@@ -1,0 +1,5 @@
+id,Tax_Percentage,Tax_Type,Tax_Name,Valid_from,Valid_To,is_active,created_at
+1,5,GST,"GST at 5%",2025-12-31,,1,1767062062007
+2,18,GST,"GST at 18%",2025-12-31,,1,1767161620175
+3,0,GST,"GST at 0%",2025-12-31,,1,1767161620181
+4,40,GST,"GST at 40%",2025-12-31,,1,1767161620184
