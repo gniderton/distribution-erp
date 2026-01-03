@@ -1,3 +1,9 @@
+const dns = require('dns');
+// Force IPv4 to avoid ENETUNREACH on some cloud providers (Render -> Supabase)
+if (dns.setDefaultResultOrder) {
+    dns.setDefaultResultOrder('ipv4first');
+}
+
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
