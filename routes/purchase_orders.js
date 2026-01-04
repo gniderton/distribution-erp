@@ -6,12 +6,6 @@ const { pool } = require('../config/db');
 router.post('/', async (req, res) => {
     const {
         vendor_id,
-        total_net,
-        total_qty,
-        gst,
-        total_taxable,
-        total_scheme,
-        total_disc,
         remarks,
         lines
     } = req.body;
@@ -22,7 +16,49 @@ router.post('/', async (req, res) => {
     }
 
     try {
-        // Call the RPC function (create_purchase_order)
+        // --- SERVER SIDE CALCULATION (Bank-Grade Security) ---
+        let calc_total_qty = 0;
+        let calc_total_gross = 0;
+        let calc_total_scheme = 0;
+        let calc_total_disc = 0;
+        let calc_total_taxable = 0;
+        let calc_gst = 0;
+        let calc_grand_total = 0;
+
+        const enrichedLines = lines.map(line => {
+            // Inputs (Trusting Qty and Price from user, logic from server)
+            const qty = Number(line.ordered_qty) || 0;
+            const price = Number(line.price) || 0;
+            const mrp = Number(line.mrp) || 0;
+            const scheme = Number(line.scheme_amount) || 0;
+            const disc_pct = Number(line.discount_percent) || 0;
+            const tax_pct = Number(line.tax_percent) || 0; // REQUIRED FIELD for calc
+
+            // Line Calculations
+            const gross = qty * price;
+            // Discount is usually on (Gross - Scheme) or just Gross. standard is (Gross - Scheme).
+            const disc_amt = (gross - scheme) * (disc_pct / 100);
+            const taxable = gross - scheme - disc_amt;
+            const tax_amt = taxable * (tax_pct / 100);
+            const net = taxable + tax_amt;
+
+            // Update Header Totals
+            calc_total_qty += qty;
+            calc_total_gross += gross;
+            calc_total_scheme += scheme;
+            calc_total_disc += disc_amt;
+            calc_total_taxable += taxable;
+            calc_gst += tax_amt;
+            calc_grand_total += net;
+
+            return {
+                ...line,
+                tax_amount: tax_amt.toFixed(2),
+                amount: net.toFixed(2)
+            };
+        });
+
+        // Call the RPC function with CALCULATED totals
         const query = `
             SELECT create_purchase_order(
                 $1::INT, 
@@ -39,14 +75,14 @@ router.post('/', async (req, res) => {
 
         const values = [
             vendor_id,
-            total_net || 0,
-            total_qty || 0,
-            gst || 0,
-            total_taxable || 0,
-            total_scheme || 0,
-            total_disc || 0,
+            calc_grand_total.toFixed(2),  // p_total_net (Final Amount)
+            calc_total_qty.toFixed(3),    // p_total_qty
+            calc_gst.toFixed(2),          // p_gst
+            calc_total_taxable.toFixed(2),// p_total_taxable
+            calc_total_scheme.toFixed(2), // p_total_scheme
+            calc_total_disc.toFixed(2),   // p_total_disc
             remarks || '',
-            JSON.stringify(lines)
+            JSON.stringify(enrichedLines)
         ];
 
         const { rows } = await pool.query(query, values);

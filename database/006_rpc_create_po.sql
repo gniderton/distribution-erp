@@ -59,7 +59,9 @@ BEGIN
             ordered_qty,
             scheme_amount,
             discount_percent,
-            price
+            price,
+            tax_amount,   -- New
+            amount        -- New
         )
         VALUES (
             v_header_id,
@@ -69,7 +71,9 @@ BEGIN
             (v_line->>'ordered_qty')::NUMERIC,
             (v_line->>'scheme_amount')::NUMERIC,
             (v_line->>'discount_percent')::NUMERIC,
-            (v_line->>'price')::NUMERIC
+            (v_line->>'price')::NUMERIC,
+            (v_line->>'tax_amount')::NUMERIC, -- New
+            (v_line->>'amount')::NUMERIC      -- New
         );
     END LOOP;
 
