@@ -5,15 +5,32 @@ const { pool } = require('../config/db');
 // GET /api/products - List products with joins for friendly names
 router.get('/', async (req, res) => {
     try {
-        const { page = 1, limit = 50, search = '' } = req.query;
+        const { page = 1, limit = 50, search = '', vendor_id } = req.query;
         const offset = (page - 1) * limit;
 
-        const searchClause = search
-            ? `WHERE p.product_name ILIKE $1 OR p.product_code ILIKE $1 OR b.brand_name ILIKE $1`
-            : '';
-        const params = search ? [`%${search}%`, limit, offset] : [limit, offset];
-        const limitIdx = search ? 2 : 1;
-        const offsetIdx = search ? 3 : 2;
+        const whereConditions = [];
+        const params = [];
+        let paramIdx = 1;
+
+        if (search) {
+            whereConditions.push(`(p.product_name ILIKE $${paramIdx} OR p.product_code ILIKE $${paramIdx} OR b.brand_name ILIKE $${paramIdx})`);
+            params.push(`%${search}%`);
+            paramIdx++;
+        }
+
+        if (vendor_id) {
+            whereConditions.push(`p.vendor_id = $${paramIdx}`);
+            params.push(vendor_id);
+            paramIdx++;
+        }
+
+        const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+        // Add limit/offset to params
+        params.push(limit);
+        params.push(offset);
+        const limitIdx = paramIdx;
+        const offsetIdx = paramIdx + 1;
 
         // Logic: Join with Brands and Categories to return useful names, not just IDs
         const query = `
@@ -28,7 +45,7 @@ router.get('/', async (req, res) => {
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN taxes t ON p.tax_id = t.id
       LEFT JOIN hsn_codes h ON p.hsn_id = h.id
-      ${searchClause}
+      ${whereClause}
       ORDER BY p.id ASC
       LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `;
@@ -36,9 +53,10 @@ router.get('/', async (req, res) => {
         const countQuery = `
       SELECT COUNT(*) FROM products p
       LEFT JOIN brands b ON p.brand_id = b.id
-      ${searchClause}
+      ${whereClause}
     `;
-        const countParams = search ? [`%${search}%`] : [];
+        // For count, we use the same params minus limit/offset
+        const countParams = params.slice(0, paramIdx - 1);
 
         const [rows, countResult] = await Promise.all([
             pool.query(query, params),
