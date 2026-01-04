@@ -5,7 +5,7 @@ const { pool } = require('../config/db');
 // GET /api/products - List products with joins for friendly names
 router.get('/', async (req, res) => {
     try {
-        const { page = 1, limit = 50, search = '', vendor_id } = req.query;
+        const { page = 1, limit = 10000, search = '', vendor_id } = req.query;
         const offset = (page - 1) * limit;
 
         const whereConditions = [];

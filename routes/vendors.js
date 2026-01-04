@@ -5,7 +5,7 @@ const { pool } = require('../config/db');
 // GET /api/vendors - Fetch all vendors with pagination & search
 router.get('/', async (req, res) => {
     try {
-        const { page = 1, limit = 50, search = '' } = req.query;
+        const { page = 1, limit = 10000, search = '' } = req.query;
         const offset = (page - 1) * limit;
 
         // Logic: Search by Code, Name, or GST
