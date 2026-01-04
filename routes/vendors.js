@@ -3,27 +3,29 @@ const router = express.Router();
 const { pool } = require('../config/db');
 
 // GET /api/vendors - Fetch all vendors with pagination & search
+// GET /api/vendors - Fetch all vendors with pagination & search
 router.get('/', async (req, res) => {
     try {
-        const { page = 1, limit = 10000, search = '' } = req.query;
-        const offset = (page - 1) * limit;
+        const { page = 1, limit, search = '' } = req.query; // limit defaults to undefined
 
         // Logic: Search by Code, Name, or GST
         const searchClause = search
             ? `WHERE vendor_name ILIKE $1 OR vendor_code ILIKE $1 OR gst ILIKE $1`
             : '';
-        const params = search ? [`%${search}%`, limit, offset] : [limit, offset];
+        const params = search ? [`%${search}%`] : [];
+        let paramIdx = search ? 2 : 1;
 
-        // Adjust param indexes based on search existence
-        const limitIdx = search ? 2 : 1;
-        const offsetIdx = search ? 3 : 2;
-
-        const query = `
+        let query = `
       SELECT * FROM vendors
       ${searchClause}
       ORDER BY id ASC
-      LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `;
+
+        if (limit) {
+            const offset = (page - 1) * limit;
+            query += ` LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
+            params.push(limit, offset);
+        }
 
         // Count for Pagination Code
         const countQuery = `SELECT COUNT(*) FROM vendors ${searchClause}`;
