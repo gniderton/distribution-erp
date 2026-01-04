@@ -5,8 +5,7 @@ const { pool } = require('../config/db');
 // GET /api/products - List products with joins for friendly names
 router.get('/', async (req, res) => {
     try {
-        const { page = 1, limit = 10000, search = '', vendor_id } = req.query;
-        const offset = (page - 1) * limit;
+        const { page = 1, limit, search = '', vendor_id } = req.query; // limit defaults to undefined if not passed
 
         const whereConditions = [];
         const params = [];
@@ -26,14 +25,8 @@ router.get('/', async (req, res) => {
 
         const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
-        // Add limit/offset to params
-        params.push(limit);
-        params.push(offset);
-        const limitIdx = paramIdx;
-        const offsetIdx = paramIdx + 1;
-
-        // Logic: Join with Brands and Categories to return useful names, not just IDs
-        const query = `
+        // Base Query
+        let query = `
       SELECT 
         p.*,
         b.brand_name,
@@ -47,16 +40,29 @@ router.get('/', async (req, res) => {
       LEFT JOIN hsn_codes h ON p.hsn_id = h.id
       ${whereClause}
       ORDER BY p.id ASC
-      LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `;
+
+        // Append Pagination if limit is provided and valid (not '0')
+        // Note: limit coming from query is string.
+        if (limit && limit !== '0') {
+            const limitVal = parseInt(limit);
+            const pageVal = parseInt(page);
+            const offset = (pageVal - 1) * limitVal;
+
+            query += ` LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
+            params.push(limitVal, offset);
+        }
 
         const countQuery = `
       SELECT COUNT(*) FROM products p
       LEFT JOIN brands b ON p.brand_id = b.id
       ${whereClause}
     `;
-        // For count, we use the same params minus limit/offset
-        const countParams = params.slice(0, paramIdx - 1);
+
+        // Count params are whatever search/vendor params existed before limit was added
+        // If we added limit (2 params) to the end, slice them off.
+        // If we didn't add limit, params is just search/vendor params.
+        const countParams = (limit && limit !== '0') ? params.slice(0, params.length - 2) : params;
 
         const [rows, countResult] = await Promise.all([
             pool.query(query, params),
@@ -68,7 +74,7 @@ router.get('/', async (req, res) => {
             pagination: {
                 total: parseInt(countResult.rows[0].count),
                 page: parseInt(page),
-                limit: parseInt(limit)
+                limit: limit ? parseInt(limit) : parseInt(countResult.rows[0].count) // if unlimited, limit = total
             }
         });
 
