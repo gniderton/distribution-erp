@@ -2,6 +2,28 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 
+// GET /api/documents/next/:type - Get next number for a document type (Preview)
+router.get('/next/:type', async (req, res) => {
+    try {
+        const { type } = req.params;
+        const result = await pool.query(
+            'SELECT current_number + 1 as next_num, prefix FROM document_sequences WHERE document_type = $1',
+            [type]
+        );
+
+        if (result.rows.length === 0) {
+            return res.json({ next_num: 1, prefix: 'PREVIEW-' });
+        }
+
+        res.json({
+            next_num: parseInt(result.rows[0].next_num),
+            prefix: result.rows[0].prefix
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/documents/sequences - List all
 router.get('/sequences', async (req, res) => {
     try {
