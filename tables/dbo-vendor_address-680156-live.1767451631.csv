@@ -1,0 +1,15 @@
+id,created_at,vendor_id,address_type_id,Addres_Line,Cordinates,Area,Pin_Code,City,District,State,is_default,is_active
+1,1767093456537,1,2,"sf.no.600/1a,near east rotary club,muthanampalayam naal road,kangayam road,Tiruppur",,,641606,,Tiruppur,33,1,1
+2,1767093584676,2,2,"NO.135 A, KIADB, Kadakkola Industrial Area, Kadakkola, Mysuru - 571311",,,571311,,Mysore,29,1,1
+3,1767093584684,3,2,"THONDAYAD,KOZHIKODE,673016",,,673016,,Kozhikode,32,1,1
+4,1767093584690,4,2,"30/748, Vadakkanthara Road, Big Bazar, Palakkad-678014",,,678014,,Palakkad,32,1,1
+5,1767093584697,5,2,"Door No 18/106-110, PP Complex Elathur",,,673303,,Kozhikode,32,1,1
+6,1767093584706,6,2,"36/579, Noor Square, V.K.k Menon Road,Kallai",,,673003,,Kozhikode,32,1,1
+7,1767093584713,7,2,"Aikkarappadi P.O ROOM No: CP8/389 B,C,D, Kuriyedam",,,673637,,Malappuram,,1,1
+8,1767093584720,8,2,"15/1434, west kallai,Calicut",,,673003,,"West kallai",32,1,1
+9,1767093584726,9,2,"NEERAVIL, PERUNAD P. O, KOLLAM",,,691601,,KOLLAM,32,1,1
+10,1767093584733,10,2,"Address - No 33, Bidadi Industrial Area, Phase 2",,,562109,,"Bangalore, Karnataka - 562109",29,1,1
+11,1767093584740,11,2,"YM TRADERS, 8/2144 , SUN N MOON, PARVANA JUNCTION , MATTANCHERRY ,COCHIN",,,682002,,Eranamkulam,32,1,1
+12,1767093584747,12,2,"CP 16/511,KAITHAKUNDA,AYIKKARAPPADI PO,
+MALAPPURAM,KERALA,673637",,,673637,,Malappuram,32,1,1
+13,1767093584754,13,2,"VICTORY SOAPS AND COSMETICS PVT LTD 18/108/29 CALICUT-MYSORE ROAD KALPETTA Kerala",,,673123,,Wayanad,32,1,1
