@@ -3,6 +3,7 @@ const { pool } = require('../config/db');
 
 // GET /api/purchase-orders - List POs (with pagination & filtering)
 router.get('/', async (req, res) => {
+    console.log('--- PO ROUTES V2 LOADED (Fix Applied) ---'); // Force Deploy & Log
     try {
         const { page = 1, limit = 50, vendor_id, status } = req.query;
         const offset = (page - 1) * limit;

@@ -33,7 +33,7 @@ async function debugGetPO(id) {
                 p.category_id
             FROM purchase_order_lines pl
             LEFT JOIN products p ON pl.product_id = p.id
-            WHERE pl.purchase_order_id = $1
+            WHERE pl.purchase_order_header_id = $1
             ORDER BY pl.id ASC
         `, [id]);
 
