@@ -3,58 +3,42 @@ const { pool } = require('../config/db');
 
 // GET /api/purchase-orders - List POs (with pagination & filtering)
 router.get('/', async (req, res) => {
-    console.log('--- PO ROUTES V2 LOADED (Fix Applied) ---'); // Force Deploy & Log
+    // ...
+});
+
+router.get('/debug-po/:id', async (req, res) => {
+    const { id } = req.params;
+    let log = [];
     try {
-        const { page = 1, limit = 50, vendor_id, status } = req.query;
-        const offset = (page - 1) * limit;
+        log.push(`Checking ID: ${id}`);
 
-        // Build Query
-        let baseQuery = `
-            SELECT 
-                ph.*, 
-                v.vendor_name 
-            FROM purchase_order_headers ph
-            LEFT JOIN vendors v ON ph.vendor_id = v.id
-            WHERE 1=1
-        `;
-        const params = [];
-        let paramIndex = 1;
+        // 1. Connection Test
+        log.push("Testing Connection...");
+        await pool.query('SELECT 1');
+        log.push("Connection OK");
 
-        if (vendor_id) {
-            baseQuery += ` AND ph.vendor_id = $${paramIndex}`;
-            params.push(vendor_id);
-            paramIndex++;
-        }
+        // 2. Header Query
+        log.push("Fetching Header...");
+        const headerRes = await pool.query(`SELECT ph.*, v.gst as vendor_gst FROM purchase_order_headers ph LEFT JOIN vendors v ON ph.vendor_id = v.id WHERE ph.id = $1`, [id]);
+        log.push(`Header Rows: ${headerRes.rows.length}`);
 
-        if (status) {
-            baseQuery += ` AND ph.status = $${paramIndex}`;
-            params.push(status);
-            paramIndex++;
-        }
+        // 3. Lines Query
+        log.push("Fetching Lines...");
+        const linesRes = await pool.query(`SELECT pl.*, p.product_name, p.category_id FROM purchase_order_lines pl LEFT JOIN products p ON pl.product_id = p.id WHERE pl.purchase_order_header_id = $1`, [id]);
+        log.push(`Lines Rows: ${linesRes.rows.length}`);
 
-        // Add Sorting & Pagination
-        baseQuery += ` ORDER BY ph.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-        params.push(limit, offset);
-
-        const { rows } = await pool.query(baseQuery, params);
-
-        // Get Total Count (for pagination)
-        const countResult = await pool.query('SELECT COUNT(*) FROM purchase_order_headers');
-
-        res.json({
-            data: rows,
-            pagination: {
-                page: Number(page),
-                limit: Number(limit),
-                total: Number(countResult.rows[0].count)
-            }
-        });
+        res.json({ success: true, log, header: headerRes.rows, lines: linesRes.rows });
 
     } catch (err) {
-        console.error('List PO Error:', err);
-        res.status(500).json({ error: 'Database error fetching Purchase Orders' });
+        res.status(500).json({
+            success: false,
+            error: err.message,
+            stack: err.stack,
+            log
+        });
     }
 });
+
 
 // GET /api/purchase-orders/:id - Get Single PO with Lines
 router.get('/:id', async (req, res) => {
