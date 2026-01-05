@@ -3,8 +3,58 @@ const router = express.Router();
 const { pool } = require('../config/db');
 
 // GET /api/purchase-orders - List POs (with pagination & filtering)
+// GET /api/purchase-orders - List POs (with pagination & filtering)
 router.get('/', async (req, res) => {
-    // ...
+    try {
+        const { page = 1, limit = 50, vendor_id, status } = req.query;
+        const offset = (page - 1) * limit;
+
+        // Build Query
+        let baseQuery = `
+            SELECT 
+                ph.*, 
+                v.vendor_name 
+            FROM purchase_order_headers ph
+            LEFT JOIN vendors v ON ph.vendor_id = v.id
+            WHERE 1=1
+        `;
+        const params = [];
+        let paramIndex = 1;
+
+        if (vendor_id) {
+            baseQuery += ` AND ph.vendor_id = $${paramIndex}`;
+            params.push(vendor_id);
+            paramIndex++;
+        }
+
+        if (status) {
+            baseQuery += ` AND ph.status = $${paramIndex}`;
+            params.push(status);
+            paramIndex++;
+        }
+
+        // Add Sorting & Pagination
+        baseQuery += ` ORDER BY ph.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+        params.push(limit, offset);
+
+        const { rows } = await pool.query(baseQuery, params);
+
+        // Get Total Count (for pagination)
+        const countResult = await pool.query('SELECT COUNT(*) FROM purchase_order_headers');
+
+        res.json({
+            data: rows,
+            pagination: {
+                page: Number(page),
+                limit: Number(limit),
+                total: Number(countResult.rows[0].count)
+            }
+        });
+
+    } catch (err) {
+        console.error('List PO Error:', err);
+        res.status(500).json({ error: 'Database error fetching Purchase Orders' });
+    }
 });
 
 router.get('/debug-po/:id', async (req, res) => {
