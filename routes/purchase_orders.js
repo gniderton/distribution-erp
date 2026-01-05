@@ -235,4 +235,104 @@ router.post('/', async (req, res) => {
     }
 });
 
+// PUT /api/purchase-orders/:id - Update an existing Purchase Order
+router.put('/:id', async (req, res) => {
+    const { id } = req.params;
+    const {
+        vendor_id,
+        remarks,
+        lines
+    } = req.body;
+
+    // Basic Validation
+    if (!vendor_id || !lines || lines.length === 0) {
+        return res.status(400).json({ error: 'Vendor and at least one line item are required' });
+    }
+
+    try {
+        // --- SERVER SIDE CALCULATION (Same as POST) ---
+        let calc_total_qty = 0;
+        let calc_total_gross = 0;
+        let calc_total_scheme = 0;
+        let calc_total_disc = 0;
+        let calc_total_taxable = 0;
+        let calc_gst = 0;
+        let calc_grand_total = 0;
+
+        const enrichedLines = lines.map(line => {
+            // Inputs 
+            const qty = Number(line.ordered_qty) || 0;
+            const price = Number(line.price) || 0;
+            const mrp = Number(line.mrp) || 0;
+            const scheme = Number(line.scheme_amount) || 0;
+            const disc_pct = Number(line.discount_percent) || 0;
+            const tax_pct = Number(line.tax_percent) || 0;
+
+            // Line Calculations
+            const gross = qty * price;
+            const disc_amt = (gross - scheme) * (disc_pct / 100);
+            const taxable = gross - scheme - disc_amt;
+            const tax_amt = taxable * (tax_pct / 100);
+            const net = taxable + tax_amt;
+
+            // Update Header Totals
+            calc_total_qty += qty;
+            calc_total_gross += gross;
+            calc_total_scheme += scheme;
+            calc_total_disc += disc_amt;
+            calc_total_taxable += taxable;
+            calc_gst += tax_amt;
+            calc_grand_total += net;
+
+            return {
+                ...line,
+                tax_amount: tax_amt.toFixed(2),
+                amount: net.toFixed(2)
+            };
+        });
+
+        // Call the RPC function with CALCULATED totals
+        const query = `
+            SELECT update_purchase_order(
+                $1::INT, 
+                $2::INT,
+                $3::NUMERIC, 
+                $4::NUMERIC, 
+                $5::NUMERIC, 
+                $6::NUMERIC, 
+                $7::NUMERIC, 
+                $8::NUMERIC, 
+                $9::TEXT, 
+                $10::JSONB
+            ) as result;
+        `;
+
+        const values = [
+            id,                           // p_header_id
+            vendor_id,                    // p_vendor_id
+            calc_grand_total.toFixed(2),  // p_total_net
+            calc_total_qty.toFixed(3),
+            calc_gst.toFixed(2),
+            calc_total_taxable.toFixed(2),
+            calc_total_scheme.toFixed(2),
+            calc_total_disc.toFixed(2),
+            remarks || '',
+            JSON.stringify(enrichedLines)
+        ];
+
+        const { rows } = await pool.query(query, values);
+        const result = rows[0].result;
+
+        if (result.success) {
+            res.status(200).json(result);
+        } else {
+            res.status(400).json({ error: 'Failed to update PO' });
+        }
+
+    } catch (err) {
+        console.error('Update PO Error:', err);
+        res.status(500).json({ error: 'Database error updating Purchase Order', details: err.message });
+    }
+});
+
 module.exports = router;
