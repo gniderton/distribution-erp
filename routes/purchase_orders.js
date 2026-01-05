@@ -56,6 +56,53 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET /api/purchase-orders/:id - Get Single PO with Lines
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // 1. Fetch Header
+        const headerRes = await pool.query(`
+            SELECT 
+                ph.*, 
+                v.vendor_name,
+                v.address as vendor_address,
+                v.gst_number as vendor_gst
+            FROM purchase_order_headers ph
+            LEFT JOIN vendors v ON ph.vendor_id = v.id
+            WHERE ph.id = $1
+        `, [id]);
+
+        if (headerRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Purchase Order not found' });
+        }
+
+        // 2. Fetch Lines (Joined with Products)
+        const linesRes = await pool.query(`
+            SELECT 
+                pl.*,
+                p.product_name,
+                p.ean_code,
+                p.department_id,
+                p.category_id
+            FROM purchase_order_lines pl
+            LEFT JOIN products p ON pl.product_id = p.product_id
+            WHERE pl.purchase_order_id = $1
+            ORDER BY pl.id ASC
+        `, [id]);
+
+        // 3. Return Combined Data
+        res.json({
+            header: headerRes.rows[0],
+            lines: linesRes.rows
+        });
+
+    } catch (err) {
+        console.error('Get PO Error:', err);
+        res.status(500).json({ error: 'Database error fetching PO details' });
+    }
+});
+
 // POST /api/purchase-orders - Create a new Purchase Order
 router.post('/', async (req, res) => {
     const {
