@@ -1,4 +1,3 @@
-const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 
@@ -66,8 +65,7 @@ router.get('/:id', async (req, res) => {
             SELECT 
                 ph.*, 
                 v.vendor_name,
-                v.address as vendor_address,
-                v.gst_number as vendor_gst
+                v.gst as vendor_gst
             FROM purchase_order_headers ph
             LEFT JOIN vendors v ON ph.vendor_id = v.id
             WHERE ph.id = $1
@@ -78,15 +76,15 @@ router.get('/:id', async (req, res) => {
         }
 
         // 2. Fetch Lines (Joined with Products)
+        // Fixed: Join on p.id, removed bad columns
         const linesRes = await pool.query(`
             SELECT 
                 pl.*,
                 p.product_name,
                 p.ean_code,
-                p.department_id,
                 p.category_id
             FROM purchase_order_lines pl
-            LEFT JOIN products p ON pl.product_id = p.product_id
+            LEFT JOIN products p ON pl.product_id = p.id
             WHERE pl.purchase_order_id = $1
             ORDER BY pl.id ASC
         `, [id]);
