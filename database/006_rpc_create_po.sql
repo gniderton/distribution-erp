@@ -25,7 +25,7 @@ BEGIN
     -- 1. Get and Increment Sequence (Atomic Lock)
     UPDATE document_sequences
     SET current_number = current_number + 1
-    WHERE "Document_Type" = 'PO'
+    WHERE document_type = 'PO'
     RETURNING prefix, current_number INTO v_prefix, v_next_num;
 
     IF v_prefix IS NULL THEN
@@ -59,7 +59,7 @@ BEGIN
             ordered_qty,
             scheme_amount,
             discount_percent,
-            price,
+            rate,
             tax_amount,   -- New
             amount        -- New
         )
