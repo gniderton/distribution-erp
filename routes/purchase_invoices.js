@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
                 pi.received_date,
                 pi.status,
                 pi.grand_total,
-                v.name as vendor_name,
+                v.vendor_name as vendor_name,
                 ph.po_number -- If linked
             FROM purchase_invoice_headers pi
             JOIN vendors v ON pi.vendor_id = v.id
