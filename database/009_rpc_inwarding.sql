@@ -1,0 +1,113 @@
+-- Phase 3: Inwarding Logic (With Batches & Buckets)
+
+-- 1. Helper: Ensure columns exist (Idempotent)
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'current_stock') THEN 
+        ALTER TABLE products ADD COLUMN current_stock numeric(12, 3) DEFAULT 0; 
+    END IF; 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'damaged_stock') THEN 
+        ALTER TABLE products ADD COLUMN damaged_stock numeric(12, 3) DEFAULT 0; 
+    END IF; 
+END $$;
+
+-- 2. RPC: Create Purchase Invoice (Buckets V3)
+create or replace function create_purchase_invoice(
+  p_vendor_id bigint,
+  p_po_id bigint, -- Nullable
+  p_invoice_no text, -- Vendor's Bill No
+  p_invoice_date date,
+  p_received_date date,
+  p_total_net numeric,
+  p_tax_amount numeric,
+  p_grand_total numeric,
+  p_lines jsonb
+)
+returns json as $$
+declare
+  v_pi_id bigint;
+  v_pi_number text;
+  v_prefix text;
+  v_next_val bigint;
+  line_item jsonb;
+  v_line_id bigint;
+  v_batch_no text;
+  v_expiry date;
+begin
+  -- A. Get Next 'PI' Sequence
+  select prefix, current_number + 1 into v_prefix, v_next_val
+  from document_sequences where document_type = 'PI' for update;
+
+  if v_prefix is null then
+     raise exception 'Sequence PI not defined';
+  end if;
+
+  v_pi_number := v_prefix || v_next_val;
+
+  -- B. Insert Header
+  insert into purchase_invoice_headers (
+    invoice_number, vendor_invoice_number, vendor_invoice_date, received_date,
+    vendor_id, purchase_order_id, status,
+    total_net, tax_amount, grand_total
+  ) values (
+    v_pi_number, p_invoice_no, p_invoice_date, p_received_date,
+    p_vendor_id, p_po_id, 'Verified', -- Stock Added Immediately
+    p_total_net, p_tax_amount, p_grand_total
+  ) returning id into v_pi_id;
+
+  -- C. Insert Lines & Create Batches
+  for line_item in select * from jsonb_array_elements(p_lines)
+  loop
+    -- 1. Insert Invoice Line
+    insert into purchase_invoice_lines (
+      purchase_invoice_header_id, product_id,
+      ordered_qty, accepted_qty, rejected_qty,
+      rate, discount_percent, scheme_amount, tax_amount, amount
+    ) values (
+      v_pi_id, (line_item->>'product_id')::bigint,
+      (line_item->>'ordered_qty')::numeric,
+      (line_item->>'accepted_qty')::numeric,
+      (line_item->>'rejected_qty')::numeric,
+       (line_item->>'rate')::numeric,
+       (line_item->>'discount_percent')::numeric,
+       (line_item->>'scheme_amount')::numeric,
+       (line_item->>'tax_amount')::numeric,
+       (line_item->>'amount')::numeric
+    ) returning id into v_line_id;
+
+    -- 2. CREATE BATCH (Stock Buckets)
+    v_batch_no := coalesce(line_item->>'batch_number', 'DEFAULT');
+    if (line_item->>'expiry_date') = '' then 
+       v_expiry := null;
+    else 
+       v_expiry := (line_item->>'expiry_date')::date;
+    end if;
+
+    insert into product_batches (
+        product_id, purchase_invoice_line_id,
+        batch_number, mrp, expiry_date, received_date,
+        purchase_rate, sale_rate,
+        initial_qty, qty_good, qty_damaged, qty_returned
+    ) values (
+        (line_item->>'product_id')::bigint, v_line_id,
+        v_batch_no, (line_item->>'mrp')::numeric, v_expiry, p_received_date,
+        (line_item->>'rate')::numeric, (line_item->>'sale_rate')::numeric,
+        (line_item->>'accepted_qty')::numeric, 
+        (line_item->>'accepted_qty')::numeric, -- Initializes into GOOD Quantity
+        0, 0
+    );
+
+    -- 3. UPDATE PRODUCT SUMMARY (Double Update)
+    update products 
+    set current_stock = (select sum(qty_good) from product_batches where product_id = (line_item->>'product_id')::bigint),
+        damaged_stock = (select sum(qty_damaged) from product_batches where product_id = (line_item->>'product_id')::bigint)
+    where id = (line_item->>'product_id')::bigint;
+    
+  end loop;
+
+  -- D. Update Sequence
+  update document_sequences set current_number = v_next_val where document_type = 'PI';
+
+  return json_build_object('success', true, 'pi_number', v_pi_number, 'id', v_pi_id);
+end;
+$$ language plpgsql;
