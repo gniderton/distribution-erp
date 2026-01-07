@@ -4,7 +4,7 @@ async function checkSchema() {
     try {
         console.log('Checking Schema...');
 
-        const tables = ['purchase_order_headers', 'purchase_order_lines', 'vendors', 'products'];
+        const tables = ['purchase_invoice_headers', 'purchase_invoice_lines'];
 
         for (const table of tables) {
             console.log(`\n--- TABLE: ${table} ---`);
