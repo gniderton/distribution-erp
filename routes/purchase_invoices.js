@@ -45,8 +45,16 @@ router.post('/', async (req, res) => {
         } = req.body;
 
         // Basic Validation
-        if (!vendor_id || !lines || lines.length === 0) {
-            return res.status(400).json({ error: 'Vendor and at least one line item are required' });
+        // Detailed Validation & Debugging
+        // We echo back the received 'req.body' so the user can see what the server got.
+        if (!req.body) {
+            return res.status(400).json({ error: 'Request Body is Empty/Null', received: req.body });
+        }
+        if (!vendor_id) {
+            return res.status(400).json({ error: 'Missing vendor_id', received: req.body });
+        }
+        if (!lines || !Array.isArray(lines) || lines.length === 0) {
+            return res.status(400).json({ error: 'Lines missing or empty array', receivedLines: lines, fullBody: req.body });
         }
 
         // --- SERVER SIDE CALCULATION & SANITIZATION (Like PO) ---
