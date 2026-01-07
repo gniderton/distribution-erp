@@ -120,10 +120,11 @@ router.get('/:id', async (req, res) => {
                 p.ean_code,
                 p.category_id,
                 p.purchase_rate,
-                p.tax_percent, 
+                COALESCE(t.tax_percentage, 0) as tax_percent, 
                 p.mrp as product_mrp
             FROM purchase_order_lines pl
             LEFT JOIN products p ON pl.product_id = p.id
+            LEFT JOIN taxes t ON p.tax_id = t.id
             WHERE pl.purchase_order_header_id = $1
             ORDER BY pl.id ASC
         `, [id]);
