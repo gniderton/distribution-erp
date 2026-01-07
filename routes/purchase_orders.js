@@ -118,7 +118,10 @@ router.get('/:id', async (req, res) => {
                 pl.*,
                 p.product_name,
                 p.ean_code,
-                p.category_id
+                p.category_id,
+                p.purchase_rate,
+                p.tax_percent, 
+                p.mrp as product_mrp
             FROM purchase_order_lines pl
             LEFT JOIN products p ON pl.product_id = p.id
             WHERE pl.purchase_order_header_id = $1
