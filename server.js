@@ -39,7 +39,8 @@ const productRoutes = require('./routes/products');
 
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/vendors', require('./routes/vendors'));
-app.use('/api/vendor-payments', require('./routes/vendor_payments')); // [NEW] Finance Module
+app.use('/api/vendor-payments', require('./routes/vendor_payments'));
+app.use('/api/debit-notes', require('./routes/debit_notes')); // [NEW] Debit Notes
 app.use('/api/products', require('./routes/products'));
 app.use('/api/master', require('./routes/masterData'));
 app.use('/api/purchase-orders', require('./routes/purchase_orders'));

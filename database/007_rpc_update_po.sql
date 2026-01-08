@@ -37,7 +37,8 @@ BEGIN
     UPDATE purchase_order_headers
     SET 
         vendor_id = p_vendor_id,
-        total_net = p_total_net,
+        grand_total = p_total_net, -- [FIX] Update the Grand Total column
+        total_net = p_total_taxable, -- Map Taxable to Net for consistency
         total_qty = p_total_qty,
         gst = p_gst,
         total_taxable = p_total_taxable,
