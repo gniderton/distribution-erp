@@ -40,10 +40,30 @@ router.post('/', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // 1. Generate Debit Note Number (Simple logic: DN-{Timestamp})
-        // Real-world: Use a Sequence table like POs.
-        // For now: timestamp is unique enough for V1.
-        const dnNumber = `DN-${Date.now().toString().slice(-6)}`;
+        // 1. Generate Debit Note Number (Sequence Logic)
+        const seqRes = await client.query(`
+            SELECT prefix, current_number 
+            FROM document_sequences 
+            WHERE document_type = 'DN' AND is_active = true
+            FOR UPDATE
+        `);
+
+        let dnNumber;
+        if (seqRes.rows.length === 0) {
+            // Fallback if seed missing
+            dnNumber = `DN-${Date.now().toString().slice(-6)}`;
+        } else {
+            const seq = seqRes.rows[0];
+            const nextNum = Number(seq.current_number) + 1;
+            dnNumber = `${seq.prefix}${nextNum}`;
+
+            // Update Sequence
+            await client.query(`
+               UPDATE document_sequences 
+               SET current_number = $1
+               WHERE document_type = 'DN'
+           `, [nextNum]);
+        }
 
         // 2. Insert Record
         const insertRes = await client.query(`
@@ -59,13 +79,36 @@ router.post('/', async (req, res) => {
             reason,
             linked_invoice_id
         ]);
+        const newId = insertRes.rows[0].id; // Capture ID
+
+        // 3. Insert Lines (If any)
+        const lines = req.body.lines || [];
+        if (lines.length > 0) {
+            for (const line of lines) {
+                await client.query(`
+                    INSERT INTO debit_note_lines 
+                    (debit_note_id, product_id, qty, rate, amount, batch_number, return_type)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                `, [
+                    newId,
+                    line.product_id,
+                    line.qty,
+                    line.rate,
+                    line.amount,
+                    line.batch_number,
+                    line.return_type || 'Damage'
+                ]);
+
+                // FUTURE: Trigger Stock Deduction Here (create_stock_movement OUT)
+            }
+        }
 
         await client.query('COMMIT');
 
         res.status(201).json({
             success: true,
             message: 'Debit Note Created',
-            id: insertRes.rows[0].id,
+            id: newId,
             dn_number: insertRes.rows[0].debit_note_number
         });
 
