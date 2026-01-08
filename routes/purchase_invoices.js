@@ -9,8 +9,8 @@ router.get('/', async (req, res) => {
         const result = await pool.query(`
             SELECT 
                 pi.id,
-                pi.invoice_number,
                 pi.vendor_invoice_number,
+                pi.vendor_id, -- Needed for Frontend Filtering
                 pi.vendor_invoice_date,
                 pi.received_date,
                 pi.status,
