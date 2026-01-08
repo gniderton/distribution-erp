@@ -15,11 +15,18 @@ router.get('/', async (req, res) => {
                 pi.received_date,
                 pi.status,
                 pi.grand_total,
+                COALESCE(pa.paid_amount, 0) as paid_amount,
+                (pi.grand_total - COALESCE(pa.paid_amount, 0)) as balance,
                 v.vendor_name as vendor_name,
                 ph.po_number -- If linked
             FROM purchase_invoice_headers pi
             JOIN vendors v ON pi.vendor_id = v.id
             LEFT JOIN purchase_order_headers ph ON pi.purchase_order_id = ph.id
+            LEFT JOIN (
+                SELECT purchase_invoice_id, SUM(amount) as paid_amount 
+                FROM payment_allocations 
+                GROUP BY purchase_invoice_id
+            ) pa ON pi.id = pa.purchase_invoice_id
             ORDER BY pi.id DESC
         `);
 
