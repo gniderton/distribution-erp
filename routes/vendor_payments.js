@@ -39,8 +39,11 @@ router.post('/', async (req, res) => {
             mode,
             transaction_ref,
             remarks,
-            allocations // Array of { invoice_id, amount }
+            allocations, // Array of { invoice_id, amount }
+            transaction_type // 'PAYMENT' (default) or 'REFUND' (Money In)
         } = req.body;
+
+        const type = (transaction_type === 'REFUND') ? 'REFUND' : 'PAYMENT';
 
         if (!vendor_id || !amount || Number(amount) <= 0) {
             return res.status(400).json({ error: 'Vendor and Valid Amount required' });
@@ -51,15 +54,15 @@ router.post('/', async (req, res) => {
         // 1. Create Payment Record
         const paymentRes = await client.query(`
             INSERT INTO vendor_payments 
-            (vendor_id, amount, payment_date, payment_mode, transaction_ref, remarks)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            (vendor_id, amount, payment_date, payment_mode, transaction_ref, remarks, transaction_type)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
-        `, [vendor_id, amount, payment_date, mode, transaction_ref, remarks]);
+        `, [vendor_id, amount, payment_date, mode, transaction_ref, remarks, type]);
 
         const paymentId = paymentRes.rows[0].id;
 
-        // 2. Validate & Create Allocations
-        if (allocations && Array.isArray(allocations) && allocations.length > 0) {
+        // 2. Validate & Create Allocations (ONLY FOR PAYMENTS)
+        if (type === 'PAYMENT' && allocations && Array.isArray(allocations) && allocations.length > 0) {
 
             // SECURITY CHECK: Ensure user isn't allocating more than they paid
             const totalAllocated = allocations.reduce((sum, a) => sum + Number(a.amount || 0), 0);
