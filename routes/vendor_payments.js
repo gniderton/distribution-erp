@@ -58,8 +58,17 @@ router.post('/', async (req, res) => {
 
         const paymentId = paymentRes.rows[0].id;
 
-        // 2. Create Allocations (if any)
+        // 2. Validate & Create Allocations
         if (allocations && Array.isArray(allocations) && allocations.length > 0) {
+
+            // SECURITY CHECK: Ensure user isn't allocating more than they paid
+            const totalAllocated = allocations.reduce((sum, a) => sum + Number(a.amount || 0), 0);
+            // Allow small float variance (e.g. 0.01)
+            if (totalAllocated > (Number(amount) + 0.01)) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: `Allocation Sum (${totalAllocated}) exceeds Payment Amount (${amount})` });
+            }
+
             for (const alloc of allocations) {
                 if (alloc.invoice_id && alloc.amount > 0) {
                     await client.query(`
