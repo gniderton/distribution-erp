@@ -115,7 +115,7 @@ router.post('/', async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Create Debit Note Error:', err.message);
-        res.status(500).json({ error: 'Server Error creating Debit Note' });
+        res.status(500).json({ error: 'Server Error creating Debit Note', details: err.message });
     } finally {
         client.release();
     }
