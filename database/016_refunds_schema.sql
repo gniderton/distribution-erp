@@ -3,11 +3,13 @@ ALTER TABLE vendor_payments
 ADD COLUMN IF NOT EXISTS transaction_type text DEFAULT 'PAYMENT' CHECK (transaction_type IN ('PAYMENT', 'REFUND'));
 
 -- Update Ledger View to handle REFUNDs
+DROP VIEW IF EXISTS view_vendor_ledger CASCADE;
 CREATE OR REPLACE VIEW view_vendor_ledger AS
 SELECT
     row_number() over (order by date, created_at) as id,
     vendor_id,
     date,
+    created_at, -- Expose this for sorting
     type,
     reference_number,
     description,

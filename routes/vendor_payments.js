@@ -40,7 +40,8 @@ router.post('/', async (req, res) => {
             transaction_ref,
             remarks,
             allocations, // Array of { invoice_id, amount }
-            transaction_type // 'PAYMENT' (default) or 'REFUND' (Money In)
+            transaction_type, // 'PAYMENT' (default) or 'REFUND' (Money In)
+            bank_account_id // [NEW] Optional Bank Account ID
         } = req.body;
 
         const type = (transaction_type === 'REFUND') ? 'REFUND' : 'PAYMENT';
@@ -51,13 +52,26 @@ router.post('/', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // 1. Create Payment Record
+        // [NEW] 0. Update Bank Balance (If linked)
+        if (bank_account_id) {
+            const numericAmount = Number(amount);
+            // If Payment (Money Out), Subtract. If Refund (Money In), Add.
+            const balanceChange = (type === 'PAYMENT') ? -numericAmount : numericAmount;
+
+            await client.query(`
+                UPDATE bank_accounts 
+                SET current_balance = current_balance + $1 
+                WHERE id = $2
+            `, [balanceChange, bank_account_id]);
+        }
+
+        // 1. Create Payment Record (Linked to Bank)
         const paymentRes = await client.query(`
             INSERT INTO vendor_payments 
-            (vendor_id, amount, payment_date, payment_mode, transaction_ref, remarks, transaction_type)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (vendor_id, amount, payment_date, payment_mode, transaction_ref, remarks, transaction_type, bank_account_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
-        `, [vendor_id, amount, payment_date, mode, transaction_ref, remarks, type]);
+        `, [vendor_id, amount, payment_date, mode, transaction_ref, remarks, type, bank_account_id]);
 
         const paymentId = paymentRes.rows[0].id;
 
