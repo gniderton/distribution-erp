@@ -113,8 +113,69 @@ router.post('/', async (req, res) => {
                     line.batch_number,
                     line.return_type || 'Damage'
                 ]);
+            }
+        }
 
-                // FUTURE: Trigger Stock Deduction Here (create_stock_movement OUT)
+        // 4. SPILLOVER ALLOCATION LOGIC (Auto-Allocate)
+        let remainingToAllocate = Number(amount);
+
+        // A. Priority Allocation (Linked Bill)
+        if (resolvedInvoiceId && remainingToAllocate > 0) {
+            // Get Balance of Linked Bill
+            const billRes = await client.query(`
+                SELECT 
+                    pi.id,
+                    (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) as balance
+                FROM purchase_invoice_headers pi
+                LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as paid FROM payment_allocations GROUP BY purchase_invoice_id) pa ON pi.id = pa.purchase_invoice_id
+                LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as applied FROM debit_note_allocations GROUP BY purchase_invoice_id) dn ON pi.id = dn.purchase_invoice_id
+                WHERE pi.id = $1
+            `, [resolvedInvoiceId]);
+
+            if (billRes.rows.length > 0) {
+                const bill = billRes.rows[0];
+                const billBal = Number(bill.balance);
+                if (billBal > 0) {
+                    const alloc = Math.min(billBal, remainingToAllocate);
+                    await client.query(`
+                        INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount)
+                        VALUES ($1, $2, $3)
+                    `, [newId, resolvedInvoiceId, alloc]);
+                    remainingToAllocate -= alloc;
+                }
+            }
+        }
+
+        // B. Spillover Allocation (FIFO on other bills)
+        if (remainingToAllocate > 0) {
+            // Fetch other pending bills for this vendor
+            const pendingRes = await client.query(`
+                SELECT 
+                    pi.id,
+                    (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) as balance
+                FROM purchase_invoice_headers pi
+                LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as paid FROM payment_allocations GROUP BY purchase_invoice_id) pa ON pi.id = pa.purchase_invoice_id
+                LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as applied FROM debit_note_allocations GROUP BY purchase_invoice_id) dn ON pi.id = dn.purchase_invoice_id
+                WHERE pi.vendor_id = $1 
+                AND pi.status != 'Cancelled'
+                AND (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) > 0
+                AND ($2 IS NULL OR pi.id != $2) -- Exclude the one we just allocated to
+                ORDER BY pi.received_date ASC, pi.created_at ASC
+            `, [vendor_id, resolvedInvoiceId]);
+
+            for (const bill of pendingRes.rows) {
+                if (remainingToAllocate <= 0.01) break;
+
+                const billBal = Number(bill.balance);
+                const alloc = Math.min(billBal, remainingToAllocate);
+
+                if (alloc > 0) {
+                    await client.query(`
+                        INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount)
+                        VALUES ($1, $2, $3)
+                    `, [newId, bill.id, alloc]);
+                    remainingToAllocate -= alloc;
+                }
             }
         }
 

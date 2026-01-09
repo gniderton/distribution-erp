@@ -30,20 +30,15 @@ router.get('/', async (req, res) => {
                 GROUP BY purchase_invoice_id
             ) pa ON pi.id = pa.purchase_invoice_id
             LEFT JOIN (
-                SELECT linked_invoice_id, SUM(amount) as dn_amount 
-                FROM debit_notes 
-                WHERE status = 'Approved'
-                GROUP BY linked_invoice_id
-            ) dn ON pi.id = dn.linked_invoice_id
+                SELECT purchase_invoice_id, SUM(amount) as dn_amount 
+                FROM debit_note_allocations 
+                GROUP BY purchase_invoice_id
+            ) dn ON pi.id = dn.purchase_invoice_id
             ORDER BY pi.id DESC
         `);
 
         // Retool expects an array
-        // We calculate balance here or in SQL. Doing it in SQL is cleaner but complex with COALESCE.
-        // Let's refine the SQL SELECT to handle it.
-        /*
-            (pi.grand_total - COALESCE(pa.paid_amount, 0) - COALESCE(dn.dn_amount, 0)) as balance
-        */
+        // Logic: Balance = Grand Total - Paid Allocations - DN Allocations
 
         res.json(result.rows);
     } catch (err) {
