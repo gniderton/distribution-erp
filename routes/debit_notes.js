@@ -38,6 +38,20 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Vendor and Valid Amount required' });
         }
 
+        // 0. Resolve Linked Invoice ID (Handle 'GD-CLT-PI...' string)
+        let resolvedInvoiceId = linked_invoice_id;
+        if (linked_invoice_id && isNaN(Number(linked_invoice_id))) {
+            // It's a string (e.g., "GD-CLT-PI-26-12"), look up the ID
+            const invRes = await client.query('SELECT id FROM purchase_invoice_headers WHERE invoice_number = $1', [linked_invoice_id]);
+            if (invRes.rows.length > 0) {
+                resolvedInvoiceId = invRes.rows[0].id;
+            } else {
+                resolvedInvoiceId = null; // Or throw error? For now, just unlink it.
+            }
+        } else if (linked_invoice_id) {
+            resolvedInvoiceId = Number(linked_invoice_id);
+        }
+
         await client.query('BEGIN');
 
         // 1. Generate Debit Note Number (Sequence Logic)
@@ -77,7 +91,7 @@ router.post('/', async (req, res) => {
             debit_note_date || new Date(),
             amount,
             reason,
-            linked_invoice_id
+            resolvedInvoiceId
         ]);
         const newId = insertRes.rows[0].id; // Capture ID
 
