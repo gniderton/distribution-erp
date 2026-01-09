@@ -46,6 +46,7 @@ app.use('/api/master', require('./routes/masterData'));
 app.use('/api/purchase-orders', require('./routes/purchase_orders'));
 app.use('/api/purchase-invoices', require('./routes/purchase_invoices')); // NEW Route
 app.use('/api/documents', require('./routes/documents'));
+app.use('/api/bank-accounts', require('./routes/bank_accounts')); // [NEW] Bank Accounts
 
 // Database Connection Test & Server Start
 pool.query('SELECT NOW()', (err, res) => {
