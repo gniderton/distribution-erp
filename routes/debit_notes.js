@@ -8,9 +8,10 @@ router.get('/vendor/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const result = await pool.query(`
-            SELECT dn.*, v.vendor_name 
+            SELECT dn.*, v.vendor_name, pi.invoice_number as linked_invoice_number
             FROM debit_notes dn
             JOIN vendors v ON dn.vendor_id = v.id
+            LEFT JOIN purchase_invoice_headers pi ON dn.linked_invoice_id = pi.id
             WHERE dn.vendor_id = $1
             ORDER BY dn.debit_note_date DESC
         `, [id]);
