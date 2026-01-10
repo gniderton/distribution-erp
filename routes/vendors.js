@@ -54,27 +54,61 @@ router.get('/', async (req, res) => {
 // POST /api/vendors - Create new vendor
 router.post('/', async (req, res) => {
     // Logic: Insert new vendor. 
-    // Strict: Requires at least vendor_code and vendor_name
-    const { vendor_code, vendor_name, contact_person, contact_no, email, gst } = req.body;
+    // Strict: Requires vendor_name. vendor_code is auto-generated if missing.
+    let {
+        vendor_code, vendor_name, contact_person, contact_no, email, gst,
+        pan, address_line1, address_line2, state, district,
+        bank_name, bank_account_no, bank_ifsc
+    } = req.body;
 
-    if (!vendor_code || !vendor_name) {
-        return res.status(400).json({ error: 'Vendor Code and Name are required' });
+    if (!vendor_name) {
+        return res.status(400).json({ error: 'Vendor Name is required' });
     }
 
     try {
+        await pool.query('BEGIN');
+
+        // Auto-Generate Code if missing
+        if (!vendor_code) {
+            const lastCodeRes = await pool.query('SELECT vendor_code FROM vendors ORDER BY id DESC LIMIT 1');
+            if (lastCodeRes.rows.length > 0) {
+                const lastCode = lastCodeRes.rows[0].vendor_code;
+                // Parse "V005" -> 5
+                const num = parseInt(lastCode.replace(/\D/g, '')) || 0;
+                const nextNum = num + 1;
+                vendor_code = `V${String(nextNum).padStart(3, '0')}`;
+            } else {
+                vendor_code = 'V001';
+            }
+        }
+
         const result = await pool.query(
-            `INSERT INTO vendors (vendor_code, vendor_name, contact_person, contact_no, email, gst)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-            [vendor_code, vendor_name, contact_person, contact_no, email, gst]
+            `INSERT INTO vendors (
+                vendor_code, vendor_name, contact_person, contact_no, email, gst,
+                pan, address_line1, address_line2, state, district,
+                bank_name, bank_account_no, bank_ifsc
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            RETURNING *`,
+            [
+                vendor_code, vendor_name, contact_person, contact_no, email, gst,
+                pan, address_line1, address_line2, state, district,
+                bank_name, bank_account_no, bank_ifsc
+            ]
         );
+
+        await pool.query('COMMIT');
         res.status(201).json(result.rows[0]);
     } catch (err) {
+        await pool.query('ROLLBACK');
         console.error(err);
         if (err.code === '23505') { // Unique violation
             return res.status(409).json({ error: 'Vendor Code already exists' });
         }
         res.status(500).json({ error: 'Database error creating vendor' });
     }
+});
+// End of POST logic
 });
 
 module.exports = router;
