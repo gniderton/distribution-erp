@@ -109,6 +109,5 @@ router.post('/', async (req, res) => {
     }
 });
 // End of POST logic
-});
 
 module.exports = router;
