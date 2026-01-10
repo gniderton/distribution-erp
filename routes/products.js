@@ -85,24 +85,88 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/products
+// POST /api/products
 router.post('/', async (req, res) => {
-    const { vendor_id, product_code, product_name, mrp, purchase_rate, is_active } = req.body;
-    // TODO: Add full field list
+    let {
+        vendor_id, product_name, brand_id, category_id,
+        hsn_id, tax_id,
+        mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate
+    } = req.body;
 
-    if (!product_code || !product_name || !vendor_id || !mrp || !purchase_rate) {
-        return res.status(400).json({ error: 'Missing required fields' });
+    if (!vendor_id || !product_name || !brand_id || !category_id || !mrp || !purchase_rate) {
+        return res.status(400).json({ error: 'Missing required fields (Vendor, Name, Brand, Category, MRP, Purchase Rate)' });
     }
 
     try {
-        const query = `
-      INSERT INTO products (vendor_id, product_code, product_name, mrp, purchase_rate, is_active)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *
-    `;
-        const result = await pool.query(query, [vendor_id, product_code, product_name, mrp, purchase_rate, is_active || true]);
+        await pool.query('BEGIN');
+
+        // 1. Fetch Brand Code and Category Code
+        const metaRes = await pool.query(
+            `SELECT 
+                (SELECT brand_code FROM brands WHERE id = $1) as brand_code,
+                (SELECT category_code FROM categories WHERE id = $2) as category_code
+            `,
+            [brand_id, category_id]
+        );
+
+        const { brand_code, category_code } = metaRes.rows[0];
+
+        if (!brand_code || !category_code) {
+            await pool.query('ROLLBACK');
+            return res.status(400).json({ error: 'Invalid Brand ID or Category ID' });
+        }
+
+        // 2. Generate Product Code: BRAND-CAT-001
+        const prefix = `${brand_code}-${category_code}-`;
+
+        // Find last code matching this prefix
+        const lastCodeRes = await pool.query(
+            `SELECT product_code FROM products 
+             WHERE product_code LIKE $1 
+             ORDER BY id DESC LIMIT 1`,
+            [`${prefix}%`]
+        );
+
+        let nextNum = 1;
+        if (lastCodeRes.rows.length > 0) {
+            const lastCode = lastCodeRes.rows[0].product_code;
+            // Extract the number part after the known prefix
+            const suffix = lastCode.replace(prefix, '');
+            const parsed = parseInt(suffix);
+            if (!isNaN(parsed)) {
+                nextNum = parsed + 1;
+            }
+        }
+
+        const product_code = `${prefix}${String(nextNum).padStart(3, '0')}`;
+
+        // 3. Insert Product
+        const insertQuery = `
+          INSERT INTO products (
+            vendor_id, brand_id, category_id, product_code, product_name, 
+            hsn_id, tax_id, 
+            mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate, 
+            is_active
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true)
+          RETURNING *
+        `;
+
+        const result = await pool.query(insertQuery, [
+            vendor_id, brand_id, category_id, product_code, product_name,
+            hsn_id || null, tax_id || null,
+            mrp, purchase_rate,
+            distributor_rate || 0, wholesale_rate || 0, dealer_rate || 0, retail_rate || 0
+        ]);
+
+        await pool.query('COMMIT');
         res.status(201).json(result.rows[0]);
     } catch (err) {
+        await pool.query('ROLLBACK');
         console.error(err);
+        if (err.code === '23505') {
+            return res.status(409).json({ error: 'Product Code already exists (Concurrency issue, please try again)' });
+        }
         res.status(500).json({ error: 'Database error creating product' });
     }
 });
