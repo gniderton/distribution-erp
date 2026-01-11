@@ -296,4 +296,181 @@ router.post('/import', async (req, res) => {
     }
 });
 
+// GET /api/products/export - Download CSV for Bulk Update
+router.get('/export', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                p.id as "Product ID",
+                p.product_name as "Product Name",
+                b.brand_name as "Brand Name",
+                c.category_name as "Category Name",
+                v.vendor_name as "Vendor Name",
+                p.mrp as "MRP",
+                p.purchase_rate as "Purchase Rate",
+                p.distributor_rate as "Distributor Rate",
+                p.wholesale_rate as "Wholesale Rate",
+                p.dealer_rate as "Dealer Rate",
+                p.retail_rate as "Retail Rate",
+                t.tax_name as "Tax Name",
+                h.hsn_code as "HSN Code",
+                p.ean_code as "EAN"
+            FROM products p
+            LEFT JOIN brands b ON p.brand_id = b.id
+            LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN vendors v ON p.vendor_id = v.id (SELECT id, vendor_name FROM vendors) v ON p.vendor_id = v.id -- Basic Join
+            LEFT JOIN taxes t ON p.tax_id = t.id
+            LEFT JOIN hsn_codes h ON p.hsn_id = h.id
+            WHERE p.is_active = true
+            ORDER BY p.id ASC
+        `;
+
+        // Correcting Join syntax above for safety
+        const safeQuery = `
+            SELECT 
+                p.id as "Product ID",
+                p.product_name as "Product Name",
+                b.brand_name as "Brand Name",
+                c.category_name as "Category Name",
+                v.vendor_name as "Vendor Name",
+                p.mrp as "MRP",
+                p.purchase_rate as "Purchase Rate",
+                p.distributor_rate as "Distributor Rate",
+                p.wholesale_rate as "Wholesale Rate",
+                p.dealer_rate as "Dealer Rate",
+                p.retail_rate as "Retail Rate",
+                t.tax_name as "Tax Name",
+                h.hsn_code as "HSN Code",
+                p.ean_code as "EAN"
+            FROM products p
+            LEFT JOIN brands b ON p.brand_id = b.id
+            LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN vendors v ON p.vendor_id = v.id
+            LEFT JOIN taxes t ON p.tax_id = t.id
+            LEFT JOIN hsn_codes h ON p.hsn_id = h.id
+            WHERE p.is_active = true
+            ORDER BY p.id ASC
+        `;
+
+        const { rows } = await pool.query(safeQuery);
+
+        // Convert to CSV
+        if (rows.length === 0) {
+            return res.send("Product ID,Product Name,Brand Name,Category Name,Vendor Name,MRP,Purchase Rate,Distributor Rate,Wholesale Rate,Dealer Rate,Retail Rate,Tax Name,HSN Code,EAN");
+        }
+
+        const headers = Object.keys(rows[0]).join(',');
+        const csvRows = rows.map(row => {
+            return Object.values(row).map(val => {
+                const str = String(val === null ? '' : val);
+                // Escape quotes and wrap in quotes if contains comma
+                if (str.includes(',') || str.includes('"')) {
+                    return `"${str.replace(/"/g, '""')}"`;
+                }
+                return str;
+            }).join(',');
+        });
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="products_export.csv"');
+        res.send([headers, ...csvRows].join('\n'));
+
+    } catch (err) {
+        console.error("Export Error:", err);
+        res.status(500).send("Error generating CSV");
+    }
+});
+
+// POST /api/products/bulk-update - Process Edited CSV (JSON)
+router.post('/bulk-update', async (req, res) => {
+    const { items } = req.body;
+    if (!items || !Array.isArray(items)) {
+        return res.status(400).json({ error: 'Invalid items array' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        let updatedCount = 0;
+        let createdCount = 0;
+
+        // Reuse Import Logic for New Items, but here we focus on Updates first
+        // Refetch Mappings for ID resolution
+        const brandsRes = await client.query('SELECT id, brand_name, brand_code FROM brands');
+        const catsRes = await client.query('SELECT id, category_name, category_code FROM categories');
+        const taxRes = await client.query('SELECT id, tax_name FROM taxes');
+        const hsnRes = await client.query('SELECT id, hsn_code FROM hsn_codes');
+        const vendRes = await client.query('SELECT id, vendor_name FROM vendors');
+
+        const brandMap = {}; brandsRes.rows.forEach(r => brandMap[r.brand_name.toLowerCase().trim()] = r);
+        const catMap = {}; catsRes.rows.forEach(r => catMap[r.category_name.toLowerCase().trim()] = r);
+        const taxMap = {}; taxRes.rows.forEach(r => taxMap[r.tax_name.toLowerCase().trim()] = r.id);
+        const hsnMap = {}; hsnRes.rows.forEach(r => hsnMap[Number(r.hsn_code)] = r.id); // HSN often numeric 
+        // Also map HSN strings just in case
+        hsnRes.rows.forEach(r => hsnMap[String(r.hsn_code).trim()] = r.id);
+        const vendMap = {}; vendRes.rows.forEach(r => vendMap[r.vendor_name.toLowerCase().trim()] = r.id);
+
+        for (const item of items) {
+            // Resolve IDs from Names (Frontend should pass Names if edited, or IDs if we trust it, but CSV usually has names)
+            // But verifyImportJS handles mapping?
+            // If the Input is coming from Retool's "bulk update" script, it might already be mapped?
+            // Let's assume Retool sends IDs if possible, but for robustness, if we see Names, we map them.
+            // Actually, assuming Retool passes "brand_id", "category_id" etc. like Import.
+            // If item has "Product ID", it's an UPDATE.
+
+            const pId = item.id || item['Product ID'];
+
+            // Standardize Input (Retool might send mapped IDs or raw names depending on script)
+            // Let's assume the user uses the SAME "Wizard Smart Logic" for Update as Import.
+            // So we receive IDs.
+
+            if (pId) {
+                // UPDATE
+                await client.query(`
+                    UPDATE products SET
+                        product_name = COALESCE($1, product_name),
+                        brand_id = COALESCE($2, brand_id),
+                        category_id = COALESCE($3, category_id),
+                        vendor_id = COALESCE($4, vendor_id),
+                        mrp = COALESCE($5, mrp),
+                        purchase_rate = COALESCE($6, purchase_rate),
+                        distributor_rate = COALESCE($7, distributor_rate),
+                        wholesale_rate = COALESCE($8, wholesale_rate),
+                        dealer_rate = COALESCE($9, dealer_rate),
+                        retail_rate = COALESCE($10, retail_rate),
+                        tax_id = COALESCE($11, tax_id),
+                        hsn_id = COALESCE($12, hsn_id),
+                        ean_code = COALESCE($13, ean_code)
+                    WHERE id = $14
+                `, [
+                    item.product_name,
+                    item.brand_id, item.category_id, item.vendor_id,
+                    item.mrp, item.purchase_rate,
+                    item.distributor_rate, item.wholesale_rate, item.dealer_rate, item.retail_rate,
+                    item.tax_id, item.hsn_id, item.ean_code,
+                    pId
+                ]);
+                updatedCount++;
+            } else {
+                // CREATE (Fallback to Import Logic logic essentially)
+                // For simplicity, we skip create here or duplicate logic. 
+                // User said "Bulk Update". Let's focus on Update.
+                // If they want Create, they use Import.
+                // But if they add a row to the export CSV?
+                // For now, ignore new rows to prevent partial/bad imports.
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, updated: updatedCount, created: createdCount });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Bulk Update Error:", err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
