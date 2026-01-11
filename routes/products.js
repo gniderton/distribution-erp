@@ -450,17 +450,17 @@ router.post('/bulk-update', async (req, res) => {
                 UPDATE products AS p
                 SET
                     product_name = COALESCE(v.product_name, p.product_name),
-                    brand_id = COALESCE(NULLIF(v.brand_id, 0)::bigint, p.brand_id),
-                    category_id = COALESCE(NULLIF(v.category_id, 0)::bigint, p.category_id),
-                    vendor_id = COALESCE(NULLIF(v.vendor_id, 0)::bigint, p.vendor_id),
+                    brand_id = COALESCE(NULLIF(v.brand_id::bigint, 0), p.brand_id),
+                    category_id = COALESCE(NULLIF(v.category_id::bigint, 0), p.category_id),
+                    vendor_id = COALESCE(NULLIF(v.vendor_id::bigint, 0), p.vendor_id),
                     mrp = COALESCE(v.mrp::numeric, p.mrp),
                     purchase_rate = COALESCE(v.purchase_rate::numeric, p.purchase_rate),
                     distributor_rate = COALESCE(v.distributor_rate::numeric, p.distributor_rate),
                     wholesale_rate = COALESCE(v.wholesale_rate::numeric, p.wholesale_rate),
                     dealer_rate = COALESCE(v.dealer_rate::numeric, p.dealer_rate),
                     retail_rate = COALESCE(v.retail_rate::numeric, p.retail_rate),
-                    tax_id = COALESCE(NULLIF(v.tax_id, 0)::bigint, p.tax_id),
-                    hsn_id = COALESCE(NULLIF(v.hsn_id, 0)::bigint, p.hsn_id),
+                    tax_id = COALESCE(NULLIF(v.tax_id::bigint, 0), p.tax_id),
+                    hsn_id = COALESCE(NULLIF(v.hsn_id::bigint, 0), p.hsn_id),
                     ean_code = COALESCE(v.ean_code, p.ean_code)
                 FROM (VALUES 
                     ${valuePlaceholders.join(', ')}
