@@ -410,55 +410,70 @@ router.post('/bulk-update', async (req, res) => {
         hsnRes.rows.forEach(r => hsnMap[String(r.hsn_code).trim()] = r.id);
         const vendMap = {}; vendRes.rows.forEach(r => vendMap[r.vendor_name.toLowerCase().trim()] = r.id);
 
+        const updates = [];
+        const newItems = [];
+
         for (const item of items) {
-            // Resolve IDs from Names (Frontend should pass Names if edited, or IDs if we trust it, but CSV usually has names)
-            // But verifyImportJS handles mapping?
-            // If the Input is coming from Retool's "bulk update" script, it might already be mapped?
-            // Let's assume Retool sends IDs if possible, but for robustness, if we see Names, we map them.
-            // Actually, assuming Retool passes "brand_id", "category_id" etc. like Import.
-            // If item has "Product ID", it's an UPDATE.
-
             const pId = item.id || item['Product ID'];
-
-            // Standardize Input (Retool might send mapped IDs or raw names depending on script)
-            // Let's assume the user uses the SAME "Wizard Smart Logic" for Update as Import.
-            // So we receive IDs.
-
             if (pId) {
-                // UPDATE
-                await client.query(`
-                    UPDATE products SET
-                        product_name = COALESCE($1, product_name),
-                        brand_id = COALESCE($2, brand_id),
-                        category_id = COALESCE($3, category_id),
-                        vendor_id = COALESCE($4, vendor_id),
-                        mrp = COALESCE($5, mrp),
-                        purchase_rate = COALESCE($6, purchase_rate),
-                        distributor_rate = COALESCE($7, distributor_rate),
-                        wholesale_rate = COALESCE($8, wholesale_rate),
-                        dealer_rate = COALESCE($9, dealer_rate),
-                        retail_rate = COALESCE($10, retail_rate),
-                        tax_id = COALESCE($11, tax_id),
-                        hsn_id = COALESCE($12, hsn_id),
-                        ean_code = COALESCE($13, ean_code)
-                    WHERE id = $14
-                `, [
-                    item.product_name,
-                    item.brand_id, item.category_id, item.vendor_id,
-                    item.mrp, item.purchase_rate,
-                    item.distributor_rate, item.wholesale_rate, item.dealer_rate, item.retail_rate,
-                    item.tax_id, item.hsn_id, item.ean_code,
-                    pId
-                ]);
-                updatedCount++;
+                updates.push({ ...item, id: pId });
             } else {
-                // CREATE (Fallback to Import Logic logic essentially)
-                // For simplicity, we skip create here or duplicate logic. 
-                // User said "Bulk Update". Let's focus on Update.
-                // If they want Create, they use Import.
-                // But if they add a row to the export CSV?
-                // For now, ignore new rows to prevent partial/bad imports.
+                newItems.push(item);
             }
+        }
+
+        if (updates.length > 0) {
+            const values = [];
+            let paramIdx = 1;
+            const valuePlaceholders = [];
+
+            for (const u of updates) {
+                // Must ensure values are formatted/cast correctly for the query placeholders
+                valuePlaceholders.push(`($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5}, $${paramIdx + 6}, $${paramIdx + 7}, $${paramIdx + 8}, $${paramIdx + 9}, $${paramIdx + 10}, $${paramIdx + 11}, $${paramIdx + 12}, $${paramIdx + 13})`);
+
+                // Helper to safely parse numbers, defaulting to 'undefined' or NULL if we want to skip? 
+                // Actually safer to trust input or 0. Since update, 0 is safer than null for rates.
+                const safeNum = (val) => (val === '' || val === null || val === undefined) ? 0 : val;
+
+                values.push(
+                    u.id,
+                    u.product_name,
+                    u.brand_id, u.category_id, u.vendor_id,
+                    safeNum(u.mrp), safeNum(u.purchase_rate),
+                    safeNum(u.distributor_rate), safeNum(u.wholesale_rate), safeNum(u.dealer_rate), safeNum(u.retail_rate),
+                    u.tax_id, u.hsn_id, u.ean_code
+                );
+                paramIdx += 14;
+            }
+
+            const query = `
+                UPDATE products AS p
+                SET
+                    product_name = COALESCE(v.product_name, p.product_name),
+                    brand_id = COALESCE(NULLIF(v.brand_id, 0)::bigint, p.brand_id),
+                    category_id = COALESCE(NULLIF(v.category_id, 0)::bigint, p.category_id),
+                    vendor_id = COALESCE(NULLIF(v.vendor_id, 0)::bigint, p.vendor_id),
+                    mrp = COALESCE(v.mrp::numeric, p.mrp),
+                    purchase_rate = COALESCE(v.purchase_rate::numeric, p.purchase_rate),
+                    distributor_rate = COALESCE(v.distributor_rate::numeric, p.distributor_rate),
+                    wholesale_rate = COALESCE(v.wholesale_rate::numeric, p.wholesale_rate),
+                    dealer_rate = COALESCE(v.dealer_rate::numeric, p.dealer_rate),
+                    retail_rate = COALESCE(v.retail_rate::numeric, p.retail_rate),
+                    tax_id = COALESCE(NULLIF(v.tax_id, 0)::bigint, p.tax_id),
+                    hsn_id = COALESCE(NULLIF(v.hsn_id, 0)::bigint, p.hsn_id),
+                    ean_code = COALESCE(v.ean_code, p.ean_code)
+                FROM (VALUES 
+                    ${valuePlaceholders.join(', ')}
+                ) AS v(
+                    id, product_name, brand_id, category_id, vendor_id, 
+                    mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate, 
+                    tax_id, hsn_id, ean_code
+                )
+                WHERE p.id = v.id::bigint
+            `;
+
+            await client.query(query, values);
+            updatedCount = updates.length;
         }
 
         await client.query('COMMIT');
