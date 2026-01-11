@@ -66,16 +66,28 @@ router.post('/', async (req, res) => {
     try {
         await pool.query('BEGIN');
 
-        // 1. Auto-Generate Code
+        // 1. Auto-Generate Code: GD-VD-001
         if (!vendor_code) {
-            const lastCodeRes = await pool.query('SELECT vendor_code FROM vendors ORDER BY id DESC LIMIT 1');
+            const prefix = 'GD-VD-';
+            const lastCodeRes = await pool.query(
+                `SELECT vendor_code FROM vendors 
+                 WHERE vendor_code LIKE $1 
+                 ORDER BY id DESC LIMIT 1`,
+                [`${prefix}%`]
+            );
+
+            let nextNum = 1;
             if (lastCodeRes.rows.length > 0) {
                 const lastCode = lastCodeRes.rows[0].vendor_code;
-                const num = parseInt(lastCode.replace(/\D/g, '')) || 0;
-                vendor_code = `V${String(num + 1).padStart(3, '0')}`;
-            } else {
-                vendor_code = 'V001';
+                // Remove prefix and parse (handle cases like GD-VD-005)
+                const suffix = lastCode.replace(prefix, '');
+                const num = parseInt(suffix);
+                if (!isNaN(num)) {
+                    nextNum = num + 1;
+                }
             }
+            // Format: GD-VD-001
+            vendor_code = `${prefix}${String(nextNum).padStart(3, '0')}`;
         }
 
         // 2. Insert Vendor (Basic Info + Bank)

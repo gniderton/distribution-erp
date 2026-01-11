@@ -174,18 +174,20 @@ router.post('/', async (req, res) => {
 // GET /api/products/template-data - Download Reference Data for CSV
 router.get('/template-data', async (req, res) => {
     try {
-        const [brands, categories, taxes, hsn] = await Promise.all([
+        const [brands, categories, taxes, hsn, vendors] = await Promise.all([
             pool.query('SELECT id, brand_name, brand_code FROM brands WHERE is_active = true'),
             pool.query('SELECT id, category_name, category_code FROM categories WHERE is_active = true'),
             pool.query('SELECT id, tax_name, tax_percentage FROM taxes WHERE is_active = true'),
-            pool.query('SELECT id, hsn_code, hsn_description FROM hsn_codes WHERE is_active = true')
+            pool.query('SELECT id, hsn_code, hsn_description FROM hsn_codes WHERE is_active = true'),
+            pool.query('SELECT id, vendor_name FROM vendors WHERE is_active = true')
         ]);
 
         res.json({
             brands: brands.rows,
             categories: categories.rows,
             taxes: taxes.rows,
-            hsn: hsn.rows
+            hsn: hsn.rows,
+            vendors: vendors.rows
         });
     } catch (err) {
         console.error(err);
