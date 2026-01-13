@@ -135,4 +135,74 @@ router.post('/', async (req, res) => {
 });
 // End of POST logic
 
+// GET /api/vendors/:id/addresses - List all addresses for a vendor
+router.get('/:id/addresses', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(
+            `SELECT * FROM vendor_addresses WHERE vendor_id = $1 ORDER BY is_default DESC, id ASC`,
+            [id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error fetching addresses' });
+    }
+});
+
+// POST /api/vendors/:id/addresses - Add new address
+router.post('/:id/addresses', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params; // vendor_id
+        const {
+            address_list_name, // e.g. "Factory B" - Not used in schema yet, mapped to 'area' or just ignored? Schema has address_line, city etc.
+            address_line,
+            city,
+            state_code,
+            pin_code,
+            is_default
+        } = req.body;
+
+        await client.query('BEGIN');
+
+        // 1. If Default, unset others
+        if (is_default) {
+            await client.query(
+                `UPDATE vendor_addresses SET is_default = false WHERE vendor_id = $1`,
+                [id]
+            );
+
+            // 2. Sync to Parent Vendor Table (Keep Default Snapshot)
+            // Note: Schema 'state' column vs 'state_code'. We assume state_code carries the name for now or simple string.
+            await client.query(
+                `UPDATE vendors SET 
+                    address_line1 = $1, 
+                    state = $2 
+                 WHERE id = $3`,
+                [address_line, state_code, id]
+            );
+        }
+
+        // 3. Insert new address
+        const result = await client.query(
+            `INSERT INTO vendor_addresses 
+            (vendor_id, address_line, city, state_code, pin_code, is_default, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6, true)
+            RETURNING *`,
+            [id, address_line, city, state_code, pin_code, !!is_default]
+        );
+
+        await client.query('COMMIT');
+        res.status(201).json(result.rows[0]);
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ error: 'Database error creating address' });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

@@ -1,0 +1,21 @@
+﻿Product Name,Brand Name,Category Name,Vendor Name,Tax Name,HSN Code,MRP,Purchase Rate,Distributor Rate,Wholesale Rate,Dealer Rate,Retail Rate,EAN,Error,Row
+Valid Product 1,Mc Vities,Bourbon,Gniderton,GST 18%,1905,100,50,60,70,80,90,,"Brand 'Mc Vities' not found, Category 'Bourbon' not found, HSN '1905' not found",2
+Valid Product 2,Mc Vities,Bourbon,Gniderton,GST 18%,1905,200,100,120,140,160,180,,"Brand 'Mc Vities' not found, Category 'Bourbon' not found, HSN '1905' not found",3
+Valid Product 3,Britania,50-50,Gniderton,GST 5%,1905,150,75,90,105,120,135,,"Brand 'Britania' not found, Category '50-50' not found, HSN '1905' not found",4
+Valid Product 4,Parle,Gluco (G),Gniderton,GST 12%,1905,20,10,12,14,16,18,,"Brand 'Parle' not found, Category 'Gluco (G)' not found, HSN '1905' not found",5
+Valid Product 5,Sunfeast,Bounce,Gniderton,GST 18%,1905,40,20,24,28,32,36,,"Brand 'Sunfeast' not found, Category 'Bounce' not found, HSN '1905' not found",6
+Valid Product 6,Haldirams,Bhujia,Gniderton,GST 12%,2106,300,150,180,210,240,270,,"Brand 'Haldirams' not found, Category 'Bhujia' not found, HSN '2106' not found",7
+Valid Product 7,Sunfeast,Dark Fantasy,Gniderton,GST 18%,1905,120,60,72,84,96,108,,"Brand 'Sunfeast' not found, Category 'Dark Fantasy' not found, HSN '1905' not found",8
+Valid Product 8,Monaco,Classic,Gniderton,GST 12%,1905,50,25,30,35,40,45,,"Brand 'Monaco' not found, Category 'Classic' not found, HSN '1905' not found",9
+Valid Product 9,Oreo,Original,Gniderton,GST 18%,1905,80,40,48,56,64,72,,"Brand 'Oreo' not found, Category 'Original' not found, HSN '1905' not found",10
+Valid Product 10,Hide & Seek,Chocolate,Gniderton,GST 18%,1905,90,45,54,63,72,81,,"Brand 'Hide & Seek' not found, Category 'Chocolate' not found, HSN '1905' not found",11
+Fail Missing Brand,,Bourbon,Gniderton,GST 18%,1905,100,50,60,70,80,90,,"Brand '' not found, Category 'Bourbon' not found, HSN '1905' not found",12
+Fail Missing Category,Mc Vities,,Gniderton,GST 18%,1905,100,50,60,70,80,90,,"Brand 'Mc Vities' not found, Category '' not found, HSN '1905' not found",13
+Fail Invalid Tax,Mc Vities,Bourbon,Gniderton,VAT 99%,1905,100,50,60,70,80,90,,"Brand 'Mc Vities' not found, Category 'Bourbon' not found, Tax 'VAT 99%' not found, HSN '1905' not found",14
+Fail Missing Vendor,Mc Vities,Bourbon,,GST 18%,1905,100,50,60,70,80,90,,"Brand 'Mc Vities' not found, Category 'Bourbon' not found, HSN '1905' not found",15
+Fail Invalid HSN,Mc Vities,Bourbon,Gniderton,GST 18%,999999,100,50,60,70,80,90,,"Brand 'Mc Vities' not found, Category 'Bourbon' not found, HSN '999999' not found",16
+Fail No Price,Mc Vities,Bourbon,Gniderton,GST 18%,1905,,,,,50,,,"Brand 'Mc Vities' not found, Category 'Bourbon' not found, HSN '1905' not found",17
+Fail Missing Name,Mc Vities,Bourbon,Gniderton,GST 18%,1905,100,50,60,70,80,90,,"Brand 'Mc Vities' not found, Category 'Bourbon' not found, HSN '1905' not found",18
+Fail Unknown Brand,UnknownBrand,Bourbon,Gniderton,GST 18%,1905,100,50,60,70,80,90,,"Brand 'UnknownBrand' not found, Category 'Bourbon' not found, HSN '1905' not found",19
+Fail Unknown Cat,Mc Vities,UnknownCat,Gniderton,GST 18%,1905,100,50,60,70,80,90,,"Brand 'Mc Vities' not found, Category 'UnknownCat' not found, HSN '1905' not found",20
+Fail Empty Row,,,,,,,,,,,,,"Brand '' not found, Category '' not found, Tax '' not found",21

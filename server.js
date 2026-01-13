@@ -37,7 +37,6 @@ app.get('/', (req, res) => {
 const vendorRoutes = require('./routes/vendors');
 const productRoutes = require('./routes/products');
 
-app.use('/api/vendors', vendorRoutes);
 app.use('/api/vendors', require('./routes/vendors'));
 app.use('/api/vendor-payments', require('./routes/vendor_payments'));
 app.use('/api/debit-notes', require('./routes/debit_notes')); // [NEW] Debit Notes
