@@ -26,8 +26,14 @@ const createSimple = (table, nameCol, codeCol = null) => async (req, res) => {
         // Build Query
         let query, params;
         if (codeCol) {
+            // Auto-Compute Code if not provided:
+            // 1. Remove non-alphanumeric (spaces, symbols)
+            // 2. Take first 3 characters
+            // 3. Uppercase
+            const autoCode = name.replace(/[^a-zA-Z0-9]/g, '').substring(0, 3).toUpperCase();
+
             query = `INSERT INTO ${table} (${nameCol}, ${codeCol}, is_active) VALUES ($1, $2, true) RETURNING *`;
-            params = [name, code || name.substring(0, 3).toUpperCase()];
+            params = [name, code || autoCode];
         } else {
             query = `INSERT INTO ${table} (${nameCol}, is_active) VALUES ($1, true) RETURNING *`;
             params = [name];

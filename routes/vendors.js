@@ -135,7 +135,51 @@ router.post('/', async (req, res) => {
 });
 // End of POST logic
 
-// GET /api/vendors/:id/addresses - List all addresses for a vendor
+// End of POST logic
+
+// GET /api/vendors/:id - Fetch single vendor with aggregated Stats
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // 1. Get Basic Info
+        const vendorRes = await pool.query(`SELECT * FROM vendors WHERE id = $1`, [id]);
+        if (vendorRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Vendor not found' });
+        }
+        const vendor = vendorRes.rows[0];
+
+        // 2. Get Statistics (Optimized Ledger Query)
+        // Note: Using view_vendor_ledger is safest for balance, but direct sum is faster for specific KPIs.
+        // Let's use direct table sums for clarity and performance.
+        const statsRes = await pool.query(`
+            SELECT 
+                (SELECT COUNT(*) FROM purchase_order_headers WHERE vendor_id = $1) as total_pos,
+                (SELECT COALESCE(SUM(grand_total), 0) FROM purchase_invoice_headers WHERE vendor_id = $1 AND status != 'Cancelled') as total_billed,
+                (SELECT COALESCE(SUM(amount), 0) FROM vendor_payments WHERE vendor_id = $1 AND is_active = true) as total_paid_cash,
+                (SELECT COALESCE(SUM(amount), 0) FROM debit_notes WHERE vendor_id = $1 AND status = 'Approved') as total_debit_notes
+        `, [id]);
+
+        const stats = statsRes.rows[0];
+        const totalBilled = parseFloat(stats.total_billed);
+        const totalPaid = parseFloat(stats.total_paid_cash) + parseFloat(stats.total_debit_notes);
+        const pendingBalance = totalBilled - totalPaid;
+
+        res.json({
+            ...vendor,
+            stats: {
+                total_pos: parseInt(stats.total_pos),
+                total_billed: totalBilled,
+                total_paid: totalPaid,
+                pending_balance: pendingBalance
+            }
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error fetching vendor details' });
+    }
+});
 router.get('/:id/addresses', async (req, res) => {
     try {
         const { id } = req.params;
