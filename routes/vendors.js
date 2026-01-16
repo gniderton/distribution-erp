@@ -180,6 +180,46 @@ router.get('/:id', async (req, res) => {
         res.status(500).json({ error: 'Server error fetching vendor details' });
     }
 });
+
+// PUT /api/vendors/:id - Update vendor details
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            vendor_name, contact_person, contact_no, email, gst,
+            pan, bank_name, bank_account_no, bank_ifsc
+        } = req.body;
+
+        const result = await pool.query(
+            `UPDATE vendors SET 
+                vendor_name = COALESCE($1, vendor_name),
+                contact_person = COALESCE($2, contact_person),
+                contact_no = COALESCE($3, contact_no),
+                email = COALESCE($4, email),
+                gst = COALESCE($5, gst),
+                pan = COALESCE($6, pan),
+                bank_name = COALESCE($7, bank_name),
+                bank_account_no = COALESCE($8, bank_account_no),
+                bank_ifsc = COALESCE($9, bank_ifsc)
+             WHERE id = $10
+             RETURNING *`,
+            [
+                vendor_name, contact_person, contact_no, email, gst,
+                pan, bank_name, bank_account_no, bank_ifsc,
+                id
+            ]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Vendor not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error updating vendor' });
+    }
+});
 router.get('/:id/addresses', async (req, res) => {
     try {
         const { id } = req.params;
