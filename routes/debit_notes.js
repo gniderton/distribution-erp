@@ -40,14 +40,12 @@ router.post('/', async (req, res) => {
         }
 
         // 0. Resolve Linked Invoice ID (Handle 'GD-CLT-PI...' string)
-        let resolvedInvoiceId = linked_invoice_id;
+        let resolvedInvoiceId = null; // Default to null explicitly
         if (linked_invoice_id && isNaN(Number(linked_invoice_id))) {
             // It's a string (e.g., "GD-CLT-PI-26-12"), look up the ID
             const invRes = await client.query('SELECT id FROM purchase_invoice_headers WHERE invoice_number = $1', [linked_invoice_id]);
             if (invRes.rows.length > 0) {
                 resolvedInvoiceId = invRes.rows[0].id;
-            } else {
-                resolvedInvoiceId = null; // Or throw error? For now, just unlink it.
             }
         } else if (linked_invoice_id) {
             resolvedInvoiceId = Number(linked_invoice_id);
@@ -159,7 +157,7 @@ router.post('/', async (req, res) => {
                 WHERE pi.vendor_id = $1 
                 AND pi.status != 'Cancelled'
                 AND (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) > 0
-                AND ($2 IS NULL OR pi.id != $2) -- Exclude the one we just allocated to
+                AND ($2::integer IS NULL OR pi.id != $2::integer) -- Exclude the one we just allocated to
                 ORDER BY pi.received_date ASC, pi.created_at ASC
             `, [vendor_id, resolvedInvoiceId]);
 
