@@ -55,7 +55,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     let {
         vendor_code, vendor_name, contact_person, contact_no, email, gst,
-        pan, address_line1, address_line2, state, district,
+        pan, address_line1, address_line2, state, district, pin_code,
         bank_name, bank_account_no, bank_ifsc
     } = req.body;
 
@@ -113,10 +113,10 @@ router.post('/', async (req, res) => {
 
             const addrRes = await pool.query(`
                 INSERT INTO vendor_addresses 
-                (vendor_id, address_line, district, state_code, is_default, is_active)
-                VALUES ($1, $2, $3, $4, true, true)
+                (vendor_id, address_line, district, state_code, pin_code, is_default, is_active)
+                VALUES ($1, $2, $3, $4, $5, true, true)
                 RETURNING id
-            `, [vendorId, fullAddress, district, state]);
+            `, [vendorId, fullAddress, district, state, pin_code]);
 
             // 4. Link Address Content back to Vendor (Optional, but good for quick lookup)
             await pool.query('UPDATE vendors SET vendor_address_id = $1 WHERE id = $2', [addrRes.rows[0].id, vendorId]);
