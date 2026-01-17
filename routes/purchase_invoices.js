@@ -25,19 +25,19 @@ router.get('/', async (req, res) => {
                 (
                     SELECT json_agg(json_build_object(
                         '_product_id', pl.product_id,
-                        'Item name', p.product_name,
+                        'Item Name', p.product_name,
                         'Ean code', p.ean_code,
-                        -- MRP from Batch (First priority) or Product Master (Fallback)
-                        'Mrp', COALESCE((SELECT mrp FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1), p.mrp),
+                        -- MRP: Matches Frontend 'MRP'
+                        'MRP', COALESCE((SELECT mrp FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1), p.mrp),
                         'Qty', pl.accepted_qty,
                         'Price', pl.rate,
                         'Gross', (pl.accepted_qty * pl.rate),
                         'Sch', pl.scheme_amount,
-                        'Disc', pl.discount_percent,
+                        'Disc %', pl.discount_percent,
                         'Taxable', (pl.amount - pl.tax_amount),
-                        'Gst', pl.tax_amount,
-                        'Net', pl.amount,
-                        'Batch no', (SELECT batch_number FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1),
+                        'GST $', pl.tax_amount,
+                        'Net $', pl.amount,
+                        'Batch No', (SELECT batch_number FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1),
                         'Expiry', (SELECT expiry_date FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1) 
                     ))
                     FROM purchase_invoice_lines pl

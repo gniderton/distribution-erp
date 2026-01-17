@@ -86,18 +86,16 @@ begin
        v_expiry := (line_item->>'expiry_date')::date;
     end if;
 
-    insert into product_batches (
-        product_id, purchase_invoice_line_id,
-        batch_number, mrp, expiry_date, received_date,
-        purchase_rate, sale_rate,
-        initial_qty, qty_good, qty_damaged, qty_returned
-    ) values (
-        (line_item->>'product_id')::bigint, v_line_id,
-        v_batch_no, (line_item->>'mrp')::numeric, v_expiry, p_received_date,
-        (line_item->>'rate')::numeric, (line_item->>'sale_rate')::numeric,
-        (line_item->>'accepted_qty')::numeric, 
-        (line_item->>'accepted_qty')::numeric, -- Initializes into GOOD Quantity
-        0, 0
+    -- Create Batch
+    INSERT INTO product_batches (
+        product_id, purchase_invoice_line_id, batch_number,
+        mrp, expiry_date, received_date,
+        purchase_rate, qty_good, initial_qty, is_active
+    )
+    VALUES (
+        (line_item->>'product_id')::bigint, v_line_id, v_batch_no,
+        (line_item->>'mrp')::numeric, v_expiry, p_received_date,
+        (line_item->>'rate')::numeric, (line_item->>'accepted_qty')::numeric, (line_item->>'accepted_qty')::numeric, true
     );
 
     -- 3. UPDATE PRODUCT SUMMARY (Double Update)
