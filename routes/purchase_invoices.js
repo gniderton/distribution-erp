@@ -12,6 +12,7 @@ router.get('/', async (req, res) => {
                 pi.invoice_number, -- Added this!
                 pi.vendor_invoice_number,
                 pi.vendor_id, -- Needed for Frontend Filtering
+                pi.purchase_order_id, -- Needed for Correction Mode Pre-fill
                 pi.vendor_invoice_date,
                 pi.received_date,
                 pi.status,

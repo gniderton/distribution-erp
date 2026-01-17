@@ -37,29 +37,46 @@ declare
 begin
   -- A. Get Next 'PI' Sequence
   select prefix, current_number + 1 into v_prefix, v_next_val
-  from document_sequences where document_type = 'PI' for update;
+  -- 1. Auto-Generate Internal ID (Sequence Logic)
+  UPDATE document_sequences 
+  SET current_number = current_number + 1
+  WHERE document_type = 'PI'
+  RETURNING current_number INTO v_seq_num;
+  
+  -- Fallback if sequence doesn't exist
+  IF v_seq_num IS NULL THEN
+     INSERT INTO document_sequences (company_settings_id, branch_id, document_type, prefix, current_number)
+     VALUES (1, 1, 'PI', 'PI', 1)
+     RETURNING current_number INTO v_seq_num;
+  END IF;
+  
+  v_internal_id := 'PI-' || v_seq_num;
 
-  if v_prefix is null then
-     raise exception 'Sequence PI not defined';
-  end if;
+  -- 2. Insert Header
+  INSERT INTO purchase_invoice_headers (
+      vendor_id, purchase_order_id, 
+      invoice_number, -- Internal System ID
+      vendor_invoice_number, -- Their Bill No
+      vendor_invoice_date, received_date,
+      total_net, tax_amount, grand_total, status,
+      parent_invoice_id,
+      created_by
+  )
+  VALUES (
+      p_vendor_id, 
+      (CASE WHEN p_po_id = 0 THEN NULL ELSE p_po_id END), 
+      v_internal_id, -- Auto-Generated
+      p_invoice_number, -- User Input (Vendor Bill No)
+      p_invoice_date, 
+      p_received_date,
+      p_total_net, p_tax_amount, p_grand_total, 'Verified',
+      p_parent_id,
+      1 -- Assuming a default created_by user for now
+  )
+  RETURNING id INTO v_pi_id;
 
-  v_pi_number := v_prefix || v_next_val;
-
-  -- B. Insert Header
-  insert into purchase_invoice_headers (
-    invoice_number, vendor_invoice_number, vendor_invoice_date, received_date,
-    vendor_id, purchase_order_id, status,
-    total_net, tax_amount, grand_total,
-    parent_invoice_id -- Linked Correction
-  ) values (
-    v_pi_number, p_invoice_no, p_invoice_date, p_received_date,
-    p_vendor_id, p_po_id, 'Verified', -- Stock Added Immediately
-    p_total_net, p_tax_amount, p_grand_total,
-    p_parent_id
-  ) returning id into v_pi_id;
-
-  -- C. Insert Lines & Create Batches
-  for line_item in select * from jsonb_array_elements(p_lines)
+  -- 3. Process Lines
+  for v_line in select * from jsonb_array_elements(p_lines_json)
   loop
     -- 1. Insert Invoice Line
     insert into purchase_invoice_lines (
