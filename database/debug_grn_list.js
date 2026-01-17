@@ -21,16 +21,23 @@ async function run() {
                 (
                     SELECT json_agg(json_build_object(
                         '_product_id', pl.product_id,
+                        'Item name', p.product_name,
+                        'Ean code', p.ean_code,
+                        -- MRP from Batch (First priority) or Product Master (Fallback)
+                        'Mrp', COALESCE((SELECT mrp FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1), p.mrp),
                         'Qty', pl.accepted_qty,
                         'Price', pl.rate,
-                        'Disc %', pl.discount_percent,
+                        'Gross', (pl.accepted_qty * pl.rate),
                         'Sch', pl.scheme_amount,
-                        'GST $', pl.tax_amount,
-                        'Net $', pl.amount,
-                        'Batch No', pl.batch_number,
-                        'expiry_date', (SELECT expiry_date FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1) 
+                        'Disc', pl.discount_percent,
+                        'Taxable', (pl.amount - pl.tax_amount),
+                        'Gst', pl.tax_amount,
+                        'Net', pl.amount,
+                        'Batch no', (SELECT batch_number FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1),
+                        'Expiry', (SELECT expiry_date FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1) 
                     ))
                     FROM purchase_invoice_lines pl
+                    JOIN products p ON pl.product_id = p.id
                     WHERE pl.purchase_invoice_header_id = pi.id
                 ) as lines_json
             FROM purchase_invoice_headers pi
