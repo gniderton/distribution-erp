@@ -148,4 +148,78 @@ router.post('/', async (req, res) => {
     }
 });
 
+// POST /api/purchase-invoices/:id/reverse - Full Reversal (Correction Mode)
+router.post('/:id/reverse', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+
+        // 1. Fetch Invoice & Validation
+        const invRes = await client.query(`SELECT * FROM purchase_invoice_headers WHERE id = $1`, [id]);
+        if (invRes.rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+        const invoice = invRes.rows[0];
+
+        if (invoice.status === 'Reversed' || invoice.status === 'Cancelled') {
+            return res.status(400).json({ error: 'Invoice is already reversed or cancelled' });
+        }
+
+        // 2. Check Stock Integrity (Product Batches)
+        // If we sold any stock from this GRN, we CANNOT auto-reverse. User must fix manually.
+        const batchCheck = await client.query(`
+            SELECT COUNT(*) 
+            FROM product_batches 
+            WHERE purchase_invoice_id = $1 AND qty_out > 0
+        `, [id]);
+
+        if (Number(batchCheck.rows[0].count) > 0) {
+            return res.status(400).json({ error: 'Cannot Reverse: Stock from this GRN has already been sold. Please process a Return first.' });
+        }
+
+        await client.query('BEGIN');
+
+        // 3. Generate Reversal Debit Note (Full Amount)
+        const dnNumber = `DN-REV-${Date.now().toString().slice(-6)}`;
+
+        const dnRes = await client.query(`
+            INSERT INTO debit_notes 
+            (vendor_id, debit_note_number, debit_note_date, amount, reason, linked_invoice_id, status)
+            VALUES ($1, $2, CURRENT_DATE, $3, 'System Reversal for GRN Correction', $4, 'Approved')
+            RETURNING id
+        `, [invoice.vendor_id, dnNumber, invoice.grand_total, id]);
+
+        const dnId = dnRes.rows[0].id;
+
+        // 3b. Add DN Lines (For Audit)
+        // Fetch original lines to copy
+        const linesRes = await client.query(`SELECT * FROM purchase_invoice_lines WHERE purchase_invoice_id = $1`, [id]);
+        for (const line of linesRes.rows) {
+            await client.query(`
+                INSERT INTO debit_note_lines 
+                (debit_note_id, product_id, qty, rate, amount, batch_number, return_type)
+                VALUES ($1, $2, $3, $4, $5, $6, 'Reversal')
+            `, [dnId, line.product_id, line.accepted_qty, line.rate, line.amount, line.batch_number]);
+        }
+
+        // 4. Update GRN Status
+        await client.query(`UPDATE purchase_invoice_headers SET status = 'Reversed' WHERE id = $1`, [id]);
+
+        // 5. Void Batches (Remove Stock)
+        await client.query(`
+            UPDATE product_batches 
+            SET qty_good = 0, is_active = false 
+            WHERE purchase_invoice_id = $1
+        `, [id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'GRN Reversed Successfully', new_dn_id: dnId });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Reverse GRN Error:", err.message);
+        res.status(500).json({ error: 'Server Error reversing GRN' });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;

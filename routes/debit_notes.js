@@ -195,4 +195,30 @@ router.post('/', async (req, res) => {
     }
 });
 
+// PUT /api/debit-notes/:id - Restricted Edit (Date/Reason)
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { debit_note_date, reason } = req.body;
+
+        const result = await pool.query(`
+            UPDATE debit_notes 
+            SET 
+                debit_note_date = COALESCE($1, debit_note_date),
+                reason = COALESCE($2, reason)
+            WHERE id = $3
+            RETURNING *
+        `, [debit_note_date, reason, id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Debit Note not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("Update DN Error:", err.message);
+        res.status(500).json({ error: 'Server Error updating Debit Note' });
+    }
+});
+
 module.exports = router;

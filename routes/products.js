@@ -84,6 +84,63 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET /api/products/:id/stats - Product Profile 360 Data
+router.get('/:id/stats', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // 1. Current Stock (Sum of Batches)
+        const stockRes = await pool.query(`
+            SELECT 
+                COALESCE(SUM(qty_good), 0) as current_stock,
+                json_agg(
+                    json_build_object(
+                        'batch_number', batch_number,
+                        'qty', qty_good,
+                        'expiry', expiry_date,
+                        'received_date', received_date
+                    ) ORDER BY received_date ASC
+                ) FILTER (WHERE qty_good > 0) as batches
+            FROM product_batches
+            WHERE product_id = $1 AND is_active = true
+        `, [id]);
+
+        // 2. Purchase History (Last 20)
+        const historyRes = await pool.query(`
+            SELECT 
+                pi.received_date,
+                v.vendor_name,
+                pl.accepted_qty,
+                pl.rate,
+                pl.batch_number
+            FROM purchase_invoice_lines pl
+            JOIN purchase_invoice_headers pi ON pl.purchase_invoice_id = pi.id
+            JOIN vendors v ON pi.vendor_id = v.id
+            WHERE pl.product_id = $1 AND pi.status != 'Cancelled' AND pi.status != 'Reversed'
+            ORDER BY pi.received_date DESC
+            LIMIT 20
+        `, [id]);
+
+        const stats = stockRes.rows[0];
+        const history = historyRes.rows;
+
+        // 3. Derived Metrics
+        const lastPurchase = history.length > 0 ? history[0] : null;
+
+        res.json({
+            current_stock: Number(stats.current_stock),
+            last_purchase_date: lastPurchase ? lastPurchase.received_date : null,
+            last_purchase_rate: lastPurchase ? Number(lastPurchase.rate) : 0,
+            batches: stats.batches || [], // List for "Stock" tab
+            history: history // List for "History" tab
+        });
+
+    } catch (err) {
+        console.error("Product Stats Error:", err.message);
+        res.status(500).json({ error: 'Server Error fetching stats' });
+    }
+});
+
 // POST /api/products
 // POST /api/products
 router.post('/', async (req, res) => {
