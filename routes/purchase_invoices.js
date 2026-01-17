@@ -194,10 +194,15 @@ router.post('/:id/reverse', async (req, res) => {
 
         // 2. Check Stock Integrity (Product Batches)
         // If we sold any stock from this GRN, we CANNOT auto-reverse. User must fix manually.
+        // Fix: product_batches links to lines (purchase_invoice_line_id), not header directly.
         const batchCheck = await client.query(`
             SELECT COUNT(*) 
             FROM product_batches 
-            WHERE purchase_invoice_id = $1 AND qty_out > 0
+            WHERE purchase_invoice_line_id IN (
+                SELECT id FROM purchase_invoice_lines WHERE purchase_invoice_header_id = $1
+            ) 
+            AND (initial_qty - current_qty) > 0 -- If any stock has been moved (current < initial)
+            AND is_active = true
         `, [id]);
 
         if (Number(batchCheck.rows[0].count) > 0) {
@@ -244,10 +249,13 @@ router.post('/:id/reverse', async (req, res) => {
         `, [id, reversed_by_id]);
 
         // 5. Void Batches (Remove Stock)
+        // Fix: Use correct columns (current_qty, purchase_invoice_line_id)
         await client.query(`
             UPDATE product_batches 
-            SET qty_good = 0, is_active = false 
-            WHERE purchase_invoice_id = $1
+            SET current_qty = 0, is_active = false 
+            WHERE purchase_invoice_line_id IN (
+                SELECT id FROM purchase_invoice_lines WHERE purchase_invoice_header_id = $1
+            )
         `, [id]);
 
         await client.query('COMMIT');
