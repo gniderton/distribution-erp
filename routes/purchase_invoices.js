@@ -18,7 +18,10 @@ router.get('/', async (req, res) => {
                 pi.grand_total,
                 COALESCE(pa.paid_amount, 0) as paid_amount,
                 COALESCE(dn.dn_amount, 0) as dn_amount,
-                (pi.grand_total - COALESCE(pa.paid_amount, 0) - COALESCE(dn.dn_amount, 0)) as balance,
+                CASE 
+                    WHEN pi.status IN ('Reversed', 'Cancelled') THEN 0
+                    ELSE (pi.grand_total - COALESCE(pa.paid_amount, 0) - COALESCE(dn.dn_amount, 0))
+                END as balance,
                 v.vendor_name as vendor_name,
                 ph.po_number,
                 -- Added Lines JSON for View/Correction (Updated with Full Details)
