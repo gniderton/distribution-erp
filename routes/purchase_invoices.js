@@ -220,14 +220,20 @@ router.post('/:id/reverse', async (req, res) => {
         const dnId = dnRes.rows[0].id;
 
         // 3b. Add DN Lines (For Audit)
-        // Fetch original lines to copy
-        const linesRes = await client.query(`SELECT * FROM purchase_invoice_lines WHERE purchase_invoice_id = $1`, [id]);
+        // Fetch original lines to copy, joining with Batches to get the Batch Number
+        const linesRes = await client.query(`
+            SELECT pil.*, pb.batch_number 
+            FROM purchase_invoice_lines pil
+            LEFT JOIN product_batches pb ON pb.purchase_invoice_line_id = pil.id
+            WHERE pil.purchase_invoice_header_id = $1
+        `, [id]);
+
         for (const line of linesRes.rows) {
             await client.query(`
                 INSERT INTO debit_note_lines 
                 (debit_note_id, product_id, qty, rate, amount, batch_number, return_type)
                 VALUES ($1, $2, $3, $4, $5, $6, 'Reversal')
-            `, [dnId, line.product_id, line.accepted_qty, line.rate, line.amount, line.batch_number]);
+            `, [dnId, line.product_id, line.accepted_qty, line.rate, line.amount, line.batch_number || 'BATCH-MISSING']);
         }
 
         // 4. Update GRN Status (With Audit Info)
