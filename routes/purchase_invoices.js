@@ -256,7 +256,9 @@ router.post('/:id/reverse', async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error("Reverse GRN Error:", err.message);
-        res.status(500).json({ error: 'Server Error reversing GRN' });
+        console.error("DEBUG Body Received:", req.body); // Log what we got
+        // Return actual error message to Frontend for debugging
+        res.status(500).json({ error: `Server Error: ${err.message}` });
     } finally {
         client.release();
     }
