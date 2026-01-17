@@ -11,7 +11,7 @@ BEGIN
     END IF; 
 END $$;
 
--- 2. RPC: Create Purchase Invoice (Buckets V3)
+-- 2. RPC: Create Purchase Invoice (Buckets V3, Traceability V4)
 create or replace function create_purchase_invoice(
   p_vendor_id bigint,
   p_po_id bigint, -- Nullable
@@ -21,7 +21,8 @@ create or replace function create_purchase_invoice(
   p_total_net numeric,
   p_tax_amount numeric,
   p_grand_total numeric,
-  p_lines jsonb
+  p_lines jsonb,
+  p_parent_id bigint default null -- Traceability: Link to Old GRN
 )
 returns json as $$
 declare
@@ -48,11 +49,13 @@ begin
   insert into purchase_invoice_headers (
     invoice_number, vendor_invoice_number, vendor_invoice_date, received_date,
     vendor_id, purchase_order_id, status,
-    total_net, tax_amount, grand_total
+    total_net, tax_amount, grand_total,
+    parent_invoice_id -- Linked Correction
   ) values (
     v_pi_number, p_invoice_no, p_invoice_date, p_received_date,
     p_vendor_id, p_po_id, 'Verified', -- Stock Added Immediately
-    p_total_net, p_tax_amount, p_grand_total
+    p_total_net, p_tax_amount, p_grand_total,
+    p_parent_id
   ) returning id into v_pi_id;
 
   -- C. Insert Lines & Create Batches

@@ -136,7 +136,8 @@ router.post('/', async (req, res) => {
                 safe_total_net,
                 safe_tax,
                 safe_grand,
-                JSON.stringify(enrichedLines)
+                JSON.stringify(enrichedLines),
+                req.body.parent_invoice_id || null // Traceability: Link to Old GRN
             ]
         );
 
@@ -184,13 +185,14 @@ router.post('/:id/reverse', async (req, res) => {
 
         // 3. Generate Reversal Debit Note (Full Amount)
         const dnNumber = `DN-REV-${Date.now().toString().slice(-6)}`;
+        const reversalReason = `Reversal of GRN: ${invoice.invoice_number} (Correction)`;
 
         const dnRes = await client.query(`
             INSERT INTO debit_notes 
             (vendor_id, debit_note_number, debit_note_date, amount, reason, linked_invoice_id, status)
-            VALUES ($1, $2, CURRENT_DATE, $3, 'System Reversal for GRN Correction', $4, 'Approved')
+            VALUES ($1, $2, CURRENT_DATE, $3, $4, $5, 'Approved')
             RETURNING id
-        `, [invoice.vendor_id, dnNumber, invoice.grand_total, id]);
+        `, [invoice.vendor_id, dnNumber, invoice.grand_total, reversalReason, id]);
 
         const dnId = dnRes.rows[0].id;
 
