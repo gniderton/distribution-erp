@@ -31,8 +31,8 @@ router.get('/', async (req, res) => {
                         'Sch', pl.scheme_amount,
                         'GST $', pl.tax_amount,
                         'Net $', pl.amount,
-                        'Batch No', pl.batch_number, -- We need to join batches if not in lines, but batch_number is usually derived/stored. 
-                        -- Actually, let's join products to get valid names if needed, but currently keeping it simple for re-loading.
+                        -- Fix: Batch info is in product_batches, not lines
+                        'Batch No', (SELECT batch_number FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1),
                         'expiry_date', (SELECT expiry_date FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1) 
                     ))
                     FROM purchase_invoice_lines pl
