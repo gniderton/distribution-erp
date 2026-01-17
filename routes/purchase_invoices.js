@@ -201,7 +201,7 @@ router.post('/:id/reverse', async (req, res) => {
             WHERE purchase_invoice_line_id IN (
                 SELECT id FROM purchase_invoice_lines WHERE purchase_invoice_header_id = $1
             ) 
-            AND (initial_qty - current_qty) > 0 -- If any stock has been moved (current < initial)
+            AND (initial_qty - qty_good) > 0 -- If any stock has been moved (qty_good < initial)
             AND is_active = true
         `, [id]);
 
@@ -249,10 +249,10 @@ router.post('/:id/reverse', async (req, res) => {
         `, [id, reversed_by_id]);
 
         // 5. Void Batches (Remove Stock)
-        // Fix: Use correct columns (current_qty, purchase_invoice_line_id)
+        // Fix: Use correct columns (qty_good, purchase_invoice_line_id)
         await client.query(`
             UPDATE product_batches 
-            SET current_qty = 0, is_active = false 
+            SET qty_good = 0, is_active = false 
             WHERE purchase_invoice_line_id IN (
                 SELECT id FROM purchase_invoice_lines WHERE purchase_invoice_header_id = $1
             )
