@@ -153,6 +153,11 @@ router.post('/:id/reverse', async (req, res) => {
     const client = await pool.connect();
     try {
         const { id } = req.params;
+        const { reversed_by_id } = req.body;
+
+        if (!reversed_by_id) {
+            return res.status(400).json({ error: 'Reversed By ID is required' });
+        }
 
         // 1. Fetch Invoice & Validation
         const invRes = await client.query(`SELECT * FROM purchase_invoice_headers WHERE id = $1`, [id]);
@@ -200,8 +205,12 @@ router.post('/:id/reverse', async (req, res) => {
             `, [dnId, line.product_id, line.accepted_qty, line.rate, line.amount, line.batch_number]);
         }
 
-        // 4. Update GRN Status
-        await client.query(`UPDATE purchase_invoice_headers SET status = 'Reversed' WHERE id = $1`, [id]);
+        // 4. Update GRN Status (With Audit Info)
+        await client.query(`
+            UPDATE purchase_invoice_headers 
+            SET status = 'Reversed', reversed_by_id = $2, reversed_at = NOW()
+            WHERE id = $1
+        `, [id, reversed_by_id]);
 
         // 5. Void Batches (Remove Stock)
         await client.query(`
