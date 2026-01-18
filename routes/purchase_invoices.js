@@ -41,10 +41,17 @@ router.get('/', async (req, res) => {
                         'Taxable', (pl.amount - pl.tax_amount),
                         'GST $', pl.tax_amount,
                         'Net $', pl.amount,
+                        'GST $', pl.tax_amount,
+                        'Net $', pl.amount,
                         'Batch No', (SELECT batch_number FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1),
                         'Expiry', (SELECT expiry_date FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1),
-                        'Tax %', COALESCE(t.tax_percentage, 0),
-                        'Tax Name', COALESCE(t.tax_name, 'No Tax')
+                        -- Fallback Logic: If Master Link is broken, Calculate % from Amount
+                        'Tax %', COALESCE(t.tax_percentage, ROUND((pl.tax_amount / NULLIF(pl.amount - pl.tax_amount, 0)) * 100, 2), 0),
+                        'Tax Name', CASE 
+                            WHEN t.tax_name IS NOT NULL THEN t.tax_name 
+                            WHEN pl.tax_amount > 0 THEN 'GST ' || ROUND((pl.tax_amount / NULLIF(pl.amount - pl.tax_amount, 0)) * 100, 0) || '%' 
+                            ELSE 'No Tax' 
+                        END
                     ))
                     FROM purchase_invoice_lines pl
                     JOIN products p ON pl.product_id = p.id
