@@ -42,10 +42,13 @@ router.get('/', async (req, res) => {
                         'GST $', pl.tax_amount,
                         'Net $', pl.amount,
                         'Batch No', (SELECT batch_number FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1),
-                        'Expiry', (SELECT expiry_date FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1) 
+                        'Expiry', (SELECT expiry_date FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1),
+                        'Tax %', COALESCE(t.tax_percentage, 0),
+                        'Tax Name', COALESCE(t.tax_name, 'No Tax')
                     ))
                     FROM purchase_invoice_lines pl
                     JOIN products p ON pl.product_id = p.id
+                    LEFT JOIN taxes t ON p.tax_id = t.id
                     WHERE pl.purchase_invoice_header_id = pi.id
                 ) as lines_json
             FROM purchase_invoice_headers pi
