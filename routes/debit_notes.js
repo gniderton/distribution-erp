@@ -98,6 +98,10 @@ router.post('/', async (req, res) => {
         const lines = req.body.lines || [];
         if (lines.length > 0) {
             for (const line of lines) {
+                // Determine if we need to reduce stock
+                // Logic: If 'Good Stock' or Specific Batch provided, we deduct.
+                // Even 'Damage' returns typically reduce 'inventory_batches' because the item PHYSICALLY leaves.
+
                 await client.query(`
                     INSERT INTO debit_note_lines 
                     (debit_note_id, product_id, qty, rate, amount, batch_number, return_type)
@@ -111,6 +115,49 @@ router.post('/', async (req, res) => {
                     line.batch_number,
                     line.return_type || 'Damage'
                 ]);
+
+                // --- STOCK DEDUCTION LOGIC (FIFO) ---
+                let remainingReturnQty = Number(line.qty);
+
+                if (remainingReturnQty > 0) {
+                    // 1. Fetch Candidates (FIFO: Oldest First)
+                    // If a specific Batch Number was provided by user, filter by it.
+                    let batchQuery = `
+                        SELECT id, quantity_remaining 
+                        FROM inventory_batches 
+                        WHERE product_id = $1 AND quantity_remaining > 0 
+                    `;
+                    const queryParams = [line.product_id];
+
+                    if (line.batch_number && line.batch_number.trim() !== '') {
+                        batchQuery += ` AND batch_code = $2`;
+                        queryParams.push(line.batch_number);
+                    }
+
+                    batchQuery += ` ORDER BY created_at ASC FOR UPDATE`;
+
+                    const batches = await client.query(batchQuery, queryParams);
+
+                    // 2. Deduct from Batches
+                    for (const batch of batches.rows) {
+                        if (remainingReturnQty <= 0) break;
+
+                        const available = Number(batch.quantity_remaining);
+                        const deduct = Math.min(available, remainingReturnQty);
+
+                        await client.query(`
+                            UPDATE inventory_batches 
+                            SET quantity_remaining = quantity_remaining - $1 
+                            WHERE id = $2
+                        `, [deduct, batch.id]);
+
+                        remainingReturnQty -= deduct;
+                    }
+
+                    // 3. (Optional) warning if we tried to return more than we have in stock
+                    // For now, we allow the Debit Note to be created even if stock is virtual/missing, 
+                    // but we only deducted what we found.
+                }
             }
         }
 

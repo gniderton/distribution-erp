@@ -47,6 +47,7 @@ app.use('/api/purchase-invoices', require('./routes/purchase_invoices')); // NEW
 app.use('/api/documents', require('./routes/documents'));
 app.use('/api/bank-accounts', require('./routes/bank_accounts'));
 app.use('/api/sales', require('./routes/sales')); // [NEW] Sales Allocation Logic
+app.use('/api/stock/adjust', require('./routes/stock_adjustments')); // [NEW] Stock Logic
 
 // Database Connection Test & Server Start
 pool.query('SELECT NOW()', (err, res) => {

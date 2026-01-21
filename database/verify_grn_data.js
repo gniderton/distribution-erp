@@ -49,6 +49,18 @@ async function verifyGRN() {
             console.log(`   - Batch ${b.batch_number} (Exp: ${b.expiry_date}) - Qty: ${b.initial_qty}`);
         });
 
+
+        // 4. [NEW] Check Inventory Batches (FIFO System)
+        const invRes = await pool.query(`
+            SELECT * FROM inventory_batches 
+            WHERE grn_id = $1
+        `, [header.id]);
+
+        console.log(`✅ Found ${invRes.rows.length} Inventory/Stock Batches (FIFO).`);
+        invRes.rows.forEach(b => {
+            console.log(`   - FIFO Batch ${b.batch_code} | Remaining: ${b.quantity_remaining}`);
+        });
+
     } catch (err) {
         console.error(err);
     } finally {
