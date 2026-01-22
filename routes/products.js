@@ -468,6 +468,9 @@ router.post('/bulk-update', async (req, res) => {
 
     const client = await pool.connect();
     try {
+        console.log("Bulk Update Received:", items.length, "items");
+        if (items.length > 0) console.log("Sample Item:", items[0]);
+
         await client.query('BEGIN');
         let updatedCount = 0;
         let createdCount = 0;
