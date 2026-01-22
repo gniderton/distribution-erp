@@ -509,9 +509,10 @@ router.post('/bulk-update', async (req, res) => {
                 // Must ensure values are formatted/cast correctly for the query placeholders
                 valuePlaceholders.push(`($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5}, $${paramIdx + 6}, $${paramIdx + 7}, $${paramIdx + 8}, $${paramIdx + 9}, $${paramIdx + 10}, $${paramIdx + 11}, $${paramIdx + 12}, $${paramIdx + 13})`);
 
-                // Helper to safely parse numbers, defaulting to 'undefined' or NULL if we want to skip? 
-                // Actually safer to trust input or 0. Since update, 0 is safer than null for rates.
-                const safeNum = (val) => (val === '' || val === null || val === undefined) ? 0 : val;
+                // Helper to safely parse numbers
+                // Fix: Return NULL for undefined/empty so COALESCE keeps original value.
+                // Only return 0 if the input is explicitly 0.
+                const safeNum = (val) => (val === '' || val === null || val === undefined) ? null : val;
 
                 values.push(
                     u.id,
