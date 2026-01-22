@@ -29,6 +29,23 @@ router.get('/', async (req, res) => {
         let query = `
       SELECT 
         p.*,
+        -- Virtual Columns for Real-Time Stock
+        COALESCE((
+            SELECT SUM(quantity_remaining) 
+            FROM inventory_batches ib 
+            WHERE ib.product_id = p.id AND ib.quantity_remaining > 0 AND ib.status = 'Good'
+        ), 0) as current_stock,
+        COALESCE((
+            SELECT SUM(quantity_remaining) 
+            FROM inventory_batches ib 
+            WHERE ib.product_id = p.id AND ib.quantity_remaining > 0 AND ib.status = 'Damage'
+        ), 0) as stock_damage,
+        COALESCE((
+            SELECT SUM(quantity_remaining) 
+            FROM inventory_batches ib 
+            WHERE ib.product_id = p.id AND ib.quantity_remaining > 0 AND ib.status = 'Expiry'
+        ), 0) as stock_expiry,
+        
         b.brand_name,
         c.category_name,
         t.tax_name,
@@ -89,20 +106,24 @@ router.get('/:id/stats', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // 1. Current Stock (Sum of Batches)
+        // 1. Current Stock (Breakdown by Status)
         const stockRes = await pool.query(`
             SELECT 
-                COALESCE(SUM(qty_good), 0) as current_stock,
+                COALESCE(SUM(quantity_remaining) FILTER (WHERE status = 'Good'), 0) as stock_good,
+                COALESCE(SUM(quantity_remaining) FILTER (WHERE status = 'Damage'), 0) as stock_damage,
+                COALESCE(SUM(quantity_remaining) FILTER (WHERE status = 'Expiry'), 0) as stock_expiry,
+                COALESCE(SUM(quantity_remaining), 0) as total_stock,
                 json_agg(
                     json_build_object(
-                        'batch_number', batch_number,
-                        'qty', qty_good,
+                        'batch_number', batch_code,
+                        'qty', quantity_remaining,
+                        'status', status,
                         'expiry', expiry_date,
-                        'received_date', received_date
-                    ) ORDER BY received_date ASC
-                ) FILTER (WHERE qty_good > 0) as batches
-            FROM product_batches
-            WHERE product_id = $1 AND is_active = true
+                        'received_date', created_at
+                    ) ORDER BY created_at ASC
+                ) FILTER (WHERE quantity_remaining > 0) as batches
+            FROM inventory_batches
+            WHERE product_id = $1 AND quantity_remaining > 0
         `, [id]);
 
         // 2. Purchase History (Last 20)

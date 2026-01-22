@@ -121,7 +121,8 @@ router.post('/', async (req, res) => {
 
                 if (remainingReturnQty > 0) {
                     // 1. Fetch Candidates (FIFO: Oldest First)
-                    // If a specific Batch Number was provided by user, filter by it.
+                    // We must filter by the requested STATUS (Good vs Damage)
+                    // 'return_type' from frontend maps to 'status' in DB
                     let batchQuery = `
                         SELECT id, quantity_remaining 
                         FROM inventory_batches 
@@ -129,8 +130,15 @@ router.post('/', async (req, res) => {
                     `;
                     const queryParams = [line.product_id];
 
+                    // Filter by Status (Important!)
+                    if (line.return_type) {
+                        batchQuery += ` AND status = $${queryParams.length + 1}`;
+                        queryParams.push(line.return_type);
+                    }
+
+                    // Filter by Batch Code (Optional)
                     if (line.batch_number && line.batch_number.trim() !== '') {
-                        batchQuery += ` AND batch_code = $2`;
+                        batchQuery += ` AND batch_code = $${queryParams.length + 1}`;
                         queryParams.push(line.batch_number);
                     }
 

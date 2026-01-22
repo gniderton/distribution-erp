@@ -77,11 +77,11 @@ router.post('/', async (req, res) => {
                 // -------------------------------
                 let remainingToDeduct = moveQty;
 
-                // Fetch FIFO Batches (Oldest First)
+                // Fetch FIFO Batches (Good Status only)
                 const batches = await client.query(`
-                    SELECT id, quantity_remaining 
+                    SELECT * 
                     FROM inventory_batches 
-                    WHERE product_id = $1 AND quantity_remaining > 0 
+                    WHERE product_id = $1 AND quantity_remaining > 0 AND status = 'Good'
                     ORDER BY created_at ASC 
                     FOR UPDATE
                 `, [product_id]);
@@ -92,21 +92,43 @@ router.post('/', async (req, res) => {
                     const available = Number(batch.quantity_remaining);
                     const deduct = Math.min(available, remainingToDeduct);
 
-                    // Update Batch
+                    // 1. Reduce Source Batch
                     await client.query(`
                         UPDATE inventory_batches 
                         SET quantity_remaining = quantity_remaining - $1 
                         WHERE id = $2
                     `, [deduct, batch.id]);
 
+                    // 2. CREATE NEW BATCH (With New Status) - The "Split"
+                    // If reason is Lost, we might just deduct. But if Damage/Expiry, we keep it.
+                    if (['Damage', 'Expiry'].includes(reason)) {
+                        // Suffix for traceability: "GRN-101" -> "GRN-101-DMG"
+                        const suffix = reason === 'Damage' ? '-DMG' : '-EXP';
+                        // Avoid double suffix if moving already moved stock (unlikely here as we filter Good)
+                        const newBatchCode = `${batch.batch_code}${suffix}`;
+
+                        await client.query(`
+                            INSERT INTO inventory_batches 
+                            (product_id, batch_code, quantity_initial, quantity_remaining, purchase_rate, is_active, status, expiry_date, grn_id)
+                            VALUES ($1, $2, $3, $3, $4, true, $5, $6, $7)
+                        `, [
+                            product_id, newBatchCode, deduct,
+                            batch.purchase_rate, // Inherit Rate
+                            reason, // Status = 'Damage' or 'Expiry'
+                            batch.expiry_date, // Keep Expiry
+                            batch.grn_id // Keep Origin Link
+                        ]);
+                    }
+
                     remainingToDeduct -= deduct;
                 }
             }
 
-            // 2. HANDLE DESTINATION (If Moving to Damage/Expiry)
+            // 2. HANDLE DESTINATION (Legacy Support + Audit)
             // --------------------------------------------------
             if (['Damage', 'Expiry'].includes(reason)) {
-                // Add to 'damaged_stock' summary column in products table
+                // We STILL update the summary bucket for now, just to keep the "Products Table" view consistent 
+                // until we migrate the frontend to read non-good rows.
                 await client.query(`
                     UPDATE products 
                     SET damaged_stock = COALESCE(damaged_stock, 0) + $1 
