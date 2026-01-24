@@ -403,8 +403,7 @@ router.get('/export', async (req, res) => {
             ORDER BY p.id ASC
         `;
 
-        // Correcting Join syntax above for safety
-        const safeQuery = `
+        let queryText = `
             SELECT 
                 p.id as "Product ID",
                 p.product_name as "Product Name",
@@ -427,10 +426,17 @@ router.get('/export', async (req, res) => {
             LEFT JOIN taxes t ON p.tax_id = t.id
             LEFT JOIN hsn_codes h ON p.hsn_id = h.id
             WHERE p.is_active = true
-            ORDER BY p.id ASC
         `;
 
-        const { rows } = await pool.query(safeQuery);
+        const filterValues = [];
+        if (req.query.brand_id) {
+            queryText += ` AND p.brand_id = $1`;
+            filterValues.push(req.query.brand_id);
+        }
+
+        queryText += ` ORDER BY p.id ASC`;
+
+        const { rows } = await pool.query(queryText, filterValues);
 
         // Convert to CSV
         if (rows.length === 0) {
@@ -517,13 +523,28 @@ router.post('/bulk-update', async (req, res) => {
                 // Only return 0 if the input is explicitly 0.
                 const safeNum = (val) => (val === '' || val === null || val === undefined) ? null : val;
 
+                // Lookup IDs from Maps if names are provided
+                // Use lowercase/trim for safe matching
+                const safeId = (val, map) => {
+                    if (!val) return null;
+                    // If it's a number/string number, assume it's an ID
+                    if (!isNaN(val)) return val;
+                    // Otherwise try to look it up in the map
+                    const key = String(val).toLowerCase().trim();
+                    return map[key] ? map[key].id || map[key] : null; // Handle map returning object or ID
+                };
+
                 values.push(
                     u.id,
                     u.product_name,
-                    u.brand_id, u.category_id, u.vendor_id,
+                    safeId(u.brand_id, brandMap),
+                    safeId(u.category_id, catMap),
+                    safeId(u.vendor_id, vendMap),
                     safeNum(u.mrp), safeNum(u.purchase_rate),
                     safeNum(u.distributor_rate), safeNum(u.wholesale_rate), safeNum(u.dealer_rate), safeNum(u.retail_rate),
-                    u.tax_id, u.hsn_id, u.ean_code
+                    safeId(u.tax_id, taxMap),
+                    safeId(u.hsn_id, hsnMap),
+                    u.ean_code
                 );
                 paramIdx += 14;
             }

@@ -11,7 +11,8 @@ if (!filePath) {
 const sql = fs.readFileSync(path.resolve(filePath), 'utf8');
 
 pool.query(sql)
-    .then(() => {
+    .then((res) => {
+        console.log(JSON.stringify(res.rows, null, 2));
         console.log(`Executed: ${filePath}`);
         process.exit(0);
     })

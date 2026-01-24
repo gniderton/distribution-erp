@@ -21,10 +21,10 @@ router.post('/allocate', async (req, res) => {
 
             // 1. Fetch Batches (FIFO: Oldest First)
             const batchesRes = await client.query(`
-                SELECT id, batch_number, qty_good, mrp, sale_rate 
-                FROM product_batches 
-                WHERE product_id = $1 AND qty_good > 0 AND is_active = true
-                ORDER BY received_date ASC, created_at ASC
+                SELECT id, batch_code as batch_number, quantity_remaining as qty_good, mrp, purchase_rate as sale_rate 
+                FROM inventory_batches 
+                WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
+                ORDER BY created_at ASC
             `, [productId]);
 
             let remaining = requestedQty;

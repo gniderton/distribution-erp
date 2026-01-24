@@ -29,13 +29,15 @@ router.post('/', async (req, res) => {
     try {
         const {
             vendor_id,
-            amount,
+            amount: rawAmount, // Rename destructured var
             debit_note_date,
             reason,
             linked_invoice_id
         } = req.body;
 
-        if (!vendor_id || !amount || Number(amount) <= 0) {
+        const amount = Math.round(Number(rawAmount)); // Enforce Rounding
+
+        if (!vendor_id || !amount || amount <= 0) {
             return res.status(400).json({ error: 'Vendor and Valid Amount required' });
         }
 
@@ -102,6 +104,9 @@ router.post('/', async (req, res) => {
                 // Logic: If 'Good Stock' or Specific Batch provided, we deduct.
                 // Even 'Damage' returns typically reduce 'inventory_batches' because the item PHYSICALLY leaves.
 
+                // Round Line Amount
+                const lineAmount = Math.round(Number(line.amount));
+
                 await client.query(`
                     INSERT INTO debit_note_lines 
                     (debit_note_id, product_id, qty, rate, amount, batch_number, return_type)
@@ -111,7 +116,7 @@ router.post('/', async (req, res) => {
                     line.product_id,
                     line.qty,
                     line.rate,
-                    line.amount,
+                    lineAmount,
                     line.batch_number,
                     line.return_type || 'Damage'
                 ]);
@@ -123,28 +128,47 @@ router.post('/', async (req, res) => {
                     // 1. Fetch Candidates (FIFO: Oldest First)
                     // We must filter by the requested STATUS (Good vs Damage)
                     // 'return_type' from frontend maps to 'status' in DB
-                    let batchQuery = `
-                        SELECT id, quantity_remaining 
-                        FROM inventory_batches 
-                        WHERE product_id = $1 AND quantity_remaining > 0 
-                    `;
-                    const queryParams = [line.product_id];
+                    // Helper to build and run query
+                    // Helper to build and run query
+                    const findBatches = async (targetStatus) => {
+                        const fs = require('fs');
+                        let q = `
+                            SELECT id, quantity_remaining, batch_code 
+                            FROM inventory_batches 
+                            WHERE product_id = $1 AND quantity_remaining > 0 
+                        `;
+                        const p = [line.product_id];
 
-                    // Filter by Status (Important!)
-                    if (line.return_type) {
-                        batchQuery += ` AND status = $${queryParams.length + 1}`;
-                        queryParams.push(line.return_type);
+                        // Debug Log
+                        fs.appendFileSync('debug_dn.txt', `\n[${new Date().toISOString()}] Searching: Prod=${line.product_id}, Status=${targetStatus}, Batch=${line.batch_number}\n`);
+
+                        if (targetStatus) {
+                            q += ` AND status = $${p.length + 1}`;
+                            p.push(targetStatus);
+                        }
+
+                        if (line.batch_number && line.batch_number.trim() !== '') {
+                            q += ` AND batch_code = $${p.length + 1}`;
+                            p.push(line.batch_number.trim());
+                        }
+
+                        q += ` ORDER BY created_at ASC FOR UPDATE`;
+
+                        fs.appendFileSync('debug_dn.txt', `Query: ${q} \nParams: ${JSON.stringify(p)}\n`);
+
+                        return await client.query(q, p);
+                    };
+
+                    // 1. Try Primary Status (e.g. 'Damage')
+                    let batches = await findBatches(line.return_type);
+                    require('fs').appendFileSync('debug_dn.txt', `Primary Search Valid Batches: ${batches.rows.length}\n`);
+
+                    // 2. Fallback to 'Good' if no stock found
+                    if (batches.rows.length === 0 && line.return_type !== 'Good') {
+                        require('fs').appendFileSync('debug_dn.txt', `Triggering Fallback to 'Good'\n`);
+                        batches = await findBatches('Good');
+                        require('fs').appendFileSync('debug_dn.txt', `Fallback Search Valid Batches: ${batches.rows.length}\n`);
                     }
-
-                    // Filter by Batch Code (Optional)
-                    if (line.batch_number && line.batch_number.trim() !== '') {
-                        batchQuery += ` AND batch_code = $${queryParams.length + 1}`;
-                        queryParams.push(line.batch_number);
-                    }
-
-                    batchQuery += ` ORDER BY created_at ASC FOR UPDATE`;
-
-                    const batches = await client.query(batchQuery, queryParams);
 
                     // 2. Deduct from Batches
                     for (const batch of batches.rows) {
@@ -153,6 +177,9 @@ router.post('/', async (req, res) => {
                         const available = Number(batch.quantity_remaining);
                         const deduct = Math.min(available, remainingReturnQty);
 
+                        require('fs').appendFileSync('debug_dn.txt', `Deducting ${deduct} from BatchID ${batch.id} (Available: ${available})\n`);
+
+                        // A. Deduct from Batch
                         await client.query(`
                             UPDATE inventory_batches 
                             SET quantity_remaining = quantity_remaining - $1 

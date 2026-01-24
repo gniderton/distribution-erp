@@ -65,13 +65,32 @@ router.post('/', async (req, res) => {
             `, [balanceChange, bank_account_id]);
         }
 
+        // 0.5 Generate Payment Number
+        const seqRes = await client.query(`
+            SELECT id, prefix, current_number 
+            FROM document_sequences 
+            WHERE document_type = 'PAY' AND is_active = true 
+            FOR UPDATE
+        `);
+
+        let paymentNumber;
+        if (seqRes.rows.length === 0) {
+            paymentNumber = `PAY-${Date.now().toString().slice(-6)}`;
+        } else {
+            const seq = seqRes.rows[0];
+            const nextNum = Number(seq.current_number) + 1;
+            paymentNumber = `${seq.prefix}${nextNum}`;
+
+            await client.query('UPDATE document_sequences SET current_number = $1 WHERE id = $2', [nextNum, seq.id]);
+        }
+
         // 1. Create Payment Record (Linked to Bank)
         const paymentRes = await client.query(`
             INSERT INTO vendor_payments 
-            (vendor_id, amount, payment_date, payment_mode, transaction_ref, remarks, transaction_type, bank_account_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id
-        `, [vendor_id, amount, payment_date, mode, transaction_ref, remarks, type, bank_account_id]);
+            (vendor_id, amount, payment_date, payment_mode, transaction_ref, remarks, transaction_type, bank_account_id, payment_number)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id, payment_number
+        `, [vendor_id, amount, payment_date, mode, transaction_ref, remarks, type, bank_account_id, paymentNumber]);
 
         const paymentId = paymentRes.rows[0].id;
 

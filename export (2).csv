@@ -1,0 +1,11 @@
+﻿ID,Created at,Vendor ID,Brand ID,Category ID,Brand name,Category name,Ean code,Product code,Product name,Hsn ID,Mrp,Tax ID,Purchase rate,Distributor rate,Wholesale rate,Dealer rate,Retail rate,Is active,Current stock,Damaged stock,Tax name,Hsn code,Stock damage,Stock expiry
+1,2026-01-16T07:18:08.958Z,9,5,1,Victory,Cleaning Supplies,,VIC-CLE-001,Victory 1000 Washing Soap 1000Gm,40,119,2,69.1779661,73.32864407,80.66150847,82.12808136,119,TRUE,0,0,GST 18,34011942,0,0
+2,2026-01-16T07:18:08.958Z,9,5,1,Victory,Cleaning Supplies,,VIC-CLE-002,Victory 1000 Washing Soap 500Gm,40,119,2,69.1779661,73.32864407,80.66150847,82.12808136,119,TRUE,0,0,GST 18,34011942,0,0
+3,2026-01-16T07:23:50.009Z,9,11,1,Anti Virus,Cleaning Supplies,,ANT-CLE-001,Anti-Virus Dish Wash Liquid (Green),38,99,2,57.55932203,61.01288136,67.11416949,68.33442712,99,TRUE,0,12,GST 18,3401,0,0
+4,2026-01-16T07:23:50.009Z,9,11,1,Anti Virus,Cleaning Supplies,,ANT-CLE-002,Anti-Virus Dish Wash Liquid (Yellow),38,99,2,57.55932203,61.01288136,67.11416949,68.33442712,99,TRUE,0,0,GST 18,3401,0,0
+5,2026-01-16T07:23:50.009Z,9,11,1,Anti Virus,Cleaning Supplies,,ANT-CLE-003,Anti-Virus Floor Cleaner (Floral Aqua),39,99,2,57.55932203,61.01288136,67.11416949,68.33442712,99,TRUE,0,0,GST 18,3402,0,0
+6,2026-01-16T07:23:50.009Z,9,11,1,Anti Virus,Cleaning Supplies,,ANT-CLE-004,Anti-Virus Floor Cleaner (Lavender),39,99,2,57.55932203,61.01288136,67.11416949,68.33442712,99,TRUE,0,0,GST 18,3402,0,0
+7,2026-01-16T07:23:50.009Z,9,11,1,Anti Virus,Cleaning Supplies,,ANT-CLE-005,Anti-Virus Floor Cleaner (Lemon Spice),39,699,2,255,270.3,297.33,302.736,699,TRUE,138,12,GST 18,3402,0,0
+8,2026-01-16T07:23:50.009Z,9,11,1,Anti Virus,Cleaning Supplies,,ANT-CLE-006,Anti-Virus Floor Cleaner (Lemongrass),39,99,2,57.55932203,61.01288136,67.11416949,68.33442712,99,TRUE,0,0,GST 18,3402,0,0
+9,2026-01-16T07:23:50.009Z,9,11,1,Anti Virus,Cleaning Supplies,,ANT-CLE-007,Anti-Virus Liquid Detergent,39,95,2,59.96166667,63.55936667,69.91530333,71.18649067,95,TRUE,0,0,GST 18,3402,0,0
+10,2026-01-16T07:23:50.009Z,9,11,1,Anti Virus,Cleaning Supplies,,ANT-CLE-008,Anti-Virus Toilet Bowl Cleaner (Acidic),39,48,2,30.53611111,32.36827778,35.60510556,36.25247111,48,TRUE,0,0,GST 18,3402,0,0

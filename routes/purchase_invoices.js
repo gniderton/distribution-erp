@@ -32,7 +32,7 @@ router.get('/', async (req, res) => {
                         'Item Name', p.product_name,
                         'Ean code', p.ean_code,
                         -- MRP: Matches Frontend 'MRP'
-                        'MRP', COALESCE((SELECT mrp FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1), p.mrp),
+                        'MRP', COALESCE((SELECT mrp FROM inventory_batches ib WHERE ib.purchase_invoice_line_id = pl.id LIMIT 1), p.mrp),
                         'Qty', pl.accepted_qty,
                         'Price', pl.rate,
                         'Gross', (pl.accepted_qty * pl.rate),
@@ -43,8 +43,8 @@ router.get('/', async (req, res) => {
                         'Net $', pl.amount,
                         'GST $', pl.tax_amount,
                         'Net $', pl.amount,
-                        'Batch No', (SELECT batch_number FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1),
-                        'Expiry', (SELECT expiry_date FROM product_batches pb WHERE pb.purchase_invoice_line_id = pl.id LIMIT 1),
+                        'Batch No', (SELECT batch_code FROM inventory_batches ib WHERE ib.purchase_invoice_line_id = pl.id LIMIT 1),
+                        'Expiry', (SELECT expiry_date FROM inventory_batches ib WHERE ib.purchase_invoice_line_id = pl.id LIMIT 1),
                         -- Fallback Logic: If Master Link is broken, Calculate % from Amount
                         'Tax %', COALESCE(t.tax_percentage, ROUND((pl.tax_amount / NULLIF(pl.amount - pl.tax_amount, 0)) * 100, 2), 0),
                         'Tax Name', CASE 
@@ -206,16 +206,15 @@ router.post('/:id/reverse', async (req, res) => {
             return res.status(400).json({ error: 'Invoice is already reversed or cancelled' });
         }
 
-        // 2. Check Stock Integrity (Product Batches)
+        // 2. Check Stock Integrity (Inventory Batches)
         // If we sold any stock from this GRN, we CANNOT auto-reverse. User must fix manually.
-        // Fix: product_batches links to lines (purchase_invoice_line_id), not header directly.
         const batchCheck = await client.query(`
             SELECT COUNT(*) 
-            FROM product_batches 
+            FROM inventory_batches 
             WHERE purchase_invoice_line_id IN (
                 SELECT id FROM purchase_invoice_lines WHERE purchase_invoice_header_id = $1
             ) 
-            AND (initial_qty - qty_good) > 0 -- If any stock has been moved (qty_good < initial)
+            AND (quantity_initial - quantity_remaining) > 0 -- If any stock has been moved
             AND is_active = true
         `, [id]);
 
@@ -241,9 +240,9 @@ router.post('/:id/reverse', async (req, res) => {
         // 3b. Add DN Lines (For Audit)
         // Fetch original lines to copy, joining with Batches to get the Batch Number
         const linesRes = await client.query(`
-            SELECT pil.*, pb.batch_number 
+            SELECT pil.*, ib.batch_code as batch_number 
             FROM purchase_invoice_lines pil
-            LEFT JOIN product_batches pb ON pb.purchase_invoice_line_id = pil.id
+            LEFT JOIN inventory_batches ib ON ib.purchase_invoice_line_id = pil.id
             WHERE pil.purchase_invoice_header_id = $1
         `, [id]);
 
@@ -263,10 +262,10 @@ router.post('/:id/reverse', async (req, res) => {
         `, [id, reversed_by_id]);
 
         // 5. Void Batches (Remove Stock)
-        // Fix: Use correct columns (qty_good, purchase_invoice_line_id)
+        // Fix: Use correct columns (quantity_remaining, purchase_invoice_line_id)
         await client.query(`
-            UPDATE product_batches 
-            SET qty_good = 0, is_active = false 
+            UPDATE inventory_batches 
+            SET quantity_remaining = 0, is_active = false 
             WHERE purchase_invoice_line_id IN (
                 SELECT id FROM purchase_invoice_lines WHERE purchase_invoice_header_id = $1
             )
