@@ -152,10 +152,11 @@ router.get('/:id/stats', async (req, res) => {
                 v.vendor_name,
                 pl.accepted_qty,
                 pl.rate,
-                pl.batch_number
+                ib.batch_code as batch_number
             FROM purchase_invoice_lines pl
-            JOIN purchase_invoice_headers pi ON pl.purchase_invoice_id = pi.id
+            JOIN purchase_invoice_headers pi ON pl.purchase_invoice_header_id = pi.id
             JOIN vendors v ON pi.vendor_id = v.id
+            LEFT JOIN inventory_batches ib ON ib.purchase_invoice_line_id = pl.id
             WHERE pl.product_id = $1 AND pi.status != 'Cancelled' AND pi.status != 'Reversed'
             ORDER BY pi.received_date DESC
             LIMIT 20
