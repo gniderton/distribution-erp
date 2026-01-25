@@ -58,6 +58,12 @@ router.get('/', async (req, res) => {
             FROM inventory_batches ib 
             WHERE ib.product_id = p.id AND ib.quantity_remaining > 0 AND ib.status = 'Good'
         ), 0) as stock_value_gross,
+
+        COALESCE((
+            SELECT SUM(ib.quantity_initial * ib.purchase_rate) 
+            FROM inventory_batches ib 
+            WHERE ib.product_id = p.id
+        ), 0) as stock_value_total_bought,
         
         b.brand_name,
         c.category_name,
