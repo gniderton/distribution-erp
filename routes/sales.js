@@ -21,7 +21,16 @@ router.post('/allocate', async (req, res) => {
 
             // 1. Fetch Batches (FIFO: Oldest First)
             const batchesRes = await client.query(`
-                SELECT id, batch_code as batch_number, quantity_remaining as qty_good, mrp, purchase_rate as sale_rate 
+                SELECT 
+                    id, 
+                    batch_code as batch_number, 
+                    quantity_remaining as qty_good, 
+                    mrp, 
+                    purchase_rate,      -- Cost Price
+                    distributor_rate,   -- Selling Rate 1
+                    wholesale_rate,     -- Selling Rate 2
+                    dealer_rate,        -- Selling Rate 3
+                    retail_rate         -- Selling Rate 4
                 FROM inventory_batches 
                 WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
                 ORDER BY created_at ASC
@@ -41,7 +50,11 @@ router.post('/allocate', async (req, res) => {
                     batch_number: batch.batch_number,
                     qty: take,
                     mrp: Number(batch.mrp),
-                    sale_rate: Number(batch.sale_rate) || Number(batch.mrp) // Fallback to MRP if sale_rate null
+                    purchase_rate: Number(batch.purchase_rate),
+                    distributor_rate: Number(batch.distributor_rate),
+                    wholesale_rate: Number(batch.wholesale_rate),
+                    dealer_rate: Number(batch.dealer_rate),
+                    retail_rate: Number(batch.retail_rate)
                 });
 
                 remaining -= take;

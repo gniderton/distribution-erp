@@ -1,0 +1,5 @@
+ALTER TABLE inventory_batches 
+ADD COLUMN distributor_rate NUMERIC(10,2) DEFAULT 0,
+ADD COLUMN wholesale_rate NUMERIC(10,2) DEFAULT 0,
+ADD COLUMN dealer_rate NUMERIC(10,2) DEFAULT 0,
+ADD COLUMN retail_rate NUMERIC(10,2) DEFAULT 0;
