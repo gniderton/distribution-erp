@@ -54,7 +54,7 @@ router.get('/', async (req, res) => {
         ), 0) as stock_value_cost,
 
         COALESCE((
-            SELECT SUM(ib.quantity_remaining * ib.purchase_rate * (1 + (COALESCE(p.tax_rate, 0) / 100.0))) 
+            SELECT SUM(ib.quantity_remaining * ib.purchase_rate * (1 + (COALESCE(t.tax_percentage, 0) / 100.0))) 
             FROM inventory_batches ib 
             WHERE ib.product_id = p.id AND ib.quantity_remaining > 0 AND ib.status = 'Good'
         ), 0) as stock_value_gross,
