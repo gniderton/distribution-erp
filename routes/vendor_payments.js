@@ -94,7 +94,45 @@ router.post('/', async (req, res) => {
 
         const paymentId = paymentRes.rows[0].id;
 
-        // 2. Validate & Create Allocations (ONLY FOR PAYMENTS)
+        // 1b. Create Accounting Entry (Ledger)
+        const acc_ap = 2001;
+        const acc_bank = 1002;
+        let ledgerLines = [];
+        let description = '';
+
+        if (type === 'PAYMENT') {
+            description = `Payment Out: ${paymentNumber}`;
+            // Dr Accounts Payable (Liability decreases), Cr Bank (Asset decreases)
+            ledgerLines = [
+                { code: acc_ap, debit: Number(amount), credit: 0 },
+                { code: acc_bank, debit: 0, credit: Number(amount) }
+            ];
+        } else {
+            description = `Refund In: ${paymentNumber}`;
+            // Dr Bank (Asset increases), Cr Accounts Payable (Liability reduces 'receivable' or effectively negative payable)
+            // Wait, Refunds usually reduce the "Advance" or "Credit Note" balance. 
+            // If we treat it as money back, it reduces the Vendor Balance (which is Credit). 
+            // Dr Bank, Cr AP is correct (AP becomes more positive/credit-heavy? No).
+            // Normal AP is Credit Balance. Payment (Dr AP) reduces it to 0. 
+            // Refund (Money In) means we got money back. 
+            // Dr Bank (Asset Up). Cr AP (Liability Up? No, Cr AP means we owe them).
+            // If we receive a refund, it means they owed US money (Debit Balance). 
+            // So Cr AP reduces that Debit Balance back to 0. Correct.
+            ledgerLines = [
+                { code: acc_bank, debit: Number(amount), credit: 0 },
+                { code: acc_ap, debit: 0, credit: Number(amount) }
+            ];
+        }
+
+        await client.query(`
+            SELECT create_journal_entry($1, $2, $3, $4, $5)
+        `, [
+            payment_date,
+            description,
+            'PAYMENT',
+            paymentId,
+            JSON.stringify(ledgerLines)
+        ]);
         if (type === 'PAYMENT' && allocations && Array.isArray(allocations) && allocations.length > 0) {
 
             // SECURITY CHECK: Ensure user isn't allocating more than they paid

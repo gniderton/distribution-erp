@@ -259,19 +259,67 @@ router.post('/', async (req, res) => {
             }
         }
 
+        // 5. Accounting Entry (Ledger)
+        const acc_ap = 2001;
+        const acc_inventory = 1001;
+        const acc_discount = 4002;
+        const acc_gst = 1010; // Defaulting to IGST for now
+
+        let ledgerLines = [];
+        let desc = '';
+
+        if (lines.length === 0) {
+            // Case A: Financial Debit Note (No Items)
+            desc = `Financial DN: ${dnNumber}`;
+            ledgerLines = [
+                { code: acc_ap, debit: Number(amount), credit: 0 },
+                { code: acc_discount, debit: 0, credit: Number(amount) }
+            ];
+        } else {
+            // Case B: Purchase Return (Itemized)
+            desc = `Purchase Return: ${dnNumber}`;
+
+            // Calculate Split (Inventory vs Tax)
+            // We rely on 'line.tax_amount' from frontend, or default to 0 tax.
+            let totalTax = 0;
+            let totalTaxable = 0;
+
+            for (const line of lines) {
+                const lineAmt = Number(line.amount) || 0; // Gross
+                const lineTax = Number(line.tax_amount) || 0;
+                totalTax += lineTax;
+                totalTaxable += (lineAmt - lineTax);
+            }
+
+            // Validation fallback: If calculation seems off (e.g. tax > amount), just put all to stock
+            if (totalTaxable < 0) totalTaxable = 0;
+
+            ledgerLines = [
+                { code: acc_ap, debit: Number(amount), credit: 0 },
+                { code: acc_inventory, debit: 0, credit: totalTaxable }
+            ];
+
+            if (totalTax > 0) {
+                ledgerLines.push({ code: acc_gst, debit: 0, credit: totalTax });
+            }
+        }
+
+        await client.query(`
+            SELECT create_journal_entry($1, $2, $3, $4, $5)
+        `, [
+            debit_note_date || new Date(),
+            desc,
+            'DN',
+            newId,
+            JSON.stringify(ledgerLines)
+        ]);
+
         await client.query('COMMIT');
-
-        res.status(201).json({
-            success: true,
-            message: 'Debit Note Created',
-            id: newId,
-            dn_number: insertRes.rows[0].debit_note_number
-        });
-
+        res.json({ success: true, id: newId, message: 'Debit Note Created', debit_note_number: dnNumber });
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Create Debit Note Error:', err.message);
-        res.status(500).json({ error: 'Server Error creating Debit Note', details: err.message });
+        console.error('Debit Note Create Error:', err);
+        res.status(500).json({ error: 'Server Error ' + err.message });
     } finally {
         client.release();
     }

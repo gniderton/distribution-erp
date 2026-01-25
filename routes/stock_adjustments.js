@@ -52,6 +52,9 @@ router.post('/', async (req, res) => {
 
         await client.query('BEGIN');
 
+        // Accounting Accumulator
+        let totalLossValue = 0;
+
         for (const item of items) {
             const { product_id, qty, reason } = item;
             const moveQty = Number(qty);
@@ -61,20 +64,16 @@ router.post('/', async (req, res) => {
             // 1. BRANCH LOGIC: INCREASE (Found) vs DECREASE (Damage/Lost/Etc)
             // -------------------------------------------------------------
             if (reason === 'Found') {
-                // HANDLE STOCK INCREASE
-                // Create a new "FOUND" batch or add to a generic one.
-                // We'll create a new batch for traceability.
+                // ... (Existing Found Logic) ...
                 const batchCode = item.batch_code || `FOUND-${new Date().toISOString().split('T')[0]}`;
-
                 await client.query(`
                     INSERT INTO inventory_batches 
                     (product_id, batch_code, quantity_initial, quantity_remaining, purchase_rate, is_active)
                     VALUES ($1, $2, $3, $3, 0, true) 
-                `, [product_id, batchCode, moveQty]); // Rate 0 as it's found/bonus
+                `, [product_id, batchCode, moveQty]);
 
             } else {
                 // HANDLE STOCK DECREASE (Damage, Expiry, Lost)
-                // -------------------------------
                 let remainingToDeduct = moveQty;
 
                 // Fetch FIFO Batches (Good Status only)
@@ -92,6 +91,9 @@ router.post('/', async (req, res) => {
                     const available = Number(batch.quantity_remaining);
                     const deduct = Math.min(available, remainingToDeduct);
 
+                    // COST CALCULATION
+                    const cost = Number(batch.purchase_rate) * deduct;
+
                     // 1. Reduce Source Batch
                     await client.query(`
                         UPDATE inventory_batches 
@@ -100,11 +102,9 @@ router.post('/', async (req, res) => {
                     `, [deduct, batch.id]);
 
                     // 2. CREATE NEW BATCH (With New Status) - The "Split"
-                    // If reason is Lost, we might just deduct. But if Damage/Expiry, we keep it.
                     if (['Damage', 'Expiry'].includes(reason)) {
-                        // Suffix for traceability: "GRN-101" -> "GRN-101-DMG"
+                        // RECLASSIFICATION (Asset -> Asset). No Loss booked yet.
                         const suffix = reason === 'Damage' ? '-DMG' : '-EXP';
-                        // Avoid double suffix if moving already moved stock (unlikely here as we filter Good)
                         const newBatchCode = `${batch.batch_code}${suffix}`;
 
                         await client.query(`
@@ -113,22 +113,23 @@ router.post('/', async (req, res) => {
                             VALUES ($1, $2, $3, $3, $4, true, $5, $6, $7)
                         `, [
                             product_id, newBatchCode, deduct,
-                            batch.purchase_rate, // Inherit Rate
-                            reason, // Status = 'Damage' or 'Expiry'
-                            batch.expiry_date, // Keep Expiry
-                            batch.grn_id // Keep Origin Link
+                            batch.purchase_rate,
+                            reason,
+                            batch.expiry_date,
+                            batch.grn_id
                         ]);
+                    } else if (reason === 'Lost') {
+                        // LOSS BOOKING
+                        // Item is gone. We track the value to book to Expense.
+                        totalLossValue += cost;
                     }
 
                     remainingToDeduct -= deduct;
                 }
             }
 
-            // 2. HANDLE DESTINATION (Legacy Support + Audit)
-            // --------------------------------------------------
+            // 2. HANDLE DESTINATION (Legacy Support)
             if (['Damage', 'Expiry'].includes(reason)) {
-                // We STILL update the summary bucket for now, just to keep the "Products Table" view consistent 
-                // until we migrate the frontend to read non-good rows.
                 await client.query(`
                     UPDATE products 
                     SET damaged_stock = COALESCE(damaged_stock, 0) + $1 
@@ -137,11 +138,31 @@ router.post('/', async (req, res) => {
             }
 
             // 3. AUDIT LOG
-            // ------------
             await client.query(`
                 INSERT INTO stock_adjustments (product_id, qty, reason, notes)
                 VALUES ($1, $2, $3, $4)
             `, [product_id, moveQty, reason, notes]);
+        }
+
+        // 4. ACCOUNTING ENTRY (For Losses)
+        if (totalLossValue > 0) {
+            const acc_inventory = 1001;
+            const acc_loss = 5002;
+
+            const ledgerLines = [
+                { code: acc_loss, debit: totalLossValue, credit: 0 },
+                { code: acc_inventory, debit: 0, credit: totalLossValue }
+            ];
+
+            await client.query(`
+                SELECT create_journal_entry($1, $2, $3, $4, $5)
+            `, [
+                new Date(),
+                `Stock Adjustment: Lost Items`,
+                'ADJUSTMENT',
+                0, // No single ID to link to, could link to first Audit Log or use 0
+                JSON.stringify(ledgerLines)
+            ]);
         }
 
         await client.query('COMMIT');
