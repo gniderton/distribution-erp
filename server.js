@@ -50,11 +50,33 @@ app.use('/api/sales', require('./routes/sales')); // [NEW] Sales Allocation Logi
 app.use('/api/stock/adjust', require('./routes/stock_adjustments')); // [NEW] Stock Logic
 
 // Database Connection Test & Server Start
+const fs = require('fs');
+const path = require('path');
+
+// Database Connection Test & Server Start
 pool.query('SELECT NOW()', (err, res) => {
     if (err) {
         console.error('Database Connection Failed:', err);
     } else {
         console.log('Database Connected Successfully:', res.rows[0].now);
+
+        // --- AUTO-MIGRATION SECTION (TEMPORARY FIX) ---
+        // Verify/Apply 040_fix_grn_rounding.sql
+        try {
+            const migrationPath = path.join(__dirname, 'database', '040_fix_grn_rounding.sql');
+            if (fs.existsSync(migrationPath)) {
+                const sql = fs.readFileSync(migrationPath, 'utf8');
+                console.log('Applying Migration 040 (Rounding Fix)...');
+                pool.query(sql, (migErr) => {
+                    if (migErr) console.error('Migration 040 Failed:', migErr);
+                    else console.log('Migration 040 Applied Successfully.');
+                });
+            }
+        } catch (migEx) {
+            console.error('Migration Error:', migEx);
+        }
+        // ----------------------------------------------
+
         app.listen(port, () => {
             console.log(`Server running on http://localhost:${port}`);
         });
