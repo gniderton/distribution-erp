@@ -188,7 +188,9 @@ router.post('/', async (req, res) => {
     let {
         vendor_id, product_name, brand_id, category_id,
         hsn_id, tax_id,
-        mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate
+        mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate,
+        case_quantity, uom, model_number, min_stock_level,
+        box_length_cm, box_width_cm, box_height_cm, weight_kg, description
     } = req.body;
 
     if (!vendor_id || !product_name || !brand_id || !category_id || !mrp || !purchase_rate) {
@@ -244,9 +246,11 @@ router.post('/', async (req, res) => {
             vendor_id, brand_id, category_id, product_code, product_name, 
             hsn_id, tax_id, ean_code,
             mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate, 
+            case_quantity, uom, model_number, min_stock_level,
+            box_length_cm, box_width_cm, box_height_cm, weight_kg, description,
             is_active
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, true)
           RETURNING *
         `;
 
@@ -254,7 +258,9 @@ router.post('/', async (req, res) => {
             vendor_id, brand_id, category_id, product_code, product_name,
             hsn_id || null, tax_id || null, req.body.ean_code || null,
             mrp, purchase_rate,
-            distributor_rate || 0, wholesale_rate || 0, dealer_rate || 0, retail_rate || 0
+            distributor_rate || 0, wholesale_rate || 0, dealer_rate || 0, retail_rate || 0,
+            case_quantity || 1, uom || 'Pcs', model_number || null, min_stock_level || 0,
+            box_length_cm || null, box_width_cm || null, box_height_cm || null, weight_kg || null, description || null
         ]);
 
         await pool.query('COMMIT');
@@ -364,9 +370,11 @@ router.post('/import', async (req, res) => {
                     ean_code,
                     hsn_id, tax_id, 
                     mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate, 
+                    case_quantity, uom, model_number, min_stock_level,
+                    box_length_cm, box_width_cm, box_height_cm, weight_kg, description,
                     is_active
                   )
-                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true)
+                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, true)
                 `;
 
                 await client.query(query, [
@@ -374,7 +382,9 @@ router.post('/import', async (req, res) => {
                     item.ean_code || null,
                     item.hsn_id || null, item.tax_id || null,
                     item.mrp || 0, item.purchase_rate || 0,
-                    item.distributor_rate || 0, item.wholesale_rate || 0, item.dealer_rate || 0, item.retail_rate || 0
+                    item.distributor_rate || 0, item.wholesale_rate || 0, item.dealer_rate || 0, item.retail_rate || 0,
+                    item.case_quantity || 1, item.uom || 'Pcs', item.model_number || null, item.min_stock_level || 0,
+                    item.box_length_cm || null, item.box_width_cm || null, item.box_height_cm || null, item.weight_kg || null, item.description || null
                 ]);
 
                 nextNum++;
@@ -412,11 +422,20 @@ router.get('/export', async (req, res) => {
                 p.retail_rate as "Retail Rate",
                 t.tax_name as "Tax Name",
                 h.hsn_code as "HSN Code",
-                p.ean_code as "EAN"
+                p.ean_code as "EAN",
+                p.case_quantity as "Case Qty",
+                p.uom as "UOM",
+                p.model_number as "Model Number",
+                p.min_stock_level as "Min Stock",
+                p.box_length_cm as "Length(cm)",
+                p.box_width_cm as "Width(cm)",
+                p.box_height_cm as "Height(cm)",
+                p.weight_kg as "Weight(kg)",
+                p.description as "Description"
             FROM products p
             LEFT JOIN brands b ON p.brand_id = b.id
             LEFT JOIN categories c ON p.category_id = c.id
-            LEFT JOIN vendors v ON p.vendor_id = v.id (SELECT id, vendor_name FROM vendors) v ON p.vendor_id = v.id -- Basic Join
+            LEFT JOIN vendors v ON p.vendor_id = v.id
             LEFT JOIN taxes t ON p.tax_id = t.id
             LEFT JOIN hsn_codes h ON p.hsn_id = h.id
             WHERE p.is_active = true
@@ -438,11 +457,20 @@ router.get('/export', async (req, res) => {
                 p.retail_rate as "Retail Rate",
                 t.tax_name as "Tax Name",
                 h.hsn_code as "HSN Code",
-                p.ean_code as "EAN"
+                p.ean_code as "EAN",
+                p.case_quantity as "Case Qty",
+                p.uom as "UOM",
+                p.model_number as "Model Number",
+                p.min_stock_level as "Min Stock",
+                p.box_length_cm as "Length(cm)",
+                p.box_width_cm as "Width(cm)",
+                p.box_height_cm as "Height(cm)",
+                p.weight_kg as "Weight(kg)",
+                p.description as "Description"
             FROM products p
             LEFT JOIN brands b ON p.brand_id = b.id
             LEFT JOIN categories c ON p.category_id = c.id
-            LEFT JOIN vendors v ON p.vendor_id = v.id
+            LEFT JOIN vendors v ON p.vendor_id = v.id 
             LEFT JOIN taxes t ON p.tax_id = t.id
             LEFT JOIN hsn_codes h ON p.hsn_id = h.id
             WHERE p.is_active = true
@@ -536,7 +564,7 @@ router.post('/bulk-update', async (req, res) => {
 
             for (const u of updates) {
                 // Must ensure values are formatted/cast correctly for the query placeholders
-                valuePlaceholders.push(`($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5}, $${paramIdx + 6}, $${paramIdx + 7}, $${paramIdx + 8}, $${paramIdx + 9}, $${paramIdx + 10}, $${paramIdx + 11}, $${paramIdx + 12}, $${paramIdx + 13})`);
+                valuePlaceholders.push(`($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5}, $${paramIdx + 6}, $${paramIdx + 7}, $${paramIdx + 8}, $${paramIdx + 9}, $${paramIdx + 10}, $${paramIdx + 11}, $${paramIdx + 12}, $${paramIdx + 13}, $${paramIdx + 14}, $${paramIdx + 15}, $${paramIdx + 16}, $${paramIdx + 17}, $${paramIdx + 18}, $${paramIdx + 19}, $${paramIdx + 20}, $${paramIdx + 21}, $${paramIdx + 22})`);
 
                 // Helper to safely parse numbers
                 // Fix: Return NULL for undefined/empty so COALESCE keeps original value.
@@ -564,9 +592,11 @@ router.post('/bulk-update', async (req, res) => {
                     safeNum(u.distributor_rate), safeNum(u.wholesale_rate), safeNum(u.dealer_rate), safeNum(u.retail_rate),
                     safeId(u.tax_id, taxMap),
                     safeId(u.hsn_id, hsnMap),
-                    u.ean_code
+                    u.ean_code,
+                    safeNum(u.case_quantity), u.uom, u.model_number, safeNum(u.min_stock_level),
+                    safeNum(u.box_length_cm), safeNum(u.box_width_cm), safeNum(u.box_height_cm), safeNum(u.weight_kg), u.description
                 );
-                paramIdx += 14;
+                paramIdx += 23;
             }
 
             const query = `
@@ -584,13 +614,24 @@ router.post('/bulk-update', async (req, res) => {
                     retail_rate = COALESCE(v.retail_rate::numeric, p.retail_rate),
                     tax_id = COALESCE(NULLIF(v.tax_id::bigint, 0), p.tax_id),
                     hsn_id = COALESCE(NULLIF(v.hsn_id::bigint, 0), p.hsn_id),
-                    ean_code = COALESCE(v.ean_code, p.ean_code)
+                    ean_code = COALESCE(v.ean_code, p.ean_code),
+                    case_quantity = COALESCE(v.case_quantity::integer, p.case_quantity),
+                    uom = COALESCE(v.uom, p.uom),
+                    model_number = COALESCE(v.model_number, p.model_number),
+                    min_stock_level = COALESCE(v.min_stock_level::integer, p.min_stock_level),
+                    box_length_cm = COALESCE(v.box_length_cm::numeric, p.box_length_cm),
+                    box_width_cm = COALESCE(v.box_width_cm::numeric, p.box_width_cm),
+                    box_height_cm = COALESCE(v.box_height_cm::numeric, p.box_height_cm),
+                    weight_kg = COALESCE(v.weight_kg::numeric, p.weight_kg),
+                    description = COALESCE(v.description, p.description)
                 FROM (VALUES 
                     ${valuePlaceholders.join(', ')}
                 ) AS v(
                     id, product_name, brand_id, category_id, vendor_id, 
                     mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate, 
-                    tax_id, hsn_id, ean_code
+                    tax_id, hsn_id, ean_code,
+                    case_quantity, uom, model_number, min_stock_level,
+                    box_length_cm, box_width_cm, box_height_cm, weight_kg, description
                 )
                 WHERE p.id = v.id::bigint
             `;

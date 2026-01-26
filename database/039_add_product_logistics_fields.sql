@@ -1,0 +1,10 @@
+ALTER TABLE products 
+ADD COLUMN case_quantity INTEGER DEFAULT 1,
+ADD COLUMN uom TEXT DEFAULT 'Pcs',
+ADD COLUMN model_number TEXT,
+ADD COLUMN min_stock_level INTEGER DEFAULT 0,
+ADD COLUMN box_length_cm NUMERIC(10,2),
+ADD COLUMN box_width_cm NUMERIC(10,2),
+ADD COLUMN box_height_cm NUMERIC(10,2),
+ADD COLUMN weight_kg NUMERIC(10,3),
+ADD COLUMN description TEXT;
