@@ -280,7 +280,6 @@ router.post('/', async (req, res) => {
             desc = `Purchase Return: ${dnNumber}`;
 
             // Calculate Split (Inventory vs Tax)
-            // We rely on 'line.tax_amount' from frontend, or default to 0 tax.
             let totalTax = 0;
             let totalTaxable = 0;
 
@@ -291,7 +290,11 @@ router.post('/', async (req, res) => {
                 totalTaxable += (lineAmt - lineTax);
             }
 
-            // Validation fallback: If calculation seems off (e.g. tax > amount), just put all to stock
+            // Round to 2 decimals for safety
+            totalTax = Number(totalTax.toFixed(2));
+            totalTaxable = Number(totalTaxable.toFixed(2));
+
+            // Validation fallback
             if (totalTaxable < 0) totalTaxable = 0;
 
             ledgerLines = [
@@ -301,6 +304,22 @@ router.post('/', async (req, res) => {
 
             if (totalTax > 0) {
                 ledgerLines.push({ code: acc_gst, debit: 0, credit: totalTax });
+            }
+
+            // --- ROUNDING FIX ---
+            const totalDebits = Number(amount);
+            const totalCredits = Number((totalTaxable + totalTax).toFixed(2)); // Sum credits
+            const diff = Number((totalDebits - totalCredits).toFixed(2));
+            const acc_rounding = 5003;
+
+            if (diff !== 0) {
+                if (diff > 0) {
+                    // Debits > Credits (e.g. 100 > 99.9). Need Credit 0.1 to balance.
+                    ledgerLines.push({ code: acc_rounding, debit: 0, credit: diff });
+                } else {
+                    // Credits > Debits (e.g. 100 < 100.1). Diff is -0.1. Need Debit 0.1 to balance.
+                    ledgerLines.push({ code: acc_rounding, debit: Math.abs(diff), credit: 0 });
+                }
             }
         }
 
