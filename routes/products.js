@@ -488,7 +488,7 @@ router.get('/export', async (req, res) => {
 
         // Convert to CSV
         if (rows.length === 0) {
-            return res.send("Product ID,Product Name,Brand Name,Category Name,Vendor Name,MRP,Purchase Rate,Distributor Rate,Wholesale Rate,Dealer Rate,Retail Rate,Tax Name,HSN Code,EAN");
+            return res.send("Product ID,Product Name,Brand Name,Category Name,Vendor Name,MRP,Purchase Rate,Distributor Rate,Wholesale Rate,Dealer Rate,Retail Rate,Tax Name,HSN Code,EAN,Case Qty,UOM,Model Number,Min Stock,Length(cm),Width(cm),Height(cm),Weight(kg),Description");
         }
 
         const headers = Object.keys(rows[0]).join(',');
@@ -537,13 +537,30 @@ router.post('/bulk-update', async (req, res) => {
         const hsnRes = await client.query('SELECT id, hsn_code FROM hsn_codes');
         const vendRes = await client.query('SELECT id, vendor_name FROM vendors');
 
-        const brandMap = {}; brandsRes.rows.forEach(r => brandMap[r.brand_name.toLowerCase().trim()] = r);
-        const catMap = {}; catsRes.rows.forEach(r => catMap[r.category_name.toLowerCase().trim()] = r);
-        const taxMap = {}; taxRes.rows.forEach(r => taxMap[r.tax_name.toLowerCase().trim()] = r.id);
-        const hsnMap = {}; hsnRes.rows.forEach(r => hsnMap[Number(r.hsn_code)] = r.id); // HSN often numeric 
-        // Also map HSN strings just in case
-        hsnRes.rows.forEach(r => hsnMap[String(r.hsn_code).trim()] = r.id);
-        const vendMap = {}; vendRes.rows.forEach(r => vendMap[r.vendor_name.toLowerCase().trim()] = r.id);
+        // 1. Build Optimization Map: Name -> Object AND ID -> Object
+        const brandMap = {}; const brandIdMap = {};
+        brandsRes.rows.forEach(r => {
+            brandMap[r.brand_name.toLowerCase().trim()] = r;
+            brandIdMap[r.id] = r;
+        });
+
+        const catMap = {}; const catIdMap = {};
+        catsRes.rows.forEach(r => {
+            catMap[r.category_name.toLowerCase().trim()] = r;
+            catIdMap[r.id] = r;
+        });
+
+        const taxMap = {};
+        taxRes.rows.forEach(r => taxMap[r.tax_name.toLowerCase().trim()] = r.id);
+
+        const hsnMap = {};
+        hsnRes.rows.forEach(r => {
+            hsnMap[Number(r.hsn_code)] = r.id;
+            hsnMap[String(r.hsn_code).trim()] = r.id;
+        });
+
+        const vendMap = {};
+        vendRes.rows.forEach(r => vendMap[r.vendor_name.toLowerCase().trim()] = r.id);
 
         const updates = [];
         const newItems = [];
@@ -557,30 +574,30 @@ router.post('/bulk-update', async (req, res) => {
             }
         }
 
+        // --- HELPER FUNCTIONS ---
+        const safeNum = (val) => (val === '' || val === null || val === undefined) ? null : val;
+
+        // Resolve ID from Value (Value can be ID or Name)
+        const safeId = (val, map) => {
+            if (!val) return null;
+            if (!isNaN(val)) return val; // Already an ID
+            const key = String(val).toLowerCase().trim();
+            // Map contains Objects (Brand/Cat) or IDs (Tax/Vendor)?
+            // Brand/Cat maps are Obj. Tax/Vendor/HSN maps are ID.
+            // We need to check what 'map' is passed.
+            // Actually, we can just check if the result is an object or primitive.
+            const res = map[key];
+            return (res && typeof res === 'object') ? res.id : res;
+        };
+
+        // --- PROCESS UPDATES ---
         if (updates.length > 0) {
             const values = [];
             let paramIdx = 1;
             const valuePlaceholders = [];
 
             for (const u of updates) {
-                // Must ensure values are formatted/cast correctly for the query placeholders
                 valuePlaceholders.push(`($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5}, $${paramIdx + 6}, $${paramIdx + 7}, $${paramIdx + 8}, $${paramIdx + 9}, $${paramIdx + 10}, $${paramIdx + 11}, $${paramIdx + 12}, $${paramIdx + 13}, $${paramIdx + 14}, $${paramIdx + 15}, $${paramIdx + 16}, $${paramIdx + 17}, $${paramIdx + 18}, $${paramIdx + 19}, $${paramIdx + 20}, $${paramIdx + 21}, $${paramIdx + 22})`);
-
-                // Helper to safely parse numbers
-                // Fix: Return NULL for undefined/empty so COALESCE keeps original value.
-                // Only return 0 if the input is explicitly 0.
-                const safeNum = (val) => (val === '' || val === null || val === undefined) ? null : val;
-
-                // Lookup IDs from Maps if names are provided
-                // Use lowercase/trim for safe matching
-                const safeId = (val, map) => {
-                    if (!val) return null;
-                    // If it's a number/string number, assume it's an ID
-                    if (!isNaN(val)) return val;
-                    // Otherwise try to look it up in the map
-                    const key = String(val).toLowerCase().trim();
-                    return map[key] ? map[key].id || map[key] : null; // Handle map returning object or ID
-                };
 
                 values.push(
                     u.id,
@@ -640,8 +657,16 @@ router.post('/bulk-update', async (req, res) => {
             updatedCount = updates.length;
         }
 
+        // --- PROCESS NEW ITEMS (CREATE) ---
+        // User requested strict separation: Bulk Update is ONLY for editing.
+        // We implicitly ignore items without IDs here.
+        if (newItems.length > 0) {
+            console.log(`Bulk Update: Ignoring ${newItems.length} items without IDs (Update Only Mode).`);
+        }
+
         await client.query('COMMIT');
-        res.json({ success: true, updated: updatedCount, created: createdCount });
+        // Return 0 created count to be explicit
+        res.json({ success: true, updated: updatedCount, created: 0 });
 
     } catch (err) {
         await client.query('ROLLBACK');
