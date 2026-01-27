@@ -61,15 +61,20 @@ pool.query('SELECT NOW()', (err, res) => {
         console.log('Database Connected Successfully:', res.rows[0].now);
 
         // --- AUTO-MIGRATION SECTION (TEMPORARY FIX) ---
-        // Verify/Apply 040_fix_grn_rounding.sql
         try {
-            const migrationPath = path.join(__dirname, 'database', '040_fix_grn_rounding.sql');
-            if (fs.existsSync(migrationPath)) {
-                const sql = fs.readFileSync(migrationPath, 'utf8');
-                console.log('Applying Migration 040 (Rounding Fix)...');
-                pool.query(sql, (migErr) => {
-                    if (migErr) console.error('Migration 040 Failed:', migErr);
-                    else console.log('Migration 040 Applied Successfully.');
+            // 1. Rounding Fix (040)
+            const mig040 = path.join(__dirname, 'database', '040_fix_grn_rounding.sql');
+            if (fs.existsSync(mig040)) {
+                pool.query(fs.readFileSync(mig040, 'utf8'), (e) => {
+                    if (e) console.error('Mig 040 Failed', e); else console.log('Mig 040 Applied');
+                });
+            }
+
+            // 2. Smart GST Logic (041)
+            const mig041 = path.join(__dirname, 'database', '041_smart_gst_logic.sql');
+            if (fs.existsSync(mig041)) {
+                pool.query(fs.readFileSync(mig041, 'utf8'), (e) => {
+                    if (e) console.error('Mig 041 Failed', e); else console.log('Mig 041 Applied');
                 });
             }
         } catch (migEx) {

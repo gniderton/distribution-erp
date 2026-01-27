@@ -294,7 +294,6 @@ router.post('/', async (req, res) => {
             totalTax = Number(totalTax.toFixed(2));
             totalTaxable = Number(totalTaxable.toFixed(2));
 
-            // Validation fallback
             if (totalTaxable < 0) totalTaxable = 0;
 
             ledgerLines = [
@@ -302,22 +301,56 @@ router.post('/', async (req, res) => {
                 { code: acc_inventory, debit: 0, credit: totalTaxable }
             ];
 
+            // --- GST SPLIT LOGIC ---
             if (totalTax > 0) {
-                ledgerLines.push({ code: acc_gst, debit: 0, credit: totalTax });
+                // 1. Fetch Company State & Vendor GST
+                const settingsRes = await client.query('SELECT state_code FROM company_settings LIMIT 1');
+                const cmpState = (settingsRes.rows.length > 0) ? Number(settingsRes.rows[0].state_code) : 32;
+
+                const vendRes = await client.query('SELECT gst FROM vendors WHERE id = $1', [vendor_id]);
+                const vGst = vendRes.rows.length > 0 ? vendRes.rows[0].gst : '';
+
+                let isIntra = false;
+                // Extract Prefix
+                if (vGst && vGst.length >= 2) {
+                    const vState = parseInt(vGst.substring(0, 2));
+                    if (!isNaN(vState) && vState === cmpState) {
+                        isIntra = true;
+                    }
+                }
+
+                if (isIntra) {
+                    const halfTax = Number((totalTax / 2).toFixed(2));
+                    // Adjust rounding on second half to ensure sum matches exactly
+                    const otherHalf = Number((totalTax - halfTax).toFixed(2));
+
+                    const acc_cgst = 1011;
+                    const acc_sgst = 1012;
+                    ledgerLines.push({ code: acc_cgst, debit: 0, credit: halfTax });
+                    ledgerLines.push({ code: acc_sgst, debit: 0, credit: otherHalf });
+                } else {
+                    // IGST
+                    ledgerLines.push({ code: acc_gst, debit: 0, credit: totalTax });
+                }
             }
+            // -----------------------
 
             // --- ROUNDING FIX ---
             const totalDebits = Number(amount);
-            const totalCredits = Number((totalTaxable + totalTax).toFixed(2)); // Sum credits
+            // Re-sum credits from actual ledger lines to be safe
+            let totalCredits = 0;
+            ledgerLines.forEach(l => {
+                if (l.credit) totalCredits += l.credit;
+            });
+            totalCredits = Number(totalCredits.toFixed(2));
+
             const diff = Number((totalDebits - totalCredits).toFixed(2));
             const acc_rounding = 5003;
 
             if (diff !== 0) {
                 if (diff > 0) {
-                    // Debits > Credits (e.g. 100 > 99.9). Need Credit 0.1 to balance.
                     ledgerLines.push({ code: acc_rounding, debit: 0, credit: diff });
                 } else {
-                    // Credits > Debits (e.g. 100 < 100.1). Diff is -0.1. Need Debit 0.1 to balance.
                     ledgerLines.push({ code: acc_rounding, debit: Math.abs(diff), credit: 0 });
                 }
             }
