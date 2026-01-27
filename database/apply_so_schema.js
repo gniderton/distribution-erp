@@ -4,10 +4,10 @@ const path = require('path');
 
 async function apply() {
     try {
-        const sqlPath = path.join(__dirname, '048_payments_schema.sql');
+        const sqlPath = path.join(__dirname, '045_sales_order_schema.sql');
         const sql = fs.readFileSync(sqlPath, 'utf8');
         await pool.query(sql);
-        console.log("✅ Payments Schema & Ledger View Applied Successfully");
+        console.log("✅ Sales Order Schema Applied Successfully");
     } catch (err) {
         console.error("❌ Schema Application Failed:", err);
     } finally {

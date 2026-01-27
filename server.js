@@ -46,8 +46,15 @@ app.use('/api/purchase-orders', require('./routes/purchase_orders'));
 app.use('/api/purchase-invoices', require('./routes/purchase_invoices')); // NEW Route
 app.use('/api/documents', require('./routes/documents'));
 app.use('/api/bank-accounts', require('./routes/bank_accounts'));
-app.use('/api/sales', require('./routes/sales')); // [NEW] Sales Allocation Logic
-app.use('/api/stock/adjust', require('./routes/stock_adjustments')); // [NEW] Stock Logic
+app.use('/api/sales', require('./routes/sales'));
+app.use('/api/stock/adjust', require('./routes/stock_adjustments'));
+
+// [NEW] Sales Module Routes
+app.use('/api/customers', require('./routes/customers'));
+app.use('/api/employees', require('./routes/employees'));
+app.use('/api/payments', require('./routes/payments'));
+app.use('/api/delivery', require('./routes/delivery'));
+app.use('/api/analytics', require('./routes/analytics'));
 
 // Database Connection Test & Server Start
 const fs = require('fs');
