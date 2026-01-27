@@ -77,6 +77,14 @@ pool.query('SELECT NOW()', (err, res) => {
                     if (e) console.error('Mig 041 Failed', e); else console.log('Mig 041 Applied');
                 });
             }
+
+            // 3. GST Columns (042)
+            const mig042 = path.join(__dirname, 'database', '042_add_gst_columns.sql');
+            if (fs.existsSync(mig042)) {
+                pool.query(fs.readFileSync(mig042, 'utf8'), (e) => {
+                    if (e) console.error('Mig 042 Failed', e); else console.log('Mig 042 Applied');
+                });
+            }
         } catch (migEx) {
             console.error('Migration Error:', migEx);
         }

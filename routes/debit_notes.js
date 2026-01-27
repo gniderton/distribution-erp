@@ -302,6 +302,11 @@ router.post('/', async (req, res) => {
             ];
 
             // --- GST SPLIT LOGIC ---
+            let cgstVal = 0;
+            let sgstVal = 0;
+            let igstVal = 0;
+            let posVal = '32'; // Default Kerala
+
             if (totalTax > 0) {
                 // 1. Fetch Company State & Vendor GST
                 const settingsRes = await client.query('SELECT state_code FROM company_settings LIMIT 1');
@@ -313,7 +318,8 @@ router.post('/', async (req, res) => {
                 let isIntra = false;
                 // Extract Prefix
                 if (vGst && vGst.length >= 2) {
-                    const vState = parseInt(vGst.substring(0, 2));
+                    posVal = vGst.substring(0, 2); // Capture POS
+                    const vState = parseInt(posVal);
                     if (!isNaN(vState) && vState === cmpState) {
                         isIntra = true;
                     }
@@ -321,19 +327,35 @@ router.post('/', async (req, res) => {
 
                 if (isIntra) {
                     const halfTax = Number((totalTax / 2).toFixed(2));
-                    // Adjust rounding on second half to ensure sum matches exactly
                     const otherHalf = Number((totalTax - halfTax).toFixed(2));
+
+                    cgstVal = halfTax;
+                    sgstVal = otherHalf;
 
                     const acc_cgst = 1011;
                     const acc_sgst = 1012;
                     ledgerLines.push({ code: acc_cgst, debit: 0, credit: halfTax });
                     ledgerLines.push({ code: acc_sgst, debit: 0, credit: otherHalf });
                 } else {
+                    igstVal = totalTax;
+
                     // IGST
                     ledgerLines.push({ code: acc_gst, debit: 0, credit: totalTax });
                 }
             }
             // -----------------------
+
+            // Update Header with Tax Info
+            await client.query(`
+                UPDATE debit_notes SET
+                    taxable_amount = $1,
+                    tax_amount = $2,
+                    cgst_amount = $3,
+                    sgst_amount = $4,
+                    igst_amount = $5,
+                    place_of_supply = $6
+                WHERE id = $7
+            `, [totalTaxable, totalTax, cgstVal, sgstVal, igstVal, posVal, newId]);
 
             // --- ROUNDING FIX ---
             const totalDebits = Number(amount);
