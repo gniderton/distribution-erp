@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 
+// GET /api/products/brands - Fetch Active Brands for Dropdowns
+router.get('/brands', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, brand_name, brand_code FROM brands WHERE is_active = true ORDER BY brand_name');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/products - List products with joins for friendly names
 router.get('/', async (req, res) => {
     try {
@@ -117,6 +127,16 @@ router.get('/', async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Server error fetching products' });
+    }
+});
+
+// GET /api/products/brands - Fetch Active Brands for Dropdowns
+router.get('/brands', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, brand_name FROM brands WHERE is_active = true ORDER BY brand_name');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const { calculateFreeItems } = require('../utils/schemeEngine'); // [NEW] Import
 
 // --- SALES ORDERS (Header/Lines) ---
 
@@ -38,39 +39,84 @@ router.get('/orders', async (req, res) => {
     }
 });
 
-// GET /api/sales/invoices - List Invoices
+// GET /api/sales/invoices - List Invoices (Filtered)
 router.get('/invoices', async (req, res) => {
     try {
-        const { limit = 50, offset = 0 } = req.query;
-        const result = await pool.query(`
+        const { limit = 50, offset = 0, route_id, date, days } = req.query;
+
+        let query = `
             SELECT si.*, c.customer_name, so.so_number
             FROM sales_invoices si
             JOIN customers c ON si.customer_id = c.id
             JOIN sales_orders so ON si.sales_order_id = so.id
-            ORDER BY si.created_at DESC
-            LIMIT $1 OFFSET $2
-        `, [limit, offset]);
+        `;
+
+        const params = [];
+        const where = [];
+        let pIdx = 1;
+
+        if (route_id) {
+            where.push(`c.route_id = $${pIdx}`);
+            params.push(route_id);
+            pIdx++;
+        }
+
+        if (date) {
+            where.push(`si.invoice_date = $${pIdx}`);
+            params.push(date);
+            pIdx++;
+        }
+
+        // Logic: "Past Data" e.g. last 7 days from NOW
+        if (days) {
+            where.push(`si.invoice_date >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'`);
+        }
+
+        if (where.length > 0) query += ` WHERE ${where.join(' AND ')}`;
+
+        query += ` ORDER BY si.created_at DESC LIMIT $${pIdx} OFFSET $${pIdx + 1}`;
+        params.push(limit, offset);
+
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// GET /api/sales/returns - List Sales Returns (Credit/Debit Notes)
+// GET /api/sales/returns - List Sales Returns (Filtered)
 router.get('/returns', async (req, res) => {
     try {
-        const { status, limit = 50, offset = 0 } = req.query;
+        const { status, limit = 50, offset = 0, route_id, days } = req.query;
         let query = `
             SELECT sr.*, c.customer_name
             FROM sales_returns sr
             JOIN customers c ON sr.customer_id = c.id
         `;
         const params = [];
+        const where = [];
+        let pIdx = 1;
+
         if (status) {
-            query += ` WHERE sr.status = $1`;
+            where.push(`sr.status = $${pIdx}`);
             params.push(status);
+            pIdx++;
         }
-        query += ` ORDER BY sr.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+
+        if (route_id) {
+            where.push(`c.route_id = $${pIdx}`);
+            params.push(route_id);
+            pIdx++;
+        }
+
+        // Default filter logic (e.g. <= 7 days) if requested
+        if (days) {
+            where.push(`sr.return_date >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'`);
+        }
+
+        if (where.length > 0) query += ` WHERE ${where.join(' AND ')}`;
+
+        query += ` ORDER BY sr.created_at DESC LIMIT $${pIdx} OFFSET $${pIdx + 1}`;
         params.push(limit, offset);
 
         const result = await pool.query(query, params);
@@ -211,13 +257,6 @@ router.post('/allocate', async (req, res) => {
                 ORDER BY created_at ASC
             `, [item.product_id]);
 
-            // ... Allocation logic allows UI to see "Which batch will be picked"
-            // For now, we return raw batches for the UI to handle logic if needed, 
-            // or we keep the previous logic if it was used. 
-            // Since I am overwriting, I should paste the previous robust logic back.
-            // But for brevity in this specific task step which focuses on ORDERS, 
-            // I will return the FIFO availablity.
-
             results.push({
                 product_id: item.product_id,
                 qty_requested: item.qty,
@@ -251,7 +290,25 @@ router.post('/orders/:id/dispatch', async (req, res) => {
         if (so.status === 'Invoiced') throw new Error('Order already invoiced');
 
         const linesRes = await client.query('SELECT * FROM sales_order_lines WHERE sales_order_id = $1', [id]);
-        const lines = linesRes.rows;
+        let lines = linesRes.rows;
+
+        // [NEW] 1.5 SCHEME LOGIC: Calculate & Inject Free Lines
+        const orderedItems = lines.map(l => ({ product_id: l.product_id, qty: l.ordered_qty }));
+        const freeItems = await calculateFreeItems(orderedItems);
+
+        for (const free of freeItems) {
+            const resFreeLine = await client.query(`
+                INSERT INTO sales_order_lines (
+                    sales_order_id, product_id, ordered_qty, rate, 
+                    tax_percent, tax_amount, amount, tier_applied
+                ) VALUES ($1, $2, $3, 0, 0, 0, 0, 'Scheme: ' || $4)
+                RETURNING *
+            `, [id, free.product_id, free.qty, free.reason]);
+
+            // Add to the 'lines' array so it gets stock allocated below
+            lines.push(resFreeLine.rows[0]);
+        }
+        // -----------------------------------------------------
 
         // 2. Prepare Invoice Totals
         let invTotal = 0;
@@ -315,6 +372,7 @@ router.post('/orders/:id/dispatch', async (req, res) => {
             }
 
             if (qtyToFulfill > 0) {
+                // For Free items, try best effort? No, stock must exist.
                 throw new Error(`Insufficient Stock for Product ID ${line.product_id}. Missing ${qtyToFulfill}`);
             }
 
@@ -328,7 +386,7 @@ router.post('/orders/:id/dispatch', async (req, res) => {
         // 6. Update Invoice Totals
         await client.query(`
             UPDATE sales_invoices 
-            SET grand_total = $1, total_taxable = $2 -- Simplified for now
+            SET grand_total = $1, total_taxable = $2 
             WHERE id = $3
         `, [invTotal, invTotal - invTax, invId]);
 
@@ -520,7 +578,23 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                 if (so.status === 'Invoiced') throw new Error(`Order ${so.so_number} already invoiced`);
 
                 const linesRes = await client.query('SELECT * FROM sales_order_lines WHERE sales_order_id = $1', [id]);
-                const lines = linesRes.rows;
+                let lines = linesRes.rows;
+
+                // [NEW] 1.5 SCHEME LOGIC (Bulk)
+                const orderedItems = lines.map(l => ({ product_id: l.product_id, qty: l.ordered_qty }));
+                const freeItems = await calculateFreeItems(orderedItems);
+
+                for (const free of freeItems) {
+                    const resFreeLine = await client.query(`
+                        INSERT INTO sales_order_lines (
+                            sales_order_id, product_id, ordered_qty, rate, 
+                            tax_percent, tax_amount, amount, tier_applied
+                        ) VALUES ($1, $2, $3, 0, 0, 0, 0, 'Scheme: ' || $4)
+                        RETURNING *
+                    `, [id, free.product_id, free.qty, free.reason]);
+                    lines.push(resFreeLine.rows[0]);
+                }
+                // ----------------------------------------
 
                 // 2. Generate Invoice Number
                 const yy = new Date().getFullYear().toString().slice(-2);

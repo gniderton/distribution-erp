@@ -36,10 +36,18 @@ router.get('/', async (req, res) => {
             pIdx++;
         }
 
-        if (dse_id) {
+        if (dse_id && dse_id !== 'null') {
             query += ` AND c.dse_id = $${pIdx}`;
             params.push(dse_id);
             pIdx++;
+        }
+
+        // [NEW] Filter by Service Day (Auto-Route)
+        if (req.query.day) {
+            const day = req.query.day; // e.g., 'Monday'
+            query += ` AND (r.service_day = $${pIdx} OR r.route_name ILIKE $${pIdx + 1})`;
+            params.push(day, `%${day}%`);
+            pIdx += 2;
         }
 
         query += ` ORDER BY c.customer_name ASC LIMIT $${pIdx} OFFSET $${pIdx + 1}`;
