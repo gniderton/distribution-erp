@@ -37,10 +37,10 @@ router.post('/eod-sync', async (req, res) => {
             // C. Insert Header
             const orderRes = await client.query(`
                 INSERT INTO sales_orders (
-                    dse_id, customer_id, order_date, total_amount, offline_id, status
-                ) VALUES ($1, $2, $3, $4, $5, 'Pending')
+                    dse_id, customer_id, order_date, total_amount, offline_id, status, latitude, longitude
+                ) VALUES ($1, $2, $3, $4, $5, 'Pending', $6, $7)
                 RETURNING id
-            `, [dse_id, order.customer_id, date, calculatedTotal, order.offline_no]);
+            `, [dse_id, order.customer_id, date, calculatedTotal, order.offline_no, order.latitude || null, order.longitude || null]);
 
             const newOrderId = orderRes.rows[0].id;
 
