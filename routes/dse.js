@@ -54,7 +54,7 @@ router.post('/eod-sync', async (req, res) => {
                 if (qty > 0) {
                     await client.query(`
                         INSERT INTO sales_order_lines (
-                            order_id, product_id, quantity, rate, amount
+                            sales_order_id, product_id, ordered_qty, rate, amount
                         ) VALUES ($1, $2, $3, $4, $5)
                     `, [newOrderId, pId, qty, rate, amount]);
                 }
