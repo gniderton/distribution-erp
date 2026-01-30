@@ -1,0 +1,6 @@
+-- Fix missing columns in sales_orders
+ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS dse_id BIGINT REFERENCES employees(id);
+ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS customer_id BIGINT REFERENCES customers(id);
+ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS order_date DATE DEFAULT CURRENT_DATE;
+ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
