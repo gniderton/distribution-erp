@@ -34,13 +34,34 @@ router.post('/eod-sync', async (req, res) => {
             const calculatedTotal = order_items.reduce((sum, item) => sum + (Number(item.qty) * Number(item.rate)), 0);
             totalOrderValue += calculatedTotal;
 
+            // B2. Generate SO Number
+            const seqRes = await client.query(`
+                UPDATE document_sequences 
+                SET current_number = current_number + 1 
+                WHERE document_type = 'Sales Order' 
+                RETURNING prefix, current_number
+            `);
+
+            let soNumber;
+            if (seqRes.rows.length === 0) {
+                // If not exists, insert and start at 1
+                await client.query(`
+                    INSERT INTO document_sequences (company_settings_id, branch_id, document_type, prefix, current_number, is_active)
+                    VALUES (1, 1, 'Sales Order', 'SO', 1, true)
+                `);
+                soNumber = 'SO-00001';
+            } else {
+                const { prefix, current_number } = seqRes.rows[0];
+                soNumber = `${prefix}-${String(current_number).padStart(5, '0')}`;
+            }
+
             // C. Insert Header
             const orderRes = await client.query(`
                 INSERT INTO sales_orders (
-                    dse_id, customer_id, order_date, total_amount, offline_id, status, latitude, longitude
-                ) VALUES ($1, $2, $3, $4, $5, 'Pending', $6, $7)
+                    dse_id, customer_id, order_date, total_amount, offline_id, status, latitude, longitude, so_number
+                ) VALUES ($1, $2, $3, $4, $5, 'Pending', $6, $7, $8)
                 RETURNING id
-            `, [dse_id, order.customer_id, date, calculatedTotal, order.offline_no, order.latitude || null, order.longitude || null]);
+            `, [dse_id, order.customer_id, date, calculatedTotal, order.offline_no, order.latitude || null, order.longitude || null, soNumber]);
 
             const newOrderId = orderRes.rows[0].id;
 
