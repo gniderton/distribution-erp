@@ -1,145 +1,129 @@
 const fs = require('fs');
 const path = require('path');
 const { pool } = require('./config/db');
+const csv = require('csv-parse');
+
+const filePath = path.join(__dirname, 'Combined.csv');
 
 async function importCombined() {
-    const filePath = path.join(__dirname, 'Combined.csv');
-    if (!fs.existsSync(filePath)) {
-        console.error('File not found:', filePath);
-        process.exit(1);
-    }
-
     const fileContent = fs.readFileSync(filePath, 'utf8');
-    const lines = fileContent.split('\n').filter(l => l.trim());
 
-    const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+    // Parse CSV
+    const records = [];
+    const parser = csv.parse(fileContent, {
+        columns: false, // We use index based mapping
+        skip_empty_lines: true,
+        relax_column_count: true,
+        from_line: 2 // Skip header
+    });
 
-    let success = 0;
-    let failed = 0;
+    parser.on('readable', function () {
+        let record;
+        while ((record = parser.read()) !== null) {
+            records.push(record);
+        }
+    });
 
+    parser.on('error', function (err) {
+        console.error(err.message);
+    });
+
+    parser.on('end', async function () {
+        console.log(`Parsed ${records.length} records. Starting import...`);
+        await processRecords(records);
+    });
+}
+
+async function processRecords(records) {
     const client = await pool.connect();
 
-    // Process in Chunks
-    const CHUNK_SIZE = 50;
+    try {
+        await client.query('BEGIN');
 
-    // Helper to process a single line
-    const processLine = async (line, i) => {
-        let cols = line.split(regex).map(s => s.trim().replace(/^"|"$/g, ''));
+        // Prepare statements for performance
+        // Customer Columns: A(0) to N(13)
+        // Address Columns: O(14) to W(22)
 
-        if (cols.length < 15) return;
+        let inserted = 0;
 
-        const name = cols[4];
-        let phone = cols[5];
-        let email = cols[6];
-        let gstin = cols[7];
-        let pan = cols[8];
-        const credit_limit = parseFloat(cols[9]) || 0;
-        const credit_days = parseInt(cols[10]) || 0;
-        let route_id = parseInt(cols[11]) || null;
-        let dse_id = parseInt(cols[12]) || null;
-        let is_active = (cols[13] || 'TRUE').toUpperCase() === 'TRUE';
-        let channel_id = parseInt(cols[14]) || null;
-        const code = cols[15];
-        const route_type_id = parseInt(cols[16]) || null;
+        for (const cols of records) {
+            // --- 1. Customer Data (Cols 0-13) ---
+            const customer_name = cols[1]?.trim();
+            if (!customer_name) continue; // Skip empty rows
 
-        // Cleanup
-        if (phone && phone.toUpperCase().includes('E+')) {
-            phone = Number(phone).toLocaleString('fullwide', { useGrouping: false });
-        }
-        if (!phone || phone === '0') phone = null;
-        if (!email || email === '0') email = null;
-        if (gstin === '0') gstin = null;
-        if (pan === '0') pan = null;
+            // Phone: Clean scientific notation if present (e.g. 9.19E+11)
+            let rawPhone = cols[2]?.trim();
+            if (rawPhone && rawPhone.includes('E')) {
+                rawPhone = Number(rawPhone).toString();
+            }
+            const customer_phone = rawPhone || null;
 
-        // Address
-        const addr1 = cols[19];
-        const addr2 = cols[20];
-        const city = cols[21];
-        const state = cols[22] || 'Kerala';
-        const pincode = cols[23];
-        const is_bill = (cols[24] === 'TRUE');
-        const is_ship = (cols[25] === 'TRUE');
+            const email = cols[3]?.trim() === '0' ? null : cols[3]?.trim();
+            const gstin = cols[4]?.trim() === '0' ? null : cols[4]?.trim();
+            const pan = cols[5]?.trim() === '0' ? null : cols[5]?.trim();
 
-        try {
-            // Note: Parallel queries share the same pool but we usually need separate clients for transactions if overlapping.
-            // But 'pool.query' creates auto-release clients. 
-            // However, we want atomic Cust+Addr.
-            // Using the SINGLE shared 'client' for all parallel requests is BAD if using BEGIN/COMMIT individually in parallel (race conditions).
-            // Solution: Use pool.connect() for EACH item or just run sequentially within the chunk?
-            // Generating 50 clients is heavy.
-            // Better: Run SEQUENTIALLY within chunk? No, that's what we had.
-            // Better: Use `pool` directly (auto client) but wrap in a single SQL function?
-            // OR: Just risk the non-transactional atomicity (small risk if code logic is fine).
-            // Safest for concurrency: Use a new client for each parallel op, OR Just insert Customer, then Insert Address. Code is unlikely to fail between them.
+            const credit_limit = parseFloat(cols[6]) || 0;
+            const credit_days = parseInt(cols[7]) || 0;
 
-            // Speed up: Just Insert. 
-            const custRes = await pool.query(`
+            const route_id = parseInt(cols[8]) || null;
+            const dse_id = parseInt(cols[9]) || null;
+            const is_active = cols[10]?.trim().toLowerCase() === 'true';
+
+            // IMPORTANT: Channel ID Default to 3 (Dealer) if missing
+            const channel_id = parseInt(cols[11]) || 3;
+
+            const customer_code = cols[12]?.trim();
+            const route_type_id = parseInt(cols[13]) || 1;
+
+            // Insert Customer
+            const custRes = await client.query(`
                 INSERT INTO customers (
-                    customer_name, customer_phone, email, gstin, pan,
-                    credit_limit, credit_days, route_id, dse_id, is_active,
+                    customer_name, customer_phone, email, gstin, pan, 
+                    credit_limit, credit_days, route_id, dse_id, is_active, 
                     channel_id, customer_code, route_type_id
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 RETURNING id
             `, [
-                name, phone, email, gstin, pan,
+                customer_name, customer_phone, email, gstin, pan,
                 credit_limit, credit_days, route_id, dse_id, is_active,
-                channel_id, code, route_type_id
-            ]).catch(async err => {
-                if (err.code === '23503') { // FK Error Retry
-                    return await pool.query(`
-                        INSERT INTO customers (
-                            customer_name, customer_phone, email, gstin, pan,
-                            credit_limit, credit_days, route_id, dse_id, is_active,
-                            channel_id, customer_code, route_type_id
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-                        RETURNING id
-                    `, [
-                        name, phone, email, gstin, pan,
-                        credit_limit, credit_days, null, null, is_active,
-                        channel_id, code, route_type_id
-                    ]);
-                }
-                throw err;
-            });
+                channel_id, customer_code, route_type_id
+            ]);
 
-            const newCustomerId = custRes.rows[0].id;
+            const newCustId = custRes.rows[0].id;
 
-            if (addr1 || addr2) {
-                await pool.query(`
+            // --- 2. Address Data (Cols 14-22) ---
+            // Col 16 = Address Line 1
+            const addr1 = cols[16]?.trim();
+            const addr2 = cols[17]?.trim();
+            const city = cols[18]?.trim();
+            const state = cols[19]?.trim();
+            const pincode = cols[20]?.trim();
+
+            // If address exists, insert it
+            if (addr1 || city) {
+                await client.query(`
                     INSERT INTO customer_addresses (
-                        customer_id, address_line1, address_line2, city, state, pincode,
-                        is_default_billing, is_default_shipping
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        customer_id, address_line1, address_line2, city, state, pincode, is_default_billing, is_default_shipping
+                    ) VALUES ($1, $2, $3, $4, $5, $6, true, true)
                 `, [
-                    newCustomerId, addr1, addr2 || null, city || null, state, pincode || null, is_bill, is_ship
+                    newCustId, addr1, addr2, city, state, pincode
                 ]);
             }
-            return true;
-        } catch (e) {
-            console.error(`Error row ${i} (${name}): ${e.message}`);
-            return false;
+
+            inserted++;
+            if (inserted % 100 === 0) console.log(`Imported ${inserted}...`);
         }
-    };
 
-    try {
-        console.log(`Starting Fast Import of ${lines.length - 1} rows...`);
+        await client.query('COMMIT');
+        console.log(`✅ Successfully imported ${inserted} customers with addresses.`);
+        process.exit(0);
 
-        let chunk = [];
-        for (let i = 1; i < lines.length; i++) {
-            chunk.push(processLine(lines[i], i));
-
-            if (chunk.length >= CHUNK_SIZE || i === lines.length - 1) {
-                const results = await Promise.all(chunk);
-                success += results.filter(r => r).length;
-                failed += results.filter(r => !r).length;
-                chunk = [];
-                process.stdout.write(`\rProcessed: ${i}/${lines.length - 1} | Success: ${success} | Failed: ${failed}`);
-            }
-        }
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error('Error during import:', e);
+        process.exit(1);
     } finally {
-        console.log(`\nDone. Total Success: ${success}, Total Failed: ${failed}`);
         client.release();
-        process.exit();
     }
 }
 
