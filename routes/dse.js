@@ -19,27 +19,46 @@ router.post('/eod-sync', async (req, res) => {
             denominations = {} // Obj { note_500: 10, total: 5000 }
         } = req.body;
 
-        // --- 1. Process Orders (Assume they are already validated JSON objects) ---
-        // (Similar logic to existing bulk order save, but simplified here for EOD contexte)
+        // --- 1. Process Orders ---
         let totalOrderValue = 0;
         for (const order of orders) {
-            // Calculate value if not provided, or trust client
-            // Here we assume client sends total_amount
-            totalOrderValue += parseFloat(order.total_amount || 0);
+            // A. Duplication Check (Idempotency) using offline_id
+            const existing = await client.query('SELECT id FROM sales_orders WHERE offline_id = $1', [order.offline_no]);
+            if (existing.rows.length > 0) {
+                console.log(`Order ${order.offline_no} already synced. Skipping.`);
+                continue;
+            }
 
-            // Insert Order Logic (Simplified - Call existing services ideally)
-            // For now, we trust separate Order Sync API handles the detailed insertion
-            // OR we should insert here. Given the prompt implies "Sync Orders", we SHOULD insert here.
+            // B. Calculate Order Total (Re-verify backend side for safety)
+            const order_items = order.items || order.lines || []; // Handle naming diff
+            const calculatedTotal = order_items.reduce((sum, item) => sum + (Number(item.qty) * Number(item.rate)), 0);
+            totalOrderValue += calculatedTotal;
 
-            // ... [Order Insert Logic - Placeholder: This route focuses on Report Generation]
-            // Actually, usually app calls /api/sales/orders/bulk first, then this closing report.
-            // BUT user asked for "One Click".
-            // Let's assume this route is the CLOSING step after syncing orders.
-            // OR let's make it handle everything.
+            // C. Insert Header
+            const orderRes = await client.query(`
+                INSERT INTO sales_orders (
+                    dse_id, customer_id, order_date, total_amount, offline_id, status
+                ) VALUES ($1, $2, $3, $4, $5, 'Pending')
+                RETURNING id
+            `, [dse_id, order.customer_id, date, calculatedTotal, order.offline_no]);
 
-            // Given complexity, let's make this route handle Expenses + Report Generation primarily,
-            // and assume Orders are synced via existing /api/sales/orders/bulk which we can chain in Frontend.
-            // BUT user said "Sync Button will appear... wait for report".
+            const newOrderId = orderRes.rows[0].id;
+
+            // D. Insert Lines
+            for (const line of order_items) {
+                const pId = line.product_id || line.id;
+                const qty = Number(line.qty || line.quantity);
+                const rate = Number(line.rate);
+                const amount = qty * rate;
+
+                if (qty > 0) {
+                    await client.query(`
+                        INSERT INTO sales_order_lines (
+                            order_id, product_id, quantity, rate, amount
+                        ) VALUES ($1, $2, $3, $4, $5)
+                    `, [newOrderId, pId, qty, rate, amount]);
+                }
+            }
         }
 
         // --- 1B. Process Payments (NEW) ---
