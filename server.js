@@ -57,6 +57,7 @@ app.use('/api/delivery', require('./routes/delivery'));
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/dse', require('./routes/dse')); // [NEW] DSE Ops (EOD, etc)
 app.use('/api/schemes', require('./routes/schemes')); // [NEW] Scheme Engine
+app.use('/api/channels', require('./routes/channels')); // [NEW] Channel Maaping
 
 // Database Connection Test & Server Start
 const fs = require('fs');

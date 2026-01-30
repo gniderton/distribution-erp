@@ -237,6 +237,84 @@ router.post('/orders', async (req, res) => {
     }
 });
 
+// POST /api/sales/orders/bulk - Sync Multiple Orders (Offline Mode)
+router.post('/orders/bulk', async (req, res) => {
+    const { orders } = req.body;
+    if (!orders || !Array.isArray(orders)) return res.status(400).json({ error: 'Invalid orders array' });
+
+    const client = await pool.connect();
+    const results = [];
+
+    try {
+        for (const order of orders) {
+            try {
+                await client.query('BEGIN');
+
+                // 1. Generate SO Number
+                const yy = new Date().getFullYear().toString().slice(-2);
+                const seqRes = await client.query("SELECT COUNT(*) FROM sales_orders WHERE so_number LIKE $1", [`SO-${yy}-%`]);
+                const nextSeq = parseInt(seqRes.rows[0].count) + 1;
+                const soNumber = `SO-${yy}-${String(nextSeq).padStart(4, '0')}`;
+
+                // 2. Insert Header
+                const headRes = await client.query(`
+                    INSERT INTO sales_orders (
+                        so_number, customer_id, created_by, order_date, delivery_date, 
+                        status, remarks, payment_instruction, special_instruction,
+                        location_lat, location_lng
+                    ) VALUES ($1, $2, $3, $4, $5, 'Draft', $6, $7, $8, $9, $10)
+                    RETURNING id
+                `, [
+                    soNumber, order.customer_id, order.dse_id, order.order_date || new Date(), order.delivery_date,
+                    order.remarks, order.payment_instruction, order.special_instruction,
+                    order.location_lat, order.location_lng
+                ]);
+                const soId = headRes.rows[0].id;
+
+                let totalAmt = 0;
+                let totalTax = 0;
+
+                // 3. Insert Lines
+                for (const item of order.items) {
+                    const qty = Number(item.qty);
+                    const rate = Number(item.rate);
+                    const taxPct = Number(item.tax_pct || 0);
+
+                    const gross = qty * rate;
+                    const taxAmt = gross * (taxPct / 100);
+                    const lineTotal = gross + taxAmt;
+
+                    await client.query(`
+                        INSERT INTO sales_order_lines (
+                            sales_order_id, product_id, ordered_qty, rate, 
+                            tax_percent, tax_amount, amount, tier_applied
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    `, [
+                        soId, item.product_id, qty, rate,
+                        taxPct, taxAmt, lineTotal, item.tier_applied || 'Manual'
+                    ]);
+
+                    totalAmt += lineTotal;
+                    totalTax += taxAmt;
+                }
+
+                // 4. Update Header Totals
+                await client.query('UPDATE sales_orders SET total_amount = $1, tax_amount = $2 WHERE id = $3', [totalAmt, totalTax, soId]);
+
+                await client.query('COMMIT');
+                results.push({ tempId: order.tempId, success: true, so_number: soNumber, id: soId });
+
+            } catch (err) {
+                await client.query('ROLLBACK');
+                results.push({ tempId: order.tempId, success: false, error: err.message });
+            }
+        }
+        res.json({ success: true, results });
+    } finally {
+        client.release();
+    }
+});
+
 
 // --- STOCK ALLOCATION LOGIC (Existing preserved) ---
 // Used by Frontend to check "Can I fulfill this?"

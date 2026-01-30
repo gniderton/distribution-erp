@@ -13,9 +13,24 @@ router.get('/', async (req, res) => {
                 r.route_name,
                 e.full_name as dse_name,
                 ch.channel_name,
-                (SELECT COUNT(*) FROM customer_addresses ca WHERE ca.customer_id = c.id) as address_count
+                ch.price_column as default_price_col,
+                c.whatsapp_number, -- [NEW]
+                rt.frequency_name as route_frequency, -- [NEW]
+                (SELECT COUNT(*) FROM customer_addresses ca WHERE ca.customer_id = c.id) as address_count,
+                 -- [NEW] Pricing Exceptions (Brand -> Channel -> Price Column)
+                (
+                    SELECT json_agg(json_build_object(
+                        'brand_id', cbp.brand_id, 
+                        'price_column', ch_ex.price_column,
+                        'channel_name', ch_ex.channel_name
+                    ))
+                    FROM customer_brand_pricing cbp
+                    JOIN channels ch_ex ON cbp.channel_id = ch_ex.id
+                    WHERE cbp.customer_id = c.id
+                ) as pricing_ex
             FROM customers c
             LEFT JOIN routes r ON c.route_id = r.id
+            LEFT JOIN route_types rt ON c.route_type_id = rt.id
             LEFT JOIN employees e ON c.dse_id = e.id
             LEFT JOIN channels ch ON c.channel_id = ch.id
             WHERE c.is_active = true
@@ -126,13 +141,13 @@ router.post('/', async (req, res) => {
             INSERT INTO customers (
                 customer_name, customer_phone, email, gstin, pan, 
                 credit_limit, credit_days, channel_id,
-                route_id, dse_id, is_active
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+                route_id, dse_id, is_active, whatsapp_number, route_type_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11, $12)
             RETURNING id
         `, [
             customer_name, customer_phone, email, gstin, pan,
             credit_limit || 0, credit_days || 0, channel_id,
-            route_id || null, dse_id || null
+            route_id || null, dse_id || null, req.body.whatsapp_number, req.body.route_type_id || null
         ]);
 
         const custId = insertRes.rows[0].id;
@@ -143,11 +158,12 @@ router.post('/', async (req, res) => {
                 await client.query(`
                     INSERT INTO customer_addresses (
                         customer_id, address_line1, address_line2, city, state, pincode, 
-                        is_default_billing, is_default_shipping
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        is_default_billing, is_default_shipping, location_lat, location_lng
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                 `, [
                     custId, addr.address_line1, addr.address_line2, addr.city, addr.state || 'Kerala', addr.pincode,
-                    addr.is_default_billing || false, addr.is_default_shipping || false
+                    addr.is_default_billing || false, addr.is_default_shipping || false,
+                    addr.location_lat || null, addr.location_lng || null
                 ]);
             }
         }
