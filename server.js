@@ -96,6 +96,14 @@ pool.query('SELECT NOW()', (err, res) => {
                     if (e) console.error('Mig 042 Failed', e); else console.log('Mig 042 Applied');
                 });
             }
+
+            // 4. Stock Traceability (071)
+            const mig071 = path.join(__dirname, 'database', '071_stock_traceability.sql');
+            if (fs.existsSync(mig071)) {
+                pool.query(fs.readFileSync(mig071, 'utf8'), (e) => {
+                    if (e) console.error('Mig 071 Failed', e); else console.log('Mig 071 Applied');
+                });
+            }
         } catch (migEx) {
             console.error('Migration Error:', migEx);
         }
