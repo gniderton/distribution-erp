@@ -467,6 +467,14 @@ router.post('/orders/:id/dispatch', async (req, res) => {
         ]);
         const invId = invHeadRes.rows[0].id;
 
+        // [NEW] 1.7 Fetch Pricing Tiers & Brand Overrides
+        const custTierRes = await client.query('SELECT default_price_tier FROM customers WHERE id = $1', [so.customer_id]);
+        const defaultTier = custTierRes.rows[0]?.default_price_tier || 'Dealer';
+
+        const overridesRes = await client.query('SELECT brand_id, price_tier FROM customer_brand_pricing WHERE customer_id = $1', [so.customer_id]);
+        const overrideMap = {};
+        overridesRes.rows.forEach(r => overrideMap[r.brand_id] = r.price_tier);
+
         // 5. Process Each Line: Deduct Stock & Create Audit
         let fullyFulfilled = true;
         for (const line of lines) {
@@ -474,9 +482,16 @@ router.post('/orders/:id/dispatch', async (req, res) => {
             let qtyToFulfill = orderedQty;
             const pid = String(line.product_id);
 
+            // Fetch Product Brand for Tier Selection
+            const prodInfo = await client.query('SELECT brand_id FROM products WHERE id = $1', [pid]);
+            const brandId = prodInfo.rows[0]?.brand_id;
+            const finalTier = overrideMap[brandId] || defaultTier;
+            const rateColumn = `${finalTier.toLowerCase()}_rate`;
+
             // FIFO Allocation Logic
             const batchesRes = await client.query(`
-                SELECT id, quantity_remaining, purchase_rate 
+                SELECT id, quantity_remaining, purchase_rate, mrp,
+                       distributor_rate, wholesale_rate, dealer_rate, retail_rate
                 FROM inventory_batches 
                 WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
                 ORDER BY created_at ASC
@@ -485,30 +500,33 @@ router.post('/orders/:id/dispatch', async (req, res) => {
 
             for (const batch of batchesRes.rows) {
                 if (qtyToFulfill <= 0) break;
+                const batchRate = Number(batch[rateColumn]) || 0;
                 const take = Math.min(qtyToFulfill, batch.quantity_remaining);
                 await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2`, [take, batch.id]);
                 await client.query(`
                     INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
                     VALUES ($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)
-                `, [batch.id, pid, -take, invId, `Allocated to ${invNumber}`]);
+                `, [batch.id, pid, -take, invId, `Allocated to ${invNumber} (${finalTier} rate)`]);
+
+                // Update totals for this specific batch chunk
+                // Note: We use the rate from the batch, NOT the line
+                const lineTaxPercent = Number(line.tax_percent) || 0;
+                const chunkAmount = (batchRate * take) * (1 + (lineTaxPercent / 100));
+                const chunkTax = chunkAmount - (batchRate * take);
+
+                await client.query(`
+                    INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, tax_percent, tax_amount, amount)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                `, [invId, pid, take, batchRate, lineTaxPercent, chunkTax, chunkAmount]);
+
+                invTotal += chunkAmount;
+                invTax += chunkTax;
+
                 qtyToFulfill -= take;
             }
 
             const shippedQty = orderedQty - qtyToFulfill;
             if (shippedQty > 0) {
-                const lineTaxPercent = Number(line.tax_percent) || 0;
-                const lineRate = Number(line.rate);
-                const lineAmount = (lineRate * shippedQty) * (1 + (lineTaxPercent / 100));
-                const lineTax = lineAmount - (lineRate * shippedQty);
-
-                await client.query(`
-                    INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, tax_percent, tax_amount, amount)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
-                `, [invId, pid, shippedQty, lineRate, lineTaxPercent, lineTax, lineAmount]);
-
-                invTotal += lineAmount;
-                invTax += lineTax;
-
                 // Update SO Line Dispatch Progress & Shortage
                 const finalDispatched = Number(line.dispatched_qty || 0) + shippedQty;
                 const shortage = orderedQty - finalDispatched;
@@ -559,18 +577,18 @@ router.post('/returns', async (req, res) => {
 
         // 1. Generate Return Number (SRN-YY-SEQ)
         const yy = new Date().getFullYear().toString().slice(-2);
-        const seqRes = await client.query("SELECT COUNT(*) FROM sales_returns WHERE return_number LIKE $1", [`SRN-${yy}-%`]);
+        const seqRes = await client.query("SELECT COUNT(*) FROM sales_returns WHERE return_number LIKE $1", [`SRN - ${yy} -% `]);
         const nextSeq = parseInt(seqRes.rows[0].count) + 1;
-        const returnNumber = `SRN-${yy}-${String(nextSeq).padStart(4, '0')}`;
+        const returnNumber = `SRN - ${yy} - ${String(nextSeq).padStart(4, '0')}`;
 
         // 2. Insert Header (Calculate totals later)
         const headRes = await client.query(`
-            INSERT INTO sales_returns (
-                return_number, customer_id, invoice_id, return_date, 
-                type, remarks, status, created_by
-            ) VALUES ($1, $2, $3, $4, $5, $6, 'Draft', $7)
+            INSERT INTO sales_returns(
+                    return_number, customer_id, invoice_id, return_date,
+                    type, remarks, status, created_by
+                ) VALUES($1, $2, $3, $4, $5, $6, 'Draft', $7)
             RETURNING id
-        `, [
+                    `, [
             returnNumber, customer_id, invoice_id, return_date || new Date(),
             type, remarks, created_by
         ]);
@@ -590,11 +608,11 @@ router.post('/returns', async (req, res) => {
             const lineTotal = taxable + taxAmt;
 
             await client.query(`
-                INSERT INTO sales_return_lines (
-                    return_id, product_id, batch_id, qty, rate, 
-                    tax_percent, tax_amount, amount, reason, return_to_stock
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            `, [
+                INSERT INTO sales_return_lines(
+                        return_id, product_id, batch_id, qty, rate,
+                        tax_percent, tax_amount, amount, reason, return_to_stock
+                    ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    `, [
                 returnId, item.product_id, item.batch_id, qty, rate,
                 taxPct, taxAmt, lineTotal, item.reason, item.return_to_stock !== false
             ]);
@@ -608,7 +626,7 @@ router.post('/returns', async (req, res) => {
             UPDATE sales_returns 
             SET total_taxable = $1, total_tax = $2, grand_total = $3 
             WHERE id = $4
-        `, [totalTaxable, totalTax, totalTaxable + totalTax, returnId]);
+                    `, [totalTaxable, totalTax, totalTaxable + totalTax, returnId]);
 
         await client.query('COMMIT');
         res.status(201).json({ success: true, return_number: returnNumber, id: returnId });
@@ -665,10 +683,10 @@ router.post('/returns/:id/apply', async (req, res) => {
 
                     // Audit Trail
                     await client.query(`
-                        INSERT INTO stock_traceability (
-                            batch_id, product_id, quantity_change, transaction_type, 
-                            reference_id, reference_type, notes
-                        ) VALUES ($1, $2, $3, 'IN', $4, 'Sales Return', $5)
+                        INSERT INTO stock_traceability(
+                        batch_id, product_id, quantity_change, transaction_type,
+                        reference_id, reference_type, notes
+                    ) VALUES($1, $2, $3, 'IN', $4, 'Sales Return', $5)
                     `, [
                         targetBatchId, line.product_id, line.qty, id, `Return #${ret.return_number}`
                     ]);
@@ -681,7 +699,7 @@ router.post('/returns/:id/apply', async (req, res) => {
             UPDATE sales_returns 
             SET status = 'Applied', applied_by = $1, applied_at = NOW() 
             WHERE id = $2
-        `, [applied_by, id]);
+                    `, [applied_by, id]);
 
         await client.query('COMMIT');
         res.json({ success: true, message: 'Return Applied. Stock and Ledger updated.' });
@@ -723,10 +741,10 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
 
                 for (const free of freeItems) {
                     const resFreeLine = await client.query(`
-                        INSERT INTO sales_order_lines (
-                            sales_order_id, product_id, ordered_qty, rate, 
-                            tax_percent, tax_amount, amount, tier_applied
-                        ) VALUES ($1, $2, $3, 0, 0, 0, 0, 'Scheme: ' || $4)
+                        INSERT INTO sales_order_lines(
+                        sales_order_id, product_id, ordered_qty, rate,
+                        tax_percent, tax_amount, amount, tier_applied
+                    ) VALUES($1, $2, $3, 0, 0, 0, 0, 'Scheme: ' || $4)
                         RETURNING *
                     `, [id, free.product_id, free.qty, free.reason]);
                     lines.push(resFreeLine.rows[0]);
@@ -735,18 +753,18 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
 
                 // 2. Generate Invoice Number
                 const yy = new Date().getFullYear().toString().slice(-2);
-                const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1", [`INV-${yy}-%`]);
+                const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1", [`INV - ${yy} -% `]);
                 const nextSeq = parseInt(seqRes.rows[0].count) + 1;
-                const invNumber = `INV-${yy}-${String(nextSeq).padStart(4, '0')}`;
+                const invNumber = `INV - ${yy} - ${String(nextSeq).padStart(4, '0')}`;
 
                 // 3. Create Invoice Header
                 const invHeadRes = await client.query(`
-                    INSERT INTO sales_invoices (
-                        invoice_number, sales_order_id, customer_id, invoice_date, 
+                    INSERT INTO sales_invoices(
+                        invoice_number, sales_order_id, customer_id, invoice_date,
                         status, grand_total
-                    ) VALUES ($1, $2, $3, $4, 'Unpaid', 0)
+                    ) VALUES($1, $2, $3, $4, 'Unpaid', 0)
                     RETURNING id
-                `, [invNumber, id, so.customer_id, invoice_date || new Date()]);
+                    `, [invNumber, id, so.customer_id, invoice_date || new Date()]);
                 const invId = invHeadRes.rows[0].id;
 
                 let invTotal = 0;
@@ -769,14 +787,14 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
 
                         await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batch.id]);
                         await client.query(`
-                            INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
-                            VALUES ($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)
+                            INSERT INTO stock_traceability(batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
+                            VALUES($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)
                         `, [batch.id, line.product_id, -take, invId, `Allocated to ${invNumber}`]);
 
                         qtyToFulfill -= take;
                     }
 
-                    if (qtyToFulfill > 0) throw new Error(`Insufficient stock for product ${line.product_id} in Order ${so.so_number}`);
+                    if (qtyToFulfill > 0) throw new Error(`Insufficient stock for product ${line.product_id} in Order ${so.so_number} `);
 
                     await client.query('UPDATE sales_order_lines SET dispatched_qty = $1 WHERE id = $2', [line.ordered_qty, line.id]);
                     invTotal += Number(line.amount);
@@ -830,24 +848,30 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 const freeItems = await calculateFreeItems(orderedItems);
                 for (const free of freeItems) {
                     const resFree = await client.query(`
-                        INSERT INTO sales_order_lines (sales_order_id, product_id, ordered_qty, rate, tax_percent, tax_amount, amount, tier_applied)
-                        VALUES ($1, $2, $3, 0, 0, 0, 0, 'Scheme: ' || $4)
-                        RETURNING *
+                        INSERT INTO sales_order_lines(sales_order_id, product_id, ordered_qty, rate, tax_percent, tax_amount, amount, tier_applied)
+                VALUES($1, $2, $3, 0, 0, 0, 0, 'Scheme: ' || $4)
+                RETURNING *
                     `, [orderId, free.product_id, free.qty, free.reason]);
                     lines.push(resFree.rows[0]);
                 }
 
                 // 3. Create Invoice Header
                 const yy = new Date().getFullYear().toString().slice(-2);
-                const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1", [`INV-${yy}-%`]);
+                const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1", [`INV - ${yy} -% `]);
                 const nextSeq = parseInt(seqRes.rows[0].count) + 1;
-                const invNumber = `INV-${yy}-${String(nextSeq).padStart(4, '0')}`;
+                const invNumber = `INV - ${yy} -${String(nextSeq).padStart(4, '0')} `;
 
                 const invHeadRes = await client.query(`
-                    INSERT INTO sales_invoices (invoice_number, sales_order_id, customer_id, status, grand_total, invoice_date)
-                    VALUES ($1, $2, $3, 'Unpaid', 0, NOW()) RETURNING id
+                    INSERT INTO sales_invoices(invoice_number, sales_order_id, customer_id, status, grand_total, invoice_date)
+                VALUES($1, $2, $3, 'Unpaid', 0, NOW()) RETURNING id
                 `, [invNumber, orderId, so.customer_id]);
-                const invId = invHeadRes.rows[0].id;
+                // [NEW] 3.5 Fetch Pricing Tiers & Brand Overrides
+                const custTierRes = await client.query('SELECT default_price_tier FROM customers WHERE id = $1', [so.customer_id]);
+                const defaultTier = custTierRes.rows[0]?.default_price_tier || 'Dealer';
+
+                const overridesRes = await client.query('SELECT brand_id, price_tier FROM customer_brand_pricing WHERE customer_id = $1', [so.customer_id]);
+                const overrideMap = {};
+                overridesRes.rows.forEach(r => overrideMap[r.brand_id] = r.price_tier);
 
                 let invTotal = 0;
                 let invTax = 0;
@@ -859,9 +883,16 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     let qtyToFulfill = orderedQty;
                     const pid = String(line.product_id);
 
+                    const prodInfo = await client.query('SELECT brand_id, tax_id FROM products WHERE id = $1', [pid]);
+                    const brandId = prodInfo.rows[0]?.brand_id;
+                    const finalTier = overrideMap[brandId] || defaultTier;
+                    const rateColumn = `${finalTier.toLowerCase()}_rate`;
+                    const lineTaxPercent = Number(line.tax_percent) || 0;
+
                     // A. Check REAL Inventory Batches
                     const batchesRes = await client.query(`
-                        SELECT id, quantity_remaining 
+                        SELECT id, quantity_remaining, mrp, purchase_rate,
+                               distributor_rate, wholesale_rate, dealer_rate, retail_rate
                         FROM inventory_batches 
                         WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
                         ORDER BY created_at ASC FOR UPDATE
@@ -870,11 +901,25 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     for (const batch of batchesRes.rows) {
                         if (qtyToFulfill <= 0) break;
                         const take = Math.min(qtyToFulfill, batch.quantity_remaining);
+                        const batchRate = Number(batch[rateColumn]) || 0;
+
                         await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batch.id]);
                         await client.query(`
                             INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
                             VALUES ($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)
-                        `, [batch.id, pid, -take, invId, `Real stock for ${invNumber}`]);
+                        `, [batch.id, pid, -take, invId, `Real stock for ${invNumber} (${finalTier} rate)`]);
+
+                        // Record Line
+                        const chunkAmount = (batchRate * take) * (1 + (lineTaxPercent / 100));
+                        const chunkTax = chunkAmount - (batchRate * take);
+
+                        await client.query(`
+                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, tax_percent, tax_amount, amount)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        `, [invId, pid, take, batchRate, lineTaxPercent, chunkTax, chunkAmount]);
+
+                        invTotal += chunkAmount;
+                        invTax += chunkTax;
                         qtyToFulfill -= take;
                     }
 
@@ -882,6 +927,10 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     if (qtyToFulfill > 0 && transitMap[pid]) {
                         const transit = transitMap[pid];
                         const take = Math.min(qtyToFulfill, Number(transit.qty));
+
+                        // For transit, we get the tier rate from the Product Master as a fallback
+                        const pMaster = await client.query(`SELECT ${rateColumn} FROM products WHERE id = $1`, [pid]);
+                        const transitRate = Number(pMaster.rows[0][rateColumn]) || 0;
 
                         // Deduct from transit "allowance" in memory for this session
                         transitMap[pid].qty -= take;
@@ -906,35 +955,31 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         await client.query(`
                             INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
                             VALUES ($1, $2, $3, 'OUT-TRANSIT', $4, 'Sales Invoice', $5)
-                        `, [batchId, pid, -take, invId, `Transit stock (${transit.batch_code}) for ${invNumber}`]);
-                        qtyToFulfill -= take;
-                    }
+                        `, [batchId, pid, -take, invId, `Transit stock (${transit.batch_code}) for ${invNumber} (${finalTier} rate)`]);
 
-                    const shippedQty = orderedQty - qtyToFulfill;
-                    if (shippedQty > 0) {
-                        // Calculate Line Totals based on shipped qty
-                        const lineTaxPercent = Number(line.tax_percent) || 0;
-                        const lineRate = Number(line.rate);
-                        const lineAmount = (lineRate * shippedQty) * (1 + (lineTaxPercent / 100));
-                        const lineTax = lineAmount - (lineRate * shippedQty);
+                        // Record Line for Transit chunk
+                        const transitChunkAmount = (transitRate * take) * (1 + (lineTaxPercent / 100));
+                        const transitChunkTax = transitChunkAmount - (transitRate * take);
 
                         await client.query(`
                             INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, tax_percent, tax_amount, amount)
                             VALUES ($1, $2, $3, $4, $5, $6, $7)
-                        `, [invId, pid, shippedQty, lineRate, lineTaxPercent, lineTax, lineAmount]);
+                        `, [invId, pid, take, transitRate, lineTaxPercent, transitChunkTax, transitChunkAmount]);
 
-                        invTotal += lineAmount;
-                        invTax += lineTax;
-
-                        // Update SO Line Dispatch Progress & Shortage
-                        const finalDispatched = Number(line.dispatched_qty || 0) + shippedQty;
-                        const shortage = orderedQty - finalDispatched;
-                        await client.query(`
-                            UPDATE sales_order_lines 
-                            SET dispatched_qty = $1, cancelled_qty = $2 
-                            WHERE id = $3
-                        `, [finalDispatched, shortage, line.id]);
+                        invTotal += transitChunkAmount;
+                        invTax += transitChunkTax;
+                        qtyToFulfill -= take;
                     }
+
+                    // Update SO Line Dispatch Progress & Shortage
+                    const shippedQty = orderedQty - qtyToFulfill;
+                    const finalDispatched = Number(line.dispatched_qty || 0) + shippedQty;
+                    const shortage = orderedQty - finalDispatched;
+                    await client.query(`
+                        UPDATE sales_order_lines 
+                        SET dispatched_qty = $1, cancelled_qty = $2 
+                        WHERE id = $3
+                    `, [finalDispatched, shortage, line.id]);
                 }
 
                 // 5. Update Totals & Order Status
