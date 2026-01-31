@@ -869,8 +869,8 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batch.id]);
                         await client.query(`
                             INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
-                            VALUES ($1, $2, - $3, 'OUT', $4, 'Sales Invoice', $5)
-                        `, [batch.id, pid, take, invId, `Real stock for ${invNumber}`]);
+                            VALUES ($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)
+                        `, [batch.id, pid, -take, invId, `Real stock for ${invNumber}`]);
                         qtyToFulfill -= take;
                     }
 
@@ -909,8 +909,8 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         // Log the usage of transit stock
                         await client.query(`
                             INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
-                            VALUES ($1, $2, - $3, 'OUT-TRANSIT', $4, 'Sales Invoice', $5)
-                        `, [batchId, pid, take, invId, `Transit stock (${transit.batch_code}) for ${invNumber}`]);
+                            VALUES ($1, $2, $3, 'OUT-TRANSIT', $4, 'Sales Invoice', $5)
+                        `, [batchId, pid, -take, invId, `Transit stock (${transit.batch_code}) for ${invNumber}`]);
 
                         qtyToFulfill -= take;
                     }
