@@ -104,6 +104,14 @@ pool.query('SELECT NOW()', (err, res) => {
                     if (e) console.error('Mig 071 Failed', e); else console.log('Mig 071 Applied');
                 });
             }
+
+            // 5. Invoice Lines (072)
+            const mig072 = path.join(__dirname, 'database', '072_sales_invoice_lines.sql');
+            if (fs.existsSync(mig072)) {
+                pool.query(fs.readFileSync(mig072, 'utf8'), (e) => {
+                    if (e) console.error('Mig 072 Failed', e); else console.log('Mig 072 Applied');
+                });
+            }
         } catch (migEx) {
             console.error('Migration Error:', migEx);
         }
