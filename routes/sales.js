@@ -509,12 +509,14 @@ router.post('/orders/:id/dispatch', async (req, res) => {
                 invTotal += lineAmount;
                 invTax += lineTax;
 
-                // Update SO Line Dispatch Progress
-                await client.query('UPDATE sales_order_lines SET dispatched_qty = COALESCE(dispatched_qty, 0) + $1 WHERE id = $2', [shippedQty, line.id]);
-            }
-
-            if (qtyToFulfill > 0) {
-                fullyFulfilled = false;
+                // Update SO Line Dispatch Progress & Shortage
+                const finalDispatched = Number(line.dispatched_qty || 0) + shippedQty;
+                const shortage = orderedQty - finalDispatched;
+                await client.query(`
+                    UPDATE sales_order_lines 
+                    SET dispatched_qty = $1, cancelled_qty = $2 
+                    WHERE id = $3
+                `, [finalDispatched, shortage, line.id]);
             }
         }
 
@@ -525,15 +527,11 @@ router.post('/orders/:id/dispatch', async (req, res) => {
 
         await client.query(`UPDATE sales_invoices SET grand_total = $1, total_taxable = $2 WHERE id = $3`, [invTotal, invTotal - invTax, invId]);
 
-        // 7. Mark Order as Invoiced or Processing
-        if (fullyFulfilled) {
-            await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [id]);
-        } else {
-            await client.query("UPDATE sales_orders SET status = 'Processing' WHERE id = $1", [id]);
-        }
+        // 7. Mark Order as Invoiced (Done for the week)
+        await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [id]);
 
         await client.query('COMMIT');
-        res.json({ success: true, invoice_number: invNumber, message: fullyFulfilled ? 'Fully Dispatched & Invoiced' : 'Partially Dispatched & Invoiced' });
+        res.json({ success: true, invoice_number: invNumber, message: 'Dispatched & Invoiced (Shortages recorded)' });
 
     } catch (err) {
         await client.query('ROLLBACK');
@@ -928,12 +926,14 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         invTotal += lineAmount;
                         invTax += lineTax;
 
-                        // Update SO Line Dispatch Progress
-                        await client.query('UPDATE sales_order_lines SET dispatched_qty = COALESCE(dispatched_qty, 0) + $1 WHERE id = $2', [shippedQty, line.id]);
-                    }
-
-                    if (qtyToFulfill > 0) {
-                        fullyFulfilled = false;
+                        // Update SO Line Dispatch Progress & Shortage
+                        const finalDispatched = Number(line.dispatched_qty || 0) + shippedQty;
+                        const shortage = orderedQty - finalDispatched;
+                        await client.query(`
+                            UPDATE sales_order_lines 
+                            SET dispatched_qty = $1, cancelled_qty = $2 
+                            WHERE id = $3
+                        `, [finalDispatched, shortage, line.id]);
                     }
                 }
 
@@ -944,11 +944,8 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                 await client.query('UPDATE sales_invoices SET grand_total = $1, total_taxable = $2 WHERE id = $3', [invTotal, invTotal - invTax, invId]);
 
-                if (fullyFulfilled) {
-                    await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [orderId]);
-                } else {
-                    await client.query("UPDATE sales_orders SET status = 'Processing' WHERE id = $1", [orderId]);
-                }
+                // Mark as Invoiced (Done for the week)
+                await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [orderId]);
 
                 await client.query('COMMIT');
                 results.push({ order_id: orderId, status: 'Success', invoice_number: invNumber });
