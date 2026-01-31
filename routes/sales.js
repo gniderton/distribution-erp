@@ -84,6 +84,63 @@ router.get('/invoices', async (req, res) => {
     }
 });
 
+// GET /api/sales/invoices/:id - Detailed Invoice for Printing
+router.get('/invoices/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const client = await pool.connect();
+        try {
+            // 1. Fetch Header + Customer + Company Info
+            const headerRes = await client.query(`
+                SELECT 
+                    si.*, 
+                    c.customer_name, c.address_line1 as customer_address, c.gst as customer_gst, c.phone as customer_phone,
+                    so.so_number, so.order_date as so_date, so.remarks as so_remarks,
+                    e.full_name as dse_name,
+                    r.route_name,
+                    (SELECT json_build_object(
+                        'name', company_name, 
+                        'gstin', gstin, 
+                        'state_code', state_code
+                    ) FROM company_settings LIMIT 1) as company
+                FROM sales_invoices si
+                JOIN customers c ON si.customer_id = c.id
+                JOIN sales_orders so ON si.sales_order_id = so.id
+                LEFT JOIN employees e ON so.created_by = e.id
+                LEFT JOIN routes r ON c.route_id = r.id
+                WHERE si.id = $1
+            `, [id]);
+
+            if (headerRes.rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+            const header = headerRes.rows[0];
+
+            // 2. Fetch Lines with Product & HSN Details
+            const linesRes = await client.query(`
+                SELECT 
+                    sol.*, 
+                    p.product_name, p.product_code, p.ean_code,
+                    h.hsn_code,
+                    t.tax_percentage as master_tax_pct
+                FROM sales_order_lines sol
+                JOIN products p ON sol.product_id = p.id
+                LEFT JOIN hsn_codes h ON p.hsn_id = h.id
+                LEFT JOIN taxes t ON p.tax_id = t.id
+                WHERE sol.sales_order_id = $1
+                ORDER BY sol.id ASC
+            `, [header.sales_order_id]);
+
+            res.json({
+                ...header,
+                lines: linesRes.rows
+            });
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/sales/returns - List Sales Returns (Filtered)
 router.get('/returns', async (req, res) => {
     try {
@@ -737,6 +794,149 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
             }
         }
         res.json(results);
+    } finally {
+        client.release();
+    }
+});
+
+// POST /api/sales/bulk-invoice-generate - Complex logic for Admin Dashboard
+router.post('/bulk-invoice-generate', async (req, res) => {
+    const { order_ids, transit_stock } = req.body;
+    if (!order_ids || !Array.isArray(order_ids)) return res.status(400).json({ error: 'Invalid order_ids' });
+
+    const client = await pool.connect();
+    const results = [];
+    const transitMap = transit_stock || {}; // { "pid": { qty, batch_code, rate } }
+
+    try {
+        for (const orderId of order_ids) {
+            try {
+                await client.query('BEGIN');
+
+                // 1. Fetch Order Header
+                const soRes = await client.query('SELECT * FROM sales_orders WHERE id = $1 FOR UPDATE', [orderId]);
+                if (soRes.rows.length === 0) throw new Error(`Order ${orderId} not found`);
+                const so = soRes.rows[0];
+                if (so.status === 'Invoiced') throw new Error(`Order ${so.so_number} already invoiced`);
+
+                // 2. Fetch Order Lines
+                const linesRes = await client.query('SELECT * FROM sales_order_lines WHERE sales_order_id = $1', [orderId]);
+                let lines = linesRes.rows;
+
+                // 2.5 Calculate Schemes (Free Items)
+                const orderedItems = lines.map(l => ({ product_id: l.product_id, qty: l.ordered_qty }));
+                const freeItems = await calculateFreeItems(orderedItems);
+                for (const free of freeItems) {
+                    const resFree = await client.query(`
+                        INSERT INTO sales_order_lines (sales_order_id, product_id, ordered_qty, rate, tax_percent, tax_amount, amount, tier_applied)
+                        VALUES ($1, $2, $3, 0, 0, 0, 0, 'Scheme: ' || $4)
+                        RETURNING *
+                    `, [orderId, free.product_id, free.qty, free.reason]);
+                    lines.push(resFree.rows[0]);
+                }
+
+                // 3. Create Invoice Header
+                const yy = new Date().getFullYear().toString().slice(-2);
+                const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1", [`INV-${yy}-%`]);
+                const nextSeq = parseInt(seqRes.rows[0].count) + 1;
+                const invNumber = `INV-${yy}-${String(nextSeq).padStart(4, '0')}`;
+
+                const invHeadRes = await client.query(`
+                    INSERT INTO sales_invoices (invoice_number, sales_order_id, customer_id, status, grand_total, invoice_date)
+                    VALUES ($1, $2, $3, 'Unpaid', 0, NOW()) RETURNING id
+                `, [invNumber, orderId, so.customer_id]);
+                const invId = invHeadRes.rows[0].id;
+
+                let invTotal = 0;
+                let invTax = 0;
+
+                // 4. Stock Allocation (Real FIFO + Transit Fallback)
+                for (const line of lines) {
+                    let qtyToFulfill = Number(line.ordered_qty);
+                    const pid = String(line.product_id);
+
+                    // A. Check REAL Inventory Batches
+                    const batchesRes = await client.query(`
+                        SELECT id, quantity_remaining 
+                        FROM inventory_batches 
+                        WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
+                        ORDER BY created_at ASC FOR UPDATE
+                    `, [pid]);
+
+                    for (const batch of batchesRes.rows) {
+                        if (qtyToFulfill <= 0) break;
+                        const take = Math.min(qtyToFulfill, batch.quantity_remaining);
+                        await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batch.id]);
+                        await client.query(`
+                            INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
+                            VALUES ($1, $2, - $3, 'OUT', $4, 'Sales Invoice', $5)
+                        `, [batch.id, pid, take, invId, `Real stock for ${invNumber}`]);
+                        qtyToFulfill -= take;
+                    }
+
+                    // B. If still needed, check TRANSIT stock from frontend
+                    if (qtyToFulfill > 0 && transitMap[pid]) {
+                        const transit = transitMap[pid];
+                        const take = Math.min(qtyToFulfill, Number(transit.qty));
+
+                        // Deduct from transit "allowance" in memory for this session
+                        transitMap[pid].qty -= take;
+
+                        // Create a "Transit Batch" record for persistence & traceability
+                        // Check if a batch with this code already exists for this product
+                        let batchId;
+                        const existingBatch = await client.query('SELECT id FROM inventory_batches WHERE product_id = $1 AND batch_code = $2', [pid, transit.batch_code]);
+
+                        if (existingBatch.rows.length > 0) {
+                            batchId = existingBatch.rows[0].id;
+                        } else {
+                            // Fetch product prices for snapshotting
+                            const prodRes = await client.query('SELECT mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate FROM products WHERE id = $1', [pid]);
+                            const p = prodRes.rows[0];
+
+                            const newBatch = await client.query(`
+                                INSERT INTO inventory_batches (
+                                    product_id, batch_code, quantity_remaining, purchase_rate, mrp, 
+                                    distributor_rate, wholesale_rate, dealer_rate, retail_rate, is_active
+                                ) VALUES ($1, $2, 0, $3, $4, $5, $6, $7, $8, false) RETURNING id
+                            `, [pid, transit.batch_code, p.purchase_rate, p.mrp, p.distributor_rate, p.wholesale_rate, p.dealer_rate, p.retail_rate]);
+                            batchId = newBatch.rows[0].id;
+                        }
+
+                        // Update the Transit Batch (It will go NEGATIVE until the GRN arrives)
+                        await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batchId]);
+
+                        // Log the usage of transit stock
+                        await client.query(`
+                            INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
+                            VALUES ($1, $2, - $3, 'OUT-TRANSIT', $4, 'Sales Invoice', $5)
+                        `, [batchId, pid, take, invId, `Transit stock (${transit.batch_code}) for ${invNumber}`]);
+
+                        qtyToFulfill -= take;
+                    }
+
+                    if (qtyToFulfill > 0) {
+                        throw new Error(`Insufficient stock (Real + Transit) for product ID ${pid}`);
+                    }
+
+                    await client.query('UPDATE sales_order_lines SET dispatched_qty = $1 WHERE id = $2', [line.ordered_qty, line.id]);
+                    invTotal += Number(line.amount);
+                    invTax += Number(line.tax_amount);
+                }
+
+                // 5. Update Totals & Order Status
+                await client.query('UPDATE sales_invoices SET grand_total = $1, total_taxable = $2 WHERE id = $3', [invTotal, invTotal - invTax, invId]);
+                await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [orderId]);
+
+                await client.query('COMMIT');
+                results.push({ order_id: orderId, status: 'Success', invoice_number: invNumber });
+
+            } catch (err) {
+                await client.query('ROLLBACK');
+                results.push({ order_id: orderId, status: 'Failed', error: err.message });
+            }
+        }
+        res.json({ results });
     } finally {
         client.release();
     }
