@@ -13,7 +13,19 @@ router.get('/', async (req, res) => {
                 c.customer_name,
                 c.route_id,
                 r.route_name,
-                e.full_name as dse_name
+                e.full_name as dse_name,
+                (
+                    SELECT json_agg(json_build_object(
+                        'product_id', sol.product_id,
+                        'product_name', p.product_name,
+                        'qty', sol.ordered_qty,
+                        'rate', sol.rate,
+                        'amount', sol.amount
+                    ))
+                    FROM sales_order_lines sol
+                    JOIN products p ON sol.product_id = p.id
+                    WHERE sol.sales_order_id = so.id
+                ) as lines
             FROM sales_orders so
             LEFT JOIN customers c ON so.customer_id = c.id
             LEFT JOIN routes r ON c.route_id = r.id
