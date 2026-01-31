@@ -4,6 +4,39 @@ const { pool } = require('../config/db');
 
 // POST /api/dse/eod-sync - Submit End of Day Report
 // Handles Orders, Payments, Expenses, and Denominations in ONE Transaction
+// GET /api/dse/reports - List Daily Sales Reports
+router.get('/reports', async (req, res) => {
+    try {
+        const { start, end, dse } = req.query;
+        let query = `
+            SELECT dsr.*, e.full_name as dse_name
+            FROM daily_sales_reports dsr
+            JOIN employees e ON dsr.dse_id = e.id
+            WHERE 1=1
+        `;
+        const params = [];
+
+        if (start && end) {
+            query += ` AND dsr.report_date BETWEEN $${params.length + 1} AND $${params.length + 2}`;
+            params.push(start, end);
+        }
+
+        if (dse) {
+            query += ` AND dsr.dse_id = $${params.length + 1}`;
+            params.push(dse);
+        }
+
+        query += ` ORDER BY dsr.report_date DESC`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST /api/dse/eod-sync - Submit End of Day Report
 router.post('/eod-sync', async (req, res) => {
     const client = await pool.connect();
 

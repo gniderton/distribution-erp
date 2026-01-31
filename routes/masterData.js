@@ -103,4 +103,8 @@ router.post('/hsn', async (req, res) => {
 // 6. Vendor Addresses (Read-only here, managed via vendors.js)
 router.get('/vendor-addresses', getTable('vendor_addresses'));
 
+// 7. Routes (Distribution Routes)
+router.get('/routes', getTable('routes', 'route_name ASC'));
+router.post('/routes', createSimple('routes', 'route_name'));
+
 module.exports = router;
