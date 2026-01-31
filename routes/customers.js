@@ -5,7 +5,7 @@ const { pool } = require('../config/db');
 // GET /api/customers - List Customers (Searchable)
 router.get('/', async (req, res) => {
     try {
-        const { search, route_id, dse_id, limit = 50, offset = 0 } = req.query;
+        const { search, route_id, dse_id, limit = 2000, offset = 0 } = req.query; // Default limit 2000
 
         let query = `
             SELECT 
