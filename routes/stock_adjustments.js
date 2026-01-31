@@ -144,25 +144,19 @@ router.post('/', async (req, res) => {
             `, [product_id, moveQty, reason, notes]);
         }
 
-        // 4. ACCOUNTING ENTRY (For Losses)
+        // 4. ACCOUNTING INTEGRATION (For Losses)
         if (totalLossValue > 0) {
             const acc_inventory = 1001;
-            const acc_loss = 5002;
+            const acc_loss = 5002; // Inventory Loss
 
-            const ledgerLines = [
-                { code: acc_loss, debit: totalLossValue, credit: 0 },
-                { code: acc_inventory, debit: 0, credit: totalLossValue }
+            const roundedLoss = Number(totalLossValue.toFixed(2));
+            const lossLines = [
+                { code: acc_loss, debit: roundedLoss, credit: 0 },
+                { code: acc_inventory, debit: 0, credit: roundedLoss }
             ];
 
-            await client.query(`
-                SELECT create_journal_entry($1, $2, $3, $4, $5)
-            `, [
-                new Date(),
-                `Stock Adjustment: Lost Items`,
-                'ADJUSTMENT',
-                0, // No single ID to link to, could link to first Audit Log or use 0
-                JSON.stringify(ledgerLines)
-            ]);
+            await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+                [new Date(), `Stock Adjustment Loss (${notes || 'Manual'})`, 'STOCK_ADJ', null, JSON.stringify(lossLines)]);
         }
 
         await client.query('COMMIT');

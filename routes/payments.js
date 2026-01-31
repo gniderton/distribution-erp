@@ -80,8 +80,14 @@ router.post('/', async (req, res) => {
         // 1. Generate Payment Number (PAY-YY-SEQ)
         const yy = new Date().getFullYear().toString().slice(-2);
         const seqRes = await client.query("SELECT COUNT(*) FROM customer_payments WHERE payment_number LIKE $1", [`PAY-${yy}-%`]);
-        const nextSeq = parseInt(seqRes.rows[0].count) + 1;
-        const payNumber = `PAY-${yy}-${String(nextSeq).padStart(4, '0')}`;
+        let nextSeq = parseInt(seqRes.rows[0].count) + 1;
+        let payNumber;
+        let check;
+        do {
+            payNumber = `PAY-${yy}-${String(nextSeq).padStart(4, '0')}`;
+            check = await client.query("SELECT id FROM customer_payments WHERE payment_number = $1", [payNumber]);
+            if (check.rows.length > 0) nextSeq++;
+        } while (check.rows.length > 0);
 
         // 2. Create Payment Record (Unallocated)
         const payRes = await client.query(`
@@ -183,6 +189,22 @@ router.post('/', async (req, res) => {
         // linked to customer, but not allocated to any invoice.
         // The Ledger View will show this as a Credit.
 
+        // --- ACCOUNTING INTEGRATION ---
+        const acc_ar = 1101;
+        const acc_bank = 1002;
+        const acc_cash = 1003;
+
+        const targetAcc = (payment_mode === 'Cash') ? acc_cash : acc_bank;
+
+        const roundedPaid = Number(totalPaid.toFixed(2));
+        const ledgerLines = [
+            { code: targetAcc, debit: roundedPaid, credit: 0 },
+            { code: acc_ar, debit: 0, credit: roundedPaid }
+        ];
+
+        await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+            [payment_date || new Date(), `Customer Payment: ${payNumber}`, 'CUST_PAY', paymentId, JSON.stringify(ledgerLines)]);
+
         await client.query('COMMIT');
 
         res.status(201).json({
@@ -195,8 +217,8 @@ router.post('/', async (req, res) => {
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error(err);
-        res.status(500).json({ error: err.message });
+        console.error("Payment Error:", err);
+        res.status(500).json({ error: err.stack || err.message });
     } finally {
         client.release();
     }

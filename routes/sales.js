@@ -448,10 +448,12 @@ router.post('/orders/:id/dispatch', async (req, res) => {
         // 2. Prepare Invoice Totals
         let invTotal = 0;
         let invTax = 0;
+        let totalCOGS = 0;
 
         // 3. Generate Invoice Number (INV-YY-SEQ)
         const yy = new Date().getFullYear().toString().slice(-2);
-        const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1", [`INV-${yy}-%`]);
+        // Flexible search to find old formats (with spaces/dashes)
+        const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1 OR invoice_number LIKE $2", [`INV-${yy}-%`, `INV - ${yy} -%`]);
         const nextSeq = parseInt(seqRes.rows[0].count) + 1;
         const invNumber = `INV-${yy}-${String(nextSeq).padStart(4, '0')}`;
 
@@ -468,12 +470,22 @@ router.post('/orders/:id/dispatch', async (req, res) => {
         const invId = invHeadRes.rows[0].id;
 
         // [NEW] 1.7 Fetch Pricing Tiers & Brand Overrides
-        const custTierRes = await client.query('SELECT default_price_tier FROM customers WHERE id = $1', [so.customer_id]);
-        const defaultTier = custTierRes.rows[0]?.default_price_tier || 'Dealer';
+        const custTierRes = await client.query(`
+            SELECT c.price_column 
+            FROM channels c 
+            JOIN customers cust ON cust.channel_id = c.id 
+            WHERE cust.id = $1
+        `, [so.customer_id]);
+        const defaultRateColumn = custTierRes.rows[0]?.price_column || 'dealer_rate';
 
-        const overridesRes = await client.query('SELECT brand_id, price_tier FROM customer_brand_pricing WHERE customer_id = $1', [so.customer_id]);
+        const overridesRes = await client.query(`
+            SELECT b.brand_id, ch.price_column 
+            FROM customer_brand_pricing b
+            JOIN channels ch ON b.channel_id = ch.id
+            WHERE b.customer_id = $1
+        `, [so.customer_id]);
         const overrideMap = {};
-        overridesRes.rows.forEach(r => overrideMap[r.brand_id] = r.price_tier);
+        overridesRes.rows.forEach(r => overrideMap[r.brand_id] = r.price_column);
 
         // 5. Process Each Line: Deduct Stock & Create Audit
         let fullyFulfilled = true;
@@ -485,8 +497,7 @@ router.post('/orders/:id/dispatch', async (req, res) => {
             // Fetch Product Brand for Tier Selection
             const prodInfo = await client.query('SELECT brand_id FROM products WHERE id = $1', [pid]);
             const brandId = prodInfo.rows[0]?.brand_id;
-            const finalTier = overrideMap[brandId] || defaultTier;
-            const rateColumn = `${finalTier.toLowerCase()}_rate`;
+            const rateColumn = overrideMap[brandId] || defaultRateColumn;
 
             // FIFO Allocation Logic
             const batchesRes = await client.query(`
@@ -521,6 +532,7 @@ router.post('/orders/:id/dispatch', async (req, res) => {
 
                 invTotal += chunkAmount;
                 invTax += chunkTax;
+                totalCOGS += (Number(batch.purchase_rate) || 0) * take;
 
                 qtyToFulfill -= take;
             }
@@ -543,13 +555,53 @@ router.post('/orders/:id/dispatch', async (req, res) => {
             throw new Error("Zero stock available for this order. No invoice generated.");
         }
 
-        await client.query(`UPDATE sales_invoices SET grand_total = $1, total_taxable = $2 WHERE id = $3`, [invTotal, invTotal - invTax, invId]);
+        const roundedTotal = Number(invTotal.toFixed(2));
+        const roundedTax = Number(invTax.toFixed(2));
+        const taxable = Number((roundedTotal - roundedTax).toFixed(2));
+        const cgst = Number((roundedTax / 2).toFixed(2));
+        const sgst = Number((roundedTax - cgst).toFixed(2));
+
+        await client.query(`
+            UPDATE sales_invoices 
+            SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4 
+            WHERE id = $5
+        `, [roundedTotal, taxable, cgst, sgst, invId]);
+
+        // --- ACCOUNTING INTEGRATION ---
+        const acc_revenue = 4001;
+        const acc_ar = 1101;
+        const acc_gst_cgst = 2011;
+        const acc_gst_sgst = 2012;
+        const acc_cogs = 5001;
+        const acc_inventory = 1001;
+
+        let invoiceLines = [
+            { code: acc_ar, debit: roundedTotal, credit: 0 },
+            { code: acc_revenue, debit: 0, credit: taxable }
+        ];
+        if (roundedTax > 0) {
+            invoiceLines.push({ code: acc_gst_cgst, debit: 0, credit: cgst });
+            invoiceLines.push({ code: acc_gst_sgst, debit: 0, credit: sgst });
+        }
+        await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+            [new Date(), `Sales Invoice: ${invNumber}`, 'SALES_INV', invId, JSON.stringify(invoiceLines)]);
+
+        // 2. COGS Entry (COGS vs Inventory)
+        if (totalCOGS > 0) {
+            const roundedCOGS = Number(totalCOGS.toFixed(2));
+            const cogsLines = [
+                { code: acc_cogs, debit: roundedCOGS, credit: 0 },
+                { code: acc_inventory, debit: 0, credit: roundedCOGS }
+            ];
+            await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+                [new Date(), `COGS for ${invNumber}`, 'COGS', invId, JSON.stringify(cogsLines)]);
+        }
 
         // 7. Mark Order as Invoiced (Done for the week)
         await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [id]);
 
         await client.query('COMMIT');
-        res.json({ success: true, invoice_number: invNumber, message: 'Dispatched & Invoiced (Shortages recorded)' });
+        res.json({ success: true, invoice_number: invNumber, message: 'Dispatched & Invoiced' });
 
     } catch (err) {
         await client.query('ROLLBACK');
@@ -701,6 +753,48 @@ router.post('/returns/:id/apply', async (req, res) => {
             WHERE id = $2
                     `, [applied_by, id]);
 
+        // --- ACCOUNTING INTEGRATION ---
+        const acc_ar = 1101;
+        const acc_revenue = 4001;
+        const acc_gst_cgst = 2011;
+        const acc_gst_sgst = 2012;
+        const acc_cogs = 5001;
+        const acc_inventory = 1001;
+
+        const taxable = Number(ret.total_taxable || 0);
+        const tax = Number(ret.total_tax || 0);
+        const total = Number(ret.grand_total || 0);
+
+        // 1. Revenue Reversal (Dr Revenue/Tax, Cr AR)
+        let reverseLines = [
+            { code: acc_revenue, debit: taxable, credit: 0 },
+            { code: acc_ar, debit: 0, credit: total }
+        ];
+        if (tax > 0) {
+            reverseLines.push({ code: acc_gst_cgst, debit: Number((tax / 2).toFixed(2)), credit: 0 });
+            reverseLines.push({ code: acc_gst_sgst, debit: Number((tax - (tax / 2)).toFixed(2)), credit: 0 });
+        }
+        await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+            [new Date(), `Sales Return: ${ret.return_number}`, 'SALES_RET', id, JSON.stringify(reverseLines)]);
+
+        // 2. COGS Reversal (Dr Inventory, Cr COGS) if returned to stock
+        let totalCOGS_Reversal = 0;
+        for (const line of linesRes.rows) {
+            if (line.return_to_stock) {
+                const pRateRes = await client.query('SELECT purchase_rate FROM products WHERE id = $1', [line.product_id]);
+                totalCOGS_Reversal += (Number(pRateRes.rows[0]?.purchase_rate) || 0) * Number(line.qty);
+            }
+        }
+
+        if (totalCOGS_Reversal > 0) {
+            const stockInLines = [
+                { code: acc_inventory, debit: Number(totalCOGS_Reversal.toFixed(2)), credit: 0 },
+                { code: acc_cogs, debit: 0, credit: Number(totalCOGS_Reversal.toFixed(2)) }
+            ];
+            await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+                [new Date(), `Stock Reversal for Return: ${ret.return_number}`, 'COGS_REV', id, JSON.stringify(stockInLines)]);
+        }
+
         await client.query('COMMIT');
         res.json({ success: true, message: 'Return Applied. Stock and Ledger updated.' });
 
@@ -715,14 +809,17 @@ router.post('/returns/:id/apply', async (req, res) => {
 
 // POST /api/sales/orders/bulk-dispatch - Process multiple orders
 router.post('/orders/bulk-dispatch', async (req, res) => {
-    const { order_ids, invoice_date } = req.body;
-    if (!order_ids || !Array.isArray(order_ids)) return res.status(400).json({ error: 'Invalid order_ids' });
+    let { order_ids, invoice_date } = req.body;
+    if (!order_ids) return res.status(400).json({ error: 'Missing order_ids' });
+    if (typeof order_ids === 'string') order_ids = order_ids.split(',').map(s => s.trim());
+    if (!Array.isArray(order_ids)) return res.status(400).json({ error: 'Invalid order_ids format' });
 
     const results = [];
     const client = await pool.connect();
 
     try {
-        for (const id of order_ids) {
+        for (let orderItem of order_ids) {
+            let id = (typeof orderItem === 'object' && orderItem !== null && orderItem.id) ? orderItem.id : orderItem;
             try {
                 await client.query('BEGIN');
 
@@ -737,7 +834,7 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
 
                 // [NEW] 1.5 SCHEME LOGIC (Bulk)
                 const orderedItems = lines.map(l => ({ product_id: l.product_id, qty: l.ordered_qty }));
-                const freeItems = await calculateFreeItems(orderedItems);
+                const freeItems = await calculateFreeItems(orderedItems, client);
 
                 for (const free of freeItems) {
                     const resFreeLine = await client.query(`
@@ -753,9 +850,15 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
 
                 // 2. Generate Invoice Number
                 const yy = new Date().getFullYear().toString().slice(-2);
-                const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1", [`INV - ${yy} -% `]);
-                const nextSeq = parseInt(seqRes.rows[0].count) + 1;
-                const invNumber = `INV - ${yy} - ${String(nextSeq).padStart(4, '0')}`;
+                const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1 OR invoice_number LIKE $2", [`INV-${yy}-%`, `INV - ${yy} -%`]);
+                let nextSeq = parseInt(seqRes.rows[0].count) + 1;
+                let invNumber;
+                let check;
+                do {
+                    invNumber = `INV-${yy}-${String(nextSeq).padStart(4, '0')}`;
+                    check = await client.query("SELECT id FROM sales_invoices WHERE invoice_number = $1", [invNumber]);
+                    if (check.rows.length > 0) nextSeq++;
+                } while (check.rows.length > 0);
 
                 // 3. Create Invoice Header
                 const invHeadRes = await client.query(`
@@ -767,50 +870,140 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                     `, [invNumber, id, so.customer_id, invoice_date || new Date()]);
                 const invId = invHeadRes.rows[0].id;
 
+                // [NEW] 1.5 Fetch Pricing Tiers & Brand Overrides
+                const custTierRes = await client.query(`
+                    SELECT c.price_column 
+                    FROM channels c 
+                    JOIN customers cust ON cust.channel_id = c.id 
+                    WHERE cust.id = $1
+                `, [so.customer_id]);
+                const defaultRateColumn = custTierRes.rows[0]?.price_column || 'dealer_rate';
+
+                const overridesRes = await client.query(`
+                    SELECT b.brand_id, ch.price_column 
+                    FROM customer_brand_pricing b
+                    JOIN channels ch ON b.channel_id = ch.id
+                    WHERE b.customer_id = $1
+                `, [so.customer_id]);
+                const overrideMap = {};
+                overridesRes.rows.forEach(r => overrideMap[r.brand_id] = r.price_column);
+
                 let invTotal = 0;
                 let invTax = 0;
+                let totalCOGS = 0;
 
-                // 4. FIFO Stock Deduction
+                // 4. FIFO Stock Allocation
                 for (const line of lines) {
-                    let qtyToFulfill = line.ordered_qty;
+                    const orderedQty = Number(line.ordered_qty);
+                    let qtyToFulfill = orderedQty;
+                    const pid = line.product_id;
+
+                    // Fetch Rate Column
+                    const prodInfo = await client.query('SELECT brand_id, tax_id FROM products WHERE id = $1', [pid]);
+                    const brandId = prodInfo.rows[0]?.brand_id;
+                    const rateColumn = overrideMap[brandId] || defaultRateColumn;
+                    const lineTaxPercent = Number(line.tax_percent) || 0;
 
                     const batchesRes = await client.query(`
-                        SELECT id, quantity_remaining 
+                        SELECT id, quantity_remaining, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate
                         FROM inventory_batches 
                         WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
                         ORDER BY created_at ASC FOR UPDATE
-                    `, [line.product_id]);
+                    `, [pid]);
 
                     for (const batch of batchesRes.rows) {
                         if (qtyToFulfill <= 0) break;
                         const take = Math.min(qtyToFulfill, batch.quantity_remaining);
+                        // For bulk dispatch, we use the rate ALREADY on the line (unlike bulk-generate which recalcs)
+                        const batchRate = Number(line.rate) || 0;
 
                         await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batch.id]);
                         await client.query(`
                             INSERT INTO stock_traceability(batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
                             VALUES($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)
-                        `, [batch.id, line.product_id, -take, invId, `Allocated to ${invNumber}`]);
+                        `, [batch.id, pid, -take, invId, `Bulk Dispatch for ${invNumber} (${rateColumn})`]);
 
+                        // Record Line
+                        const chunkAmount = (batchRate * take) * (1 + (lineTaxPercent / 100));
+                        const chunkTax = chunkAmount - (batchRate * take);
+
+                        await client.query(`
+                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, tax_percent, tax_amount, amount)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        `, [invId, pid, take, batchRate, lineTaxPercent, chunkTax, chunkAmount]);
+
+                        invTotal += chunkAmount;
+                        invTax += chunkTax;
+                        totalCOGS += (Number(batch.purchase_rate) || 0) * take;
                         qtyToFulfill -= take;
                     }
 
-                    if (qtyToFulfill > 0) throw new Error(`Insufficient stock for product ${line.product_id} in Order ${so.so_number} `);
-
-                    await client.query('UPDATE sales_order_lines SET dispatched_qty = $1 WHERE id = $2', [line.ordered_qty, line.id]);
-                    invTotal += Number(line.amount);
-                    invTax += Number(line.tax_amount);
+                    // Update SO Line Dispatch Progress
+                    const shippedQty = orderedQty - qtyToFulfill;
+                    const finalDispatched = Number(line.dispatched_qty || 0) + shippedQty;
+                    const shortage = orderedQty - finalDispatched;
+                    await client.query(`
+                        UPDATE sales_order_lines SET dispatched_qty = $1, cancelled_qty = $2 WHERE id = $3
+                    `, [finalDispatched, shortage, line.id]);
                 }
 
                 // 5. Finalize
-                await client.query('UPDATE sales_invoices SET grand_total = $1, total_taxable = $2 WHERE id = $3', [invTotal, invTotal - invTax, invId]);
+                if (invTotal === 0) {
+                    throw new Error("Zero stock available for this order.");
+                }
+
+                const roundedTotal = Number(invTotal.toFixed(2));
+                const roundedTax = Number(invTax.toFixed(2));
+                const taxable = Number((roundedTotal - roundedTax).toFixed(2));
+                const cgst = Number((roundedTax / 2).toFixed(2));
+                const sgst = Number((roundedTax - cgst).toFixed(2));
+
+                await client.query(`
+                    UPDATE sales_invoices 
+                    SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4 
+                    WHERE id = $5
+                `, [roundedTotal, taxable, cgst, sgst, invId]);
+
+                // --- ACCOUNTING INTEGRATION ---
+                const acc_revenue = 4001;
+                const acc_ar = 1101;
+                const acc_gst_cgst = 2011;
+                const acc_gst_sgst = 2012;
+                const acc_cogs = 5001;
+                const acc_inventory = 1001;
+
+                let invoiceLines = [
+                    { code: acc_ar, debit: roundedTotal, credit: 0 },
+                    { code: acc_revenue, debit: 0, credit: taxable }
+                ];
+                if (roundedTax > 0) {
+                    invoiceLines.push({ code: acc_gst_cgst, debit: 0, credit: cgst });
+                    invoiceLines.push({ code: acc_gst_sgst, debit: 0, credit: sgst });
+                }
+                await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+                    [new Date(), `Sales Invoice: ${invNumber}`, 'SALES_INV', invId, JSON.stringify(invoiceLines)]);
+
+                // 2. COGS Entry (COGS vs Inventory)
+                if (totalCOGS > 0) {
+                    const roundedCOGS = Number(totalCOGS.toFixed(2));
+                    const cogsLines = [
+                        { code: acc_cogs, debit: roundedCOGS, credit: 0 },
+                        { code: acc_inventory, debit: 0, credit: roundedCOGS }
+                    ];
+                    await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+                        [new Date(), `COGS for ${invNumber}`, 'COGS', invId, JSON.stringify(cogsLines)]);
+                }
+
+                // 7. Mark Order as Invoiced
                 await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [id]);
 
                 await client.query('COMMIT');
-                results.push({ id, status: 'Success', invoice_number: invNumber });
+                results.push({ id, order_id: id, status: 'Success', invoice_number: invNumber });
 
             } catch (err) {
                 await client.query('ROLLBACK');
-                results.push({ id, status: 'Failed', error: err.message });
+                console.error("Bulk Order Error:", err);
+                results.push({ id: (typeof id === 'object' ? id.id : id), order_id: (typeof id === 'object' ? id.id : id), status: 'Failed', error: err.stack || err.message });
             }
         }
         res.json(results);
@@ -821,15 +1014,18 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
 
 // POST /api/sales/bulk-invoice-generate - Complex logic for Admin Dashboard
 router.post('/bulk-invoice-generate', async (req, res) => {
-    const { order_ids, transit_stock } = req.body;
-    if (!order_ids || !Array.isArray(order_ids)) return res.status(400).json({ error: 'Invalid order_ids' });
+    let { order_ids, transit_stock } = req.body;
+    if (!order_ids) return res.status(400).json({ error: 'Missing order_ids' });
+    if (typeof order_ids === 'string') order_ids = order_ids.split(',').map(s => s.trim());
+    if (!Array.isArray(order_ids)) return res.status(400).json({ error: 'Invalid order_ids format' });
 
-    const client = await pool.connect();
     const results = [];
+    const client = await pool.connect();
     const transitMap = transit_stock || {}; // { "pid": { qty, batch_code, rate } }
 
     try {
-        for (const orderId of order_ids) {
+        for (let orderItem of order_ids) {
+            let orderId = (typeof orderItem === 'object' && orderItem !== null && orderItem.id) ? orderItem.id : orderItem;
             try {
                 await client.query('BEGIN');
 
@@ -845,7 +1041,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                 // 2.5 Calculate Schemes (Free Items)
                 const orderedItems = lines.map(l => ({ product_id: l.product_id, qty: l.ordered_qty }));
-                const freeItems = await calculateFreeItems(orderedItems);
+                const freeItems = await calculateFreeItems(orderedItems, client);
                 for (const free of freeItems) {
                     const resFree = await client.query(`
                         INSERT INTO sales_order_lines(sales_order_id, product_id, ordered_qty, rate, tax_percent, tax_amount, amount, tier_applied)
@@ -857,24 +1053,43 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                 // 3. Create Invoice Header
                 const yy = new Date().getFullYear().toString().slice(-2);
-                const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1", [`INV - ${yy} -% `]);
-                const nextSeq = parseInt(seqRes.rows[0].count) + 1;
-                const invNumber = `INV - ${yy} -${String(nextSeq).padStart(4, '0')} `;
+                // Flexible search to find old formats
+                const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1 OR invoice_number LIKE $2", [`INV-${yy}-%`, `INV - ${yy} -%`]);
+                let nextSeq = parseInt(seqRes.rows[0].count) + 1;
+                let invNumber;
+                let check;
+                do {
+                    invNumber = `INV-${yy}-${String(nextSeq).padStart(4, '0')}`;
+                    check = await client.query("SELECT id FROM sales_invoices WHERE invoice_number = $1", [invNumber]);
+                    if (check.rows.length > 0) nextSeq++;
+                } while (check.rows.length > 0);
 
                 const invHeadRes = await client.query(`
                     INSERT INTO sales_invoices(invoice_number, sales_order_id, customer_id, status, grand_total, invoice_date)
                 VALUES($1, $2, $3, 'Unpaid', 0, NOW()) RETURNING id
                 `, [invNumber, orderId, so.customer_id]);
-                // [NEW] 3.5 Fetch Pricing Tiers & Brand Overrides
-                const custTierRes = await client.query('SELECT default_price_tier FROM customers WHERE id = $1', [so.customer_id]);
-                const defaultTier = custTierRes.rows[0]?.default_price_tier || 'Dealer';
+                const invId = invHeadRes.rows[0].id;
+                // [NEW] 1.5 Fetch Pricing Tiers & Brand Overrides
+                const custTierRes = await client.query(`
+                    SELECT c.price_column 
+                    FROM channels c 
+                    JOIN customers cust ON cust.channel_id = c.id 
+                    WHERE cust.id = $1
+                `, [so.customer_id]);
+                const defaultRateColumn = custTierRes.rows[0]?.price_column || 'dealer_rate';
 
-                const overridesRes = await client.query('SELECT brand_id, price_tier FROM customer_brand_pricing WHERE customer_id = $1', [so.customer_id]);
+                const overridesRes = await client.query(`
+                    SELECT b.brand_id, ch.price_column 
+                    FROM customer_brand_pricing b
+                    JOIN channels ch ON b.channel_id = ch.id
+                    WHERE b.customer_id = $1
+                `, [so.customer_id]);
                 const overrideMap = {};
-                overridesRes.rows.forEach(r => overrideMap[r.brand_id] = r.price_tier);
+                overridesRes.rows.forEach(r => overrideMap[r.brand_id] = r.price_column);
 
                 let invTotal = 0;
                 let invTax = 0;
+                let totalCOGS = 0;
                 let fullyFulfilled = true;
 
                 // 4. Stock Allocation (Real FIFO + Transit Fallback)
@@ -885,8 +1100,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                     const prodInfo = await client.query('SELECT brand_id, tax_id FROM products WHERE id = $1', [pid]);
                     const brandId = prodInfo.rows[0]?.brand_id;
-                    const finalTier = overrideMap[brandId] || defaultTier;
-                    const rateColumn = `${finalTier.toLowerCase()}_rate`;
+                    const rateColumn = overrideMap[brandId] || defaultRateColumn;
                     const lineTaxPercent = Number(line.tax_percent) || 0;
 
                     // A. Check REAL Inventory Batches
@@ -907,7 +1121,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         await client.query(`
                             INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
                             VALUES ($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)
-                        `, [batch.id, pid, -take, invId, `Real stock for ${invNumber} (${finalTier} rate)`]);
+                        `, [batch.id, pid, -take, invId, `Real stock for ${invNumber} (${rateColumn})`]);
 
                         // Record Line
                         const chunkAmount = (batchRate * take) * (1 + (lineTaxPercent / 100));
@@ -920,6 +1134,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                         invTotal += chunkAmount;
                         invTax += chunkTax;
+                        totalCOGS += (Number(batch.purchase_rate) || 0) * take;
                         qtyToFulfill -= take;
                     }
 
@@ -955,7 +1170,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         await client.query(`
                             INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
                             VALUES ($1, $2, $3, 'OUT-TRANSIT', $4, 'Sales Invoice', $5)
-                        `, [batchId, pid, -take, invId, `Transit stock (${transit.batch_code}) for ${invNumber} (${finalTier} rate)`]);
+                        `, [batchId, pid, -take, invId, `Transit stock (${transit.batch_code}) for ${invNumber} (${rateColumn})`]);
 
                         // Record Line for Transit chunk
                         const transitChunkAmount = (transitRate * take) * (1 + (lineTaxPercent / 100));
@@ -968,6 +1183,9 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                         invTotal += transitChunkAmount;
                         invTax += transitChunkTax;
+                        // Transit COGS uses Product Master purchase rate
+                        const prodP = await client.query('SELECT purchase_rate FROM products WHERE id = $1', [pid]);
+                        totalCOGS += (Number(prodP.rows[0]?.purchase_rate) || 0) * take;
                         qtyToFulfill -= take;
                     }
 
@@ -987,20 +1205,61 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     throw new Error("Zero stock available for this order. No invoice generated.");
                 }
 
-                await client.query('UPDATE sales_invoices SET grand_total = $1, total_taxable = $2 WHERE id = $3', [invTotal, invTotal - invTax, invId]);
+                const roundedTotal = Number(invTotal.toFixed(2));
+                const roundedTax = Number(invTax.toFixed(2));
+                const taxable = Number((roundedTotal - roundedTax).toFixed(2));
+                const cgst = Number((roundedTax / 2).toFixed(2));
+                const sgst = Number((roundedTax - cgst).toFixed(2));
+
+                await client.query('UPDATE sales_invoices SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4 WHERE id = $5', [roundedTotal, taxable, cgst, sgst, invId]);
+
+                // --- ACCOUNTING INTEGRATION ---
+                const acc_revenue = 4001;
+                const acc_ar = 1101;
+                const acc_gst_cgst = 2011;
+                const acc_gst_sgst = 2012;
+                const acc_cogs = 5001;
+                const acc_inventory = 1001;
+
+                // 1. Invoice Entry (AR vs Sales + GST)
+                let invoiceLines = [
+                    { code: acc_ar, debit: roundedTotal, credit: 0 },
+                    { code: acc_revenue, debit: 0, credit: taxable }
+                ];
+                if (roundedTax > 0) {
+                    invoiceLines.push({ code: acc_gst_cgst, debit: 0, credit: cgst });
+                    invoiceLines.push({ code: acc_gst_sgst, debit: 0, credit: sgst });
+                }
+                await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+                    [new Date(), `Sales Invoice: ${invNumber}`, 'SALES_INV', invId, JSON.stringify(invoiceLines)]);
+
+                // 2. COGS Entry (COGS vs Inventory)
+                if (totalCOGS > 0) {
+                    const roundedCOGS = Number(totalCOGS.toFixed(2));
+                    const cogsLines = [
+                        { code: acc_cogs, debit: roundedCOGS, credit: 0 },
+                        { code: acc_inventory, debit: 0, credit: roundedCOGS }
+                    ];
+                    await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+                        [new Date(), `COGS for ${invNumber}`, 'COGS', invId, JSON.stringify(cogsLines)]);
+                }
 
                 // Mark as Invoiced (Done for the week)
                 await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [orderId]);
 
                 await client.query('COMMIT');
-                results.push({ order_id: orderId, status: 'Success', invoice_number: invNumber });
+                results.push({ id: orderId, order_id: orderId, status: 'Success', invoice_number: invNumber });
 
             } catch (err) {
                 await client.query('ROLLBACK');
-                results.push({ order_id: orderId, status: 'Failed', error: err.message });
+                console.error("Bulk Order Error:", err);
+                results.push({ id: orderId, order_id: orderId, status: 'Failed', error: err.stack || err.message });
             }
         }
-        res.json({ results });
+        res.json(results);
+    } catch (err) {
+        console.error("Bulk Generation Critical Error:", err);
+        res.status(500).json({ error: err.stack || err.message });
     } finally {
         client.release();
     }

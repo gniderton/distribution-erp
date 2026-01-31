@@ -1,11 +1,12 @@
 const { pool } = require('../config/db');
 
-async function calculateFreeItems(items) {
+async function calculateFreeItems(items, client = null) {
+    const db = client || pool;
     // Input: [{ product_id, qty }]
     if (!items || items.length === 0) return [];
 
     // 1. Fetch Rules
-    const rulesRes = await pool.query(`
+    const rulesRes = await db.query(`
         SELECT sr.*, s.scheme_name
         FROM scheme_rules sr
         JOIN schemes s ON sr.scheme_id = s.id
@@ -20,7 +21,7 @@ async function calculateFreeItems(items) {
 
     // 2. Fetch Product Meta (Brand, Cat, CaseQty)
     const productIds = items.map(i => i.product_id);
-    const metaRes = await pool.query(`
+    const metaRes = await db.query(`
         SELECT id, brand_id, category_id, case_quantity 
         FROM products WHERE id = ANY($1::int[])
     `, [productIds]);
