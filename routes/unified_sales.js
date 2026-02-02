@@ -24,7 +24,7 @@ router.get('/unified', async (req, res) => {
                 so.customer_id,
                 c.customer_name,
                 so.dse_id,
-                e.employee_name as dse_name,
+                e.full_name as dse_name,
                 so.order_date,
                 so.delivery_date,
                 so.status,
@@ -135,7 +135,7 @@ router.get('/unified/:id', async (req, res) => {
                 c.customer_name,
                 c.customer_phone,
                 c.gstin,
-                e.employee_name as dse_name,
+                e.full_name as dse_name,
                 
                 -- Invoice header
                 si.id as invoice_id,
