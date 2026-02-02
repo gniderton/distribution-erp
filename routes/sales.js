@@ -598,7 +598,7 @@ router.post('/orders/:id/dispatch', async (req, res) => {
         }
 
         // 7. Mark Order as Invoiced (Done for the week)
-        await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [id]);
+        await client.query("UPDATE sales_orders SET status = 'Invoiced', invoice_number = $1 WHERE id = $2", [invNumber, id]);
 
         await client.query('COMMIT');
         res.json({ success: true, invoice_number: invNumber, message: 'Dispatched & Invoiced' });
@@ -995,7 +995,7 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                 }
 
                 // 7. Mark Order as Invoiced
-                await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [id]);
+                await client.query("UPDATE sales_orders SET status = 'Invoiced', invoice_number = $1 WHERE id = $2", [invNumber, id]);
 
                 await client.query('COMMIT');
                 results.push({ id, order_id: id, status: 'Success', invoice_number: invNumber });
@@ -1245,7 +1245,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 }
 
                 // Mark as Invoiced (Done for the week)
-                await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [orderId]);
+                await client.query("UPDATE sales_orders SET status = 'Invoiced', invoice_number = $1 WHERE id = $2", [invNumber, orderId]);
 
                 await client.query('COMMIT');
                 results.push({ id: orderId, order_id: orderId, status: 'Success', invoice_number: invNumber });
