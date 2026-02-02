@@ -597,19 +597,8 @@ router.post('/orders/:id/dispatch', async (req, res) => {
                 [new Date(), `COGS for ${invNumber}`, 'COGS', invId, JSON.stringify(cogsLines)]);
         }
 
-        // 7. Mark Order as Invoiced with full breakdown
-        await client.query(`
-            UPDATE sales_orders 
-            SET status = 'Invoiced', 
-                invoice_number = $1,
-                invoice_gross_amount = $2,
-                invoice_scheme_amount = 0,
-                invoice_discount_amount = 0,
-                invoice_taxable_amount = $3,
-                invoice_gst_amount = $4,
-                invoice_net_amount = $5
-            WHERE id = $6
-        `, [invNumber, roundedTotal, taxable, roundedTax, roundedTotal, id]);
+        // 7. Mark Order as Invoiced
+        await client.query("UPDATE sales_orders SET status = 'Invoiced', invoice_number = $1 WHERE id = $2", [invNumber, id]);
 
         await client.query('COMMIT');
         res.json({ success: true, invoice_number: invNumber, message: 'Dispatched & Invoiced' });
@@ -1005,19 +994,8 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                         [new Date(), `COGS for ${invNumber}`, 'COGS', invId, JSON.stringify(cogsLines)]);
                 }
 
-                // 7. Mark Order as Invoiced with full breakdown
-                await client.query(`
-                    UPDATE sales_orders 
-                    SET status = 'Invoiced', 
-                        invoice_number = $1,
-                        invoice_gross_amount = $2,
-                        invoice_scheme_amount = 0,
-                        invoice_discount_amount = 0,
-                        invoice_taxable_amount = $3,
-                        invoice_gst_amount = $4,
-                        invoice_net_amount = $5
-                    WHERE id = $6
-                `, [invNumber, roundedTotal, taxable, roundedTax, roundedTotal, id]);
+                // 7. Mark Order as Invoiced
+                await client.query("UPDATE sales_orders SET status = 'Invoiced', invoice_number = $1 WHERE id = $2", [invNumber, id]);
 
                 await client.query('COMMIT');
                 results.push({ id, order_id: id, status: 'Success', invoice_number: invNumber });
@@ -1266,19 +1244,8 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         [new Date(), `COGS for ${invNumber}`, 'COGS', invId, JSON.stringify(cogsLines)]);
                 }
 
-                // Mark as Invoiced with full breakdown
-                await client.query(`
-                    UPDATE sales_orders 
-                    SET status = 'Invoiced', 
-                        invoice_number = $1,
-                        invoice_gross_amount = $2,
-                        invoice_scheme_amount = 0,
-                        invoice_discount_amount = 0,
-                        invoice_taxable_amount = $3,
-                        invoice_gst_amount = $4,
-                        invoice_net_amount = $5
-                    WHERE id = $6
-                `, [invNumber, roundedTotal, taxable, roundedTax, roundedTotal, orderId]);
+                // Mark as Invoiced
+                await client.query("UPDATE sales_orders SET status = 'Invoiced', invoice_number = $1 WHERE id = $2", [invNumber, orderId]);
 
                 await client.query('COMMIT');
                 results.push({ id: orderId, order_id: orderId, status: 'Success', invoice_number: invNumber });
