@@ -61,6 +61,7 @@ app.use('/api/dse', require('./routes/dse')); // [NEW] DSE Ops (EOD, etc)
 app.use('/api/sales-orders', require('./routes/sales_orders')); // [NEW] Sales Admin
 app.use('/api/schemes', require('./routes/schemes')); // [NEW] Scheme Engine
 app.use('/api/channels', require('./routes/channels')); // [NEW] Channel Maaping
+app.use('/api/categories', require('./routes/categories')); // Categories for dropdowns
 
 // Database Connection Test & Server Start
 const fs = require('fs');
