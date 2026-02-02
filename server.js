@@ -47,6 +47,8 @@ app.use('/api/purchase-invoices', require('./routes/purchase_invoices')); // NEW
 app.use('/api/documents', require('./routes/documents'));
 app.use('/api/bank-accounts', require('./routes/bank_accounts'));
 app.use('/api/sales', require('./routes/sales'));
+app.use('/api/sales', require('./routes/unified_sales')); // Unified orders + invoices view
+
 app.use('/api/stock/adjust', require('./routes/stock_adjustments'));
 
 // [NEW] Sales Module Routes
