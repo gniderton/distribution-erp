@@ -80,6 +80,23 @@ app.get('/api/fix-combo-db', async (req, res) => {
     }
 });
 
+// [TEMP] Reset Sales Module Data
+app.get('/api/reset-sales-data', async (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const { pool } = require('./config/db');
+
+        const sqlPath = path.join(__dirname, 'database', '080_reset_sales_module.sql');
+        const sql = fs.readFileSync(sqlPath, 'utf8');
+
+        await pool.query(sql);
+        res.send('<h1>✅ Sales Data Reset Successful!</h1><p>Cleared: Schemes, Orders, Invoices, Deliveries, Payments.<br>Preserved: Products, Customers, Inventory.</p>');
+    } catch (err) {
+        res.status(500).send(`<h1>❌ Reset Failed</h1><pre>${err.message}</pre>`);
+    }
+});
+
 // Database Connection Test & Server Start
 const fs = require('fs');
 const path = require('path');
