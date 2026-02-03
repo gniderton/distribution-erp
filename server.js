@@ -63,6 +63,23 @@ app.use('/api/schemes', require('./routes/schemes')); // [NEW] Scheme Engine
 app.use('/api/channels', require('./routes/channels')); // [NEW] Channel Maaping
 app.use('/api/categories', require('./routes/categories')); // Categories for dropdowns
 
+// [TEMP] Migration Endpoint to fix Combo Schema
+app.get('/api/fix-combo-db', async (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const { pool } = require('./config/db');
+
+        const sqlPath = path.join(__dirname, 'database', '079_fix_combo_trigger_id.sql');
+        const sql = fs.readFileSync(sqlPath, 'utf8');
+
+        await pool.query(sql);
+        res.send('<h1>✅ Migration Successful!</h1><p>Combo schemes explicitly fixed. You can now create combo schemes.</p>');
+    } catch (err) {
+        res.status(500).send(`<h1>❌ Migration Failed</h1><pre>${err.message}</pre>`);
+    }
+});
+
 // Database Connection Test & Server Start
 const fs = require('fs');
 const path = require('path');
