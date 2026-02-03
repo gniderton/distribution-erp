@@ -520,6 +520,7 @@ router.post('/orders/:id/dispatch', async (req, res) => {
             let lineTaxable = 0;
             let lineTaxAmt = 0;
             let lineTotal = 0;
+            let lineTotalDiscAmt = 0; // [NEW] Track total discount info
             let fulfilledQty = 0;
 
             for (const batch of batchesRes.rows) {
@@ -535,29 +536,39 @@ router.post('/orders/:id/dispatch', async (req, res) => {
                     `, [batch.id, pid, -take, invId, `Allocated to ${invNumber}`]);
 
                 // --- CALCULATION LOGIC (Per Batch Chunk) ---
-                // This chunk represents 'take' quantity.
-                // We need to apportion the 'Free Qty' benefit across the total qty? 
-                // Or is Free Qty distinct? 
-                // User says: "in the qty column 13 pcs... in the scheme column, free qty*unit price"
 
-                // Ratio of this batch to total line qty
+                // Ratio of this batch to total line qty (for scheme apportionment)
                 const ratio = take / totalQty;
 
+                // 1. Gross (Qty * Rate)
                 const chunkGross = take * batchRate;
-                const chunkScheme = (freeQty * batchRate) * ratio; // Pro-rate scheme deduction
-                // Discount? (Assuming 0 for now as not in payload yet)
 
-                const chunkTaxable = chunkGross - chunkScheme;
+                // 2. Scheme (Free Value deduction)
+                const chunkScheme = (freeQty * batchRate) * ratio;
 
+                // 3. Discount (Percent on GROSS usually, or Taxable? User said: taxble - (gross-scheme-disc))
+                // We'll apply Discount % on the GROSS amount (Qty * Rate).
+                const lineDiscPct = Number(line.discount_percent) || 0;
+                const chunkDiscAmt = chunkGross * (lineDiscPct / 100);
+
+                // 4. Taxable
+                const chunkTaxable = chunkGross - chunkScheme - chunkDiscAmt;
+
+                // 5. Tax
                 const lineTaxPercent = Number(line.tax_percent) || 0;
-                // Tax on Taxable Amount
-                const chunkTaxVal = chunkTaxable * (lineTaxPercent / 100);
-                const chunkTotal = chunkTaxable + chunkTaxVal;
+                const chunkTaxAmt = chunkTaxable * (lineTaxPercent / 100);
+
+                // 6. Net Total
+                const chunkTotal = chunkTaxable + chunkTaxAmt;
 
                 lineGross += chunkGross;
                 lineScheme += chunkScheme;
+
+                // Discount is strictly per line percent, so just summing up chunks
+                lineTotalDiscAmt += chunkDiscAmt;
+
                 lineTaxable += chunkTaxable;
-                lineTaxAmt += chunkTaxVal;
+                lineTaxAmt += chunkTaxAmt;
                 lineTotal += chunkTotal;
                 totalCOGS += (Number(batch.purchase_rate) || 0) * take;
 
@@ -570,14 +581,16 @@ router.post('/orders/:id/dispatch', async (req, res) => {
                 await client.query(`
                         INSERT INTO sales_invoice_lines (
                             invoice_id, product_id, shipped_qty, rate, 
-                            gross_amount, scheme_amount, taxable_amount,
+                            gross_amount, scheme_amount, discount_percent, discount_amount, taxable_amount,
                             tax_percent, tax_amount, amount
                         )
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                     `, [
                     invId, pid, fulfilledQty, Number(line.rate), // Use original rate as ref
                     Number(lineGross.toFixed(2)),
                     Number(lineScheme.toFixed(2)),
+                    Number(line.discount_percent || 0),
+                    Number(lineTotalDiscAmt.toFixed(2)),
                     Number(lineTaxable.toFixed(2)),
                     Number(line.tax_percent),
                     Number(lineTaxAmt.toFixed(2)),
