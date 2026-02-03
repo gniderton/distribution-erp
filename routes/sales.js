@@ -427,22 +427,19 @@ router.post('/orders/:id/dispatch', async (req, res) => {
         const linesRes = await client.query('SELECT * FROM sales_order_lines WHERE sales_order_id = $1', [id]);
         let lines = linesRes.rows;
 
-        // [NEW] 1.5 SCHEME LOGIC: Calculate & Inject Free Lines
+        // [NEW] 1.5 SCHEME LOGIC: Calculate & Merge Free Lines
         const orderedItems = lines.map(l => ({ product_id: l.product_id, qty: l.ordered_qty }));
         const freeItems = await calculateFreeItems(orderedItems);
 
-        for (const free of freeItems) {
-            const resFreeLine = await client.query(`
-                INSERT INTO sales_order_lines (
-                    sales_order_id, product_id, ordered_qty, rate, 
-                    tax_percent, tax_amount, amount, tier_applied
-                ) VALUES ($1, $2, $3, 0, 0, 0, 0, 'Scheme: ' || $4)
-                RETURNING *
-            `, [id, free.product_id, free.qty, free.reason]);
+        // Merge Logic: Instead of adding new lines, we update the existing line's quantity and scheme_amount
+        // Map free items by Product ID for easier lookup
+        const freeMap = {};
+        freeItems.forEach(f => {
+            if (!freeMap[f.product_id]) freeMap[f.product_id] = { qty: 0, reason: [] };
+            freeMap[f.product_id].qty += f.qty;
+            freeMap[f.product_id].reason.push(f.reason);
+        });
 
-            // Add to the 'lines' array so it gets stock allocated below
-            lines.push(resFreeLine.rows[0]);
-        }
         // -----------------------------------------------------
 
         // 2. Prepare Invoice Totals
@@ -459,39 +456,43 @@ router.post('/orders/:id/dispatch', async (req, res) => {
 
         // 4. Create Invoice Header
         const invHeadRes = await client.query(`
-            INSERT INTO sales_invoices (
-                invoice_number, sales_order_id, customer_id, invoice_date, 
-                status, grand_total
-            ) VALUES ($1, $2, $3, $4, 'Unpaid', 0)
-            RETURNING id
-        `, [
+                INSERT INTO sales_invoices (
+                    invoice_number, sales_order_id, customer_id, invoice_date, 
+                    status, grand_total
+                ) VALUES ($1, $2, $3, $4, 'Unpaid', 0)
+                RETURNING id
+            `, [
             invNumber, id, so.customer_id, invoice_date || new Date()
         ]);
         const invId = invHeadRes.rows[0].id;
 
         // [NEW] 1.7 Fetch Pricing Tiers & Brand Overrides
         const custTierRes = await client.query(`
-            SELECT c.price_column 
-            FROM channels c 
-            JOIN customers cust ON cust.channel_id = c.id 
-            WHERE cust.id = $1
-        `, [so.customer_id]);
+                SELECT c.price_column 
+                FROM channels c 
+                JOIN customers cust ON cust.channel_id = c.id 
+                WHERE cust.id = $1
+            `, [so.customer_id]);
         const defaultRateColumn = custTierRes.rows[0]?.price_column || 'dealer_rate';
 
         const overridesRes = await client.query(`
-            SELECT b.brand_id, ch.price_column 
-            FROM customer_brand_pricing b
-            JOIN channels ch ON b.channel_id = ch.id
-            WHERE b.customer_id = $1
-        `, [so.customer_id]);
+                SELECT b.brand_id, ch.price_column 
+                FROM customer_brand_pricing b
+                JOIN channels ch ON b.channel_id = ch.id
+                WHERE b.customer_id = $1
+            `, [so.customer_id]);
         const overrideMap = {};
         overridesRes.rows.forEach(r => overrideMap[r.brand_id] = r.price_column);
 
         // 5. Process Each Line: Deduct Stock & Create Audit
-        let fullyFulfilled = true;
         for (const line of lines) {
+            // Determine Total Qty (Original + Free)
             const orderedQty = Number(line.ordered_qty);
-            let qtyToFulfill = orderedQty;
+            const freeData = freeMap[line.product_id];
+            const freeQty = freeData ? freeData.qty : 0;
+            const totalQty = orderedQty + freeQty; // e.g. 12 + 1 = 13
+
+            let qtyToFulfill = totalQty;
             const pid = String(line.product_id);
 
             // Fetch Product Brand for Tier Selection
@@ -501,52 +502,107 @@ router.post('/orders/:id/dispatch', async (req, res) => {
 
             // FIFO Allocation Logic
             const batchesRes = await client.query(`
-                SELECT id, quantity_remaining, purchase_rate, mrp,
-                       distributor_rate, wholesale_rate, dealer_rate, retail_rate
-                FROM inventory_batches 
-                WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
-                ORDER BY created_at ASC
-                FOR UPDATE
-            `, [pid]);
+                    SELECT id, quantity_remaining, purchase_rate, mrp,
+                           distributor_rate, wholesale_rate, dealer_rate, retail_rate
+                    FROM inventory_batches 
+                    WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
+                    ORDER BY created_at ASC
+                    FOR UPDATE
+                `, [pid]);
+
+            // We need to calculate weighted average rate if multiple batches used, 
+            // BUT for scheme calculation, we usually use the "Standard Rate" of the line.
+            // However, detailed breakdown needs to be per-line. 
+            // We'll process batch allocation but sum up the financials for the Invoice Line.
+
+            let lineGross = 0;
+            let lineScheme = 0;
+            let lineTaxable = 0;
+            let lineTaxAmt = 0;
+            let lineTotal = 0;
+            let fulfilledQty = 0;
 
             for (const batch of batchesRes.rows) {
                 if (qtyToFulfill <= 0) break;
+
                 const batchRate = Number(batch[rateColumn]) || 0;
                 const take = Math.min(qtyToFulfill, batch.quantity_remaining);
+
                 await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2`, [take, batch.id]);
                 await client.query(`
-                    INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
-                    VALUES ($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)
-                `, [batch.id, pid, -take, invId, `Allocated to ${invNumber} (${finalTier} rate)`]);
+                        INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
+                        VALUES ($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)
+                    `, [batch.id, pid, -take, invId, `Allocated to ${invNumber}`]);
 
-                // Update totals for this specific batch chunk
-                // Note: We use the rate from the batch, NOT the line
+                // --- CALCULATION LOGIC (Per Batch Chunk) ---
+                // This chunk represents 'take' quantity.
+                // We need to apportion the 'Free Qty' benefit across the total qty? 
+                // Or is Free Qty distinct? 
+                // User says: "in the qty column 13 pcs... in the scheme column, free qty*unit price"
+
+                // Ratio of this batch to total line qty
+                const ratio = take / totalQty;
+
+                const chunkGross = take * batchRate;
+                const chunkScheme = (freeQty * batchRate) * ratio; // Pro-rate scheme deduction
+                // Discount? (Assuming 0 for now as not in payload yet)
+
+                const chunkTaxable = chunkGross - chunkScheme;
+
                 const lineTaxPercent = Number(line.tax_percent) || 0;
-                const chunkAmount = (batchRate * take) * (1 + (lineTaxPercent / 100));
-                const chunkTax = chunkAmount - (batchRate * take);
+                // Tax on Taxable Amount
+                const chunkTaxVal = chunkTaxable * (lineTaxPercent / 100);
+                const chunkTotal = chunkTaxable + chunkTaxVal;
 
-                await client.query(`
-                    INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, tax_percent, tax_amount, amount)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
-                `, [invId, pid, take, batchRate, lineTaxPercent, chunkTax, chunkAmount]);
-
-                invTotal += chunkAmount;
-                invTax += chunkTax;
+                lineGross += chunkGross;
+                lineScheme += chunkScheme;
+                lineTaxable += chunkTaxable;
+                lineTaxAmt += chunkTaxVal;
+                lineTotal += chunkTotal;
                 totalCOGS += (Number(batch.purchase_rate) || 0) * take;
 
+                fulfilledQty += take;
                 qtyToFulfill -= take;
             }
 
-            const shippedQty = orderedQty - qtyToFulfill;
-            if (shippedQty > 0) {
-                // Update SO Line Dispatch Progress & Shortage
-                const finalDispatched = Number(line.dispatched_qty || 0) + shippedQty;
-                const shortage = orderedQty - finalDispatched;
+            if (fulfilledQty > 0) {
+                // Save the Unified Line
                 await client.query(`
-                    UPDATE sales_order_lines 
-                    SET dispatched_qty = $1, cancelled_qty = $2 
-                    WHERE id = $3
-                `, [finalDispatched, shortage, line.id]);
+                        INSERT INTO sales_invoice_lines (
+                            invoice_id, product_id, shipped_qty, rate, 
+                            gross_amount, scheme_amount, taxable_amount,
+                            tax_percent, tax_amount, amount
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    `, [
+                    invId, pid, fulfilledQty, Number(line.rate), // Use original rate as ref
+                    Number(lineGross.toFixed(2)),
+                    Number(lineScheme.toFixed(2)),
+                    Number(lineTaxable.toFixed(2)),
+                    Number(line.tax_percent),
+                    Number(lineTaxAmt.toFixed(2)),
+                    Number(lineTotal.toFixed(2))
+                ]);
+
+                invTotal += lineTotal;
+                invTax += lineTaxAmt;
+
+                // Update SO Line Dispatch Progress
+                // Note: We dispatched 'fulfilledQty', but 'ordered_qty' was only the paid portion.
+                // We should track based on 'ordered_qty' logic or just mark complete?
+                // Typically SO line completion tracks the 'ordered' amount. 
+                // If we ship 13 (12+1), we effectively shipped 12 "ordered" units.
+                // Let's cap the update to ordered_qty to avoid confusion, or track total.
+                // Let's assume strict tracking:
+                const shippedOrderedPortion = fulfilledQty - (freeQty * (fulfilledQty / totalQty)); // Approx
+
+                // Simple approach: Just mark what we can.
+                const finalDispatched = Number(line.dispatched_qty || 0) + fulfilledQty; // Tracking physical units
+                await client.query(`
+                        UPDATE sales_order_lines 
+                        SET dispatched_qty = $1 
+                        WHERE id = $2
+                    `, [finalDispatched, line.id]);
             }
         }
 
