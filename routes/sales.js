@@ -492,6 +492,8 @@ router.post('/orders/:id/dispatch', async (req, res) => {
             const freeQty = freeData ? freeData.qty : 0;
             const totalQty = orderedQty + freeQty; // e.g. 12 + 1 = 13
 
+            console.log(`[DEBUG] Line PID: ${line.product_id}, Ordered: ${orderedQty}, IsFreeMap: ${!!freeData}, FreeQty: ${freeQty}, Total: ${totalQty}`);
+
             let qtyToFulfill = totalQty;
             const pid = String(line.product_id);
 
@@ -509,6 +511,8 @@ router.post('/orders/:id/dispatch', async (req, res) => {
                     ORDER BY created_at ASC
                     FOR UPDATE
                 `, [pid]);
+
+            console.log(`[DEBUG] Batches Found: ${batchesRes.rows.length}`);
 
             // We need to calculate weighted average rate if multiple batches used, 
             // BUT for scheme calculation, we usually use the "Standard Rate" of the line.
@@ -528,6 +532,8 @@ router.post('/orders/:id/dispatch', async (req, res) => {
 
                 const batchRate = Number(batch[rateColumn]) || 0;
                 const take = Math.min(qtyToFulfill, batch.quantity_remaining);
+
+                console.log(`[DEBUG] Allocating Batch ${batch.id}: Take ${take}, Rate ${batchRate}`);
 
                 await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2`, [take, batch.id]);
                 await client.query(`
@@ -575,6 +581,8 @@ router.post('/orders/:id/dispatch', async (req, res) => {
                 fulfilledQty += take;
                 qtyToFulfill -= take;
             }
+
+            console.log(`[DEBUG] Final Line: Shipped ${fulfilledQty}, Gross ${lineGross}, Scheme ${lineScheme}`);
 
             if (fulfilledQty > 0) {
                 // Save the Unified Line
