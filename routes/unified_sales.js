@@ -31,6 +31,16 @@ router.get('/unified', async (req, res) => {
                 so.total_amount as order_total,
                 so.tax_amount as order_tax,
                 so.remarks,
+                so.latitude,
+                so.longitude,
+                
+                -- Invoice breakdown in SO (User's new columns)
+                so.invoice_gross_amount,
+                so.invoice_scheme_amount,
+                so.invoice_discount_amount,
+                so.invoice_taxable_amount,
+                so.invoice_gst_amount,
+                so.invoice_net_amount,
                 
                 -- Invoice details (null if not invoiced)
                 si.id as invoice_id,
@@ -42,6 +52,8 @@ router.get('/unified', async (req, res) => {
                 si.total_sgst,
                 (si.total_cgst + si.total_sgst) as total_gst,
                 si.status as invoice_status,
+                si.paid_amount,
+                si.balance_amount,
                 
                 -- Computed fields for frontend
                 CASE 
@@ -145,6 +157,8 @@ router.get('/unified/:id', async (req, res) => {
                 si.total_taxable,
                 si.total_cgst,
                 si.total_sgst,
+                si.paid_amount,
+                si.balance_amount,
                 si.status as invoice_status,
                 
                 -- Order lines
@@ -156,9 +170,12 @@ router.get('/unified/:id', async (req, res) => {
                             'product_name', p.product_name,
                             'ordered_qty', sol.ordered_qty,
                             'dispatched_qty', sol.dispatched_qty,
+                            'cancelled_qty', sol.cancelled_qty,
                             'rate', sol.rate,
+                            'discount_percent', sol.discount_percent,
                             'tax_percent', sol.tax_percent,
-                            'amount', sol.amount
+                            'amount', sol.amount,
+                            'tier_applied', sol.tier_applied
                         )
                     )
                     FROM sales_order_lines sol
@@ -175,7 +192,13 @@ router.get('/unified/:id', async (req, res) => {
                             'product_name', p.product_name,
                             'shipped_qty', sil.shipped_qty,
                             'rate', sil.rate,
+                            'gross_amount', sil.gross_amount,
+                            'scheme_amount', sil.scheme_amount,
+                            'discount_percent', sil.discount_percent,
+                            'discount_amount', sil.discount_amount,
+                            'taxable_amount', sil.taxable_amount,
                             'tax_percent', sil.tax_percent,
+                            'tax_amount', sil.tax_amount,
                             'amount', sil.amount
                         )
                     )

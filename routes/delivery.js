@@ -141,4 +141,89 @@ router.post('/stops/:id/status', async (req, res) => {
     }
 });
 
+// GET /api/delivery/trips/:id/print-pack - Full Aggregated Data for One-Click Print
+router.get('/trips/:id/print-pack', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { cutoff_amount = 5000 } = req.query; // Configurable threshold
+
+        // 1. Header
+        const tripRes = await pool.query(`
+            SELECT dt.*, v.vehicle_number, e.full_name as driver_name
+            FROM delivery_trips dt
+            LEFT JOIN vehicles v ON dt.vehicle_id = v.id
+            LEFT JOIN employees e ON dt.driver_id = e.id
+            WHERE dt.id = $1
+        `, [id]);
+        if (tripRes.rows.length === 0) return res.status(404).json({ error: 'Trip not found' });
+
+        // 2. Pick List (From Invoice Lines, NOT Order Lines, to be accurate to actual stock out)
+        const pickListRes = await pool.query(`
+            SELECT p.product_name, p.product_code, SUM(sil.shipped_qty) as total_qty
+            FROM trip_stops ts
+            JOIN sales_invoices si ON ts.invoice_id = si.id
+            JOIN sales_invoice_lines sil ON si.id = sil.invoice_id
+            JOIN products p ON sil.product_id = p.id
+            WHERE ts.trip_id = $1
+            GROUP BY p.product_name, p.product_code
+            ORDER BY p.product_name
+        `, [id]);
+
+        // 3. Delivery List (Stops)
+        const stopsRes = await pool.query(`
+            SELECT 
+                ts.sequence_no, 
+                si.invoice_number, si.grand_total,
+                c.customer_name, c.address_line1, c.phone
+            FROM trip_stops ts
+            JOIN sales_invoices si ON ts.invoice_id = si.id
+            JOIN customers c ON si.customer_id = c.id
+            WHERE ts.trip_id = $1
+            ORDER BY ts.sequence_no
+        `, [id]);
+
+        // 4. Invoices (The Heavy Payload)
+        // Fetch All Invoices + Their Lines
+        const invoicesRes = await pool.query(`
+            SELECT 
+                si.*, 
+                c.customer_name, c.address_line1, c.gst as customer_gst,
+                (SELECT json_agg(json_build_object(
+                    'product_name', p.product_name,
+                    'qty', sil.shipped_qty,
+                    'rate', sil.rate,
+                    'total', sil.amount,
+                    'scheme', sol.tier_applied 
+                ) ORDER BY sil.id)
+                FROM sales_invoice_lines sil
+                JOIN products p ON sil.product_id = p.id
+                JOIN sales_orders so ON si.sales_order_id = so.id
+                JOIN sales_order_lines sol ON so.id = sol.sales_order_id AND sol.product_id = sil.product_id
+                WHERE sil.invoice_id = si.id
+                ) as lines
+            FROM trip_stops ts
+            JOIN sales_invoices si ON ts.invoice_id = si.id
+            JOIN customers c ON si.customer_id = c.id
+            WHERE ts.trip_id = $1
+            ORDER BY ts.sequence_no
+        `, [id]);
+
+        // 5. Logic: Determine Copies
+        const invoices = invoicesRes.rows.map(inv => ({
+            ...inv,
+            print_copies: Number(inv.grand_total) < Number(cutoff_amount) ? 1 : 2
+        }));
+
+        res.json({
+            trip: tripRes.rows[0],
+            pick_list: pickListRes.rows,
+            delivery_list: stopsRes.rows,
+            invoices: invoices
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

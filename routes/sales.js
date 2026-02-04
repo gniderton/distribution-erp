@@ -413,7 +413,7 @@ router.post('/orders/:id/dispatch', async (req, res) => {
     const client = await pool.connect();
     try {
         const { id } = req.params;
-        const { invoice_date } = req.body; // Optional override
+        const { invoice_date } = req.body;
 
         await client.query('BEGIN');
 
@@ -427,210 +427,141 @@ router.post('/orders/:id/dispatch', async (req, res) => {
         const linesRes = await client.query('SELECT * FROM sales_order_lines WHERE sales_order_id = $1', [id]);
         let lines = linesRes.rows;
 
-        // [NEW] 1.5 SCHEME LOGIC: Calculate & Merge Free Lines
-        const orderedItems = lines.map(l => ({ product_id: l.product_id, qty: l.ordered_qty }));
-        const freeItems = await calculateFreeItems(orderedItems);
+        // STEP A: STOCK CHECK (Dry Run)
+        const shippedMap = {}; // { pid: qty_we_can_fulfill }
+        for (const line of lines) {
+            const stockRes = await client.query('SELECT SUM(quantity_remaining) FROM inventory_batches WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true', [line.product_id]);
+            const available = Number(stockRes.rows[0].sum || 0);
+            shippedMap[line.product_id] = Math.min(Number(line.ordered_qty), available);
+        }
 
-        // Merge Logic: Instead of adding new lines, we update the existing line's quantity and scheme_amount
-        // Map free items by Product ID for easier lookup
+        // STEP B: SCHEME ENGINE
+        const schemeInput = Object.entries(shippedMap).map(([pid, qty]) => ({ product_id: Number(pid), qty })).filter(i => i.qty > 0);
+        const { freeItems, priceSlabs } = await calculateFreeItems(schemeInput, so.customer_id, client);
+
         const freeMap = {};
         freeItems.forEach(f => {
-            if (!freeMap[f.product_id]) freeMap[f.product_id] = { qty: 0, reason: [] };
+            if (!freeMap[f.product_id]) freeMap[f.product_id] = { qty: 0, reasons: [] };
             freeMap[f.product_id].qty += f.qty;
-            freeMap[f.product_id].reason.push(f.reason);
+            freeMap[f.product_id].reasons.push(f.reason);
         });
 
-        // -----------------------------------------------------
+        // Update Tier Applied for reporting
+        for (const line of lines) {
+            const reasons = [];
+            if (freeMap[line.product_id]) reasons.push(...freeMap[line.product_id].reasons);
+            if (priceSlabs[line.product_id]) reasons.push(priceSlabs[line.product_id].reason);
+            if (reasons.length > 0) {
+                await client.query('UPDATE sales_order_lines SET tier_applied = $1 WHERE id = $2', [reasons.join(', '), line.id]);
+            }
+        }
 
-        // 2. Prepare Invoice Totals
+        // STEP C: INVOICE GENERATION
+        const yy = new Date().getFullYear().toString().slice(-2);
+        const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1", [`INV-${yy}-%`]);
+        const nextSeq = parseInt(seqRes.rows[0].count) + 1;
+        const invNumber = `INV-${yy}-${String(nextSeq).padStart(4, '0')}`;
+
+        const invHeadRes = await client.query(`
+            INSERT INTO sales_invoices (invoice_number, sales_order_id, customer_id, invoice_date, status, grand_total)
+            VALUES ($1, $2, $3, $4, 'Unpaid', 0) RETURNING id
+        `, [invNumber, id, so.customer_id, invoice_date || new Date()]);
+        const invId = invHeadRes.rows[0].id;
+
+        // Pricing Context
+        const custTierRes = await client.query(`SELECT ch.price_column FROM channels ch JOIN customers c ON c.channel_id = ch.id WHERE c.id = $1`, [so.customer_id]);
+        const defaultRateColumn = custTierRes.rows[0]?.price_column || 'dealer_rate';
+
+        const overridesRes = await client.query(`SELECT brand_id, ch.price_column FROM customer_brand_pricing b JOIN channels ch ON b.channel_id = ch.id WHERE b.customer_id = $1`, [so.customer_id]);
+        const overrideMap = {};
+        overridesRes.rows.forEach(r => overrideMap[r.brand_id] = r.price_column);
+
         let invTotal = 0;
         let invTax = 0;
         let totalCOGS = 0;
 
-        // 3. Generate Invoice Number (INV-YY-SEQ)
-        const yy = new Date().getFullYear().toString().slice(-2);
-        // Flexible search to find old formats (with spaces/dashes)
-        const seqRes = await client.query("SELECT COUNT(*) FROM sales_invoices WHERE invoice_number LIKE $1 OR invoice_number LIKE $2", [`INV-${yy}-%`, `INV - ${yy} -%`]);
-        const nextSeq = parseInt(seqRes.rows[0].count) + 1;
-        const invNumber = `INV-${yy}-${String(nextSeq).padStart(4, '0')}`;
+        // Process Products
+        const allPids = new Set([...lines.map(l => l.product_id), ...Object.keys(freeMap).map(Number)]);
 
-        // 4. Create Invoice Header
-        const invHeadRes = await client.query(`
-                INSERT INTO sales_invoices (
-                    invoice_number, sales_order_id, customer_id, invoice_date, 
-                    status, grand_total
-                ) VALUES ($1, $2, $3, $4, 'Unpaid', 0)
-                RETURNING id
-            `, [
-            invNumber, id, so.customer_id, invoice_date || new Date()
-        ]);
-        const invId = invHeadRes.rows[0].id;
-
-        // [NEW] 1.7 Fetch Pricing Tiers & Brand Overrides
-        const custTierRes = await client.query(`
-                SELECT c.price_column 
-                FROM channels c 
-                JOIN customers cust ON cust.channel_id = c.id 
-                WHERE cust.id = $1
-            `, [so.customer_id]);
-        const defaultRateColumn = custTierRes.rows[0]?.price_column || 'dealer_rate';
-
-        const overridesRes = await client.query(`
-                SELECT b.brand_id, ch.price_column 
-                FROM customer_brand_pricing b
-                JOIN channels ch ON b.channel_id = ch.id
-                WHERE b.customer_id = $1
-            `, [so.customer_id]);
-        const overrideMap = {};
-        overridesRes.rows.forEach(r => overrideMap[r.brand_id] = r.price_column);
-
-        // 5. Process Each Line: Deduct Stock & Create Audit
-        for (const line of lines) {
-            // Determine Total Qty (Original + Free)
-            const orderedQty = Number(line.ordered_qty);
-            const freeData = freeMap[line.product_id];
+        for (const pid of allPids) {
+            const line = lines.find(l => l.product_id === pid);
+            const freeData = freeMap[pid];
             const freeQty = freeData ? freeData.qty : 0;
-            const totalQty = orderedQty + freeQty; // e.g. 12 + 1 = 13
+            const plannedShip = shippedMap[pid] || 0;
+            const totalToShip = plannedShip + freeQty;
 
-            console.log(`[DEBUG] Line PID: ${line.product_id}, Ordered: ${orderedQty}, IsFreeMap: ${!!freeData}, FreeQty: ${freeQty}, Total: ${totalQty}`);
+            if (totalToShip <= 0) continue;
 
-            let qtyToFulfill = totalQty;
-            const pid = String(line.product_id);
-
-            // Fetch Product Brand for Tier Selection
-            const prodInfo = await client.query('SELECT brand_id FROM products WHERE id = $1', [pid]);
-            const brandId = prodInfo.rows[0]?.brand_id;
+            // Get Rate Column
+            const prodRes = await client.query('SELECT brand_id, tax_bracket FROM products WHERE id = $1', [pid]);
+            const brandId = prodRes.rows[0].brand_id;
+            const taxPct = Number(prodRes.rows[0].tax_bracket || 0);
             const rateColumn = overrideMap[brandId] || defaultRateColumn;
 
-            // FIFO Allocation Logic
-            const batchesRes = await client.query(`
-                    SELECT id, quantity_remaining, purchase_rate, mrp,
-                           distributor_rate, wholesale_rate, dealer_rate, retail_rate
-                    FROM inventory_batches 
-                    WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
-                    ORDER BY created_at ASC
-                    FOR UPDATE
-                `, [pid]);
+            // FIFO ALLOCATION
+            const batches = await client.query(`
+                SELECT * FROM inventory_batches WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true ORDER BY created_at ASC FOR UPDATE
+            `, [pid]);
 
-            console.log(`[DEBUG] Batches Found: ${batchesRes.rows.length}`);
-
-            // We need to calculate weighted average rate if multiple batches used, 
-            // BUT for scheme calculation, we usually use the "Standard Rate" of the line.
-            // However, detailed breakdown needs to be per-line. 
-            // We'll process batch allocation but sum up the financials for the Invoice Line.
-
-            let lineGross = 0;
-            let lineScheme = 0;
-            let lineTaxable = 0;
-            let lineTaxAmt = 0;
-            let lineTotal = 0;
-            let lineTotalDiscAmt = 0; // [NEW] Track total discount info
             let fulfilledQty = 0;
+            let qtyToFulfill = totalToShip;
+            let lineGross = 0;
+            let slabDeductionTotal = 0;
 
-            for (const batch of batchesRes.rows) {
+            for (const batch of batches.rows) {
                 if (qtyToFulfill <= 0) break;
-
-                const batchRate = Number(batch[rateColumn]) || 0;
                 const take = Math.min(qtyToFulfill, batch.quantity_remaining);
 
-                console.log(`[DEBUG] Allocating Batch ${batch.id}: Take ${take}, Rate ${batchRate}`);
+                const unitRate = Number(batch[rateColumn]) || 0;
 
-                await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2`, [take, batch.id]);
-                await client.query(`
-                        INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
-                        VALUES ($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)
-                    `, [batch.id, pid, -take, invId, `Allocated to ${invNumber}`]);
+                // Price Slab Deduction Calculation (Recorded in Scheme Amount, not Rate)
+                if (priceSlabs[pid]) {
+                    const targetNet = Number(priceSlabs[pid].special_price);
+                    const targetExcl = targetNet / (1 + (taxPct / 100));
+                    const unitDeduction = Math.max(0, unitRate - targetExcl);
+                    slabDeductionTotal += (take * unitDeduction);
+                    console.log(`[PRICE SLAB] PID ${pid}: Batch ${batch.batch_code} Rate ${unitRate} -> Target Excl ${targetExcl.toFixed(2)}. Deduction: ${unitDeduction.toFixed(2)}/unit`);
+                }
 
-                // --- CALCULATION LOGIC (Per Batch Chunk) ---
-
-                // Ratio of this batch to total line qty (for scheme apportionment)
-                const ratio = take / totalQty;
-
-                // 1. Gross (Qty * Rate)
-                const chunkGross = take * batchRate;
-
-                // 2. Scheme (Free Value deduction)
-                const chunkScheme = (freeQty * batchRate) * ratio;
-
-                // 3. Discount (Percent on GROSS usually, or Taxable? User said: taxble - (gross-scheme-disc))
-                // We'll apply Discount % on the GROSS amount (Qty * Rate).
-                const lineDiscPct = Number(line.discount_percent) || 0;
-                const chunkDiscAmt = chunkGross * (lineDiscPct / 100);
-
-                // 4. Taxable
-                const chunkTaxable = chunkGross - chunkScheme - chunkDiscAmt;
-
-                // 5. Tax
-                const lineTaxPercent = Number(line.tax_percent) || 0;
-                const chunkTaxAmt = chunkTaxable * (lineTaxPercent / 100);
-
-                // 6. Net Total
-                const chunkTotal = chunkTaxable + chunkTaxAmt;
-
-                lineGross += chunkGross;
-                lineScheme += chunkScheme;
-
-                // Discount is strictly per line percent, so just summing up chunks
-                lineTotalDiscAmt += chunkDiscAmt;
-
-                lineTaxable += chunkTaxable;
-                lineTaxAmt += chunkTaxAmt;
-                lineTotal += chunkTotal;
-                totalCOGS += (Number(batch.purchase_rate) || 0) * take;
+                await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batch.id]);
+                await client.query('INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type) VALUES ($1, $2, $3, $4, $5, $6)', [batch.id, pid, -take, 'OUT', invId, 'Sales Invoice']);
 
                 fulfilledQty += take;
                 qtyToFulfill -= take;
+                lineGross += (take * unitRate);
+                totalCOGS += (take * Number(batch.purchase_rate || 0));
             }
-
-            console.log(`[DEBUG] Final Line: Shipped ${fulfilledQty}, Gross ${lineGross}, Scheme ${lineScheme}`);
 
             if (fulfilledQty > 0) {
-                // Save the Unified Line
+                const avgRateBeforeScheme = lineGross / fulfilledQty;
+                const actualFree = Math.min(freeQty, fulfilledQty);
+                // lineScheme = Free Item Value + Price Slab Value
+                const freeItemValue = actualFree * avgRateBeforeScheme;
+                const lineScheme = freeItemValue + slabDeductionTotal;
+
+                const taxableValue = lineGross - lineScheme;
+                const taxValue = taxableValue * (taxPct / 100);
+                const netValue = taxableValue + taxValue;
+
                 await client.query(`
-                        INSERT INTO sales_invoice_lines (
-                            invoice_id, product_id, shipped_qty, rate, 
-                            gross_amount, scheme_amount, discount_percent, discount_amount, taxable_amount,
-                            tax_percent, tax_amount, amount
-                        )
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-                    `, [
-                    invId, pid, fulfilledQty, Number(line.rate), // Use original rate as ref
-                    Number(lineGross.toFixed(2)),
-                    Number(lineScheme.toFixed(2)),
-                    Number(line.discount_percent || 0),
-                    Number(lineTotalDiscAmt.toFixed(2)),
-                    Number(lineTaxable.toFixed(2)),
-                    Number(line.tax_percent),
-                    Number(lineTaxAmt.toFixed(2)),
-                    Number(lineTotal.toFixed(2))
-                ]);
+                    INSERT INTO sales_invoice_lines (
+                        invoice_id, product_id, shipped_qty, rate, 
+                        gross_amount, scheme_amount, taxable_amount, tax_percent, tax_amount, amount
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                `, [invId, pid, fulfilledQty, avgRateBeforeScheme.toFixed(2), lineGross, lineScheme, taxableValue, taxPct, taxValue, netValue]);
 
-                invTotal += lineTotal;
-                invTax += lineTaxAmt;
+                invTotal += netValue;
+                invTax += taxValue;
 
-                // Update SO Line Dispatch Progress
-                // Note: We dispatched 'fulfilledQty', but 'ordered_qty' was only the paid portion.
-                // We should track based on 'ordered_qty' logic or just mark complete?
-                // Typically SO line completion tracks the 'ordered' amount. 
-                // If we ship 13 (12+1), we effectively shipped 12 "ordered" units.
-                // Let's cap the update to ordered_qty to avoid confusion, or track total.
-                // Let's assume strict tracking:
-                const shippedOrderedPortion = fulfilledQty - (freeQty * (fulfilledQty / totalQty)); // Approx
-
-                // Simple approach: Just mark what we can.
-                const finalDispatched = Number(line.dispatched_qty || 0) + fulfilledQty; // Tracking physical units
-                await client.query(`
-                        UPDATE sales_order_lines 
-                        SET dispatched_qty = $1 
-                        WHERE id = $2
-                    `, [finalDispatched, line.id]);
+                // Update SO line progress
+                if (line) {
+                    await client.query('UPDATE sales_order_lines SET dispatched_qty = dispatched_qty + $1 WHERE id = $2', [fulfilledQty, line.id]);
+                }
             }
         }
 
-        // 6. Update Invoice Totals
-        if (invTotal === 0) {
-            throw new Error("Zero stock available for this order. No invoice generated.");
-        }
+        // Finalize Header
+        if (invTotal === 0) throw new Error("Zero stock available");
 
         const roundedTotal = Number(invTotal.toFixed(2));
         const roundedTax = Number(invTax.toFixed(2));
@@ -638,45 +569,26 @@ router.post('/orders/:id/dispatch', async (req, res) => {
         const cgst = Number((roundedTax / 2).toFixed(2));
         const sgst = Number((roundedTax - cgst).toFixed(2));
 
-        await client.query(`
-            UPDATE sales_invoices 
-            SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4 
-            WHERE id = $5
-        `, [roundedTotal, taxable, cgst, sgst, invId]);
+        await client.query(`UPDATE sales_invoices SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4 WHERE id = $5`,
+            [roundedTotal, taxable, cgst, sgst, invId]);
 
-        // --- ACCOUNTING INTEGRATION ---
-        const acc_revenue = 4001;
-        const acc_ar = 1101;
-        const acc_gst_cgst = 2011;
-        const acc_gst_sgst = 2012;
-        const acc_cogs = 5001;
-        const acc_inventory = 1001;
-
-        let invoiceLines = [
+        // Accounting
+        const acc_revenue = 4001, acc_ar = 1101, acc_gst_cgst = 2011, acc_gst_sgst = 2012, acc_cogs = 5001, acc_inventory = 1001;
+        const invoiceLines = [
             { code: acc_ar, debit: roundedTotal, credit: 0 },
             { code: acc_revenue, debit: 0, credit: taxable }
         ];
         if (roundedTax > 0) {
-            invoiceLines.push({ code: acc_gst_cgst, debit: 0, credit: cgst });
-            invoiceLines.push({ code: acc_gst_sgst, debit: 0, credit: sgst });
+            invoiceLines.push({ code: acc_gst_cgst, debit: 0, credit: cgst }, { code: acc_gst_sgst, debit: 0, credit: sgst });
         }
-        await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
-            [new Date(), `Sales Invoice: ${invNumber}`, 'SALES_INV', invId, JSON.stringify(invoiceLines)]);
+        await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [new Date(), `Invoice: ${invNumber}`, 'SALES_INV', invId, JSON.stringify(invoiceLines)]);
 
-        // 2. COGS Entry (COGS vs Inventory)
         if (totalCOGS > 0) {
-            const roundedCOGS = Number(totalCOGS.toFixed(2));
-            const cogsLines = [
-                { code: acc_cogs, debit: roundedCOGS, credit: 0 },
-                { code: acc_inventory, debit: 0, credit: roundedCOGS }
-            ];
-            await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
-                [new Date(), `COGS for ${invNumber}`, 'COGS', invId, JSON.stringify(cogsLines)]);
+            const cogsLines = [{ code: acc_cogs, debit: totalCOGS.toFixed(2), credit: 0 }, { code: acc_inventory, debit: 0, credit: totalCOGS.toFixed(2) }];
+            await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [new Date(), `COGS: ${invNumber}`, 'COGS', invId, JSON.stringify(cogsLines)]);
         }
 
-        // 7. Mark Order as Invoiced
         await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [id]);
-
         await client.query('COMMIT');
         res.json({ success: true, invoice_number: invNumber, message: 'Dispatched & Invoiced' });
 
