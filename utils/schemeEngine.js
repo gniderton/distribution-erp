@@ -4,9 +4,12 @@ async function calculateFreeItems(items, customerId = null, client = null) {
     const db = client || pool;
     if (!items || items.length === 0) return [];
 
-    const productIds = items.map(i => i.product_id);
     const qtyMap = {}; // Tracks Remaining Qty for Single Logic
-    items.forEach(i => qtyMap[i.product_id] = Number(i.qty));
+    items.forEach(i => {
+        const pid = String(i.product_id);
+        qtyMap[pid] = (qtyMap[pid] || 0) + Number(i.qty);
+    });
+    const productIds = Object.keys(qtyMap).map(Number);
 
     // ---------------------------------------------------------
     // STEP 1: SMART LOOKUP (Filter Inputs)
@@ -87,14 +90,18 @@ async function calculateFreeItems(items, customerId = null, client = null) {
 
     if (singleCandidates.length > 0) {
         const rulesRes = await db.query(`
-            SELECT sr.*, s.scheme_name
+            SELECT sr.*, s.scheme_name, s.id as scheme_id
             FROM scheme_rules sr
             JOIN schemes s ON sr.scheme_id = s.id
             WHERE s.is_active = true 
-              AND sr.scheme_type = 'BUY_GET_FREE' -- Only BGF here
+              AND sr.scheme_type = 'BUY_GET_FREE' 
               AND (s.end_date IS NULL OR s.end_date >= CURRENT_DATE)
               AND s.start_date <= CURRENT_DATE
-              AND sr.trigger_id = ANY($1::int[])
+              AND (
+                (sr.trigger_type = 'Product' AND sr.trigger_id = ANY($1::int[])) OR
+                (sr.trigger_type = 'Brand') OR
+                (sr.trigger_type = 'Category')
+              )
             ORDER BY sr.tier_level DESC, sr.min_qty DESC
         `, [singleCandidates]);
 
@@ -106,29 +113,48 @@ async function calculateFreeItems(items, customerId = null, client = null) {
             if (!meta) continue;
 
             let remainingQty = qtyMap[pidStr];
-            const effectiveTier = brandOverrides[meta.brand_id] || defaultTier;
+            const effectiveTier = (brandOverrides[meta.brand_id] || defaultTier || '').trim().toLowerCase();
 
+            // Filter rules that match this product (Direct, Brand, or Category)
             const applicableRules = rules.filter(r => {
-                if (r.trigger_id != pid) return false;
-                if (r.channel_tier && r.channel_tier !== effectiveTier) return false;
+                const ruleTier = (r.channel_tier || '').trim().toLowerCase();
+                if (ruleTier && ruleTier !== effectiveTier) return false;
+
+                if (r.trigger_type === 'Product' && r.trigger_id != pid) return false;
+                if (r.trigger_type === 'Brand' && r.trigger_id != meta.brand_id) return false;
+                if (r.trigger_type === 'Category' && r.trigger_id != meta.category_id) return false;
+
                 return true;
             });
 
+            // Tracking applied schemes for this product to ensure tier exclusivity if desired
+            // (Standard: apply only the best rule PER SCHEME)
+            const schemesApplied = new Set();
+
             for (const rule of applicableRules) {
+                if (remainingQty <= 0) break;
+
+                // [POLICY] If we already applied a rule from this scheme for this product, skip lower tiers
+                if (schemesApplied.has(rule.scheme_id)) continue;
+
                 let triggerPool = rule.is_case_qty ? Math.floor(remainingQty / (meta.case_quantity || 1)) : remainingQty;
 
                 if (triggerPool >= rule.min_qty) {
                     let multiplier = rule.is_recursive ? Math.floor(triggerPool / rule.min_qty) : 1;
                     if (multiplier > 0) {
+                        const rewardQty = multiplier * rule.reward_qty;
+                        console.log(`[SCHEME] Applied ${rule.scheme_name} to PID ${pid}: Buy ${rule.min_qty} Get ${rule.reward_qty} x ${multiplier} = ${rewardQty}`);
+
                         freeItems.push({
                             product_id: rule.reward_product_id || pid,
-                            qty: multiplier * rule.reward_qty,
+                            qty: rewardQty,
                             reason: `${rule.scheme_name} (Buy ${rule.min_qty} Get ${rule.reward_qty})`
                         });
 
                         const consumed = rule.is_case_qty ? (multiplier * rule.min_qty * (meta.case_quantity || 1)) : (multiplier * rule.min_qty);
                         remainingQty -= consumed;
-                        qtyMap[pidStr] -= consumed; // Deduct from map so Combo doesn't use it
+                        qtyMap[pidStr] -= consumed;
+                        schemesApplied.add(rule.scheme_id);
                     }
                 }
             }
