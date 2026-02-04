@@ -499,63 +499,76 @@ router.post('/orders/:id/dispatch', async (req, res) => {
             const rateColumn = overrideMap[brandId] || defaultRateColumn;
 
             // FIFO ALLOCATION
+            const mrpGroups = {}; // { [mrp]: { qty, gross, cogs, slabDeduction } }
             const batches = await client.query(`
                 SELECT * FROM inventory_batches WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true ORDER BY created_at ASC FOR UPDATE
             `, [pid]);
 
-            let fulfilledQty = 0;
+            let fulfilledTotal = 0;
             let qtyToFulfill = totalToShip;
-            let lineGross = 0;
-            let slabDeductionTotal = 0;
 
             for (const batch of batches.rows) {
                 if (qtyToFulfill <= 0) break;
                 const take = Math.min(qtyToFulfill, batch.quantity_remaining);
-
                 const unitRate = Number(batch[rateColumn]) || 0;
+                const batchMrp = Number(batch.mrp || 0);
 
-                // Price Slab Deduction Calculation (Recorded in Scheme Amount, not Rate)
+                if (!mrpGroups[batchMrp]) {
+                    mrpGroups[batchMrp] = { qty: 0, gross: 0, cogs: 0, slabDeduction: 0 };
+                }
+
+                // Price Slab Deduction Calculation
                 if (priceSlabs[pid]) {
                     const targetNet = Number(priceSlabs[pid].special_price);
                     const targetExcl = targetNet / (1 + (taxPct / 100));
                     const unitDeduction = Math.max(0, unitRate - targetExcl);
-                    slabDeductionTotal += (take * unitDeduction);
-                    console.log(`[PRICE SLAB] PID ${pid}: Batch ${batch.batch_code} Rate ${unitRate} -> Target Excl ${targetExcl.toFixed(2)}. Deduction: ${unitDeduction.toFixed(2)}/unit`);
+                    mrpGroups[batchMrp].slabDeduction += (take * unitDeduction);
                 }
 
                 await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batch.id]);
                 await client.query('INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type) VALUES ($1, $2, $3, $4, $5, $6)', [batch.id, pid, -take, 'OUT', invId, 'Sales Invoice']);
 
-                fulfilledQty += take;
+                mrpGroups[batchMrp].qty += take;
+                mrpGroups[batchMrp].gross += (take * unitRate);
+                mrpGroups[batchMrp].cogs += (take * Number(batch.purchase_rate || 0));
+
+                fulfilledTotal += take;
                 qtyToFulfill -= take;
-                lineGross += (take * unitRate);
-                totalCOGS += (take * Number(batch.purchase_rate || 0));
             }
 
-            if (fulfilledQty > 0) {
-                const avgRateBeforeScheme = lineGross / fulfilledQty;
-                const actualFree = Math.min(freeQty, fulfilledQty);
-                // lineScheme = Free Item Value + Price Slab Value
-                const freeItemValue = actualFree * avgRateBeforeScheme;
-                const lineScheme = freeItemValue + slabDeductionTotal;
+            // Insert Invoice Lines per MRP Group
+            let remainingFree = freeQty;
+            for (const [mrpVal, group] of Object.entries(mrpGroups)) {
+                if (group.qty <= 0) continue;
 
-                const taxableValue = lineGross - lineScheme;
+                const groupAvgRate = group.gross / group.qty;
+                const groupFree = Math.min(remainingFree, group.qty);
+                remainingFree -= groupFree;
+
+                const freeItemValue = groupFree * groupAvgRate;
+                const lineScheme = freeItemValue + group.slabDeduction;
+
+                const taxableValue = group.gross - lineScheme;
                 const taxValue = taxableValue * (taxPct / 100);
                 const netValue = taxableValue + taxValue;
 
                 await client.query(`
                     INSERT INTO sales_invoice_lines (
-                        invoice_id, product_id, shipped_qty, rate, 
+                        invoice_id, product_id, shipped_qty, rate, mrp,
                         gross_amount, scheme_amount, taxable_amount, tax_percent, tax_amount, amount
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                `, [invId, pid, fulfilledQty, avgRateBeforeScheme.toFixed(2), lineGross, lineScheme, taxableValue, taxPct, taxValue, netValue]);
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                `, [
+                    invId, pid, group.qty, groupAvgRate.toFixed(2), mrpVal,
+                    group.gross, lineScheme, taxableValue, taxPct, taxValue, netValue
+                ]);
 
                 invTotal += netValue;
                 invTax += taxValue;
+                totalCOGS += group.cogs;
 
                 // Update SO line progress
                 if (line) {
-                    await client.query('UPDATE sales_order_lines SET dispatched_qty = dispatched_qty + $1 WHERE id = $2', [fulfilledQty, line.id]);
+                    await client.query('UPDATE sales_order_lines SET dispatched_qty = dispatched_qty + $1 WHERE id = $2', [group.qty, line.id]);
                 }
             }
         }
@@ -894,15 +907,23 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                     const lineTaxPercent = Number(line.tax_percent) || 0;
 
                     const batchesRes = await client.query(`
-                        SELECT id, quantity_remaining, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate
+                        SELECT id, quantity_remaining, purchase_rate, mrp, distributor_rate, wholesale_rate, dealer_rate, retail_rate
                         FROM inventory_batches 
                         WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
                         ORDER BY created_at ASC FOR UPDATE
                     `, [pid]);
 
+                    const mrpGroups = {}; // { [mrp]: { qty, cogs } }
+
                     for (const batch of batchesRes.rows) {
                         if (qtyToFulfill <= 0) break;
                         const take = Math.min(qtyToFulfill, batch.quantity_remaining);
+                        const batchMrp = Number(batch.mrp || 0);
+
+                        if (!mrpGroups[batchMrp]) {
+                            mrpGroups[batchMrp] = { qty: 0, cogs: 0 };
+                        }
+
                         // For bulk dispatch, we use the rate ALREADY on the line (unlike bulk-generate which recalcs)
                         const batchRate = Number(line.rate) || 0;
 
@@ -910,21 +931,27 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                         await client.query(`
                             INSERT INTO stock_traceability(batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
                             VALUES($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)
-                        `, [batch.id, pid, -take, invId, `Bulk Dispatch for ${invNumber} (${rateColumn})`]);
+                        `, [batch.id, pid, -take, invId, `Bulk Dispatch for ${invNumber}`]);
 
-                        // Record Line
-                        const chunkAmount = (batchRate * take) * (1 + (lineTaxPercent / 100));
-                        const chunkTax = chunkAmount - (batchRate * take);
+                        mrpGroups[batchMrp].qty += take;
+                        mrpGroups[batchMrp].cogs += (Number(batch.purchase_rate) || 0) * take;
+                        qtyToFulfill -= take;
+                    }
+
+                    for (const [mrpVal, group] of Object.entries(mrpGroups)) {
+                        if (group.qty <= 0) continue;
+                        const batchRate = Number(line.rate) || 0;
+                        const chunkAmount = (batchRate * group.qty) * (1 + (lineTaxPercent / 100));
+                        const chunkTax = chunkAmount - (batchRate * group.qty);
 
                         await client.query(`
-                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, tax_percent, tax_amount, amount)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7)
-                        `, [invId, pid, take, batchRate, lineTaxPercent, chunkTax, chunkAmount]);
+                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, mrp, tax_percent, tax_amount, amount)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        `, [invId, pid, group.qty, batchRate, mrpVal, lineTaxPercent, chunkTax, chunkAmount]);
 
                         invTotal += chunkAmount;
                         invTax += chunkTax;
-                        totalCOGS += (Number(batch.purchase_rate) || 0) * take;
-                        qtyToFulfill -= take;
+                        totalCOGS += group.cogs;
                     }
 
                     // Update SO Line Dispatch Progress
@@ -1101,30 +1128,43 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         ORDER BY created_at ASC FOR UPDATE
                     `, [pid]);
 
+                    const mrpGroups = {}; // { [mrp]: { qty, gross, cogs } }
                     for (const batch of batchesRes.rows) {
                         if (qtyToFulfill <= 0) break;
                         const take = Math.min(qtyToFulfill, batch.quantity_remaining);
                         const batchRate = Number(batch[rateColumn]) || 0;
+                        const batchMrp = Number(batch.mrp || 0);
+
+                        if (!mrpGroups[batchMrp]) {
+                            mrpGroups[batchMrp] = { qty: 0, gross: 0, cogs: 0 };
+                        }
 
                         await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batch.id]);
                         await client.query(`
                             INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
                             VALUES ($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)
-                        `, [batch.id, pid, -take, invId, `Real stock for ${invNumber} (${rateColumn})`]);
+                        `, [batch.id, pid, -take, invId, `Real stock for ${invNumber}`]);
 
-                        // Record Line
-                        const chunkAmount = (batchRate * take) * (1 + (lineTaxPercent / 100));
-                        const chunkTax = chunkAmount - (batchRate * take);
+                        mrpGroups[batchMrp].qty += take;
+                        mrpGroups[batchMrp].gross += (take * batchRate);
+                        mrpGroups[batchMrp].cogs += (Number(batch.purchase_rate) || 0) * take;
+                        qtyToFulfill -= take;
+                    }
+
+                    for (const [mrpVal, group] of Object.entries(mrpGroups)) {
+                        if (group.qty <= 0) continue;
+                        const avgRate = group.gross / group.qty;
+                        const chunkAmount = group.gross * (1 + (lineTaxPercent / 100));
+                        const chunkTax = chunkAmount - group.gross;
 
                         await client.query(`
-                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, tax_percent, tax_amount, amount)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7)
-                        `, [invId, pid, take, batchRate, lineTaxPercent, chunkTax, chunkAmount]);
+                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, mrp, tax_percent, tax_amount, amount)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        `, [invId, pid, group.qty, avgRate.toFixed(2), mrpVal, lineTaxPercent, chunkTax, chunkAmount]);
 
                         invTotal += chunkAmount;
                         invTax += chunkTax;
-                        totalCOGS += (Number(batch.purchase_rate) || 0) * take;
-                        qtyToFulfill -= take;
+                        totalCOGS += group.cogs;
                     }
 
                     // B. If still needed, check TRANSIT stock from frontend
@@ -1166,9 +1206,9 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         const transitChunkTax = transitChunkAmount - (transitRate * take);
 
                         await client.query(`
-                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, tax_percent, tax_amount, amount)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7)
-                        `, [invId, pid, take, transitRate, lineTaxPercent, transitChunkTax, transitChunkAmount]);
+                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, mrp, tax_percent, tax_amount, amount)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        `, [invId, pid, take, transitRate, transit.mrp || pMaster.rows[0].mrp, lineTaxPercent, transitChunkTax, transitChunkAmount]);
 
                         invTotal += transitChunkAmount;
                         invTax += transitChunkTax;

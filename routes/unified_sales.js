@@ -195,6 +195,7 @@ router.get('/unified/:id', async (req, res) => {
                             'product_name', p.product_name,
                             'shipped_qty', sil.shipped_qty,
                             'rate', sil.rate,
+                            'mrp', sil.mrp,
                             'gross_amount', sil.gross_amount,
                             'scheme_amount', sil.scheme_amount,
                             'discount_percent', sil.discount_percent,
