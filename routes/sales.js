@@ -901,10 +901,21 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                 let totalCOGS = 0;
 
                 // 4. Combined FIFO Stock Allocation (Paid + Free)
-                const allPids = new Set([...lines.map(l => l.product_id), ...Object.keys(freeMap).map(Number)]);
+                // Use strings for allPids to avoid numeric mapping duplicates (bigint vs number)
+                console.log(`[Bulk Dispatch] Processing Order ${id}...`);
+                const allPids = new Set([
+                    ...lines.map(l => String(l.product_id)),
+                    ...Object.keys(freeMap)
+                ]);
+
+                // Pre-fetch product metadata for all involved PIDs to reduce query overhead
+                const pidsArray = Array.from(allPids).map(Number);
+                const productsRes = await client.query('SELECT id, brand_id, tax_id, tax_bracket FROM products WHERE id = ANY($1)', [pidsArray]);
+                const prodMeta = {};
+                productsRes.rows.forEach(p => prodMeta[String(p.id)] = p);
 
                 for (const pid of allPids) {
-                    const line = lines.find(l => l.product_id === pid);
+                    const line = lines.find(l => String(l.product_id) === pid);
                     const freeData = freeMap[pid];
                     const freeQty = freeData ? freeData.qty : 0;
                     const paidQty = line ? Number(line.ordered_qty) : 0;
@@ -912,10 +923,14 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
 
                     if (totalToShip <= 0) continue;
 
-                    // Fetch Rate Column
-                    const prodInfo = await client.query('SELECT brand_id, tax_id, tax_bracket FROM products WHERE id = $1', [pid]);
-                    const brandId = prodInfo.rows[0]?.brand_id;
-                    const taxPct = Number(prodInfo.rows[0]?.tax_bracket || 0);
+                    const pInfo = prodMeta[pid];
+                    if (!pInfo) {
+                        console.error(`[Bulk Dispatch] Missing metadata for PID ${pid}`);
+                        continue;
+                    }
+
+                    const brandId = pInfo.brand_id;
+                    const taxPct = Number(pInfo.tax_bracket || 0);
                     const rateColumn = overrideMap[brandId] || defaultRateColumn;
                     const lineTaxPercent = line ? Number(line.tax_percent) : taxPct;
 
@@ -1160,9 +1175,20 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 let fullyFulfilled = true;
 
                 // 4. Combined FIFO Stock Allocation (Real + Transit + Scheme)
-                const allPids = new Set([...lines.map(l => l.product_id), ...Object.keys(freeMap).map(Number)]);
+                // Use strings for allPids to avoid numeric mapping duplicates (bigint vs number)
+                const allPids = new Set([
+                    ...lines.map(l => String(l.product_id)),
+                    ...Object.keys(freeMap)
+                ]);
+
+                // Pre-fetch product metadata for all involved PIDs to reduce query overhead
+                const pidsArray = Array.from(allPids).map(Number);
+                const productsRes = await client.query('SELECT id, brand_id, tax_id, tax_bracket FROM products WHERE id = ANY($1)', [pidsArray]);
+                const prodMeta = {};
+                productsRes.rows.forEach(p => prodMeta[String(p.id)] = p);
+
                 for (const pid of allPids) {
-                    const line = lines.find(l => l.product_id === pid);
+                    const line = lines.find(l => String(l.product_id) === pid);
                     const freeData = freeMap[pid];
                     const freeQty = freeData ? freeData.qty : 0;
                     const paidQty = line ? Number(line.ordered_qty) : 0;
@@ -1170,9 +1196,14 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                     if (qtyToFulfill <= 0) continue;
 
-                    const prodInfo = await client.query('SELECT brand_id, tax_id, tax_bracket FROM products WHERE id = $1', [pid]);
-                    const brandId = prodInfo.rows[0]?.brand_id;
-                    const taxPct = Number(prodInfo.rows[0]?.tax_bracket || 0);
+                    const pInfo = prodMeta[pid];
+                    if (!pInfo) {
+                        console.error(`[Bulk Admin] Missing metadata for PID ${pid}`);
+                        continue;
+                    }
+
+                    const brandId = pInfo.brand_id;
+                    const taxPct = Number(pInfo.tax_bracket || 0);
                     const rateColumn = overrideMap[brandId] || defaultRateColumn;
                     const lineTaxPercent = line ? Number(line.tax_percent) : taxPct;
 
