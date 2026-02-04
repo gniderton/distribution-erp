@@ -34,13 +34,13 @@ router.get('/unified', async (req, res) => {
                 so.latitude,
                 so.longitude,
                 
-                -- Invoice breakdown in SO (User's new columns)
-                so.invoice_gross_amount,
-                so.invoice_scheme_amount,
-                so.invoice_discount_amount,
-                so.invoice_taxable_amount,
-                so.invoice_gst_amount,
-                so.invoice_net_amount,
+                -- Aggregated Invoice breakdown (from lines)
+                (SELECT SUM(gross_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_gross_amount,
+                (SELECT SUM(scheme_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_scheme_amount,
+                (SELECT SUM(discount_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_discount_amount,
+                si.total_taxable as invoice_taxable_amount,
+                (si.total_cgst + si.total_sgst + si.total_igst) as invoice_gst_amount,
+                si.grand_total as invoice_net_amount,
                 
                 -- Invoice details (null if not invoiced)
                 si.id as invoice_id,
@@ -159,6 +159,9 @@ router.get('/unified/:id', async (req, res) => {
                 si.total_sgst,
                 si.paid_amount,
                 si.balance_amount,
+                (SELECT SUM(gross_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_gross_amount,
+                (SELECT SUM(scheme_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_scheme_amount,
+                (SELECT SUM(discount_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_discount_amount,
                 si.status as invoice_status,
                 
                 -- Order lines
