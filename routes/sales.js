@@ -834,10 +834,11 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                 const linesRes = await client.query('SELECT * FROM sales_order_lines WHERE sales_order_id = $1', [id]);
                 let lines = linesRes.rows;
 
-                // [NEW] 1.5 SCHEME LOGIC (Bulk)
+                // [FIX] 1.5 SCHEME LOGIC (Bulk) - Corrected Signature and Return Handling
                 const orderedItems = lines.map(l => ({ product_id: l.product_id, qty: l.ordered_qty }));
-                const freeItems = await calculateFreeItems(orderedItems, client);
+                const { freeItems, priceSlabs } = await calculateFreeItems(orderedItems, so.customer_id, client);
 
+                const freeMap = {};
                 for (const free of freeItems) {
                     const resFreeLine = await client.query(`
                         INSERT INTO sales_order_lines(
@@ -846,7 +847,12 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                     ) VALUES($1, $2, $3, 0, 0, 0, 0, 'Scheme: ' || $4)
                         RETURNING *
                     `, [id, free.product_id, free.qty, free.reason]);
-                    lines.push(resFreeLine.rows[0]);
+                    const freeRow = resFreeLine.rows[0];
+                    lines.push(freeRow);
+
+                    if (!freeMap[free.product_id]) freeMap[free.product_id] = { qty: 0, reasons: [] };
+                    freeMap[free.product_id].qty += free.qty;
+                    freeMap[free.product_id].reasons.push(free.reason);
                 }
                 // ----------------------------------------
 
@@ -917,15 +923,21 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
 
                     for (const batch of batchesRes.rows) {
                         if (qtyToFulfill <= 0) break;
-                        const take = Math.min(qtyToFulfill, batch.quantity_remaining);
+                        // For bulk dispatch, we use the rate ALREADY on the line (unlike bulk-generate which recalcs)
+                        const batchRate = Number(line.rate) || 0;
                         const batchMrp = Number(batch.mrp || 0);
 
                         if (!mrpGroups[batchMrp]) {
-                            mrpGroups[batchMrp] = { qty: 0, cogs: 0 };
+                            mrpGroups[batchMrp] = { qty: 0, cogs: 0, slabDeduction: 0 };
                         }
 
-                        // For bulk dispatch, we use the rate ALREADY on the line (unlike bulk-generate which recalcs)
-                        const batchRate = Number(line.rate) || 0;
+                        // [NEW] Price Slab Deduction Calculation for Bulk Dispatch
+                        if (priceSlabs[pid]) {
+                            const targetNet = Number(priceSlabs[pid].special_price);
+                            const targetExcl = targetNet / (1 + (lineTaxPercent / 100));
+                            const unitDeduction = Math.max(0, batchRate - targetExcl);
+                            mrpGroups[batchMrp].slabDeduction += (take * unitDeduction);
+                        }
 
                         await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batch.id]);
                         await client.query(`
@@ -941,13 +953,16 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                     for (const [mrpVal, group] of Object.entries(mrpGroups)) {
                         if (group.qty <= 0) continue;
                         const batchRate = Number(line.rate) || 0;
-                        const chunkAmount = (batchRate * group.qty) * (1 + (lineTaxPercent / 100));
-                        const chunkTax = chunkAmount - (batchRate * group.qty);
+
+                        // Deduct slabs (pro-rated logic not needed since rate is fixed per line here, but we use the stored deduction)
+                        const productTotalBeforeTax = (batchRate * group.qty) - group.slabDeduction;
+                        const chunkAmount = productTotalBeforeTax * (1 + (lineTaxPercent / 100));
+                        const chunkTax = chunkAmount - productTotalBeforeTax;
 
                         await client.query(`
-                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, mrp, tax_percent, tax_amount, amount)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                        `, [invId, pid, group.qty, batchRate, mrpVal, lineTaxPercent, chunkTax, chunkAmount]);
+                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, mrp, scheme_amount, taxable_amount, tax_percent, tax_amount, amount)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                        `, [invId, pid, group.qty, batchRate, mrpVal, group.slabDeduction, productTotalBeforeTax, lineTaxPercent, chunkTax, chunkAmount]);
 
                         invTotal += chunkAmount;
                         invTax += chunkTax;
@@ -1043,6 +1058,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
         for (let orderItem of order_ids) {
             let orderId = (typeof orderItem === 'object' && orderItem !== null && orderItem.id) ? orderItem.id : orderItem;
             try {
+                console.log(`[Bulk Invoice] Processing Order ${orderId}...`);
                 await client.query('BEGIN');
 
                 // 1. Fetch Order Header
@@ -1055,14 +1071,15 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 const linesRes = await client.query('SELECT * FROM sales_order_lines WHERE sales_order_id = $1', [orderId]);
                 let lines = linesRes.rows;
 
-                // 2.5 Calculate Schemes (Free Items)
+                // [FIX] 2.5 Calculate Schemes (Free Items) - Corrected Signature
                 const orderedItems = lines.map(l => ({ product_id: l.product_id, qty: l.ordered_qty }));
-                const freeItems = await calculateFreeItems(orderedItems, client);
+                const { freeItems, priceSlabs } = await calculateFreeItems(orderedItems, so.customer_id, client);
+
                 for (const free of freeItems) {
                     const resFree = await client.query(`
                         INSERT INTO sales_order_lines(sales_order_id, product_id, ordered_qty, rate, tax_percent, tax_amount, amount, tier_applied)
-                VALUES($1, $2, $3, 0, 0, 0, 0, 'Scheme: ' || $4)
-                RETURNING *
+                        VALUES($1, $2, $3, 0, 0, 0, 0, 'Scheme: ' || $4)
+                        RETURNING *
                     `, [orderId, free.product_id, free.qty, free.reason]);
                     lines.push(resFree.rows[0]);
                 }
@@ -1128,15 +1145,25 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         ORDER BY created_at ASC FOR UPDATE
                     `, [pid]);
 
-                    const mrpGroups = {}; // { [mrp]: { qty, gross, cogs } }
+                    const mrpGroups = {}; // { [mrp]: { qty, gross, cogs, slabDeduction } }
                     for (const batch of batchesRes.rows) {
                         if (qtyToFulfill <= 0) break;
                         const take = Math.min(qtyToFulfill, batch.quantity_remaining);
-                        const batchRate = Number(batch[rateColumn]) || 0;
+                        // If the line rate is 0 (Scheme item), keep it at 0. Otherwise use batch tier rate.
+                        const isScheme = (Number(line.rate) === 0 || (line.tier_applied && line.tier_applied.startsWith('Scheme')));
+                        const batchRate = isScheme ? 0 : (Number(batch[rateColumn]) || 0);
                         const batchMrp = Number(batch.mrp || 0);
 
                         if (!mrpGroups[batchMrp]) {
-                            mrpGroups[batchMrp] = { qty: 0, gross: 0, cogs: 0 };
+                            mrpGroups[batchMrp] = { qty: 0, gross: 0, cogs: 0, slabDeduction: 0 };
+                        }
+
+                        // [NEW] Price Slab Deduction Calculation for Admin Generate
+                        if (priceSlabs[pid]) {
+                            const targetNet = Number(priceSlabs[pid].special_price);
+                            const targetExcl = targetNet / (1 + (lineTaxPercent / 100));
+                            const unitDeduction = Math.max(0, batchRate - targetExcl);
+                            mrpGroups[batchMrp].slabDeduction += (take * unitDeduction);
                         }
 
                         await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batch.id]);
@@ -1154,13 +1181,15 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     for (const [mrpVal, group] of Object.entries(mrpGroups)) {
                         if (group.qty <= 0) continue;
                         const avgRate = group.gross / group.qty;
-                        const chunkAmount = group.gross * (1 + (lineTaxPercent / 100));
-                        const chunkTax = chunkAmount - group.gross;
+
+                        const taxableValue = group.gross - group.slabDeduction;
+                        const chunkAmount = taxableValue * (1 + (lineTaxPercent / 100));
+                        const chunkTax = chunkAmount - taxableValue;
 
                         await client.query(`
-                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, mrp, tax_percent, tax_amount, amount)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                        `, [invId, pid, group.qty, avgRate.toFixed(2), mrpVal, lineTaxPercent, chunkTax, chunkAmount]);
+                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, mrp, scheme_amount, taxable_amount, tax_percent, tax_amount, amount)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                        `, [invId, pid, group.qty, avgRate.toFixed(2), mrpVal, group.slabDeduction, taxableValue, lineTaxPercent, chunkTax, chunkAmount]);
 
                         invTotal += chunkAmount;
                         invTax += chunkTax;
@@ -1173,8 +1202,9 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         const take = Math.min(qtyToFulfill, Number(transit.qty));
 
                         // For transit, we get the tier rate from the Product Master as a fallback
+                        const isScheme = (Number(line.rate) === 0 || (line.tier_applied && line.tier_applied.startsWith('Scheme')));
                         const pMaster = await client.query(`SELECT ${rateColumn} FROM products WHERE id = $1`, [pid]);
-                        const transitRate = Number(pMaster.rows[0][rateColumn]) || 0;
+                        const transitRate = isScheme ? 0 : (Number(pMaster.rows[0][rateColumn]) || 0);
 
                         // Deduct from transit "allowance" in memory for this session
                         transitMap[pid].qty -= take;
@@ -1202,13 +1232,14 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         `, [batchId, pid, -take, invId, `Transit stock (${transit.batch_code}) for ${invNumber} (${rateColumn})`]);
 
                         // Record Line for Transit chunk
-                        const transitChunkAmount = (transitRate * take) * (1 + (lineTaxPercent / 100));
-                        const transitChunkTax = transitChunkAmount - (transitRate * take);
+                        const transitTotalBeforeTax = (transitRate * take);
+                        const transitChunkAmount = transitTotalBeforeTax * (1 + (lineTaxPercent / 100));
+                        const transitChunkTax = transitChunkAmount - transitTotalBeforeTax;
 
                         await client.query(`
-                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, mrp, tax_percent, tax_amount, amount)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                        `, [invId, pid, take, transitRate, transit.mrp || pMaster.rows[0].mrp, lineTaxPercent, transitChunkTax, transitChunkAmount]);
+                            INSERT INTO sales_invoice_lines (invoice_id, product_id, shipped_qty, rate, mrp, scheme_amount, taxable_amount, tax_percent, tax_amount, amount)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                        `, [invId, pid, take, transitRate, transit.mrp || pMaster.rows[0].mrp, 0, transitTotalBeforeTax, lineTaxPercent, transitChunkTax, transitChunkAmount]);
 
                         invTotal += transitChunkAmount;
                         invTax += transitChunkTax;

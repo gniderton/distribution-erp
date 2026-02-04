@@ -289,7 +289,7 @@ router.patch('/:id/toggle', async (req, res) => {
 router.post('/calculate', async (req, res) => {
     try {
         const { items } = req.body;
-        const freeItems = await calculateFreeItems(items);
+        const { freeItems } = await calculateFreeItems(items);
         res.json({ success: true, free_items: freeItems });
     } catch (err) {
         console.error(err);
