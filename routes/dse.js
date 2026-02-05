@@ -118,8 +118,11 @@ router.post('/eod-sync', async (req, res) => {
         // --- 1B. Process Payments (NEW) ---
         for (const pay of payments) {
             const payRes = await client.query(`
-                INSERT INTO customer_payments (customer_id, collected_by, amount, payment_mode, payment_date)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO customer_payments (
+                    customer_id, collected_by, amount, payment_mode, payment_date, 
+                    verification_status
+                )
+                VALUES ($1, $2, $3, $4, $5, 'Pending')
                 RETURNING id
              `, [pay.customer_id, dse_id, pay.amount, pay.mode, date]);
 

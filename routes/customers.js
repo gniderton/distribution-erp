@@ -123,6 +123,33 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+// GET /api/customers/:id/pending-bills - Get Unpaid Invoices
+router.get('/:id/pending-bills', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(`
+            SELECT 
+                id, 
+                invoice_number, 
+                invoice_date, 
+                grand_total, 
+                (COALESCE(paid_amount, 0) + COALESCE(amount_paid, 0)) as amount_paid,
+                (grand_total - COALESCE(paid_amount, 0) - COALESCE(amount_paid, 0)) as balance_amount,
+                status
+            FROM sales_invoices 
+            WHERE customer_id = $1 
+              AND status != 'Cancelled'
+              -- Check if balance > 0
+              AND (grand_total - COALESCE(paid_amount, 0) - COALESCE(amount_paid, 0)) > 0
+            ORDER BY invoice_date ASC
+        `, [id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /api/customers - Create New Customer
 router.post('/', async (req, res) => {
     const client = await pool.connect();

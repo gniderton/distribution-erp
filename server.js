@@ -63,6 +63,9 @@ app.use('/api/schemes', require('./routes/schemes')); // [NEW] Scheme Engine
 app.use('/api/channels', require('./routes/channels')); // [NEW] Channel Maaping
 app.use('/api/categories', require('./routes/categories')); // Categories for dropdowns
 
+// [NEW] Finance Module
+app.use('/api/finance', require('./routes/payment_reconciliation'));
+
 // [TEMP] Migration Endpoint to fix Combo Schema
 app.get('/api/fix-combo-db', async (req, res) => {
     try {
