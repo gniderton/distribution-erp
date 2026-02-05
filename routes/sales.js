@@ -587,23 +587,41 @@ router.post('/orders/:id/dispatch', async (req, res) => {
         // Finalize Header
         if (invTotal === 0) throw new Error("Zero stock available");
 
-        const roundedTotal = Number(invTotal.toFixed(2));
+        const roundedTotal = Math.round(invTotal); // [FIX] Round to nearest integer (Round to Zero decimal places)
+        const roundOff = Number((roundedTotal - invTotal).toFixed(2)); // Diff (+/-)
+
         const roundedTax = Number(invTax.toFixed(2));
-        const taxable = Number((roundedTotal - roundedTax).toFixed(2));
+        const taxable = Number((invTotal - roundedTax).toFixed(2)); // Use actual total for taxable back-calculation or just keep as is?
+        // Better: Taxable = Actual Total - Tax. The Round Off is a separate P&L line.
+
         const cgst = Number((roundedTax / 2).toFixed(2));
         const sgst = Number((roundedTax - cgst).toFixed(2));
 
-        await client.query(`UPDATE sales_invoices SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4 WHERE id = $5`,
-            [roundedTotal, taxable, cgst, sgst, invId]);
+        await client.query(`
+            UPDATE sales_invoices 
+            SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4, round_off = $5 
+            WHERE id = $6
+        `, [roundedTotal, taxable, cgst, sgst, roundOff, invId]);
 
         // Accounting
-        const acc_revenue = 4001, acc_ar = 1101, acc_gst_cgst = 2011, acc_gst_sgst = 2012, acc_cogs = 5001, acc_inventory = 1001;
+        const acc_revenue = 4001, acc_ar = 1101, acc_gst_cgst = 2011, acc_gst_sgst = 2012, acc_cogs = 5001, acc_inventory = 1001, acc_round = 5003;
         const invoiceLines = [
             { code: acc_ar, debit: roundedTotal, credit: 0 },
             { code: acc_revenue, debit: 0, credit: taxable }
         ];
         if (roundedTax > 0) {
             invoiceLines.push({ code: acc_gst_cgst, debit: 0, credit: cgst }, { code: acc_gst_sgst, debit: 0, credit: sgst });
+        }
+
+        // [FIX] Add Rounding Line
+        if (roundOff !== 0) {
+            if (roundOff > 0) {
+                // Gain (Credit) e.g. 500.5 -> 501 (+0.5). AR Dr 501. Revenue Cr 500.5. Needs Cr 0.5
+                invoiceLines.push({ code: acc_round, debit: 0, credit: Math.abs(roundOff) });
+            } else {
+                // Loss (Debit) e.g. 500.4 -> 500 (-0.4). AR Dr 500. Revenue Cr 500.4. Needs Dr 0.4
+                invoiceLines.push({ code: acc_round, debit: Math.abs(roundOff), credit: 0 });
+            }
         }
         await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [new Date(), `Invoice: ${invNumber}`, 'SALES_INV', invId, JSON.stringify(invoiceLines)]);
 

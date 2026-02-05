@@ -2,7 +2,7 @@ const { pool } = require('../config/db');
 
 async function calculateFreeItems(items, customerId = null, client = null) {
     const db = client || pool;
-    if (!items || items.length === 0) return [];
+    if (!items || items.length === 0) return { freeItems: [], priceSlabs: {} };
 
     const qtyMap = {}; // Tracks Remaining Qty for Single Logic
     items.forEach(i => {
