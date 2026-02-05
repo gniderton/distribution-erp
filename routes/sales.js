@@ -505,6 +505,12 @@ router.post('/orders/:id/dispatch', async (req, res) => {
 
             // FIFO ALLOCATION
             const mrpGroups = {}; // { [mrp]: { qty, gross, cogs, slabDeduction } }
+            // [FIX] If SO line has 0% tax (legacy/bug), fallback to Product Master Tax
+            // Note: Currently single dispatch does not have access to 'line' object easily here, wait, 'line' IS available above at line 487 (lines loop).
+            // Wait, this loop is over allPids, line = lines.find(...)
+            const lineTaxRaw = line ? Number(line.tax_percent) : 0;
+            const lineTaxPercent = lineTaxRaw > 0 ? lineTaxRaw : taxPct;
+
             const batches = await client.query(`
                 SELECT * FROM inventory_batches WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true ORDER BY created_at ASC FOR UPDATE
             `, [pid]);
@@ -942,7 +948,8 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                     const brandId = pInfo.brand_id;
                     const taxPct = Number(pInfo.tax_bracket || 0);
                     const rateColumn = overrideMap[brandId] || defaultRateColumn;
-                    const lineTaxPercent = line ? Number(line.tax_percent) : taxPct;
+                    const lineTaxRaw = line ? Number(line.tax_percent) : 0;
+                    const lineTaxPercent = lineTaxRaw > 0 ? lineTaxRaw : taxPct;
 
                     const batchesRes = await client.query(`
                         SELECT id, quantity_remaining, purchase_rate, mrp, distributor_rate, wholesale_rate, dealer_rate, retail_rate
@@ -1118,6 +1125,11 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 const so = soRes.rows[0];
                 if (so.status === 'Invoiced') throw new Error(`Order ${so.so_number} already invoiced`);
 
+                // Check if already invoiced
+                const checkInv = await client.query("SELECT id FROM sales_invoices WHERE sales_order_id = $1", [orderId]);
+                if (checkInv.rows.length > 0) {
+                    return { id: orderId, status: 'Failed', error: `Order ${so.so_number} already invoiced` };
+                }
                 // 2. Fetch Order Lines
                 const linesRes = await client.query('SELECT * FROM sales_order_lines WHERE sales_order_id = $1', [orderId]);
                 let lines = linesRes.rows;
@@ -1220,7 +1232,8 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     const brandId = pInfo.brand_id;
                     const taxPct = Number(pInfo.tax_bracket || 0);
                     const rateColumn = overrideMap[brandId] || defaultRateColumn;
-                    const lineTaxPercent = line ? Number(line.tax_percent) : taxPct;
+                    const lineTaxRaw = line ? Number(line.tax_percent) : 0;
+                    const lineTaxPercent = lineTaxRaw > 0 ? lineTaxRaw : taxPct;
 
                     // A. Check REAL Inventory Batches
                     const batchesRes = await client.query(`
