@@ -142,7 +142,7 @@ router.post('/eod-sync', async (req, res) => {
             // Optional: Allocation to an invoice if invoice_id provided
             if (pay.invoice_id) {
                 await client.query(`
-                    INSERT INTO payment_allocations (payment_id, invoice_id, amount)
+                    INSERT INTO customer_payment_allocations (payment_id, invoice_id, amount)
                     VALUES ($1, $2, $3)
                 `, [paymentId, pay.invoice_id, pay.amount]);
             }
