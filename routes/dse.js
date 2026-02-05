@@ -115,19 +115,37 @@ router.post('/eod-sync', async (req, res) => {
             }
         }
 
-        // --- 1B. Process Payments (NEW) ---
+        // --- 1B. Process Payments (UPDATED) ---
         for (const pay of payments) {
             const payRes = await client.query(`
                 INSERT INTO customer_payments (
                     customer_id, collected_by, amount, payment_mode, payment_date, 
+                    transaction_ref, bank_name, cheque_date, deposit_bank,
                     verification_status
                 )
-                VALUES ($1, $2, $3, $4, $5, 'Pending')
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Pending')
                 RETURNING id
-             `, [pay.customer_id, dse_id, pay.amount, pay.mode, date]);
+             `, [
+                pay.customer_id,
+                dse_id,
+                pay.amount,
+                pay.mode,
+                date,
+                pay.transaction_ref || null,
+                pay.bank_name || null,
+                pay.cheque_date || null,
+                pay.deposit_bank || null
+            ]);
 
-            // TODO: Allocations logic if invoice IDs provided
-            // For now, we save the payment record.
+            const paymentId = payRes.rows[0].id;
+
+            // Optional: Allocation to an invoice if invoice_id provided
+            if (pay.invoice_id) {
+                await client.query(`
+                    INSERT INTO payment_allocations (payment_id, invoice_id, amount)
+                    VALUES ($1, $2, $3)
+                `, [paymentId, pay.invoice_id, pay.amount]);
+            }
         }
 
         // --- 2. Insert Expenses ---
