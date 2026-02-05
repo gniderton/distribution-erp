@@ -492,8 +492,13 @@ router.post('/orders/:id/dispatch', async (req, res) => {
 
             if (totalToShip <= 0) continue;
 
-            // Get Rate Column
-            const prodRes = await client.query('SELECT brand_id, tax_bracket FROM products WHERE id = $1', [pid]);
+            // Get Rate Column (Fix: join taxes for bracket)
+            const prodRes = await client.query(`
+                SELECT p.brand_id, t.tax_percentage as tax_bracket 
+                FROM products p 
+                LEFT JOIN taxes t ON p.tax_id = t.id 
+                WHERE p.id = $1
+            `, [pid]);
             const brandId = prodRes.rows[0].brand_id;
             const taxPct = Number(prodRes.rows[0].tax_bracket || 0);
             const rateColumn = overrideMap[brandId] || defaultRateColumn;
@@ -910,7 +915,12 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
 
                 // Pre-fetch product metadata for all involved PIDs to reduce query overhead
                 const pidsArray = Array.from(allPids).map(Number);
-                const productsRes = await client.query('SELECT id, brand_id, tax_id, tax_bracket FROM products WHERE id = ANY($1)', [pidsArray]);
+                const productsRes = await client.query(`
+                    SELECT p.id, p.brand_id, p.tax_id, t.tax_percentage as tax_bracket 
+                    FROM products p 
+                    LEFT JOIN taxes t ON p.tax_id = t.id 
+                    WHERE p.id = ANY($1)
+                `, [pidsArray]);
                 const prodMeta = {};
                 productsRes.rows.forEach(p => prodMeta[String(p.id)] = p);
 
@@ -1183,7 +1193,12 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                 // Pre-fetch product metadata for all involved PIDs to reduce query overhead
                 const pidsArray = Array.from(allPids).map(Number);
-                const productsRes = await client.query('SELECT id, brand_id, tax_id, tax_bracket FROM products WHERE id = ANY($1)', [pidsArray]);
+                const productsRes = await client.query(`
+                    SELECT p.id, p.brand_id, p.tax_id, t.tax_percentage as tax_bracket 
+                    FROM products p 
+                    LEFT JOIN taxes t ON p.tax_id = t.id 
+                    WHERE p.id = ANY($1)
+                `, [pidsArray]);
                 const prodMeta = {};
                 productsRes.rows.forEach(p => prodMeta[String(p.id)] = p);
 
