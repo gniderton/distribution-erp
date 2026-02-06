@@ -21,21 +21,29 @@ router.post('/upload', async (req, res) => {
 
     let entries = [];
     try {
-        const typeNormalized = bank_type.toLowerCase();
-        if (typeNormalized.includes('axis')) {
-            entries = parseAxisCSV(content);
-        } else if (typeNormalized.includes('idfc')) {
-            entries = parseIDFCText(content);
-        } else {
-            return res.status(400).json({ error: `Invalid bank_type '${bank_type}'. Use Axis or IDFC.` });
-        }
-
-        if (entries.length === 0) {
-            return res.status(400).json({ error: "No valid credit entries found in the file." });
-        }
-
         const client = await pool.connect();
         try {
+            // Resolve bank_name if bank_type is a numeric ID
+            if (!isNaN(bank_type)) {
+                const bankLookup = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [bank_type]);
+                if (bankLookup.rows.length > 0) {
+                    bank_type = bankLookup.rows[0].bank_name;
+                }
+            }
+
+            const typeNormalized = bank_type.toLowerCase();
+            if (typeNormalized.includes('axis')) {
+                entries = parseAxisCSV(content);
+            } else if (typeNormalized.includes('idfc')) {
+                entries = parseIDFCText(content);
+            } else {
+                return res.status(400).json({ error: `Invalid bank_type '${bank_type}'. Use Axis or IDFC.` });
+            }
+
+            if (entries.length === 0) {
+                return res.status(400).json({ error: "No valid credit entries found in the file." });
+            }
+
             await client.query('BEGIN');
             const batchId = `BATCH-${Date.now()}`;
 
