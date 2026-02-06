@@ -1,6 +1,4 @@
-/**
- * Utility to parse bank statement files (IDFC Excel/Text and Axis CSV)
- */
+const XLSX = require('xlsx');
 
 function parseAxisCSV(content) {
     const lines = content.split('\n');
@@ -75,24 +73,114 @@ function parseIDFCText(content) {
     return entries;
 }
 
+function parseExcel(buffer, bank_name) {
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    const entries = [];
+
+    // Find header row (usually contains 'Particulars')
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(data.length, 50); i++) {
+        const row = data[i];
+        if (row && row.some(cell => typeof cell === 'string' && cell.toLowerCase().includes('particulars'))) {
+            headerIdx = i;
+            break;
+        }
+    }
+
+    if (headerIdx === -1) return [];
+
+    // Map column indices
+    const header = data[headerIdx];
+    const colMap = {};
+    header.forEach((cell, idx) => {
+        if (!cell) return;
+        const name = cell.toLowerCase().replace(/[\s\n\t]/g, '');
+        if (name.includes('date')) colMap.date = idx;
+        if (name.includes('particular')) colMap.particulars = idx;
+        if (name.includes('credit')) colMap.credit = idx;
+        if (name.includes('amount')) colMap.amount = idx; // Some use 'Amount' and 'Type'
+        if (name.includes('type')) colMap.type = idx;
+    });
+
+    // Fallback if generic labels fail (IDFC often has un-labelled headers in some templates)
+    // Based on inspection: 0: Date, 2: Particulars, 4: Debit, 5: Credit
+    if (Object.keys(colMap).length < 2) {
+        colMap.date = 0;
+        colMap.particulars = 2;
+        colMap.credit = 5;
+    }
+
+    for (let i = headerIdx + 1; i < data.length; i++) {
+        const row = data[i];
+        if (!row || row.length < 3) continue;
+
+        const dateStr = row[colMap.date];
+        const particulars = row[colMap.particulars];
+
+        let amount = 0;
+        if (colMap.credit !== undefined) {
+            amount = parseFloat(row[colMap.credit]);
+        } else if (colMap.amount !== undefined && colMap.type !== undefined) {
+            const type = String(row[colMap.type]).toUpperCase();
+            if (type.includes('CR')) amount = parseFloat(row[colMap.amount]);
+        }
+
+        if (amount > 0 && dateStr && particulars) {
+            const refId = extractReference(particulars);
+            if (refId) {
+                entries.push({
+                    transaction_date: formatGenericDate(dateStr),
+                    particulars: String(particulars),
+                    bank_ref_id: refId,
+                    amount: amount,
+                    bank_name: bank_name
+                });
+            }
+        }
+    }
+    return entries;
+}
+
+function formatGenericDate(val) {
+    if (val instanceof Date) {
+        return val.toISOString().split('T')[0];
+    }
+    const str = String(val);
+    if (str.includes('-')) {
+        // Handle 09-Dec-2024
+        const [d, mStr, y] = str.split('-');
+        const months = { 'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12' };
+        if (months[mStr]) return `${y}-${months[mStr]}-${d.padStart(2, '0')}`;
+    }
+    if (str.includes('/')) {
+        // Handle 09/12/2024
+        const parts = str.split('/');
+        if (parts[2].length === 4) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return str;
+}
+
 /**
  * Extracts reference ID (UTR, UPI ID, etc) from particulars
  */
 function extractReference(particulars) {
+    const text = String(particulars);
     // UPI Case: UPI/CR/123456789012/... or UPI/CR/600106971121/...
-    const upiMatch = particulars.match(/UPI\/CR\/(\d+)\//);
+    const upiMatch = text.match(/UPI\/CR\/(\d+)\//);
     if (upiMatch) return upiMatch[1];
 
     // NEFT Case: NEFT/AXODH00456375599/... or NEFT/IDFB600158310008/...
-    const neftMatch = particulars.match(/NEFT\/([A-Z0-9]+)\//);
+    const neftMatch = text.match(/NEFT\/([A-Z0-9]+)\//);
     if (neftMatch) return neftMatch[1];
 
-    // IMPS Case: IMPS-OPM/600113318190/...
-    const impsMatch = particulars.match(/IMPS[^\/]*\/(\d+)\//);
+    // IMPS Case: IMPS-OPM/434920863879/
+    const impsMatch = text.match(/IMPS[^\/]*\/(\d+)\//);
     if (impsMatch) return impsMatch[1];
 
     // General 12-digit search (often Ref IDs match this)
-    const digitMatch = particulars.match(/(\d{12})/);
+    const digitMatch = text.match(/(\d{12})/);
     if (digitMatch) return digitMatch[1];
 
     return null;
@@ -111,4 +199,4 @@ function formatDateIDFC(str) {
     return `${y}-${months[mStr]}-${d.padStart(2, '0')}`;
 }
 
-module.exports = { parseAxisCSV, parseIDFCText };
+module.exports = { parseAxisCSV, parseIDFCText, parseExcel };

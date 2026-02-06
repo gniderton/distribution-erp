@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
-const { parseAxisCSV, parseIDFCText } = require('../utils/bankParser');
+const { parseAxisCSV, parseIDFCText, parseExcel } = require('../utils/bankParser');
 
 // Upload Bank Statement
 router.post('/upload', async (req, res) => {
@@ -10,16 +10,26 @@ router.post('/upload', async (req, res) => {
     if (!content) return res.status(400).json({ error: "Missing 'content' field. Ensure your FilePicker is correctly linked." });
     if (!bank_type) return res.status(400).json({ error: "Missing 'bank_type' field. Ensure your Select component is correctly linked." });
 
-    // Auto-decode base64 if it comes from Retool FilePicker
+    let entries = [];
+    let buffer = null;
+
+    // Detect if content is Base64 (Retool FilePicker default)
     if (content.length > 50 && !content.includes('\n') && !content.includes(',')) {
         try {
-            content = Buffer.from(content, 'base64').toString('utf8');
+            buffer = Buffer.from(content, 'base64');
+            // Check for XLSX magic bytes "PK" (50 4B)
+            if (buffer[0] === 0x50 && buffer[1] === 0x4B) {
+                // It's an Excel file
+            } else {
+                // Try to treat as text
+                content = buffer.toString('utf8');
+                buffer = null;
+            }
         } catch (e) {
-            console.log("Not base64, using raw content");
+            console.log("Decoding issue, using raw content");
         }
     }
 
-    let entries = [];
     try {
         const client = await pool.connect();
         try {
@@ -32,12 +42,19 @@ router.post('/upload', async (req, res) => {
             }
 
             const typeNormalized = bank_type.toLowerCase();
-            if (typeNormalized.includes('axis')) {
-                entries = parseAxisCSV(content);
-            } else if (typeNormalized.includes('idfc')) {
-                entries = parseIDFCText(content);
+
+            if (buffer) {
+                // Handle Excel
+                entries = parseExcel(buffer, bank_type);
             } else {
-                return res.status(400).json({ error: `Invalid bank_type '${bank_type}'. Use Axis or IDFC.` });
+                // Handle Text/CSV
+                if (typeNormalized.includes('axis')) {
+                    entries = parseAxisCSV(content);
+                } else if (typeNormalized.includes('idfc')) {
+                    entries = parseIDFCText(content);
+                } else {
+                    return res.status(400).json({ error: `Invalid bank_type '${bank_type}'. Use Axis, IDFC, or provide an Excel file.` });
+                }
             }
 
             if (entries.length === 0) {
