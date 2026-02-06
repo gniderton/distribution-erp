@@ -132,4 +132,31 @@ router.get('/list', async (req, res) => {
     }
 });
 
+// [NEW] Clear Bank Statement Entries (For re-upload)
+router.post('/clear', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Unlink bank entries from customer payments
+        await client.query(`
+            UPDATE customer_payments 
+            SET bank_statement_entry_id = NULL 
+            WHERE bank_statement_entry_id IS NOT NULL
+        `);
+
+        // 2. Truncate bank statement entries
+        await client.query('TRUNCATE TABLE bank_statement_entries RESTART IDENTITY CASCADE');
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Bank statement data cleared successfully." });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
