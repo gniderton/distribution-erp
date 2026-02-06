@@ -36,10 +36,13 @@ router.get('/', async (req, res) => {
 // GET /api/payments/ledger/:customerId
 router.get('/ledger/:customerId', async (req, res) => {
     try {
-        const result = await pool.query(
-            "SELECT * FROM view_customer_ledger WHERE customer_id = $1 ORDER BY id DESC LIMIT 50",
-            [req.params.customerId]
-        );
+        const result = await pool.query(`
+            SELECT vl.*, c.customer_name 
+            FROM view_customer_ledger vl
+            JOIN customers c ON vl.customer_id = c.id
+            WHERE vl.customer_id = $1 
+            ORDER BY vl.id DESC LIMIT 50
+        `, [req.params.customerId]);
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -50,10 +53,11 @@ router.get('/ledger/:customerId', async (req, res) => {
 router.get('/invoices/:customerId', async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT *, (grand_total - COALESCE(amount_paid, 0)) as balance 
-            FROM sales_invoices 
-            WHERE customer_id = $1 AND status != 'Paid'
-            ORDER BY invoice_date ASC
+            SELECT si.*, (si.grand_total - COALESCE(si.amount_paid, 0)) as balance, c.customer_name
+            FROM sales_invoices si
+            JOIN customers c ON si.customer_id = c.id
+            WHERE si.customer_id = $1 AND si.status != 'Paid'
+            ORDER BY si.invoice_date ASC
         `, [req.params.customerId]);
         res.json(result.rows);
     } catch (err) {

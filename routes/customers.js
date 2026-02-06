@@ -129,19 +129,20 @@ router.get('/:id/pending-bills', async (req, res) => {
         const { id } = req.params;
         const result = await pool.query(`
             SELECT 
-                id, 
-                invoice_number, 
-                invoice_date, 
-                grand_total, 
-                (COALESCE(paid_amount, 0) + COALESCE(amount_paid, 0)) as amount_paid,
-                (grand_total - COALESCE(paid_amount, 0) - COALESCE(amount_paid, 0)) as balance_amount,
-                status
-            FROM sales_invoices 
-            WHERE customer_id = $1 
-              AND status != 'Cancelled'
-              -- Check if balance > 0
-              AND (grand_total - COALESCE(paid_amount, 0) - COALESCE(amount_paid, 0)) > 0
-            ORDER BY invoice_date ASC
+                si.id, 
+                si.invoice_number, 
+                si.invoice_date, 
+                si.grand_total, 
+                (COALESCE(si.paid_amount, 0) + COALESCE(si.amount_paid, 0)) as amount_paid,
+                (si.grand_total - COALESCE(si.paid_amount, 0) - COALESCE(si.amount_paid, 0)) as balance_amount,
+                si.status,
+                c.customer_name
+            FROM sales_invoices si
+            JOIN customers c ON si.customer_id = c.id
+            WHERE si.customer_id = $1 
+              AND si.status != 'Cancelled'
+              AND (si.grand_total - COALESCE(si.paid_amount, 0) - COALESCE(si.amount_paid, 0)) > 0
+            ORDER BY si.invoice_date ASC
         `, [id]);
         res.json(result.rows);
     } catch (err) {
