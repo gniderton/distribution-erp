@@ -67,10 +67,20 @@ router.post('/upload', async (req, res) => {
             for (let entry of entries) {
                 await client.query(`
                     INSERT INTO bank_statement_entries (
-                        transaction_date, bank_name, particulars, bank_ref_id, amount, upload_batch_id
-                    ) VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT (bank_ref_id, amount, transaction_date) DO NOTHING
-                `, [entry.transaction_date, entry.bank_name, entry.particulars, entry.bank_ref_id, entry.amount, batchId]);
+                        transaction_date, bank_name, particulars, bank_ref_id, 
+                        debit_amount, credit_amount, amount, upload_batch_id
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    ON CONFLICT (transaction_date, particulars, debit_amount, credit_amount) DO NOTHING
+                `, [
+                    entry.transaction_date,
+                    entry.bank_name,
+                    entry.particulars,
+                    entry.bank_ref_id || null,
+                    entry.debit_amount || 0,
+                    entry.credit_amount || 0,
+                    entry.credit_amount || 0, // Legacy amount column = credit
+                    batchId
+                ]);
             }
 
             await client.query('COMMIT');

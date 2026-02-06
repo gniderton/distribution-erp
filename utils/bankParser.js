@@ -19,20 +19,20 @@ function parseAxisCSV(content) {
         const date = parts[1];
         const particulars = parts[3].replace(/"/g, '').trim();
         const amountStr = parts[4].replace(/"/g, '').replace(/[	,]/g, '').trim();
-        const type = parts[5].trim(); // CR or DR
+        const type = parts[5].trim().toUpperCase(); // CR or DR
         const amount = parseFloat(amountStr);
 
-        if (type === 'CR' && !isNaN(amount)) {
+        if (!isNaN(amount)) {
             const refId = extractReference(particulars);
-            if (refId) {
-                entries.push({
-                    transaction_date: formatDateAxis(date),
-                    particulars: particulars,
-                    bank_ref_id: refId,
-                    amount: amount,
-                    bank_name: 'Axis'
-                });
-            }
+            entries.push({
+                transaction_date: formatDateAxis(date),
+                particulars: particulars,
+                bank_ref_id: refId, // Now optional
+                debit_amount: type === 'DR' ? amount : 0,
+                credit_amount: type === 'CR' ? amount : 0,
+                amount: type === 'CR' ? amount : 0, // Legacy support
+                bank_name: 'Axis'
+            });
         }
     }
     return entries;
@@ -55,19 +55,20 @@ function parseIDFCText(content) {
 
         const date = parts[0];
         const particulars = parts[2].trim();
-        const credit = parseFloat(parts[5].replace(/,/g, '').trim());
+        const debit = parseFloat(parts[4].replace(/,/g, '').trim()) || 0;
+        const credit = parseFloat(parts[5].replace(/,/g, '').trim()) || 0;
 
-        if (!isNaN(credit) && credit > 0) {
+        if (debit > 0 || credit > 0) {
             const refId = extractReference(particulars);
-            if (refId) {
-                entries.push({
-                    transaction_date: formatDateIDFC(date),
-                    particulars: particulars,
-                    bank_ref_id: refId,
-                    amount: credit,
-                    bank_name: 'IDFC'
-                });
-            }
+            entries.push({
+                transaction_date: formatDateIDFC(date),
+                particulars: particulars,
+                bank_ref_id: refId, // Now optional
+                debit_amount: debit,
+                credit_amount: credit,
+                amount: credit, // Legacy support
+                bank_name: 'IDFC'
+            });
         }
     }
     return entries;
@@ -99,16 +100,18 @@ function parseExcel(buffer, bank_name) {
         const name = cell.toLowerCase().replace(/[\s\n\t]/g, '');
         if (name.includes('date')) colMap.date = idx;
         if (name.includes('particular')) colMap.particulars = idx;
+        if (name.includes('debit')) colMap.debit = idx;
         if (name.includes('credit')) colMap.credit = idx;
         if (name.includes('amount')) colMap.amount = idx; // Some use 'Amount' and 'Type'
         if (name.includes('type')) colMap.type = idx;
     });
 
-    // Fallback if generic labels fail (IDFC often has un-labelled headers in some templates)
+    // Fallback if generic labels fail (IDFC often has un-labelled headers)
     // Based on inspection: 0: Date, 2: Particulars, 4: Debit, 5: Credit
     if (Object.keys(colMap).length < 2) {
         colMap.date = 0;
         colMap.particulars = 2;
+        colMap.debit = 4;
         colMap.credit = 5;
     }
 
@@ -119,25 +122,30 @@ function parseExcel(buffer, bank_name) {
         const dateStr = row[colMap.date];
         const particulars = row[colMap.particulars];
 
-        let amount = 0;
-        if (colMap.credit !== undefined) {
-            amount = parseFloat(row[colMap.credit]);
+        let debit = 0;
+        let credit = 0;
+
+        if (colMap.debit !== undefined && colMap.credit !== undefined) {
+            debit = parseFloat(row[colMap.debit]) || 0;
+            credit = parseFloat(row[colMap.credit]) || 0;
         } else if (colMap.amount !== undefined && colMap.type !== undefined) {
             const type = String(row[colMap.type]).toUpperCase();
-            if (type.includes('CR')) amount = parseFloat(row[colMap.amount]);
+            const val = parseFloat(row[colMap.amount]);
+            if (type.includes('CR')) credit = val;
+            if (type.includes('DR')) debit = val;
         }
 
-        if (amount > 0 && dateStr && particulars) {
+        if ((debit > 0 || credit > 0) && dateStr && particulars) {
             const refId = extractReference(particulars);
-            if (refId) {
-                entries.push({
-                    transaction_date: formatGenericDate(dateStr),
-                    particulars: String(particulars),
-                    bank_ref_id: refId,
-                    amount: amount,
-                    bank_name: bank_name
-                });
-            }
+            entries.push({
+                transaction_date: formatGenericDate(dateStr),
+                particulars: String(particulars),
+                bank_ref_id: refId,
+                debit_amount: debit,
+                credit_amount: credit,
+                amount: credit, // Legacy support
+                bank_name: bank_name
+            });
         }
     }
     return entries;

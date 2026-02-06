@@ -167,6 +167,14 @@ pool.query('SELECT NOW()', (err, res) => {
                     if (e) console.error('Mig 065 Failed', e); else console.log('Mig 065 Applied');
                 });
             }
+
+            // 7. Full Statement Schema (083)
+            const mig083 = path.join(__dirname, 'database', '083_full_statement_schema.sql');
+            if (fs.existsSync(mig083)) {
+                pool.query(fs.readFileSync(mig083, 'utf8'), (e) => {
+                    if (e) console.error('Mig 083 Failed', e); else console.log('Mig 083 Applied');
+                });
+            }
         } catch (migEx) {
             console.error('Migration Error:', migEx);
         }
