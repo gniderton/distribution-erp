@@ -175,6 +175,14 @@ pool.query('SELECT NOW()', (err, res) => {
                     if (e) console.error('Mig 083 Failed', e); else console.log('Mig 083 Applied');
                 });
             }
+
+            // 8. Fix Bank Amount Constraint (084)
+            const mig084 = path.join(__dirname, 'database', '084_fix_bank_amount_constraint.sql');
+            if (fs.existsSync(mig084)) {
+                pool.query(fs.readFileSync(mig084, 'utf8'), (e) => {
+                    if (e) console.error('Mig 084 Failed', e); else console.log('Mig 084 Applied');
+                });
+            }
         } catch (migEx) {
             console.error('Migration Error:', migEx);
         }
