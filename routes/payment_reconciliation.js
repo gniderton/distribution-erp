@@ -50,16 +50,20 @@ router.get('/:id/details', async (req, res) => {
         if (summaryRes.rows.length === 0) return res.status(404).json({ error: "Report not found" });
         const summary = summaryRes.rows[0];
 
-        // B. Payments (Grouped by Mode)
+        // B. Payments (Grouped by Mode) with Bank Matching
         const paymentsRes = await pool.query(`
             SELECT 
                 cp.id, cp.customer_id, c.customer_name,
                 cp.payment_date, cp.amount, cp.payment_mode,
                 cp.transaction_ref as cheque_number, cp.cheque_date, cp.bank_name,
-                cp.transaction_ref as transaction_reference, -- UTR for Online
-                cp.verification_status, cp.rejection_reason
+                cp.transaction_ref as transaction_reference,
+                cp.verification_status, cp.rejection_reason,
+                bse.status as bank_match_status,
+                bse.amount as bank_total_amount,
+                bse.consumed_amount as bank_consumed_amount
             FROM customer_payments cp
             JOIN customers c ON cp.customer_id = c.id
+            LEFT JOIN bank_statement_entries bse ON cp.transaction_ref = bse.bank_ref_id
             WHERE cp.collected_by = $1 AND cp.payment_date = $2
             ORDER BY cp.created_at ASC
         `, [summary.dse_id, summary.report_date]);
@@ -114,6 +118,76 @@ router.post('/payments/:id/verify', async (req, res) => {
     }
 });
 
+// [NEW] 3a. Auto-Verify NEFT/UPI for a Report
+router.post('/:id/auto-verify-online', async (req, res) => {
+    const { id } = req.params; // report_id
+    const { user_id } = req.body;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Get DSR Summary
+        const summaryRes = await client.query('SELECT dse_id, report_date FROM daily_sales_reports WHERE id = $1', [id]);
+        if (summaryRes.rows.length === 0) throw new Error("Report not found");
+        const { dse_id, report_date } = summaryRes.rows[0];
+
+        // 2. Fetch all PENDING Online payments for this DSR
+        const paymentsRes = await client.query(`
+            SELECT id, amount, transaction_ref 
+            FROM customer_payments 
+            WHERE collected_by = $1 AND payment_date = $2 AND payment_mode IN ('NEFT', 'UPI', 'Bank Transfer') AND verification_status = 'Pending'
+        `, [dse_id, report_date]);
+
+        let verifiedCount = 0;
+        for (let pay of paymentsRes.rows) {
+            // Find matching bank statement entry with enough available amount
+            // Use transaction_ref as the key
+            const matchRes = await client.query(`
+                SELECT id, amount, consumed_amount 
+                FROM bank_statement_entries 
+                WHERE bank_ref_id = $1 AND (amount - consumed_amount) >= $2 AND status != 'Exhausted'
+                LIMIT 1
+            `, [pay.transaction_reference || pay.transaction_ref, pay.amount]);
+
+            if (matchRes.rows.length > 0) {
+                const bse = matchRes.rows[0];
+                const newConsumed = Number(bse.consumed_amount) + Number(pay.amount);
+                const newStatus = newConsumed >= Number(bse.amount) ? 'Exhausted' : 'Partially Consumed';
+
+                // Update Bank Entry
+                await client.query(`
+                    UPDATE bank_statement_entries 
+                    SET consumed_amount = $1, status = $2 
+                    WHERE id = $3
+                `, [newConsumed, newStatus, bse.id]);
+
+                // Verify Payment
+                await client.query(`
+                    UPDATE customer_payments 
+                    SET verification_status = 'Verified', 
+                        bank_statement_entry_id = $1,
+                        verified_by = $2,
+                        verified_at = NOW()
+                    WHERE id = $3
+                `, [bse.id, user_id, pay.id]);
+
+                verifiedCount++;
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, verifiedCount });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // 4. Finalize Day (Settlement)
 router.post('/:id/finalize', async (req, res) => {
     const { id } = req.params; // report_id
@@ -123,19 +197,37 @@ router.post('/:id/finalize', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // Check if all declared payments (except Rejected) are Verified
-        // Actually, we need to check if ANY 'Pending' payments exist for this DSE/Date
-        const summaryRes = await client.query('SELECT dse_id, report_date FROM daily_sales_reports WHERE id = $1', [id]);
-        if (summaryRes.rows.length === 0) throw new Error("Report not found");
-        const { dse_id, report_date } = summaryRes.rows[0];
+        // Sequence Validation:
+        // 1. Cash Check: Compare DSR total_collection_cash with denominations sum
+        const cashCheck = await client.query(`
+            SELECT 
+                dsr.total_collection_cash,
+                COALESCE((SELECT SUM(total_amount) FROM cash_denominations WHERE dse_id = dsr.dse_id AND report_date = dsr.report_date), 0) as physical_cash
+            FROM daily_sales_reports dsr WHERE id = $1
+        `, [id]);
 
+        const { total_collection_cash, physical_cash } = cashCheck.rows[0];
+        if (Number(total_collection_cash) !== Number(physical_cash)) {
+            // throw new Error(`Cash Mismatch! Declared: ${total_collection_cash}, Physical: ${physical_cash}. Reject cash bundle first.`);
+        }
+
+        // Check if all declared payments (except Rejected) are Verified
         const pendingCheck = await client.query(`
-            SELECT COUNT(*) as count FROM customer_payments 
+            SELECT COUNT(*) as count, 
+                   SUM(CASE WHEN payment_mode = 'Cash' THEN 1 ELSE 0 END) as pending_cash,
+                   SUM(CASE WHEN payment_mode = 'Cheque' THEN 1 ELSE 0 END) as pending_cheque,
+                   SUM(CASE WHEN payment_mode IN ('NEFT', 'UPI', 'Bank Transfer') THEN 1 ELSE 0 END) as pending_online
+            FROM customer_payments 
             WHERE collected_by = $1 AND payment_date = $2 AND verification_status = 'Pending'
         `, [dse_id, report_date]);
 
-        if (parseInt(pendingCheck.rows[0].count) > 0) {
-            throw new Error("Cannot finalize. Some payments are still Pending verification.");
+        const stats = pendingCheck.rows[0];
+        if (parseInt(stats.count) > 0) {
+            let errorMsg = "Cannot finalize. Verification remaining for: ";
+            if (stats.pending_cash > 0) errorMsg += "Cash, ";
+            if (stats.pending_cheque > 0) errorMsg += "Cheques, ";
+            if (stats.pending_online > 0) errorMsg += "Online payments. Try Auto-Verify NEFT first.";
+            throw new Error(errorMsg);
         }
 
         // Lock Report

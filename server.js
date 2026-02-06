@@ -26,7 +26,7 @@ const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors()); // Allow Retool to access this API
-app.use(express.json()); // Parse JSON bodies
+app.use(express.json({ limit: '10mb' })); // Parse JSON bodies (increased for bank statements)
 
 // Health Check
 app.get('/', (req, res) => {
@@ -65,6 +65,7 @@ app.use('/api/categories', require('./routes/categories')); // Categories for dr
 
 // [NEW] Finance Module
 app.use('/api/finance/reconciliation', require('./routes/payment_reconciliation'));
+app.use('/api/finance/reconciliation/bank', require('./routes/bank_recon'));
 
 // [TEMP] Migration Endpoint to fix Combo Schema
 app.get('/api/fix-combo-db', async (req, res) => {
