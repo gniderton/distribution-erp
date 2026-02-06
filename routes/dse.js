@@ -217,4 +217,49 @@ router.post('/eod-sync', async (req, res) => {
     }
 });
 
+// POST /api/dse/reports/:id/finalize - Strict Settlement Gate
+router.post('/reports/:id/finalize', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { settled_by } = req.body;
+
+        if (!settled_by) return res.status(400).json({ error: 'settled_by (Employee ID) is required' });
+
+        // 1. Get Report Info
+        const reportRes = await pool.query('SELECT * FROM daily_sales_reports WHERE id = $1', [id]);
+        if (reportRes.rows.length === 0) return res.status(404).json({ error: 'Report not found' });
+        const report = reportRes.rows[0];
+
+        // 2. CHECK: Are all payments verified?
+        const pendingRes = await pool.query(`
+            SELECT id, payment_number, customer_id, amount, payment_mode
+            FROM customer_payments 
+            WHERE collected_by = $1 
+              AND payment_date = $2
+              AND verification_status != 'Verified'
+        `, [report.dse_id, report.report_date]);
+
+        if (pendingRes.rows.length > 0) {
+            return res.status(400).json({
+                error: 'Cannot finalize report. Unverified payments found.',
+                pending_payments: pendingRes.rows
+            });
+        }
+
+        // 3. Finalize
+        await pool.query(`
+            UPDATE daily_sales_reports 
+            SET settlement_status = 'Settled', 
+                settled_at = NOW(),
+                settled_by = $1
+            WHERE id = $2
+        `, [settled_by, id]);
+
+        res.json({ success: true, message: 'Report Settled Successfully' });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

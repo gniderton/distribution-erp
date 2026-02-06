@@ -228,7 +228,81 @@ router.post('/', async (req, res) => {
     }
 });
 
-// Admin endpoints (Verify/Reject) ... (Keep existing verify logic if needed, but 'Verified' implies auto-post here)
-// For simplicity, DSE payments are auto-verified in this Phase.
+// PATCH /api/payments/:id/verify-cheque - Capture Cheque Image & Auto-Verify
+router.patch('/:id/verify-cheque', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { cheque_image_url, verified_by } = req.body;
+
+        if (!cheque_image_url) return res.status(400).json({ error: 'Cheque image is required' });
+
+        // Logic: For now, we set status to Verified once image is provided.
+        // In a future phase, we can integrate OCR here to match the cheque_number.
+        const result = await pool.query(`
+            UPDATE customer_payments 
+            SET cheque_image_url = $1, 
+                verification_status = 'Verified', 
+                verified_at = NOW(),
+                verified_by = $2
+            WHERE id = $3
+            RETURNING *
+        `, [cheque_image_url, verified_by, id]);
+
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Payment not found' });
+
+        res.json({ success: true, payment: result.rows[0] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PATCH /api/payments/:id/verify-cash - Denomination Validation
+router.patch('/:id/verify-cash', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { denominations, verified_by } = req.body; // Obj: { 500: 2, 200: 5, ... }
+
+        if (!denominations) return res.status(400).json({ error: 'Denominations are required' });
+
+        // 1. Fetch Payment Amount
+        const payRes = await pool.query('SELECT amount FROM customer_payments WHERE id = $1', [id]);
+        if (payRes.rows.length === 0) return res.status(404).json({ error: 'Payment not found' });
+        const targetAmount = Number(payRes.rows[0].amount);
+
+        // 2. Calculate Total from Denominations
+        const denomValues = {
+            500: 500, 200: 200, 100: 100, 50: 50, 20: 20, 10: 10, 5: 5, 2: 2, 1: 1
+        };
+        let calcTotal = 0;
+        for (const [key, qty] of Object.entries(denominations)) {
+            if (denomValues[key]) {
+                calcTotal += (Number(qty) * denomValues[key]);
+            }
+        }
+
+        // 3. Match Check
+        if (Math.abs(calcTotal - targetAmount) > 0.01) {
+            return res.status(400).json({
+                error: `Denomination total (${calcTotal}) does not match payment amount (${targetAmount})`
+            });
+        }
+
+        // 4. Update
+        const result = await pool.query(`
+            UPDATE customer_payments 
+            SET verification_data = $1, 
+                verification_status = 'Verified', 
+                verified_at = NOW(),
+                verified_by = $2
+            WHERE id = $3
+            RETURNING *
+        `, [JSON.stringify(denominations), verified_by, id]);
+
+        res.json({ success: true, payment: result.rows[0] });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 module.exports = router;

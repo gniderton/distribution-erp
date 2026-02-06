@@ -183,6 +183,14 @@ pool.query('SELECT NOW()', (err, res) => {
                     if (e) console.error('Mig 084 Failed', e); else console.log('Mig 084 Applied');
                 });
             }
+
+            // 9. Enhanced Verification Schema (085)
+            const mig085 = path.join(__dirname, 'database', '085_enhanced_verification_schema.sql');
+            if (fs.existsSync(mig085)) {
+                pool.query(fs.readFileSync(mig085, 'utf8'), (e) => {
+                    if (e) console.error('Mig 085 Failed', e); else console.log('Mig 085 Applied');
+                });
+            }
         } catch (migEx) {
             console.error('Migration Error:', migEx);
         }
