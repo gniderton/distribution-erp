@@ -159,4 +159,22 @@ router.post('/clear', async (req, res) => {
     }
 });
 
+// [NEW] Get Unconsumed Credits for DSE Smart Select
+router.get('/unconsumed-credits', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT id, bank_ref_id, particulars, credit_amount, consumed_amount, transaction_date
+            FROM bank_statement_entries 
+            WHERE credit_amount > consumed_amount 
+              AND status != 'Exhausted'
+            ORDER BY transaction_date DESC, created_at DESC
+            LIMIT 50
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
