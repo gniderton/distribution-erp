@@ -7,9 +7,8 @@ const { parseAxisCSV, parseIDFCText } = require('../utils/bankParser');
 router.post('/upload', async (req, res) => {
     let { content, bank_type } = req.body; // content: raw file text or base64, bank_type: 'Axis' | 'IDFC'
 
-    if (!content || !bank_type) {
-        return res.status(400).json({ error: "Content and bank_type are required" });
-    }
+    if (!content) return res.status(400).json({ error: "Missing 'content' field. Ensure your FilePicker is correctly linked." });
+    if (!bank_type) return res.status(400).json({ error: "Missing 'bank_type' field. Ensure your Select component is correctly linked." });
 
     // Auto-decode base64 if it comes from Retool FilePicker
     if (content.length > 50 && !content.includes('\n') && !content.includes(',')) {
@@ -22,12 +21,13 @@ router.post('/upload', async (req, res) => {
 
     let entries = [];
     try {
-        if (bank_type === 'Axis') {
+        const typeNormalized = bank_type.toLowerCase();
+        if (typeNormalized.includes('axis')) {
             entries = parseAxisCSV(content);
-        } else if (bank_type === 'IDFC') {
+        } else if (typeNormalized.includes('idfc')) {
             entries = parseIDFCText(content);
         } else {
-            return res.status(400).json({ error: "Invalid bank_type. Use Axis or IDFC." });
+            return res.status(400).json({ error: `Invalid bank_type '${bank_type}'. Use Axis or IDFC.` });
         }
 
         if (entries.length === 0) {
