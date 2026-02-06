@@ -153,6 +153,20 @@ pool.query('SELECT NOW()', (err, res) => {
                     if (e) console.error('Mig 072 Failed', e); else console.log('Mig 072 Applied');
                 });
             }
+
+            // 6. Bank Recon (064 & 065)
+            const mig064 = path.join(__dirname, 'database', '064_bank_statement_schema.sql');
+            if (fs.existsSync(mig064)) {
+                pool.query(fs.readFileSync(mig064, 'utf8'), (e) => {
+                    if (e) console.error('Mig 064 Failed', e); else console.log('Mig 064 Applied');
+                });
+            }
+            const mig065 = path.join(__dirname, 'database', '065_bank_statement_unique_constraint.sql');
+            if (fs.existsSync(mig065)) {
+                pool.query(fs.readFileSync(mig065, 'utf8'), (e) => {
+                    if (e) console.error('Mig 065 Failed', e); else console.log('Mig 065 Applied');
+                });
+            }
         } catch (migEx) {
             console.error('Migration Error:', migEx);
         }
