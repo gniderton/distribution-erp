@@ -305,4 +305,87 @@ router.patch('/:id/verify-cash', async (req, res) => {
     }
 });
 
+// PATCH /api/payments/:id/verify-online - Bank Statement Auto-Matching
+router.patch('/:id/verify-online', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const { verified_by } = req.body;
+
+        await client.query('BEGIN');
+
+        // 1. Get Payment Details
+        const payRes = await client.query('SELECT * FROM customer_payments WHERE id = $1', [id]);
+        if (payRes.rows.length === 0) return res.status(404).json({ error: 'Payment not found' });
+        const payment = payRes.rows[0];
+
+        if (!payment.transaction_ref) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Payment has no transaction reference to match' });
+        }
+
+        // 2. Search Bank Statement for Ref ID
+        // Note: Reference IDs can sometimes be slightly different (case/whitespace), so we use ILIKE/TRIM
+        const bankRes = await client.query(`
+            SELECT * FROM bank_statement_entries 
+            WHERE TRIM(bank_ref_id) ILIKE TRIM($1)
+              AND status != 'Exhausted'
+            ORDER BY transaction_date DESC LIMIT 1
+        `, [payment.transaction_ref]);
+
+        if (bankRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({
+                error: `No matching entry found in bank statement for Ref: ${payment.transaction_ref}`
+            });
+        }
+
+        const bankEntry = bankRes.rows[0];
+        const payAmount = Number(payment.amount);
+        const availableAmount = Number(bankEntry.credit_amount) - Number(bankEntry.consumed_amount);
+
+        // 3. Check if available amount in bank entry is sufficient
+        if (availableAmount < payAmount - 0.01) { // Allowing tiny floating point diff
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+                error: `Bank entry exists but has insufficient balance. Required: ${payAmount}, Available: ${availableAmount.toFixed(2)}`
+            });
+        }
+
+        // 4. Verification Update
+        const updatedPay = await client.query(`
+            UPDATE customer_payments 
+            SET bank_statement_entry_id = $1, 
+                verification_status = 'Verified', 
+                verified_at = NOW(),
+                verified_by = $2
+            WHERE id = $3
+            RETURNING *
+        `, [bankEntry.id, verified_by, id]);
+
+        // 5. Bank Statement Update
+        const newConsumed = Number(bankEntry.consumed_amount) + payAmount;
+        let newStatus = 'Partially Consumed';
+        if (Math.abs(newConsumed - Number(bankEntry.credit_amount)) < 0.01) {
+            newStatus = 'Exhausted';
+        }
+
+        await client.query(`
+            UPDATE bank_statement_entries 
+            SET consumed_amount = $1, 
+                status = $2 
+            WHERE id = $3
+        `, [newConsumed, newStatus, bankEntry.id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, payment: updatedPay.rows[0], matched_bank_id: bankEntry.id });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
