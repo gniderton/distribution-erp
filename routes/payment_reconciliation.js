@@ -119,9 +119,14 @@ router.post('/payments/:id/verify', async (req, res) => {
 
 // [NEW] 3. Bulk Verify/Reject (Payments & Expenses)
 router.post('/bulk-update', async (req, res) => {
-    const { items, action, reason, user_id } = req.body;
-    // items: [{ id: 1, type: 'payment' }, { id: 5, type: 'expense' }]
-    // action: 'Verified' | 'Rejected'
+    let { items, action, reason, user_id } = req.body;
+
+    // Safety: Ensure items is an array
+    if (!items) items = [];
+    if (!Array.isArray(items)) {
+        console.error('Bulk Update Error: items is not an array', items);
+        return res.status(400).json({ error: "Invalid items format. Must be an array." });
+    }
 
     const client = await pool.connect();
     try {
