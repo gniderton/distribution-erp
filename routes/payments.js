@@ -388,4 +388,31 @@ router.patch('/:id/verify-online', async (req, res) => {
     }
 });
 
+// [NEW] OCR Cheque Extraction (Proxy/Mock for DSE App)
+router.post('/ocr-cheque', async (req, res) => {
+    try {
+        const { image_base64 } = req.body;
+
+        if (!image_base64) return res.status(400).json({ error: 'Image data required' });
+
+        // Logic: In a real implementation, you would send image_base64 to 
+        // Google Vision, AWS Textract, or OpenAI Vision here.
+
+        // MOCK RESPONSE for Retool UI Development
+        // This allows the user to build the "Match" logic immediately.
+        const mockResult = {
+            cheque_number: "223344",
+            bank_name: "IDFC First Bank",
+            amount: 1500.00,
+            confidence: 0.98
+        };
+
+        console.log('OCR Mock Triggered');
+        res.json(mockResult);
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
