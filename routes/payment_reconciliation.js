@@ -145,12 +145,92 @@ router.post('/bulk-update', async (req, res) => {
                     UPDATE customer_payments 
                     SET verification_status = $1, rejection_reason = $2, verified_by = $3, verified_at = NOW()
                     WHERE id = $4
-                    RETURNING id, amount, payment_mode, payment_number, customer_id
+                    RETURNING *
                 `, [itemAction, itemReason, user_id, item.id]);
 
-                // GL Rejection Logic
-                if (itemAction === 'Rejected' && resPay.rows.length > 0) {
-                    const pay = resPay.rows[0];
+                if (resPay.rows.length === 0) continue;
+                const pay = resPay.rows[0];
+
+                // [NEW] VERIFICATION LOGIC: Allocate and Post GL
+                if (itemAction === 'Verified') {
+                    // 1. FIFO Allocation to Invoices
+                    let remainingToAllocate = Number(pay.amount);
+                    const unpaidRes = await client.query(`
+                        SELECT id, invoice_number, grand_total, COALESCE(amount_paid, 0) as amount_paid 
+                        FROM sales_invoices 
+                        WHERE customer_id = $1 AND status != 'Paid'
+                        ORDER BY invoice_date ASC
+                    `, [pay.customer_id]);
+
+                    for (const inv of unpaidRes.rows) {
+                        if (remainingToAllocate <= 0) break;
+
+                        const balance = Number(inv.grand_total) - Number(inv.amount_paid);
+                        if (balance <= 0) continue;
+
+                        const allocate = Math.min(remainingToAllocate, balance);
+
+                        // Create allocation record
+                        await client.query(`
+                            INSERT INTO payment_allocations (payment_id, invoice_id, amount)
+                            VALUES ($1, $2, $3)
+                        `, [pay.id, inv.id, allocate]);
+
+                        // Update invoice
+                        await client.query(`
+                            UPDATE sales_invoices 
+                            SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                                status = CASE 
+                                    WHEN (grand_total - (COALESCE(amount_paid, 0) + $1)) <= 1 THEN 'Paid'
+                                    ELSE 'Partial' 
+                                END
+                            WHERE id = $2
+                        `, [allocate, inv.id]);
+
+                        remainingToAllocate -= allocate;
+                    }
+
+                    // 2. Post GL Entry
+                    const acc_ar = 1101;
+                    const acc_bank = 1002;
+                    const acc_cash = 1003;
+                    const targetAcc = (pay.payment_mode === 'Cash') ? acc_cash : acc_bank;
+
+                    const ledgerLines = [
+                        { code: targetAcc, debit: Number(pay.amount), credit: 0 },
+                        { code: acc_ar, debit: 0, credit: Number(pay.amount) }
+                    ];
+
+                    await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+                        [pay.payment_date || new Date(), `Customer Payment: ${pay.payment_number}`, 'CUST_PAY', pay.id, JSON.stringify(ledgerLines)]);
+                }
+
+                // REJECTION LOGIC: Reverse Allocations and Post GL Reversal
+                if (itemAction === 'Rejected') {
+                    // 1. Reverse allocations
+                    const allocRes = await client.query(`
+                        SELECT invoice_id, amount 
+                        FROM payment_allocations 
+                        WHERE payment_id = $1
+                    `, [pay.id]);
+
+                    for (const alloc of allocRes.rows) {
+                        await client.query(`
+                            UPDATE sales_invoices 
+                            SET amount_paid = COALESCE(amount_paid, 0) - $1,
+                                status = CASE 
+                                    WHEN (grand_total - (COALESCE(amount_paid, 0) - $1)) > 1 THEN 'Unpaid'
+                                    WHEN (grand_total - (COALESCE(amount_paid, 0) - $1)) <= 1 THEN 'Paid'
+                                    ELSE 'Partial'
+                                END
+                            WHERE id = $2
+                        `, [alloc.amount, alloc.invoice_id]);
+                    }
+
+                    // Delete allocations
+                    await client.query(`DELETE FROM payment_allocations WHERE payment_id = $1`, [pay.id]);
+
+                    // 2. Post GL Reversal
                     const acc_ar = 1101;
                     const acc_bank = 1002;
                     const acc_cash = 1003;
@@ -163,8 +243,7 @@ router.post('/bulk-update', async (req, res) => {
                     ];
 
                     await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
-                        [new Date(), `Rejection: ${pay.payment_number}`, 'PAY_REJECT', pay.id, JSON.stringify(ledgerLines)]
-                    );
+                        [new Date(), `Rejection: ${pay.payment_number}`, 'PAY_REJECT', pay.id, JSON.stringify(ledgerLines)]);
                 }
 
             } else if (item.type === 'expense') {

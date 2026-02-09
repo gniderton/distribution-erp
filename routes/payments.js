@@ -93,13 +93,13 @@ router.post('/', async (req, res) => {
             if (check.rows.length > 0) nextSeq++;
         } while (check.rows.length > 0);
 
-        // 2. Create Payment Record (Unallocated)
+        // 2. Create Payment Record (Pending Verification)
         const payRes = await client.query(`
             INSERT INTO customer_payments (
                 payment_number, customer_id, amount, payment_mode, 
-                transaction_ref, collected_by, payment_date, status,
-                location_lat, location_lng
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Verified', $8, $9)
+                transaction_ref, collected_by, payment_date, 
+                verification_status, location_lat, location_lng
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Pending', $8, $9)
             RETURNING id
         `, [
             payNumber, customer_id, totalPaid, payment_mode,
@@ -108,12 +108,18 @@ router.post('/', async (req, res) => {
         ]);
         const paymentId = payRes.rows[0].id;
 
+        /* ============================================================
+         * ALLOCATION LOGIC DISABLED - NOW HAPPENS AT VERIFICATION
+         * ============================================================
+         * This logic has been moved to payment_reconciliation.js
+         * Allocations only happen AFTER finance team verifies payment
+         * ============================================================
+         
         let remainingToAllocate = totalPaid;
         const allocations = [];
 
         // 3. PHASE 1: Selected Invoices (Priority)
         if (invoices && Array.isArray(invoices) && invoices.length > 0) {
-            // Fetch only selected invoices
             const selectedRes = await client.query(`
                 SELECT id, invoice_number, grand_total, COALESCE(amount_paid, 0) as amount_paid 
                 FROM sales_invoices 
@@ -136,7 +142,6 @@ router.post('/', async (req, res) => {
 
         // 4. PHASE 2: FIFO Overflow (Oldest Unpaid First)
         if (remainingToAllocate > 0) {
-            // Fetch ALL unpaid invoices for customer, ordered by date
             const unpaidRes = await client.query(`
                 SELECT id, invoice_number, grand_total, COALESCE(amount_paid, 0) as amount_paid 
                 FROM sales_invoices 
@@ -147,9 +152,6 @@ router.post('/', async (req, res) => {
             for (const inv of unpaidRes.rows) {
                 if (remainingToAllocate <= 0) break;
 
-                // Check if we effectively paid this in Phase 1?
-                // We allocated in JS array, DB not updated yet. 
-                // Need to account for Phase 1 allocation to avoid double counting.
                 const existingAlloc = allocations.find(a => a.invoice_id === inv.id);
                 const alreadyAllocated = existingAlloc ? existingAlloc.amount : 0;
 
@@ -189,10 +191,16 @@ router.post('/', async (req, res) => {
             `, [alloc.amount, alloc.invoice_id]);
         }
 
-        // 6. If money STILL remains (Overpayment), it sits in 'customer_payments' 
-        // linked to customer, but not allocated to any invoice.
-        // The Ledger View will show this as a Credit.
+        ============================================================ */
 
+
+        /* ============================================================
+         * GL ENTRY DISABLED - NOW HAPPENS AT VERIFICATION
+         * ============================================================
+         * GL entry is now posted in payment_reconciliation.js
+         * Only VERIFIED payments hit the general ledger
+         * ============================================================
+         
         // --- ACCOUNTING INTEGRATION ---
         const acc_ar = 1101;
         const acc_bank = 1002;
@@ -209,14 +217,17 @@ router.post('/', async (req, res) => {
         await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
             [payment_date || new Date(), `Customer Payment: ${payNumber}`, 'CUST_PAY', paymentId, JSON.stringify(ledgerLines)]);
 
+        ============================================================ */
+
+
         await client.query('COMMIT');
 
         res.status(201).json({
             success: true,
             id: paymentId,
             payment_number: payNumber,
-            allocated_count: allocations.length,
-            unallocated_balance: remainingToAllocate
+            verification_status: 'Pending',
+            message: 'Payment created. Awaiting finance verification for allocation and GL posting.'
         });
 
     } catch (err) {
