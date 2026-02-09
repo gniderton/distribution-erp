@@ -139,10 +139,11 @@ router.post('/bulk-update', async (req, res) => {
                     SET verification_status = $1, rejection_reason = $2, verified_by = $3, verified_at = NOW()
                     WHERE id = $4
                     RETURNING id, amount, payment_mode, payment_number, customer_id
-                `, [action, reason, user_id, item.id]);
+                `, [item.action || action, item.reason || reason, user_id, item.id]);
 
                 // GL Rejection Logic
-                if (action === 'Rejected' && resPay.rows.length > 0) {
+                const currentAction = item.action || action;
+                if (currentAction === 'Rejected' && resPay.rows.length > 0) {
                     const pay = resPay.rows[0];
                     const acc_ar = 1101;
                     const acc_bank = 1002;
