@@ -1383,13 +1383,19 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     throw new Error("Zero stock available for this order. No invoice generated.");
                 }
 
-                const roundedTotal = Number(invTotal.toFixed(2));
+                const roundedTotal = Math.round(invTotal); // Enforce Integer Rounding
+                const roundOff = Number((roundedTotal - invTotal).toFixed(2));
                 const roundedTax = Number(invTax.toFixed(2));
-                const taxable = Number((roundedTotal - roundedTax).toFixed(2));
+                const taxable = Number((roundedTotal - roundedTax - roundOff).toFixed(2)); // Back-calculate taxable base? No, keep original taxable.
+                // Better: Taxable = Actual Total - Tax. RoundOff is separate.
+                // Re-calculating taxable creates issues. Let's stick to: InvTotal (float) = Taxable + Tax.
+                // RoundedTotal = InvTotal + RoundOff.
+
                 const cgst = Number((roundedTax / 2).toFixed(2));
                 const sgst = Number((roundedTax - cgst).toFixed(2));
 
-                await client.query('UPDATE sales_invoices SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4 WHERE id = $5', [roundedTotal, taxable, cgst, sgst, invId]);
+                await client.query('UPDATE sales_invoices SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4, round_off = $5 WHERE id = $6',
+                    [roundedTotal, taxable, cgst, sgst, roundOff, invId]);
 
                 // --- ACCOUNTING INTEGRATION ---
                 const acc_revenue = 4001;
@@ -1398,8 +1404,9 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 const acc_gst_sgst = 2012;
                 const acc_cogs = 5001;
                 const acc_inventory = 1001;
+                const acc_round = 5003;
 
-                // 1. Invoice Entry (AR vs Sales + GST)
+                // 1. Invoice Entry (AR vs Sales + GST + Rounding)
                 let invoiceLines = [
                     { code: acc_ar, debit: roundedTotal, credit: 0 },
                     { code: acc_revenue, debit: 0, credit: taxable }
@@ -1408,6 +1415,18 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     invoiceLines.push({ code: acc_gst_cgst, debit: 0, credit: cgst });
                     invoiceLines.push({ code: acc_gst_sgst, debit: 0, credit: sgst });
                 }
+
+                // Add Rounding Line
+                if (roundOff !== 0) {
+                    if (roundOff > 0) {
+                        // Gain (Credit) e.g. 500.5 -> 501 (+0.5). AR Dr 501. Revenue Cr 500.5. Needs Cr 0.5
+                        invoiceLines.push({ code: acc_round, debit: 0, credit: Math.abs(roundOff) });
+                    } else {
+                        // Loss (Debit) e.g. 500.4 -> 500 (-0.4). AR Dr 500. Revenue Cr 500.4. Needs Dr 0.4
+                        invoiceLines.push({ code: acc_round, debit: Math.abs(roundOff), credit: 0 });
+                    }
+                }
+
                 await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
                     [new Date(), `Sales Invoice: ${invNumber}`, 'SALES_INV', invId, JSON.stringify(invoiceLines)]);
 
