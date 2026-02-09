@@ -134,16 +134,18 @@ router.post('/bulk-update', async (req, res) => {
 
         for (let item of items) {
             if (item.type === 'payment') {
+                const itemAction = item.action || item.status || action; // Fallback: item.action -> item.status -> global action
+                const itemReason = item.reason || reason;
+
                 const resPay = await client.query(`
                     UPDATE customer_payments 
                     SET verification_status = $1, rejection_reason = $2, verified_by = $3, verified_at = NOW()
                     WHERE id = $4
                     RETURNING id, amount, payment_mode, payment_number, customer_id
-                `, [item.action || action, item.reason || reason, user_id, item.id]);
+                `, [itemAction, itemReason, user_id, item.id]);
 
                 // GL Rejection Logic
-                const currentAction = item.action || action;
-                if (currentAction === 'Rejected' && resPay.rows.length > 0) {
+                if (itemAction === 'Rejected' && resPay.rows.length > 0) {
                     const pay = resPay.rows[0];
                     const acc_ar = 1101;
                     const acc_bank = 1002;
