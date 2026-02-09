@@ -129,16 +129,35 @@ router.post('/eod-sync', async (req, res) => {
                 }
             }
 
+            // Generate Payment Number (PAY-YY-SEQ)
+            const yy = new Date().getFullYear().toString().slice(-2);
+            const seqRes = await client.query(
+                "SELECT COUNT(*) FROM customer_payments WHERE payment_number LIKE $1",
+                [`PAY-${yy}-%`]
+            );
+            let nextSeq = parseInt(seqRes.rows[0].count) + 1;
+            let payNumber;
+            let check;
+            do {
+                payNumber = `PAY-${yy}-${String(nextSeq).padStart(4, '0')}`;
+                check = await client.query(
+                    "SELECT id FROM customer_payments WHERE payment_number = $1",
+                    [payNumber]
+                );
+                if (check.rows.length > 0) nextSeq++;
+            } while (check.rows.length > 0);
+
             // Insert payment with new fields
             const payRes = await client.query(`
                 INSERT INTO customer_payments (
-                    customer_id, collected_by, amount, payment_mode, payment_date, 
+                    payment_number, customer_id, collected_by, amount, payment_mode, payment_date, 
                     transaction_ref, bank_name, cheque_date, deposit_bank,
                     verification_status, offline_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Pending', $10)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Pending', $11)
                 RETURNING id
             `, [
+                payNumber,
                 pay.customer_id,
                 dse_id,
                 pay.amount,
