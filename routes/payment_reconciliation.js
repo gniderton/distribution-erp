@@ -130,6 +130,9 @@ router.post('/bulk-update', async (req, res) => {
 
     const client = await pool.connect();
     try {
+        console.log(`[Bulk Update v1.2] RAW req.body:`, JSON.stringify(req.body));
+        console.log(`[Bulk Update v1.2] items type:`, typeof items, 'isArray:', Array.isArray(items));
+        console.log(`[Bulk Update v1.2] items value:`, items);
         console.log(`[Bulk Update v1.2] Payload:`, JSON.stringify({ itemsLength: items.length, action, reason, user_id }));
         await client.query('BEGIN');
 
