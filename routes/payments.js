@@ -65,6 +65,52 @@ router.get('/invoices/:customerId', async (req, res) => {
     }
 });
 
+// GET /api/payments/dse-pending-invoices/:dseId - DSE Pending Invoices Dashboard
+router.get('/dse-pending-invoices/:dseId', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                si.id,
+                si.invoice_number,
+                si.invoice_date,
+                si.grand_total as bill_amount,
+                COALESCE(si.amount_paid, 0) as paid_amount,
+                (si.grand_total - COALESCE(si.amount_paid, 0)) as balance,
+                si.status,
+                c.customer_name,
+                c.id as customer_id,
+                
+                -- ARD (Agreed Receivable Days) - from customer master
+                COALESCE(c.payment_terms_days, 0) as ard_days,
+                
+                -- Days from billed (invoice age)
+                CURRENT_DATE - si.invoice_date::date as days_from_billed,
+                
+                -- Overdue days (negative means not due yet)
+                CURRENT_DATE - (si.invoice_date::date + COALESCE(c.payment_terms_days, 0)) as overdue_days,
+                
+                -- Due date
+                (si.invoice_date::date + COALESCE(c.payment_terms_days, 0)) as due_date
+                
+            FROM sales_invoices si
+            JOIN customers c ON si.customer_id = c.id
+            WHERE c.dse_id = $1 
+              AND si.status != 'Paid'
+              AND si.status != 'Cancelled'
+            ORDER BY 
+                CASE 
+                    WHEN CURRENT_DATE > (si.invoice_date::date + COALESCE(c.payment_terms_days, 0)) THEN 0  -- Overdue first
+                    ELSE 1
+                END,
+                si.invoice_date ASC
+        `, [req.params.dseId]);
+
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /api/payments/validate-sync - DSE Sync Validation
 router.post('/validate-sync', async (req, res) => {
     try {
