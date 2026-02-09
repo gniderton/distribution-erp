@@ -65,6 +65,200 @@ router.get('/invoices/:customerId', async (req, res) => {
     }
 });
 
+// POST /api/payments/validate-sync - DSE Sync Validation
+router.post('/validate-sync', async (req, res) => {
+    try {
+        const { customer_id, amount, allocations, offline_id } = req.body;
+
+        // Check for duplicate offline_id
+        if (offline_id) {
+            const dupCheck = await pool.query(
+                'SELECT id, payment_number FROM customer_payments WHERE offline_id = $1',
+                [offline_id]
+            );
+            if (dupCheck.rows.length > 0) {
+                return res.json({
+                    valid: false,
+                    duplicate: true,
+                    existing_payment: dupCheck.rows[0],
+                    message: `Payment already synced as ${dupCheck.rows[0].payment_number}`
+                });
+            }
+        }
+
+        const conflicts = [];
+        const totalPaid = Number(amount);
+        let totalAllocated = 0;
+
+        // Validate each allocation
+        if (allocations && allocations.length > 0) {
+            for (const alloc of allocations) {
+                totalAllocated += Number(alloc.allocated_amount);
+
+                // Get current invoice balance
+                const invRes = await pool.query(`
+                    SELECT id, invoice_number, 
+                           (grand_total - COALESCE(amount_paid, 0)) as current_balance,
+                           grand_total, amount_paid
+                    FROM sales_invoices 
+                    WHERE id = $1 AND customer_id = $2
+                `, [alloc.invoice_id, customer_id]);
+
+                if (invRes.rows.length === 0) {
+                    conflicts.push({
+                        invoice_id: alloc.invoice_id,
+                        invoice_number: alloc.invoice_number,
+                        reason: "Invoice not found or belongs to different customer",
+                        allocated_amount: alloc.allocated_amount,
+                        excess_amount: alloc.allocated_amount,
+                        severity: 'ERROR'
+                    });
+                    continue;
+                }
+
+                const inv = invRes.rows[0];
+                const currentBalance = Number(inv.current_balance);
+                const allocatedAmount = Number(alloc.allocated_amount);
+                const expectedBalance = Number(alloc.invoice_balance_at_entry || 0);
+
+                // Check if allocated amount exceeds current balance
+                if (allocatedAmount > currentBalance + 0.01) { // 1 paisa tolerance
+                    const reason = await getBalanceChangeReason(alloc.invoice_id, expectedBalance, currentBalance);
+
+                    conflicts.push({
+                        invoice_id: alloc.invoice_id,
+                        invoice_number: alloc.invoice_number,
+                        expected_balance: expectedBalance,
+                        current_balance: currentBalance,
+                        allocated_amount: allocatedAmount,
+                        excess_amount: allocatedAmount - currentBalance,
+                        reason: reason,
+                        severity: 'CONFLICT'
+                    });
+                }
+            }
+        }
+
+        // Check if total allocation matches payment amount
+        if (Math.abs(totalAllocated - totalPaid) > 0.01 && allocations && allocations.length > 0) {
+            return res.json({
+                valid: false,
+                allocation_mismatch: true,
+                total_paid: totalPaid,
+                total_allocated: totalAllocated,
+                difference: totalPaid - totalAllocated,
+                message: "Total allocation does not match payment amount"
+            });
+        }
+
+        // If conflicts found, provide suggestions
+        if (conflicts.length > 0) {
+            const suggestions = await generateSuggestions(conflicts, customer_id, totalPaid);
+
+            return res.json({
+                valid: false,
+                conflicts,
+                suggestions,
+                message: `${conflicts.length} conflict(s) detected. Please resolve before syncing.`
+            });
+        }
+
+        // All validations passed
+        res.json({
+            valid: true,
+            message: "All allocations valid. Ready to sync.",
+            total_allocated: totalAllocated,
+            advance_amount: totalPaid - totalAllocated
+        });
+
+    } catch (err) {
+        console.error("Validation Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Helper: Get reason for balance change
+async function getBalanceChangeReason(invoiceId, expectedBalance, currentBalance) {
+    const diff = expectedBalance - currentBalance;
+
+    // Check for debit notes
+    const dnRes = await pool.query(`
+        SELECT dn.debit_note_number, SUM(dnl.amount) as total_amount
+        FROM debit_notes dn
+        JOIN debit_note_lines dnl ON dn.id = dnl.debit_note_id
+        WHERE dnl.invoice_id = $1 AND dn.status != 'Cancelled'
+        GROUP BY dn.debit_note_number
+        ORDER BY dn.created_at DESC
+        LIMIT 1
+    `, [invoiceId]);
+
+    if (dnRes.rows.length > 0) {
+        const dn = dnRes.rows[0];
+        return `Debit Note ${dn.debit_note_number} applied (₹${Number(dn.total_amount).toFixed(2)})`;
+    }
+
+    // Check for other payments
+    const payRes = await pool.query(`
+        SELECT p.payment_number, pa.amount
+        FROM payment_allocations pa
+        JOIN customer_payments p ON pa.payment_id = p.id
+        WHERE pa.invoice_id = $1 AND pa.status = 'ACTIVE'
+        ORDER BY p.created_at DESC
+        LIMIT 1
+    `, [invoiceId]);
+
+    if (payRes.rows.length > 0) {
+        const pay = payRes.rows[0];
+        return `Payment ${pay.payment_number} applied (₹${Number(pay.amount).toFixed(2)})`;
+    }
+
+    return `Balance changed by ₹${Math.abs(diff).toFixed(2)}`;
+}
+
+// Helper: Generate resolution suggestions
+async function generateSuggestions(conflicts, customerId, totalPaid) {
+    const suggestions = [];
+
+    // Get other unpaid invoices
+    const unpaidRes = await pool.query(`
+        SELECT id, invoice_number, (grand_total - COALESCE(amount_paid, 0)) as balance
+        FROM sales_invoices 
+        WHERE customer_id = $1 AND status != 'Paid'
+        ORDER BY invoice_date ASC
+        LIMIT 5
+    `, [customerId]);
+
+    const totalExcess = conflicts.reduce((sum, c) => sum + (c.excess_amount || 0), 0);
+
+    // Suggestion 1: Adjust to next bills
+    if (unpaidRes.rows.length > 0) {
+        suggestions.push({
+            type: 'ADJUST_TO_NEXT',
+            message: `Allocate excess ₹${totalExcess.toFixed(2)} to other unpaid invoices`,
+            available_invoices: unpaidRes.rows.map(inv => ({
+                invoice_id: inv.id,
+                invoice_number: inv.invoice_number,
+                balance: Number(inv.balance)
+            }))
+        });
+    }
+
+    // Suggestion 2: Create advance
+    suggestions.push({
+        type: 'CREATE_ADVANCE',
+        message: `Keep ₹${totalExcess.toFixed(2)} as advance payment`,
+        advance_amount: totalExcess
+    });
+
+    // Suggestion 3: Cancel sync
+    suggestions.push({
+        type: 'CANCEL_SYNC',
+        message: "Cancel sync and review with customer"
+    });
+
+    return suggestions;
+}
+
 // POST /api/payments - Hybrid FIFO Allocation
 router.post('/', async (req, res) => {
     const client = await pool.connect();
@@ -72,7 +266,8 @@ router.post('/', async (req, res) => {
         const {
             customer_id, amount, payment_mode,
             transaction_ref, collected_by, payment_date,
-            invoices, // [NEW] Optional: Array of Invoice IDs to prioritize
+            allocations, // [NEW] DSE-specified allocations
+            offline_id, // [NEW] DSE offline tracking ID
             location_lat, location_lng
         } = req.body;
 
@@ -98,15 +293,33 @@ router.post('/', async (req, res) => {
             INSERT INTO customer_payments (
                 payment_number, customer_id, amount, payment_mode, 
                 transaction_ref, collected_by, payment_date, 
-                verification_status, location_lat, location_lng
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Pending', $8, $9)
+                verification_status, offline_id,
+                location_lat, location_lng
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Pending', $8, $9, $10)
             RETURNING id
         `, [
             payNumber, customer_id, totalPaid, payment_mode,
             transaction_ref, collected_by, payment_date || new Date(),
+            offline_id,
             location_lat, location_lng
         ]);
         const paymentId = payRes.rows[0].id;
+
+        // [NEW] Store DSE-specified allocations with PENDING status
+        if (allocations && allocations.length > 0) {
+            for (const alloc of allocations) {
+                await client.query(`
+                    INSERT INTO payment_allocations (
+                        payment_id, invoice_id, amount, status, expected_invoice_balance
+                    ) VALUES ($1, $2, $3, 'PENDING', $4)
+                `, [
+                    paymentId,
+                    alloc.invoice_id,
+                    alloc.allocated_amount,
+                    alloc.invoice_balance_at_entry
+                ]);
+            }
+        }
 
         /* ============================================================
          * ALLOCATION LOGIC DISABLED - NOW HAPPENS AT VERIFICATION
@@ -222,12 +435,20 @@ router.post('/', async (req, res) => {
 
         await client.query('COMMIT');
 
+        const totalAllocated = allocations ? allocations.reduce((sum, a) => sum + Number(a.allocated_amount), 0) : 0;
+        const advanceAmount = totalPaid - totalAllocated;
+
         res.status(201).json({
             success: true,
             id: paymentId,
             payment_number: payNumber,
             verification_status: 'Pending',
-            message: 'Payment created. Awaiting finance verification for allocation and GL posting.'
+            allocations_count: allocations?.length || 0,
+            total_allocated: totalAllocated,
+            advance_amount: advanceAmount,
+            message: allocations && allocations.length > 0
+                ? `Payment created with ${allocations.length} allocation(s). Awaiting finance verification.`
+                : 'Payment created as advance. Awaiting finance verification.'
         });
 
     } catch (err) {
