@@ -115,16 +115,30 @@ router.post('/eod-sync', async (req, res) => {
             }
         }
 
-        // --- 1B. Process Payments (UPDATED) ---
+        // --- 1B. Process Payments (UPDATED for Allocation System) ---
         for (const pay of payments) {
+            // Check for duplicate using offline_id
+            if (pay.offline_id) {
+                const dupCheck = await client.query(
+                    'SELECT id FROM customer_payments WHERE offline_id = $1',
+                    [pay.offline_id]
+                );
+                if (dupCheck.rows.length > 0) {
+                    console.log(`Payment ${pay.offline_id} already synced. Skipping.`);
+                    continue;
+                }
+            }
+
+            // Insert payment with new fields
             const payRes = await client.query(`
+                INSERT INTO customer_payments (
                     customer_id, collected_by, amount, payment_mode, payment_date, 
                     transaction_ref, bank_name, cheque_date, deposit_bank,
-                    verification_status
+                    verification_status, offline_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Pending')
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Pending', $10)
                 RETURNING id
-             `, [
+            `, [
                 pay.customer_id,
                 dse_id,
                 pay.amount,
@@ -133,17 +147,26 @@ router.post('/eod-sync', async (req, res) => {
                 pay.transaction_ref || null,
                 pay.bank_name || null,
                 pay.cheque_date || null,
-                pay.deposit_bank || null
+                pay.deposit_bank || null,
+                pay.offline_id || null
             ]);
 
             const paymentId = payRes.rows[0].id;
 
-            // Optional: Allocation to an invoice if invoice_id provided
-            if (pay.invoice_id) {
-                await client.query(`
-                    INSERT INTO customer_payment_allocations (payment_id, invoice_id, amount)
-                    VALUES ($1, $2, $3)
-                `, [paymentId, pay.invoice_id, pay.amount]);
+            // Store DSE-specified allocations with PENDING status
+            if (pay.allocations && pay.allocations.length > 0) {
+                for (const alloc of pay.allocations) {
+                    await client.query(`
+                        INSERT INTO payment_allocations (
+                            payment_id, invoice_id, amount, status, expected_invoice_balance
+                        ) VALUES ($1, $2, $3, 'PENDING', $4)
+                    `, [
+                        paymentId,
+                        alloc.invoice_id,
+                        alloc.allocated_amount,
+                        alloc.invoice_balance_at_entry
+                    ]);
+                }
             }
         }
 
