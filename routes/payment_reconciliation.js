@@ -151,46 +151,113 @@ router.post('/bulk-update', async (req, res) => {
                 if (resPay.rows.length === 0) continue;
                 const pay = resPay.rows[0];
 
-                // [NEW] VERIFICATION LOGIC: Allocate and Post GL
+                // [NEW] VERIFICATION LOGIC: Use DSE Allocations with Auto-Resolution
                 if (itemAction === 'Verified') {
-                    // 1. FIFO Allocation to Invoices
+                    // 1. Check for DSE-specified allocations (PENDING status)
+                    const pendingAllocRes = await client.query(`
+                        SELECT pa.*, si.grand_total, COALESCE(si.amount_paid, 0) as current_paid
+                        FROM payment_allocations pa
+                        JOIN sales_invoices si ON pa.invoice_id = si.id
+                        WHERE pa.payment_id = $1 AND pa.status = 'PENDING'
+                        ORDER BY si.invoice_date ASC
+                    `, [pay.id]);
+
                     let remainingToAllocate = Number(pay.amount);
-                    const unpaidRes = await client.query(`
-                        SELECT id, invoice_number, grand_total, COALESCE(amount_paid, 0) as amount_paid 
-                        FROM sales_invoices 
-                        WHERE customer_id = $1 AND status != 'Paid'
-                        ORDER BY invoice_date ASC
-                    `, [pay.customer_id]);
+                    const processedInvoices = new Set();
 
-                    for (const inv of unpaidRes.rows) {
-                        if (remainingToAllocate <= 0) break;
+                    // 2. Process DSE allocations with auto-resolution
+                    if (pendingAllocRes.rows.length > 0) {
+                        for (const pendingAlloc of pendingAllocRes.rows) {
+                            if (remainingToAllocate <= 0) break;
 
-                        const balance = Number(inv.grand_total) - Number(inv.amount_paid);
-                        if (balance <= 0) continue;
+                            const currentBalance = Number(pendingAlloc.grand_total) - Number(pendingAlloc.current_paid);
+                            const requestedAmount = Number(pendingAlloc.amount);
 
-                        const allocate = Math.min(remainingToAllocate, balance);
+                            if (currentBalance <= 0) {
+                                // Invoice fully paid - skip and mark as REVERSED
+                                await client.query(`
+                                    UPDATE payment_allocations 
+                                    SET status = 'REVERSED' 
+                                    WHERE id = $1
+                                `, [pendingAlloc.id]);
+                                continue;
+                            }
 
-                        // Create allocation record
-                        await client.query(`
-                            INSERT INTO payment_allocations (payment_id, invoice_id, amount)
-                            VALUES ($1, $2, $3)
-                        `, [pay.id, inv.id, allocate]);
+                            // Auto-adjust to current balance if needed
+                            const allocateAmount = Math.min(requestedAmount, currentBalance, remainingToAllocate);
 
-                        // Update invoice
-                        await client.query(`
-                            UPDATE sales_invoices 
-                            SET amount_paid = COALESCE(amount_paid, 0) + $1,
-                                status = CASE 
-                                    WHEN (grand_total - (COALESCE(amount_paid, 0) + $1)) <= 1 THEN 'Paid'
-                                    ELSE 'Partial' 
-                                END
-                            WHERE id = $2
-                        `, [allocate, inv.id]);
+                            // Update allocation to ACTIVE status with adjusted amount
+                            await client.query(`
+                                UPDATE payment_allocations 
+                                SET status = 'ACTIVE', amount = $1
+                                WHERE id = $2
+                            `, [allocateAmount, pendingAlloc.id]);
 
-                        remainingToAllocate -= allocate;
+                            // Update invoice
+                            await client.query(`
+                                UPDATE sales_invoices 
+                                SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                                    status = CASE 
+                                        WHEN (grand_total - (COALESCE(amount_paid, 0) + $1)) <= 1 THEN 'Paid'
+                                        ELSE 'Partial' 
+                                    END
+                                WHERE id = $2
+                            `, [allocateAmount, pendingAlloc.invoice_id]);
+
+                            remainingToAllocate -= allocateAmount;
+                            processedInvoices.add(pendingAlloc.invoice_id);
+                        }
                     }
 
-                    // 2. Post GL Entry
+                    // 3. FIFO allocation for remaining amount (auto-resolution)
+                    if (remainingToAllocate > 0.01) {
+                        const unpaidRes = await client.query(`
+                            SELECT id, invoice_number, grand_total, COALESCE(amount_paid, 0) as amount_paid 
+                            FROM sales_invoices 
+                            WHERE customer_id = $1 AND status != 'Paid'
+                            ORDER BY invoice_date ASC
+                        `, [pay.customer_id]);
+
+                        for (const inv of unpaidRes.rows) {
+                            if (remainingToAllocate <= 0.01) break;
+                            if (processedInvoices.has(inv.id)) continue; // Skip already processed
+
+                            const balance = Number(inv.grand_total) - Number(inv.amount_paid);
+                            if (balance <= 0) continue;
+
+                            const allocate = Math.min(remainingToAllocate, balance);
+
+                            // Create new allocation (FIFO auto-resolution)
+                            await client.query(`
+                                INSERT INTO payment_allocations (payment_id, invoice_id, amount, status)
+                                VALUES ($1, $2, $3, 'ACTIVE')
+                            `, [pay.id, inv.id, allocate]);
+
+                            // Update invoice
+                            await client.query(`
+                                UPDATE sales_invoices 
+                                SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                                    status = CASE 
+                                        WHEN (grand_total - (COALESCE(amount_paid, 0) + $1)) <= 1 THEN 'Paid'
+                                        ELSE 'Partial' 
+                                    END
+                                WHERE id = $2
+                            `, [allocate, inv.id]);
+
+                            remainingToAllocate -= allocate;
+                        }
+                    }
+
+                    // 4. Create advance if still remaining (auto-resolution)
+                    if (remainingToAllocate > 0.01) {
+                        await client.query(`
+                            INSERT INTO customer_advances (
+                                customer_id, payment_id, amount, balance
+                            ) VALUES ($1, $2, $3, $3)
+                        `, [pay.customer_id, pay.id, remainingToAllocate]);
+                    }
+
+                    // 5. Post GL Entry
                     const acc_ar = 1101;
                     const acc_bank = 1002;
                     const acc_cash = 1003;
