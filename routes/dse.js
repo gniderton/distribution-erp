@@ -148,64 +148,73 @@ router.post('/eod-sync', async (req, res) => {
             } while (check.rows.length > 0);
 
             // Insert payment with new fields
-            const payRes = await client.query(`
-                INSERT INTO customer_payments (
-                    payment_number, customer_id, collected_by, amount, payment_mode, payment_date, 
-                    transaction_ref, bank_name, cheque_date, deposit_bank,
-                    verification_status, offline_id
-                )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Pending', $11)
-                RETURNING id
-            `, [
-                payNumber,
-                pay.customer_id,
-                dse_id,
-                pay.amount,
-                pay.mode,
-                date,
-                pay.transaction_ref || null,
-                pay.bank_name || null,
-                pay.cheque_date || null,
-                pay.deposit_bank || null,
-                pay.offline_id || null
-            ]);
+            try {
+                const payRes = await client.query(`
+                    INSERT INTO customer_payments (
+                        payment_number, customer_id, collected_by, amount, payment_mode, payment_date, 
+                        transaction_ref, bank_name, cheque_date, deposit_bank,
+                        verification_status, offline_id
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Pending', $11)
+                    RETURNING id
+                `, [
+                    payNumber,
+                    pay.customer_id,
+                    dse_id,
+                    pay.amount,
+                    pay.mode,
+                    date,
+                    pay.transaction_ref || null,
+                    pay.bank_name || null,
+                    pay.cheque_date || null,
+                    pay.deposit_bank || null,
+                    pay.offline_id || null
+                ]);
 
-            const paymentId = payRes.rows[0].id;
+                if (!payRes.rows || payRes.rows.length === 0) {
+                    throw new Error('Payment insertion returned no rows');
+                }
 
-            // Handle both old and new allocation formats
-            // OLD FORMAT: { invoice_id: 102, amount: 1248 }
-            // NEW FORMAT: { allocations: [{ invoice_id: 102, allocated_amount: 1248, invoice_balance_at_entry: 1248 }] }
+                const paymentId = payRes.rows[0].id;
+                console.log(`Payment created: ${payNumber} (ID: ${paymentId})`);
 
-            if (pay.allocations && pay.allocations.length > 0) {
-                // NEW FORMAT: Store DSE-specified allocations with PENDING status
-                for (const alloc of pay.allocations) {
-                    await client.query(`
+                // Handle both old and new allocation formats
+                // OLD FORMAT: { invoice_id: 102, amount: 1248 }
+                // NEW FORMAT: { allocations: [{ invoice_id: 102, allocated_amount: 1248, invoice_balance_at_entry: 1248 }] }
+
+                if (pay.allocations && pay.allocations.length > 0) {
+                    // NEW FORMAT: Store DSE-specified allocations with PENDING status
+                    for (const alloc of pay.allocations) {
+                        await client.query(`
                         INSERT INTO payment_allocations (
                             payment_id, invoice_id, amount, status, expected_invoice_balance
                         ) VALUES ($1, $2, $3, 'PENDING', $4)
                     `, [
-                        paymentId,
-                        alloc.invoice_id,
-                        alloc.allocated_amount,
-                        alloc.invoice_balance_at_entry || null
-                    ]);
-                }
-            } else if (pay.invoice_id) {
-                // OLD FORMAT: Convert to new format for backward compatibility
-                await client.query(`
+                            paymentId,
+                            alloc.invoice_id,
+                            alloc.allocated_amount,
+                            alloc.invoice_balance_at_entry || null
+                        ]);
+                    }
+                } else if (pay.invoice_id) {
+                    // OLD FORMAT: Convert to new format for backward compatibility
+                    await client.query(`
                     INSERT INTO payment_allocations (
                         payment_id, invoice_id, amount, status, expected_invoice_balance
                     ) VALUES ($1, $2, $3, 'PENDING', NULL)
                 `, [
-                    paymentId,
-                    pay.invoice_id,
-                    pay.amount
-                ]);
+                        paymentId,
+                        pay.invoice_id,
+                        pay.amount
+                    ]);
+                }
+                // If neither, it's an advance payment (no allocations)
+            } catch (paymentError) {
+                console.error('Payment insertion error:', paymentError);
+                console.error('Payment data:', JSON.stringify(pay, null, 2));
+                throw new Error(`Failed to insert payment: ${paymentError.message}`);
             }
-            // If neither, it's an advance payment (no allocations)
         }
-
-        // --- 2. Insert Expenses ---
         let totalExpense = 0;
         for (const exp of expenses) {
             await client.query(`
