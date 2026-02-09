@@ -56,7 +56,6 @@ router.get('/:id/details', async (req, res) => {
                 cp.id, cp.customer_id, c.customer_name,
                 cp.payment_date, cp.amount, cp.payment_mode,
                 cp.transaction_ref as cheque_number, cp.cheque_date, cp.bank_name,
-                cp.verification_data,
                 cp.transaction_ref as transaction_reference,
                 cp.verification_status, cp.rejection_reason,
                 bse.status as bank_match_status,
