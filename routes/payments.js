@@ -68,7 +68,9 @@ router.get('/invoices/:customerId', async (req, res) => {
 // GET /api/payments/dse-pending-invoices/:dseId - DSE Pending Invoices Dashboard
 router.get('/dse-pending-invoices/:dseId', async (req, res) => {
     try {
-        const result = await pool.query(`
+        const { day } = req.query; // Optional filter: e.g., 'Monday'
+
+        let query = `
             SELECT 
                 si.id,
                 si.invoice_number,
@@ -79,6 +81,7 @@ router.get('/dse-pending-invoices/:dseId', async (req, res) => {
                 si.status,
                 c.customer_name,
                 c.id as customer_id,
+                r.route_name,
                 
                 -- ARD (Agreed Receivable Days) - from customer master
                 COALESCE(c.credit_days, 0) as ard_days,
@@ -94,16 +97,30 @@ router.get('/dse-pending-invoices/:dseId', async (req, res) => {
                 
             FROM sales_invoices si
             JOIN customers c ON si.customer_id = c.id
+            LEFT JOIN routes r ON c.route_id = r.id
             WHERE c.dse_id = $1 
               AND si.status != 'Paid'
               AND si.status != 'Cancelled'
+        `;
+
+        const params = [req.params.dseId];
+
+        // Add Day Filter if provided
+        if (day) {
+            query += ` AND r.route_name ILIKE $2`;
+            params.push(`%${day}%`);
+        }
+
+        query += `
             ORDER BY 
                 CASE 
                     WHEN CURRENT_DATE > (si.invoice_date::date + COALESCE(c.credit_days, 0)) THEN 0  -- Overdue first
                     ELSE 1
                 END,
                 si.invoice_date ASC
-        `, [req.params.dseId]);
+        `;
+
+        const result = await pool.query(query, params);
 
         res.json(result.rows);
     } catch (err) {
