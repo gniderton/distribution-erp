@@ -81,16 +81,16 @@ router.get('/dse-pending-invoices/:dseId', async (req, res) => {
                 c.id as customer_id,
                 
                 -- ARD (Agreed Receivable Days) - from customer master
-                COALESCE(c.payment_terms_days, 0) as ard_days,
+                COALESCE(c.credit_days, 0) as ard_days,
                 
                 -- Days from billed (invoice age)
                 CURRENT_DATE - si.invoice_date::date as days_from_billed,
                 
                 -- Overdue days (negative means not due yet)
-                CURRENT_DATE - (si.invoice_date::date + COALESCE(c.payment_terms_days, 0)) as overdue_days,
+                CURRENT_DATE - (si.invoice_date::date + COALESCE(c.credit_days, 0)) as overdue_days,
                 
                 -- Due date
-                (si.invoice_date::date + COALESCE(c.payment_terms_days, 0)) as due_date
+                (si.invoice_date::date + COALESCE(c.credit_days, 0)) as due_date
                 
             FROM sales_invoices si
             JOIN customers c ON si.customer_id = c.id
@@ -99,7 +99,7 @@ router.get('/dse-pending-invoices/:dseId', async (req, res) => {
               AND si.status != 'Cancelled'
             ORDER BY 
                 CASE 
-                    WHEN CURRENT_DATE > (si.invoice_date::date + COALESCE(c.payment_terms_days, 0)) THEN 0  -- Overdue first
+                    WHEN CURRENT_DATE > (si.invoice_date::date + COALESCE(c.credit_days, 0)) THEN 0  -- Overdue first
                     ELSE 1
                 END,
                 si.invoice_date ASC
