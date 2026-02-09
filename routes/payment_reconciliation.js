@@ -130,6 +130,7 @@ router.post('/bulk-update', async (req, res) => {
 
     const client = await pool.connect();
     try {
+        console.log(`[Bulk Update v1.2] Payload:`, JSON.stringify({ itemsLength: items.length, action, reason, user_id }));
         await client.query('BEGIN');
 
         for (let item of items) {
@@ -176,7 +177,7 @@ router.post('/bulk-update', async (req, res) => {
         }
 
         await client.query('COMMIT');
-        res.json({ success: true, count: items.length });
+        res.json({ success: true, count: items.length, version: "1.2", items_received: items.length, updated_records: items.map(i => i.id) });
     } catch (err) {
         await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
