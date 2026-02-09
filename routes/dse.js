@@ -153,8 +153,12 @@ router.post('/eod-sync', async (req, res) => {
 
             const paymentId = payRes.rows[0].id;
 
-            // Store DSE-specified allocations with PENDING status
+            // Handle both old and new allocation formats
+            // OLD FORMAT: { invoice_id: 102, amount: 1248 }
+            // NEW FORMAT: { allocations: [{ invoice_id: 102, allocated_amount: 1248, invoice_balance_at_entry: 1248 }] }
+
             if (pay.allocations && pay.allocations.length > 0) {
+                // NEW FORMAT: Store DSE-specified allocations with PENDING status
                 for (const alloc of pay.allocations) {
                     await client.query(`
                         INSERT INTO payment_allocations (
@@ -164,10 +168,22 @@ router.post('/eod-sync', async (req, res) => {
                         paymentId,
                         alloc.invoice_id,
                         alloc.allocated_amount,
-                        alloc.invoice_balance_at_entry
+                        alloc.invoice_balance_at_entry || null
                     ]);
                 }
+            } else if (pay.invoice_id) {
+                // OLD FORMAT: Convert to new format for backward compatibility
+                await client.query(`
+                    INSERT INTO payment_allocations (
+                        payment_id, invoice_id, amount, status, expected_invoice_balance
+                    ) VALUES ($1, $2, $3, 'PENDING', NULL)
+                `, [
+                    paymentId,
+                    pay.invoice_id,
+                    pay.amount
+                ]);
             }
+            // If neither, it's an advance payment (no allocations)
         }
 
         // --- 2. Insert Expenses ---
