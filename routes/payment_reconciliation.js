@@ -239,7 +239,7 @@ router.post('/bulk-update', async (req, res) => {
                                 SET amount_paid = COALESCE(amount_paid, 0) + $1,
                                     status = CASE 
                                         WHEN (grand_total - (COALESCE(amount_paid, 0) + $1)) <= 1 THEN 'Paid'
-                                        ELSE 'Partial' 
+                                        ELSE 'Partially Paid' 
                                     END
                                 WHERE id = $2
                             `, [allocate, inv.id]);
