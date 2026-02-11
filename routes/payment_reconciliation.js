@@ -446,4 +446,146 @@ router.post('/:id/finalize', async (req, res) => {
     }
 });
 
+// [NEW] 6. Strict Payment Verification Endpoints
+
+// A. Verify Cash (Denomination Audit)
+router.patch('/:id/verify-cash', async (req, res) => {
+    const { id } = req.params;
+    const { denominations, user_id } = req.body;
+    // denominations: { note_500: 10, note_200: 5, ... }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Get Payment Info
+        const payRes = await client.query('SELECT amount, payment_mode FROM customer_payments WHERE id = $1', [id]);
+        if (payRes.rows.length === 0) throw new Error('Payment not found');
+
+        const payment = payRes.rows[0];
+        if (payment.payment_mode !== 'Cash') throw new Error('Not a Cash payment');
+
+        // 2. Calculate Total from Denominations
+        const calcTotal =
+            (Number(denominations.note_500 || 0) * 500) +
+            (Number(denominations.note_200 || 0) * 200) +
+            (Number(denominations.note_100 || 0) * 100) +
+            (Number(denominations.note_50 || 0) * 50) +
+            (Number(denominations.note_20 || 0) * 20) +
+            (Number(denominations.note_10 || 0) * 10) +
+            (Number(denominations.coins || 0));
+
+        // 3. Validate Match
+        if (Math.abs(calcTotal - Number(payment.amount)) > 1) { // Allow slight rounding diff if any
+            throw new Error(`Denomination total (${calcTotal}) does not match payment amount (${payment.amount})`);
+        }
+
+        // 4. Update Status & Store Denominations
+        await client.query(`
+            UPDATE customer_payments 
+            SET verification_status = 'Verified', 
+                verification_data = $1::jsonb,
+                verified_by = $2, 
+                verified_at = NOW()
+            WHERE id = $3
+        `, [JSON.stringify(denominations), user_id, id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Cash Verified Successfully' });
+
+    } catch (e) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: e.message });
+    } finally {
+        client.release();
+    }
+});
+
+// B. Verify Cheque (Capture Details)
+router.patch('/:id/verify-cheque', async (req, res) => {
+    const { id } = req.params;
+    const { cheque_number, cheque_date, bank_name, user_id, verification_notes } = req.body;
+
+    try {
+        await pool.query(`
+            UPDATE customer_payments 
+            SET verification_status = 'Verified',
+                transaction_ref = $1, -- Update/Confirm Cheque No
+                cheque_date = $2,
+                bank_name = $3,
+                verification_data = $4::jsonb,
+                verified_by = $5,
+                verified_at = NOW()
+            WHERE id = $6 AND payment_mode = 'Cheque'
+        `, [
+            cheque_number,
+            cheque_date,
+            bank_name,
+            JSON.stringify({ notes: verification_notes }),
+            user_id,
+            id
+        ]);
+
+        res.json({ success: true, message: 'Cheque Verified' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// C. Verify Online (Bank Link)
+router.patch('/:id/verify-online', async (req, res) => {
+    const { id } = req.params;
+    const { bank_stmt_id, user_id } = req.body;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Get Payment
+        const payRes = await client.query('SELECT amount FROM customer_payments WHERE id = $1', [id]);
+        if (payRes.rows.length === 0) throw new Error('Payment not found');
+        const payAmount = Number(payRes.rows[0].amount);
+
+        // 2. Get Bank Entry
+        const bankRes = await client.query('SELECT amount, consumed_amount FROM bank_statement_entries WHERE id = $1', [bank_stmt_id]);
+        if (bankRes.rows.length === 0) throw new Error('Bank entry not found');
+        const bankEntry = bankRes.rows[0];
+
+        // 3. Check Capacity
+        const available = Number(bankEntry.amount) - Number(bankEntry.consumed_amount);
+        if (payAmount > (available + 1)) { // +1 for floating point safety
+            throw new Error(`Bank entry has insufficient balance. Available: ${available}, Required: ${payAmount}`);
+        }
+
+        // 4. Update Bank Entry
+        const newConsumed = Number(bankEntry.consumed_amount) + payAmount;
+        const newStatus = (newConsumed >= Number(bankEntry.amount) - 1) ? 'Exhausted' : 'Partially Consumed';
+
+        await client.query(`
+            UPDATE bank_statement_entries 
+            SET consumed_amount = $1, status = $2 
+            WHERE id = $3
+        `, [newConsumed, newStatus, bank_stmt_id]);
+
+        // 5. Update Payment
+        await client.query(`
+            UPDATE customer_payments 
+            SET verification_status = 'Verified', 
+                bank_statement_entry_id = $1,
+                verified_by = $2, 
+                verified_at = NOW()
+            WHERE id = $3
+        `, [bank_stmt_id, user_id, id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+
+    } catch (e) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: e.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
