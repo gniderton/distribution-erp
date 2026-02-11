@@ -710,4 +710,51 @@ router.post('/ocr-cheque', async (req, res) => {
     }
 });
 
+// GET /api/payments/:id - Get Single Payment Details
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // 1. Get Payment Header
+        const paymentRes = await pool.query(`
+            SELECT 
+                cp.*,
+                c.customer_name,
+                c.customer_code,
+                r.route_name
+            FROM customer_payments cp
+            JOIN customers c ON cp.customer_id = c.id
+            LEFT JOIN routes r ON c.route_id = r.id
+            WHERE cp.id = $1
+        `, [id]);
+
+        if (paymentRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Payment not found' });
+        }
+
+        const payment = paymentRes.rows[0];
+
+        // 2. Get Allocations (Invoices paid)
+        const allocRes = await pool.query(`
+            SELECT 
+                pa.id,
+                pa.amount,
+                pa.status,
+                si.invoice_number,
+                si.invoice_date,
+                si.grand_total as invoice_amount
+            FROM payment_allocations pa
+            JOIN sales_invoices si ON pa.invoice_id = si.id
+            WHERE pa.payment_id = $1
+            ORDER BY si.invoice_date ASC
+        `, [id]);
+
+        payment.allocations = allocRes.rows;
+
+        res.json(payment);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
