@@ -17,8 +17,7 @@ router.get('/invoices-pool', async (req, res) => {
                 dse.name as dse_name -- Crucial for sorting
             FROM sales_invoices si
             JOIN customers c ON si.customer_id = c.id
-            LEFT JOIN route_days rd ON c.id = rd.customer_id
-            LEFT JOIN routes rt ON rd.route_id = rt.id
+            LEFT JOIN routes rt ON c.route_id = rt.id
             LEFT JOIN sales_orders so ON si.sales_order_id = so.id
             LEFT JOIN employees dse ON so.dse_id = dse.id
             WHERE si.delivery_status IN ('Pending', 'Partial') -- Not Delivered yet
