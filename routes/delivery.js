@@ -12,16 +12,16 @@ router.get('/invoices-pool', async (req, res) => {
             SELECT 
                 si.id, si.invoice_number, si.invoice_date, si.grand_total,
                 si.delivery_status,
-                c.name as customer_name, c.latitude, c.longitude, c.route_sequence,
-                rt.name as route_name,
-                dse.name as dse_name -- Crucial for sorting
+                c.customer_name, c.latitude, c.longitude, c.route_sequence,
+                rt.route_name,
+                dse.full_name as dse_name -- Crucial for sorting
             FROM sales_invoices si
             JOIN customers c ON si.customer_id = c.id
             LEFT JOIN routes rt ON c.route_id = rt.id
             LEFT JOIN sales_orders so ON si.sales_order_id = so.id
             LEFT JOIN employees dse ON so.dse_id = dse.id
             WHERE si.delivery_status IN ('Pending', 'Partial') -- Not Delivered yet
-            ORDER BY rt.name, dse.name, c.route_sequence
+            ORDER BY rt.route_name, dse.full_name, c.route_sequence
         `);
         res.json(result.rows);
     } catch (err) {
@@ -33,7 +33,7 @@ router.get('/invoices-pool', async (req, res) => {
 router.get('/teams', async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT dt.id, dt.name, e.name as driver_name, v.vehicle_number 
+            SELECT dt.id, dt.name, e.full_name as driver_name, v.vehicle_number 
             FROM delivery_teams dt
             LEFT JOIN employees e ON dt.driver_id = e.id
             LEFT JOIN vehicles v ON dt.vehicle_id = v.id
@@ -94,14 +94,14 @@ router.get('/trips', async (req, res) => {
         const result = await pool.query(`
             SELECT 
                 dt.id, dt.trip_number, dt.status, dt.created_at,
-                t.name as team_name, e.name as driver_name, dt.vehicle_number,
+                t.name as team_name, e.full_name as driver_name, dt.vehicle_number,
                 COUNT(ti.id) as invoice_count
             FROM delivery_trips dt
             LEFT JOIN delivery_teams t ON dt.team_id = t.id
             LEFT JOIN employees e ON dt.driver_id = e.id
             LEFT JOIN trip_invoices ti ON dt.id = ti.trip_id
             WHERE dt.status = ANY($1)
-            GROUP BY dt.id, dt.trip_number, dt.status, dt.created_at, t.name, e.name, dt.vehicle_number
+            GROUP BY dt.id, dt.trip_number, dt.status, dt.created_at, t.name, e.full_name, dt.vehicle_number
             ORDER BY dt.created_at DESC
         `, [statusFilter]);
         res.json(result.rows);
@@ -147,7 +147,10 @@ router.get('/trips/:id/manifest', async (req, res) => {
             SELECT 
                 ti.id as trip_invoice_id,
                 si.id as invoice_id, si.invoice_number, si.grand_total, si.balance_amount,
-                c.name as customer_name, c.address, c.latitude, c.longitude, c.phone,
+                c.customer_name, 
+                -- Customer Addresses Join for Address Line 1
+                (SELECT address_line1 FROM customer_addresses WHERE customer_id = c.id LIMIT 1) as address,
+                c.latitude, c.longitude, c.customer_phone as phone,
                 ti.delivery_status
             FROM trip_invoices ti
             JOIN sales_invoices si ON ti.invoice_id = si.id
