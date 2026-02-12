@@ -53,6 +53,17 @@ router.post('/trips', async (req, res) => {
     try {
         await client.query('BEGIN');
 
+        // Validate Invoice IDs Existence
+        const invCheck = await client.query(`
+            SELECT id FROM sales_invoices WHERE id = ANY($1)
+        `, [invoice_ids]);
+
+        if (invCheck.rows.length !== invoice_ids.length) {
+            const foundIds = invCheck.rows.map(r => r.id);
+            const missingIds = invoice_ids.filter(id => !foundIds.includes(String(id)) && !foundIds.includes(Number(id)));
+            throw new Error(`Invalid Invoice IDs: ${missingIds.join(', ')}. They do not exist in sales_invoices.`);
+        }
+
         // Create Trip
         const tripRes = await client.query(`
             INSERT INTO delivery_trips (trip_number, team_id, driver_id, vehicle_number, created_by, status)
