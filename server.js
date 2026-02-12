@@ -3,16 +3,26 @@ const dns = require('dns');
 // CRITICAL FIX: Monkey-patch dns.lookup to force IPv4 globally.
 // This is required because Render's Node 20+ environment forces IPv6
 // which fails to route to Supabase (ENETUNREACH).
+// CRITICAL FIX: Monkey-patch dns.lookup to force IPv4 globally.
+// This is required because Render's Node 20+ environment defaults to IPv6,
+// but the Supabase IPv4 Pooler (aws-0-ap-southeast-2.pooler.supabase.com)
+// usually requires explicit IPv4 resolution in this specific environment.
 const originalLookup = dns.lookup;
 dns.lookup = (hostname, options, callback) => {
+    // If options is a callback, shift arguments
     if (typeof options === 'function') {
         callback = options;
-        options = { family: 4 }; // Force IPv4
+        options = {};
     } else if (!options) {
-        options = { family: 4 }; // Force IPv4
-    } else {
-        options = { ...options, family: 4 }; // Force IPv4
+        options = {};
     }
+
+    // Force IPv4 for Supabase Pooler domains to prevent ETIMEOUT/ENETUNREACH
+    // caused by Render trying to reach IPv6 addresses that don't accept the connection.
+    if (hostname && (hostname.includes('supabase.com') || hostname.includes('pooler'))) {
+        options = { ...options, family: 4, hints: dns.ADDRCONFIG | dns.V4MAPPED };
+    }
+
     return originalLookup(hostname, options, callback);
 };
 
@@ -58,6 +68,7 @@ app.use('/api/payments', require('./routes/payments'));
 app.use('/api/delivery', require('./routes/delivery'));
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/dse', require('./routes/dse')); // [NEW] DSE Ops (EOD, etc)
+// app.use('/api/delivery', require('./routes/delivery')); // [NEW] Supply Chain / Delivery - REMOVED DUPLICATE
 app.use('/api/sales-orders', require('./routes/sales_orders')); // [NEW] Sales Admin
 app.use('/api/schemes', require('./routes/schemes')); // [NEW] Scheme Engine
 app.use('/api/channels', require('./routes/channels')); // [NEW] Channel Maaping

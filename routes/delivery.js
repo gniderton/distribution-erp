@@ -2,65 +2,82 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 
-// --- VEHICLE MASTER ---
+// --- A. Dispatcher Operations ---
 
-router.get('/vehicles', async (req, res) => {
+// 1. Get Pool of Pending Invoices (Modified to include DSE)
+// Query: "All Invoiced bills, not delivered"
+router.get('/invoices-pool', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM vehicles WHERE is_active = true ORDER BY vehicle_number');
+        const result = await pool.query(`
+            SELECT 
+                si.id, si.invoice_number, si.invoice_date, si.grand_total,
+                si.delivery_status,
+                c.name as customer_name, c.latitude, c.longitude, c.route_sequence,
+                rt.name as route_name,
+                dse.name as dse_name -- Crucial for sorting
+            FROM sales_invoices si
+            JOIN customers c ON si.customer_id = c.id
+            LEFT JOIN route_days rd ON c.id = rd.customer_id
+            LEFT JOIN routes rt ON rd.route_id = rt.id
+            LEFT JOIN sales_orders so ON si.sales_order_id = so.id
+            LEFT JOIN employees dse ON so.dse_id = dse.id
+            WHERE si.delivery_status IN ('Pending', 'Partial') -- Not Delivered yet
+            ORDER BY rt.name, dse.name, c.route_sequence
+        `);
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-router.post('/vehicles', async (req, res) => {
+// 2. Get Delivery Teams
+router.get('/teams', async (req, res) => {
     try {
-        const { vehicle_number, vehicle_type } = req.body;
-        const result = await pool.query(
-            'INSERT INTO vehicles (vehicle_number, vehicle_type) VALUES ($1, $2) RETURNING *',
-            [vehicle_number, vehicle_type]
-        );
-        res.status(201).json(result.rows[0]);
+        const result = await pool.query(`
+            SELECT dt.id, dt.name, e.name as driver_name, v.vehicle_number 
+            FROM delivery_teams dt
+            LEFT JOIN employees e ON dt.driver_id = e.id
+            LEFT JOIN vehicles v ON dt.vehicle_id = v.id
+            WHERE dt.is_active = true
+        `);
+        res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// --- TRIP MANAGEMENT ---
-
-// POST /api/delivery/trips - Create Trip & Assign Invoices
+// 3. Create Trip & Assign Invoices (Updated for Teams)
 router.post('/trips', async (req, res) => {
+    const { team_id, driver_id, vehicle_number, invoice_ids, created_by } = req.body;
+
     const client = await pool.connect();
     try {
-        const { vehicle_id, driver_id, helper_id, trip_date, invoice_ids } = req.body;
-        if (!invoice_ids || !Array.isArray(invoice_ids)) return res.status(400).json({ error: 'No invoices selected' });
-
         await client.query('BEGIN');
 
-        // 1. Generate Trip Number (TRP-YY-SEQ)
-        const yy = new Date().getFullYear().toString().slice(-2);
-        const seqRes = await client.query("SELECT COUNT(*) FROM delivery_trips WHERE trip_number LIKE $1", [`TRP-${yy}-%`]);
-        const nextSeq = parseInt(seqRes.rows[0].count) + 1;
-        const tripNumber = `TRP-${yy}-${String(nextSeq).padStart(4, '0')}`;
+        // Create Trip
+        const tripRes = await client.query(`
+            INSERT INTO delivery_trips (trip_number, team_id, driver_id, vehicle_number, created_by, status)
+            VALUES ('TRIP-' || to_char(now(), 'YY-MM-DD-HH24MI'), $1, $2, $3, $4, 'Scheduled')
+            RETURNING id, trip_number
+        `, [team_id || null, driver_id, vehicle_number, created_by]);
 
-        // 2. Create Header
-        const headRes = await client.query(`
-            INSERT INTO delivery_trips (trip_number, trip_date, vehicle_id, driver_id, helper_id, status)
-            VALUES ($1, $2, $3, $4, $5, 'Planned')
-            RETURNING id
-        `, [tripNumber, trip_date || new Date(), vehicle_id, driver_id, helper_id]);
-        const tripId = headRes.rows[0].id;
+        const tripId = tripRes.rows[0].id;
 
-        // 3. Create Stops
-        for (let i = 0; i < invoice_ids.length; i++) {
+        // Assign Invoices
+        for (const invId of invoice_ids) {
             await client.query(`
-                INSERT INTO trip_stops (trip_id, invoice_id, sequence_no, status)
-                VALUES ($1, $2, $3, 'Pending')
-            `, [tripId, invoice_ids[i], i + 1]);
+                INSERT INTO trip_invoices (trip_id, invoice_id, delivery_status)
+                VALUES ($1, $2, 'Pending')
+            `, [tripId, invId]);
+
+            // Update Invoice Status
+            await client.query(`
+                UPDATE sales_invoices SET delivery_status = 'In Transit' WHERE id = $1
+            `, [invId]);
         }
 
         await client.query('COMMIT');
-        res.status(201).json({ success: true, trip_number: tripNumber, id: tripId });
+        res.json({ success: true, trip_id: tripId, trip_number: tripRes.rows[0].trip_number });
 
     } catch (err) {
         await client.query('ROLLBACK');
@@ -70,159 +87,202 @@ router.post('/trips', async (req, res) => {
     }
 });
 
-// GET /api/delivery/trips/:id/manifest - Get All Details + Pick List
-router.get('/trips/:id/manifest', async (req, res) => {
+// 4. Get Active Trips (List)
+router.get('/trips', async (req, res) => {
     try {
-        const { id } = req.params;
-
-        // 1. Get Trip Header
-        const tripRes = await pool.query(`
-            SELECT dt.*, v.vehicle_number, v.vehicle_type, e.full_name as driver_name
-            FROM delivery_trips dt
-            LEFT JOIN vehicles v ON dt.vehicle_id = v.id
-            LEFT JOIN employees e ON dt.driver_id = e.id
-            WHERE dt.id = $1
-        `, [id]);
-
-        if (tripRes.rows.length === 0) return res.status(404).json({ error: 'Trip not found' });
-
-        // 2. Get Stops
-        const stopsRes = await pool.query(`
-            SELECT ts.*, si.invoice_number, c.customer_name, c.customer_phone, sa.address_line1, sa.city
-            FROM trip_stops ts
-            JOIN sales_invoices si ON ts.invoice_id = si.id
-            JOIN customers c ON si.customer_id = c.id
-            LEFT JOIN customer_addresses sa ON c.id = sa.customer_id AND sa.is_default = true
-            WHERE ts.trip_id = $1
-            ORDER BY ts.sequence_no
-        `, [id]);
-
-        // 3. Aggregate Pick List (Sum of all products in all invoices in this trip)
-        const pickListRes = await pool.query(`
-            SELECT p.product_name, p.product_code, SUM(sol.ordered_qty) as total_qty
-            FROM trip_stops ts
-            JOIN sales_invoices si ON ts.invoice_id = si.id
-            JOIN sales_order_lines sol ON si.sales_order_id = sol.sales_order_id
-            JOIN products p ON sol.product_id = p.id
-            WHERE ts.trip_id = $1
-            GROUP BY p.product_name, p.product_code
-            ORDER BY p.product_name
-        `, [id]);
-
-        res.json({
-            trip: tripRes.rows[0],
-            stops: stopsRes.rows,
-            pick_list: pickListRes.rows
-        });
-
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// POST /api/delivery/stops/:id/status - Confirm Delivery (Driver)
-router.post('/stops/:id/status', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { status, delivery_lat, delivery_lng, rejection_reason } = req.body;
+        const statusFilter = req.query.status ? [req.query.status] : ['Scheduled', 'In Transit'];
 
         const result = await pool.query(`
-            UPDATE trip_stops 
-            SET status = $1, delivery_lat = $2, delivery_lng = $3, rejection_reason = $4, delivered_at = NOW()
-            WHERE id = $5
-            RETURNING *
-        `, [status, delivery_lat, delivery_lng, rejection_reason, id]);
-
-        if (result.rowCount === 0) return res.status(404).json({ error: 'Stop not found' });
-
-        res.json({ success: true, stop: result.rows[0] });
+            SELECT 
+                dt.id, dt.trip_number, dt.status, dt.created_at,
+                t.name as team_name, e.name as driver_name, dt.vehicle_number,
+                COUNT(ti.id) as invoice_count
+            FROM delivery_trips dt
+            LEFT JOIN delivery_teams t ON dt.team_id = t.id
+            LEFT JOIN employees e ON dt.driver_id = e.id
+            LEFT JOIN trip_invoices ti ON dt.id = ti.trip_id
+            WHERE dt.status = ANY($1)
+            GROUP BY dt.id, dt.trip_number, dt.status, dt.created_at, t.name, e.name, dt.vehicle_number
+            ORDER BY dt.created_at DESC
+        `, [statusFilter]);
+        res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// GET /api/delivery/trips/:id/print-pack - Full Aggregated Data for One-Click Print
-router.get('/trips/:id/print-pack', async (req, res) => {
+// --- B. Warehouse Operations ---
+
+// 5. Get Picklist (Aggregated)
+router.get('/trips/:id/picklist', async (req, res) => {
     try {
-        const { id } = req.params;
-        const { cutoff_amount = 5000 } = req.query; // Configurable threshold
-
-        // 1. Header
-        const tripRes = await pool.query(`
-            SELECT dt.*, v.vehicle_number, e.full_name as driver_name
-            FROM delivery_trips dt
-            LEFT JOIN vehicles v ON dt.vehicle_id = v.id
-            LEFT JOIN employees e ON dt.driver_id = e.id
-            WHERE dt.id = $1
-        `, [id]);
-        if (tripRes.rows.length === 0) return res.status(404).json({ error: 'Trip not found' });
-
-        // 2. Pick List (From Invoice Lines, NOT Order Lines, to be accurate to actual stock out)
-        const pickListRes = await pool.query(`
-            SELECT p.product_name, p.product_code, SUM(sil.shipped_qty) as total_qty
-            FROM trip_stops ts
-            JOIN sales_invoices si ON ts.invoice_id = si.id
+        // Aggregate Qty by Product across all invoices in trip
+        const result = await pool.query(`
+            SELECT 
+                p.product_name, p.product_code,
+                SUM(sil.qty) as total_qty,
+                string_agg(DISTINCT ib.batch_code, ', ') as batches
+            FROM trip_invoices ti
+            JOIN sales_invoices si ON ti.invoice_id = si.id
             JOIN sales_invoice_lines sil ON si.id = sil.invoice_id
             JOIN products p ON sil.product_id = p.id
-            WHERE ts.trip_id = $1
-            GROUP BY p.product_name, p.product_code
+            LEFT JOIN inventory_batches ib ON sil.batch_id = ib.id
+            WHERE ti.trip_id = $1
+            GROUP BY p.id, p.product_name, p.product_code
             ORDER BY p.product_name
-        `, [id]);
+        `, [req.params.id]);
 
-        // 3. Delivery List (Stops)
-        const stopsRes = await pool.query(`
-            SELECT 
-                ts.sequence_no, 
-                si.invoice_number, si.grand_total,
-                c.customer_name, c.address_line1, c.phone
-            FROM trip_stops ts
-            JOIN sales_invoices si ON ts.invoice_id = si.id
-            JOIN customers c ON si.customer_id = c.id
-            WHERE ts.trip_id = $1
-            ORDER BY ts.sequence_no
-        `, [id]);
-
-        // 4. Invoices (The Heavy Payload)
-        // Fetch All Invoices + Their Lines
-        const invoicesRes = await pool.query(`
-            SELECT 
-                si.*, 
-                c.customer_name, c.address_line1, c.gst as customer_gst,
-                (SELECT json_agg(json_build_object(
-                    'product_name', p.product_name,
-                    'qty', sil.shipped_qty,
-                    'rate', sil.rate,
-                    'total', sil.amount,
-                    'scheme', sol.tier_applied 
-                ) ORDER BY sil.id)
-                FROM sales_invoice_lines sil
-                JOIN products p ON sil.product_id = p.id
-                JOIN sales_orders so ON si.sales_order_id = so.id
-                JOIN sales_order_lines sol ON so.id = sol.sales_order_id AND sol.product_id = sil.product_id
-                WHERE sil.invoice_id = si.id
-                ) as lines
-            FROM trip_stops ts
-            JOIN sales_invoices si ON ts.invoice_id = si.id
-            JOIN customers c ON si.customer_id = c.id
-            WHERE ts.trip_id = $1
-            ORDER BY ts.sequence_no
-        `, [id]);
-
-        // 5. Logic: Determine Copies
-        const invoices = invoicesRes.rows.map(inv => ({
-            ...inv,
-            print_copies: Number(inv.grand_total) < Number(cutoff_amount) ? 1 : 2
-        }));
-
-        res.json({
-            trip: tripRes.rows[0],
-            pick_list: pickListRes.rows,
-            delivery_list: stopsRes.rows,
-            invoices: invoices
-        });
-
+        res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// --- C. Mobile App Operations ---
+
+// 6. Get Manifest (Detailed Route)
+// Sorted by efficient route (or sequence)
+router.get('/trips/:id/manifest', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                ti.id as trip_invoice_id,
+                si.id as invoice_id, si.invoice_number, si.grand_total, si.balance_amount,
+                c.name as customer_name, c.address, c.latitude, c.longitude, c.phone,
+                ti.delivery_status
+            FROM trip_invoices ti
+            JOIN sales_invoices si ON ti.invoice_id = si.id
+            JOIN customers c ON si.customer_id = c.id
+            WHERE ti.trip_id = $1
+            ORDER BY c.route_sequence ASC
+        `, [req.params.id]);
+
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 7. Sync Delivery Data (End of Day / Live)
+router.post('/sync', async (req, res) => {
+    const { trip_id, updates } = req.body;
+    // updates: [{ invoice_id, status, payment: {}, returns: [] }]
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        for (const update of updates) {
+            // 1. Update Trip Invoice Status
+            await client.query(`
+                UPDATE trip_invoices 
+                SET delivery_status = $1, delivery_time = NOW(), notes = $2
+                WHERE trip_id = $3 AND invoice_id = $4
+            `, [update.status, update.notes || null, trip_id, update.invoice_id]);
+
+            // 2. Update Main Invoice Status
+            // Logic: If Delivered -> Delivered. If Returned -> Returned. 
+            // If Partial -> Partial. Undelivered -> Pending (for next trip)
+            let mainStatus = update.status;
+            if (update.status === 'Undelivered') mainStatus = 'Pending'; // Return to pool
+
+            await client.query(`
+                UPDATE sales_invoices SET delivery_status = $1 WHERE id = $2
+            `, [mainStatus, update.invoice_id]);
+
+            // 3. Handle Returns (Instant Rejections / Expiry)
+            if (update.returns && update.returns.length > 0) {
+                for (const ret of update.returns) {
+                    await client.query(`
+                        INSERT INTO trip_returns (trip_id, invoice_id, product_id, qty, reason, return_type, verification_status)
+                        VALUES ($1, $2, $3, $4, $5, $6, 'Pending')
+                    `, [trip_id, update.invoice_id, ret.product_id, ret.qty, ret.reason, ret.type]);
+                }
+            }
+
+            // 4. Handle Payments (Simple Collection)
+            if (update.payment && update.payment.amount > 0) {
+                // Call existing payment logic or insert directly? 
+                // Better to insert into customer_payments directly
+                await client.query(`
+                    INSERT INTO customer_payments (
+                        payment_number, customer_id, payment_date, amount, payment_mode, 
+                        collected_by, verification_status, created_at
+                    )
+                    SELECT 
+                        'PAY-DEL-' || $1 || '-' || $2, customer_id, CURRENT_DATE, $3, $4, 
+                        (SELECT driver_id FROM delivery_trips WHERE id = $1), 'Pending', NOW()
+                    FROM sales_invoices WHERE id = $2
+                `, [trip_id, update.invoice_id, update.payment.amount, update.payment.mode]);
+            }
+        }
+
+        // Check if trip is fully complete? (Optional, maybe specific endpoint for Trip End)
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Sync successful' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// --- D. Verification ---
+
+// 8. Get Trip Returns (Verification View)
+router.get('/trips/:id/returns', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                tr.id, tr.return_type, tr.qty, tr.reason, tr.verification_status,
+                p.product_name, si.invoice_number
+            FROM trip_returns tr
+            JOIN products p ON tr.product_id = p.id
+            JOIN sales_invoices si ON tr.invoice_id = si.id
+            WHERE tr.trip_id = $1
+        `, [req.params.id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 9. Verify Trip & Returns
+router.post('/trips/:id/verify', async (req, res) => {
+    const { return_actions, verified_by } = req.body;
+    // return_actions: [{ return_id, action: 'Approve' | 'Reject', destination: 'Stock' | 'Scrap' }]
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        for (const action of return_actions) {
+            await client.query(`
+                UPDATE trip_returns 
+                SET verification_status = $1, verified_by = $2, verified_at = NOW()
+                WHERE id = $3
+            `, [action.action === 'Approve' ? 'Approved' : 'Rejected', verified_by, action.return_id]);
+
+            // If Approved, what updates? 
+            // - Credit Note creation? (Deferred as per user request)
+            // - Stock Adjustment? (Move to Damaged/Scrap bucket)
+
+            // For this phase, we just mark verification.
+        }
+
+        // Close Trip
+        await client.query(`UPDATE delivery_trips SET status = 'Verified' WHERE id = $1`, [req.params.id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
 

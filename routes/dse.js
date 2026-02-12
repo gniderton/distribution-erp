@@ -293,12 +293,15 @@ router.post('/expenses/:id/authorize', async (req, res) => {
             return res.status(400).json({ error: "Msg: Invalid status. Use Authorized or Rejected" });
         }
 
+        // Map 'Authorized' to 'Verified' for DB constraint
+        const dbStatus = (status === 'Authorized') ? 'Verified' : status;
+
         const result = await pool.query(`
             UPDATE dse_expenses 
             SET status = $1, rejection_reason = $2, verified_by = $3, verified_at = NOW()
             WHERE id = $4
             RETURNING *
-        `, [status, reason || null, user_id, id]);
+        `, [dbStatus, reason || null, user_id, id]);
 
         if (result.rows.length === 0) return res.status(404).json({ error: "Expense not found" });
 
