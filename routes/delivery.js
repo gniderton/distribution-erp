@@ -33,7 +33,7 @@ router.get('/invoices-pool', async (req, res) => {
 router.get('/teams', async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT dt.id, dt.name, e.full_name as driver_name, v.vehicle_number 
+            SELECT dt.id, dt.name, dt.driver_id, e.full_name as driver_name, v.vehicle_number 
             FROM delivery_teams dt
             LEFT JOIN employees e ON dt.driver_id = e.id
             LEFT JOIN vehicles v ON dt.vehicle_id = v.id
@@ -149,7 +149,75 @@ router.get('/trips/:id/picklist', async (req, res) => {
     }
 });
 
-// --- C. Mobile App Operations ---
+// --- C. Mobile Action Hub (Detailed Execution) ---
+
+// 6. Get Invoice Lines (View Items)
+router.get('/invoices/:id/lines', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                sil.id, sil.product_id, p.product_name, p.product_code,
+                sil.shipped_qty as qty, sil.rate, sil.amount, sil.mrp,
+                ib.batch_code, sil.batch_id
+            FROM sales_invoice_lines sil
+            JOIN products p ON sil.product_id = p.id
+            LEFT JOIN inventory_batches ib ON sil.batch_id = ib.id
+            WHERE sil.invoice_id = $1
+            ORDER BY p.product_name
+        `, [req.params.id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 7. Get Customer Pending Invoices (Collect Payment > Other Bills)
+router.get('/customers/:id/pending-invoices', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                id, invoice_number, invoice_date, 
+                grand_total, balance_amount, delivery_status
+            FROM sales_invoices
+            WHERE customer_id = $1 
+              AND balance_amount > 0 
+              AND delivery_status != 'Cancelled'
+            ORDER BY invoice_date ASC
+        `, [req.params.id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 8. Get Customer Invoice History (Any Bill Return)
+// Searchable by Invoice Number or Date
+router.get('/customers/:id/history', async (req, res) => {
+    try {
+        const { search } = req.query;
+        let query = `
+            SELECT 
+                id, invoice_number, invoice_date, grand_total, delivery_status
+            FROM sales_invoices
+            WHERE customer_id = $1 AND delivery_status != 'Cancelled'
+        `;
+
+        const params = [req.params.id];
+        if (search) {
+            query += ` AND (invoice_number ILIKE $2 OR to_char(invoice_date, 'YYYY-MM-DD') ILIKE $2)`;
+            params.push(`%${search}%`);
+        }
+
+        query += ` ORDER BY invoice_date DESC LIMIT 20`; // Limit for mobile performance
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- D. Mobile App Operations ---
 
 // 6. Get Manifest (Detailed Route)
 // Sorted by efficient route (or sequence)
