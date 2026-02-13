@@ -130,7 +130,7 @@ router.get('/trips/:id/picklist', async (req, res) => {
         const result = await pool.query(`
             SELECT 
                 p.product_name, p.product_code,
-                SUM(sil.qty) as total_qty,
+                SUM(sil.shipped_qty) as total_qty,
                 string_agg(DISTINCT ib.batch_code, ', ') as batches
             FROM trip_invoices ti
             JOIN sales_invoices si ON ti.invoice_id = si.id
@@ -162,10 +162,12 @@ router.get('/trips/:id/manifest', async (req, res) => {
                 -- Customer Addresses Join for Address Line 1
                 (SELECT address_line1 FROM customer_addresses WHERE customer_id = c.id LIMIT 1) as address,
                 c.latitude, c.longitude, c.customer_phone as phone,
-                ti.delivery_status
+                ti.delivery_status,
+                so.notes as instructions -- DSE Instructions
             FROM trip_invoices ti
             JOIN sales_invoices si ON ti.invoice_id = si.id
             JOIN customers c ON si.customer_id = c.id
+            LEFT JOIN sales_orders so ON si.sales_order_id = so.id
             WHERE ti.trip_id = $1
             ORDER BY c.route_sequence ASC
         `, [req.params.id]);
