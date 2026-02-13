@@ -4,6 +4,28 @@ const { pool } = require('../config/db');
 
 // --- A. Dispatcher Operations ---
 
+// 0. Mobile Login (Simple Phone Auth)
+router.post('/login', async (req, res) => {
+    const { phone } = req.body;
+    try {
+        const result = await pool.query(`
+            SELECT id, full_name, contact_primary, designation
+            FROM employees 
+            WHERE contact_primary = $1 AND is_active = true
+        `, [phone]);
+
+        if (result.rows.length === 0) {
+            return res.status(401).json({ error: 'Invalid Phone Number or Account Inactive' });
+        }
+
+        const user = result.rows[0];
+        // In a real app, you'd issue a JWT. For this MVP, we return the user object directly.
+        res.json({ success: true, user: user });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 1. Get Pool of Pending Invoices (Modified to include DSE)
 // Query: "All Invoiced bills, not delivered"
 router.get('/invoices-pool', async (req, res) => {
