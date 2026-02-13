@@ -130,6 +130,7 @@ router.get('/trips/:id/picklist', async (req, res) => {
         const result = await pool.query(`
             SELECT 
                 p.product_name, p.product_code,
+                sil.mrp,
                 SUM(sil.shipped_qty) as total_qty,
                 string_agg(DISTINCT ib.batch_code, ', ') as batches
             FROM trip_invoices ti
@@ -138,8 +139,8 @@ router.get('/trips/:id/picklist', async (req, res) => {
             JOIN products p ON sil.product_id = p.id
             LEFT JOIN inventory_batches ib ON sil.batch_id = ib.id
             WHERE ti.trip_id = $1
-            GROUP BY p.id, p.product_name, p.product_code
-            ORDER BY p.product_name
+            GROUP BY p.id, p.product_name, p.product_code, sil.mrp
+            ORDER BY p.product_name, sil.mrp
         `, [req.params.id]);
 
         res.json(result.rows);
