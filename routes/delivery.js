@@ -101,8 +101,9 @@ router.post('/trips', async (req, res) => {
 router.get('/trips', async (req, res) => {
     try {
         const statusFilter = req.query.status ? [req.query.status] : ['Scheduled', 'In Transit'];
+        const driverId = req.query.driver_id;
 
-        const result = await pool.query(`
+        let query = `
             SELECT 
                 dt.id, dt.trip_number, dt.status, dt.created_at,
                 t.name as team_name, e.full_name as driver_name, dt.vehicle_number,
@@ -112,9 +113,19 @@ router.get('/trips', async (req, res) => {
             LEFT JOIN employees e ON dt.driver_id = e.id
             LEFT JOIN trip_invoices ti ON dt.id = ti.trip_id
             WHERE dt.status = ANY($1)
-            GROUP BY dt.id, dt.trip_number, dt.status, dt.created_at, t.name, e.full_name, dt.vehicle_number
-            ORDER BY dt.created_at DESC
-        `, [statusFilter]);
+        `;
+
+        const params = [statusFilter];
+
+        if (driverId) {
+            query += ` AND dt.driver_id = $2`;
+            params.push(driverId);
+        }
+
+        query += ` GROUP BY dt.id, dt.trip_number, dt.status, dt.created_at, t.name, e.full_name, dt.vehicle_number
+                   ORDER BY dt.created_at DESC`;
+
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
