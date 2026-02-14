@@ -4,14 +4,14 @@ const { pool } = require('../config/db');
 
 // --- A. Dispatcher Operations ---
 
-// 0. Mobile Login (Simple Phone Auth)
+// 0. Mobile Login (Simple Phone + PIN Auth)
 router.post('/login', async (req, res) => {
-    const { phone } = req.body;
+    const { phone, pin } = req.body;
     try {
         const result = await pool.query(`
-            SELECT id, full_name, contact_primary, designation
+            SELECT id, full_name, contact_primary, designation, login_pin
             FROM employees 
-            WHERE contact_primary = $1 AND is_active = true
+            WHERE contact_primary = $1 AND employment_status = 'Active'
         `, [phone]);
 
         if (result.rows.length === 0) {
@@ -19,7 +19,15 @@ router.post('/login', async (req, res) => {
         }
 
         const user = result.rows[0];
-        // In a real app, you'd issue a JWT. For this MVP, we return the user object directly.
+
+        // Verify PIN
+        if (!user.login_pin || user.login_pin !== pin) {
+            return res.status(401).json({ error: 'Invalid PIN' });
+        }
+
+        // Remove sensitive data before returning
+        delete user.login_pin;
+
         res.json({ success: true, user: user });
     } catch (err) {
         res.status(500).json({ error: err.message });
