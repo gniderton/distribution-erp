@@ -9,9 +9,19 @@ router.post('/login', async (req, res) => {
     const { phone, pin } = req.body;
     try {
         const result = await pool.query(`
-            SELECT id, full_name, contact_primary, designation, login_pin
-            FROM employees 
-            WHERE contact_primary = $1 AND employment_status = 'Active'
+            SELECT 
+                e.id, e.full_name, e.contact_primary, e.designation, e.login_pin,
+                dt.id as team_id, dt.name as team_name, dt.vehicle_id
+            FROM employees e, delivery_teams dt
+            WHERE e.id = dt.driver_id AND dt.is_active = true
+            AND e.contact_primary = $1 AND e.employment_status = 'Active'
+            UNION
+            SELECT 
+                e.id, e.full_name, e.contact_primary, e.designation, e.login_pin,
+                NULL as team_id, NULL as team_name, NULL as vehicle_id
+            FROM employees e
+            WHERE e.contact_primary = $1 AND e.employment_status = 'Active'
+            AND NOT EXISTS (SELECT 1 FROM delivery_teams dt WHERE dt.driver_id = e.id AND dt.is_active = true)
         `, [phone]);
 
         if (result.rows.length === 0) {
