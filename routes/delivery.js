@@ -174,6 +174,33 @@ router.get('/trips', async (req, res) => {
 
 // --- B. Warehouse Operations ---
 
+// 5a. Get Picklist Item Breakdown (Who ordered what?)
+router.get('/trips/:id/product-breakdown', async (req, res) => {
+    const { product_code, mrp } = req.query;
+    try {
+        const result = await pool.query(`
+            SELECT 
+                c.customer_name, 
+                si.invoice_number,
+                sil.shipped_qty as qty,
+                sil.mrp
+            FROM trip_invoices ti
+            JOIN sales_invoices si ON ti.invoice_id = si.id
+            JOIN customers c ON si.customer_id = c.id
+            JOIN sales_invoice_lines sil ON si.id = sil.invoice_id
+            JOIN products p ON sil.product_id = p.id
+            WHERE ti.trip_id = $1 
+              AND p.product_code = $2
+              AND sil.mrp = $3
+            ORDER BY c.customer_name
+        `, [req.params.id, product_code, mrp]);
+
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 5. Get Picklist (Aggregated)
 router.get('/trips/:id/picklist', async (req, res) => {
     try {
