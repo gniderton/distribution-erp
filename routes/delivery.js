@@ -176,7 +176,7 @@ router.get('/trips', async (req, res) => {
 
 // 5a. Get Picklist Item Breakdown (Who ordered what?)
 router.get('/trips/:id/product-breakdown', async (req, res) => {
-    const { product_code, mrp } = req.query;
+    const { product_id, mrp } = req.query; // [CHANGED] product_code -> product_id
     try {
         const result = await pool.query(`
             SELECT 
@@ -188,12 +188,11 @@ router.get('/trips/:id/product-breakdown', async (req, res) => {
             JOIN sales_invoices si ON ti.invoice_id = si.id
             JOIN customers c ON si.customer_id = c.id
             JOIN sales_invoice_lines sil ON si.id = sil.invoice_id
-            JOIN products p ON sil.product_id = p.id
             WHERE ti.trip_id = $1 
-              AND p.product_code = $2
+              AND sil.product_id = $2
               AND sil.mrp = $3
             ORDER BY c.customer_name
-        `, [req.params.id, product_code, mrp]);
+        `, [req.params.id, product_id, mrp]);
 
         res.json(result.rows);
     } catch (err) {
@@ -207,6 +206,7 @@ router.get('/trips/:id/picklist', async (req, res) => {
         // Aggregate Qty by Product across all invoices in trip
         const result = await pool.query(`
             SELECT 
+                p.id as product_id, -- [ADDED] product_id
                 p.product_name, p.product_code,
                 sil.mrp,
                 SUM(sil.shipped_qty) as total_qty,
