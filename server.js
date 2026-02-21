@@ -117,94 +117,46 @@ const fs = require('fs');
 const path = require('path');
 
 // Database Connection Test & Server Start
-pool.query('SELECT NOW()', (err, res) => {
+pool.query('SELECT NOW()', async (err, res) => {
     if (err) {
         console.error('Database Connection Failed:', err);
     } else {
         console.log('Database Connected Successfully:', res.rows[0].now);
 
         // --- AUTO-MIGRATION SECTION (TEMPORARY FIX) ---
-        try {
-            // 1. Rounding Fix (040)
-            const mig040 = path.join(__dirname, 'database', '040_fix_grn_rounding.sql');
-            if (fs.existsSync(mig040)) {
-                pool.query(fs.readFileSync(mig040, 'utf8'), (e) => {
-                    if (e) console.error('Mig 040 Failed', e); else console.log('Mig 040 Applied');
-                });
-            }
+        const migrations = [
+            { id: '040', path: '040_fix_grn_rounding.sql' },
+            { id: '041', path: '041_smart_gst_logic.sql' },
+            { id: '042', path: '042_add_gst_columns.sql' },
+            { id: '071', path: '071_stock_traceability.sql' },
+            { id: '072', path: '072_sales_invoice_lines.sql' },
+            { id: '064', path: '064_bank_statement_schema.sql' },
+            { id: '065', path: '065_bank_statement_unique_constraint.sql' },
+            { id: '083', path: '083_full_statement_schema.sql' },
+            { id: '084', path: '084_fix_bank_amount_constraint.sql' },
+            { id: '085', path: '085_enhanced_verification_schema.sql' },
+            { id: '101', path: '101_trip_returns_batch_condition.sql' }
+        ];
 
-            // 2. Smart GST Logic (041)
-            const mig041 = path.join(__dirname, 'database', '041_smart_gst_logic.sql');
-            if (fs.existsSync(mig041)) {
-                pool.query(fs.readFileSync(mig041, 'utf8'), (e) => {
-                    if (e) console.error('Mig 041 Failed', e); else console.log('Mig 041 Applied');
-                });
+        for (const m of migrations) {
+            const mPath = path.join(__dirname, 'database', m.path);
+            if (fs.existsSync(mPath)) {
+                try {
+                    const sql = fs.readFileSync(mPath, 'utf8');
+                    await pool.query(sql);
+                    console.log(`Mig ${m.id} Applied/Verified`);
+                } catch (e) {
+                    // Ignore "already exists" errors (42P07, 42710)
+                    if (e.code === '42P07' || e.code === '42710') {
+                        console.log(`Mig ${m.id} already exists, skipping.`);
+                    } else {
+                        console.error(`Mig ${m.id} Failed:`, e.message);
+                    }
+                }
             }
-
-            // 3. GST Columns (042)
-            const mig042 = path.join(__dirname, 'database', '042_add_gst_columns.sql');
-            if (fs.existsSync(mig042)) {
-                pool.query(fs.readFileSync(mig042, 'utf8'), (e) => {
-                    if (e) console.error('Mig 042 Failed', e); else console.log('Mig 042 Applied');
-                });
-            }
-
-            // 4. Stock Traceability (071)
-            const mig071 = path.join(__dirname, 'database', '071_stock_traceability.sql');
-            if (fs.existsSync(mig071)) {
-                pool.query(fs.readFileSync(mig071, 'utf8'), (e) => {
-                    if (e) console.error('Mig 071 Failed', e); else console.log('Mig 071 Applied');
-                });
-            }
-
-            // 5. Invoice Lines (072)
-            const mig072 = path.join(__dirname, 'database', '072_sales_invoice_lines.sql');
-            if (fs.existsSync(mig072)) {
-                pool.query(fs.readFileSync(mig072, 'utf8'), (e) => {
-                    if (e) console.error('Mig 072 Failed', e); else console.log('Mig 072 Applied');
-                });
-            }
-
-            // 6. Bank Recon (064 & 065)
-            const mig064 = path.join(__dirname, 'database', '064_bank_statement_schema.sql');
-            if (fs.existsSync(mig064)) {
-                pool.query(fs.readFileSync(mig064, 'utf8'), (e) => {
-                    if (e) console.error('Mig 064 Failed', e); else console.log('Mig 064 Applied');
-                });
-            }
-            const mig065 = path.join(__dirname, 'database', '065_bank_statement_unique_constraint.sql');
-            if (fs.existsSync(mig065)) {
-                pool.query(fs.readFileSync(mig065, 'utf8'), (e) => {
-                    if (e) console.error('Mig 065 Failed', e); else console.log('Mig 065 Applied');
-                });
-            }
-
-            // 7. Full Statement Schema (083)
-            const mig083 = path.join(__dirname, 'database', '083_full_statement_schema.sql');
-            if (fs.existsSync(mig083)) {
-                pool.query(fs.readFileSync(mig083, 'utf8'), (e) => {
-                    if (e) console.error('Mig 083 Failed', e); else console.log('Mig 083 Applied');
-                });
-            }
-
-            // 8. Fix Bank Amount Constraint (084)
-            const mig084 = path.join(__dirname, 'database', '084_fix_bank_amount_constraint.sql');
-            if (fs.existsSync(mig084)) {
-                pool.query(fs.readFileSync(mig084, 'utf8'), (e) => {
-                    if (e) console.error('Mig 084 Failed', e); else console.log('Mig 084 Applied');
-                });
-            }
-
-            // 9. Enhanced Verification Schema (085)
-            const mig085 = path.join(__dirname, 'database', '085_enhanced_verification_schema.sql');
-            if (fs.existsSync(mig085)) {
-                pool.query(fs.readFileSync(mig085, 'utf8'), (e) => {
-                    if (e) console.error('Mig 085 Failed', e); else console.log('Mig 085 Applied');
-                });
-            }
-        } catch (migEx) {
-            console.error('Migration Error:', migEx);
         }
+        // ----------------------------------------------
+        // ----------------------------------------------
         // ----------------------------------------------
 
         app.listen(port, () => {
