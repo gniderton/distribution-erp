@@ -330,7 +330,9 @@ router.post('/sync', async (req, res) => {
     const { trip_id, updates, payments, returns, expenses, denominations } = req.body;
     const client = await pool.connect();
     try {
-        // 0. Log Sync Attempt (for debugging)
+        await client.query('BEGIN');
+
+        // 1. Create Master Sync Log (The "Header")
         const summary = {
             updates_count: updates?.length || 0,
             payments_count: payments?.length || 0,
@@ -338,30 +340,34 @@ router.post('/sync', async (req, res) => {
             expenses_count: expenses?.length || 0,
             has_denominations: !!denominations
         };
-        await pool.query(
-            "INSERT INTO sync_logs (trip_id, payload_summary) VALUES ($1, $2)",
+
+        const syncRes = await client.query(
+            "INSERT INTO sync_logs (trip_id, payload_summary, sync_type) VALUES ($1, $2, 'Delivery') RETURNING id",
             [trip_id, JSON.stringify(summary)]
         );
-        console.log(`Sync Logged for Trip ${trip_id}:`, summary);
+        const syncId = syncRes.rows[0].id;
+        console.log(`Master Sync ID Created: ${syncId} for Trip ${trip_id}`);
 
-        await client.query('BEGIN');
-
-        // 1. Update Trip Global Status (Awaiting Verification)
+        // 2. Update Trip Global Status (Awaiting Verification)
         await client.query(`
             UPDATE delivery_trips 
             SET status = 'Completed', end_time = NOW(), updated_at = NOW() 
             WHERE id = $1
         `, [trip_id]);
 
-        // 2. Process Manifest Updates (Deliveries) - Status only, no financial impact yet
+        // 3. Process Manifest Updates (Deliveries)
         if (updates && Array.isArray(updates)) {
             for (const update of updates) {
-                // Update Junction Table
+                // Update Junction Table + Link Sync ID
                 await client.query(`
                     UPDATE trip_invoices 
-                    SET delivery_status = $1, delivery_time = $2, submitted_at = NOW()
-                    WHERE trip_id = $3 AND invoice_id = $4
-                `, [update.status, update.timestamp, trip_id, update.invoice_id]);
+                    SET delivery_status = $1, 
+                        delivery_time = $2, 
+                        submitted_at = NOW(),
+                        sync_id = $3,
+                        verification_status = 'Pending'
+                    WHERE trip_id = $4 AND invoice_id = $5
+                `, [update.status, update.timestamp, syncId, trip_id, update.invoice_id]);
 
                 // Update Master Invoice Table Status
                 await client.query(`
@@ -372,79 +378,77 @@ router.post('/sync', async (req, res) => {
             }
         }
 
-        // 3. Process Payments (PENDING status)
+        // 4. Process Payments
         if (payments && Array.isArray(payments)) {
             for (const p of payments) {
-                // Generate Payment Number (PAY-YY-SEQ)
                 const yy = new Date().getFullYear().toString().slice(-2);
                 const seqRes = await client.query("SELECT COUNT(*) FROM customer_payments WHERE payment_number LIKE $1", [`PAY-${yy}-%`]);
                 const nextSeq = parseInt(seqRes.rows[0].count) + 1;
                 const payNumber = `PAY-${yy}-${String(nextSeq).padStart(4, '0')}`;
 
-                // A. Insert into customer_payments (Verification Status: Pending)
                 const payRes = await client.query(`
                     INSERT INTO customer_payments (
                         payment_number, customer_id, amount, payment_mode, transaction_ref, 
-                        collected_by, payment_date, verification_status, status
-                    ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, 'Pending', 'Pending')
+                        collected_by, payment_date, verification_status, status, sync_id
+                    ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, 'Pending', 'Pending', $7)
                     RETURNING id
-                `, [payNumber, p.customer_id, p.amount, p.mode, p.transaction_ref || p.bank_name, p.collected_by]);
+                `, [payNumber, p.customer_id, p.amount, p.mode, p.transaction_ref || p.bank_name, p.collected_by, syncId]);
 
                 const paymentId = payRes.rows[0].id;
 
-                // B. Insert into payment_allocations (Status: PENDING)
                 await client.query(`
                     INSERT INTO payment_allocations (payment_id, invoice_id, amount, status)
                     VALUES ($1, $2, $3, 'PENDING')
                 `, [paymentId, p.invoice_id, p.amount]);
-
-                // C. Note: NO UPDATE to sales_invoices balances yet.
             }
         }
 
-        // 4. Process Returns
+        // 5. Process Returns (Dual Flow: Instant vs Expiry)
         if (returns && Array.isArray(returns)) {
             for (const r of returns) {
                 const invId = (r.invoice_id && !isNaN(r.invoice_id)) ? r.invoice_id : null;
                 const batchId = (r.batch_id && !isNaN(r.batch_id)) ? r.batch_id : null;
+                const customerId = r.customer_id || null;
 
                 await client.query(`
                     INSERT INTO trip_returns (
-                        trip_id, invoice_id, product_id, return_type, qty, reason, 
-                        verification_status, batch_id, condition
-                    ) VALUES ($1, $2, $3, $4, $5, $6, 'Pending', $7, $8)
+                        trip_id, invoice_id, product_id, customer_id, return_type, qty, reason, 
+                        verification_status, batch_id, condition, sync_id
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Pending', $8, $9, $10)
                 `, [
                     trip_id,
                     invId,
                     r.product_id,
+                    customerId,
                     r.return_type || 'Instant Rejection',
                     r.qty,
                     r.reason || 'Customer Rejected',
                     batchId,
-                    r.condition || null
+                    r.condition || null,
+                    syncId
                 ]);
             }
         }
 
-        // 5. Process Expenses
+        // 6. Process Expenses
         if (expenses && Array.isArray(expenses)) {
             for (const e of expenses) {
                 await client.query(`
-                    INSERT INTO dse_expenses (dse_id, expense_type, amount, description, status)
-                    VALUES ($1, $2, $3, $4, 'Pending')
-                `, [e.collected_by || e.dse_id, e.type || e.mode, e.amount, e.description || 'Trip Expense']);
+                    INSERT INTO dse_expenses (dse_id, expense_type, amount, description, status, sync_id)
+                    VALUES ($1, $2, $3, $4, 'Pending', $5)
+                `, [e.collected_by || e.dse_id, e.type || e.mode, e.amount, e.description || 'Trip Expense', syncId]);
             }
         }
 
-        // 6. Process Denominations
+        // 7. Process Denominations
         if (denominations && denominations.total_verified > 0) {
             await client.query(`
                 INSERT INTO cash_denominations (
                     dse_id, report_date, note_500, note_200, note_100, 
-                    note_50, note_20, note_10, coins, total_amount
-                ) VALUES ($1, CURRENT_DATE, $2, $3, $4, $5, $6, $7, $8, $9)
+                    note_50, note_20, note_10, coins, total_amount, sync_id
+                ) VALUES ($1, CURRENT_DATE, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             `, [
-                denominations.dse_id || (updates?.[0]?.collected_by), // Fallback to driver
+                denominations.dse_id || (updates?.[0]?.collected_by),
                 denominations.n500 || 0,
                 denominations.n200 || 0,
                 denominations.n100 || 0,
@@ -452,12 +456,13 @@ router.post('/sync', async (req, res) => {
                 denominations.n20 || 0,
                 denominations.n10 || 0,
                 denominations.coins || 0,
-                denominations.total_verified
+                denominations.total_verified,
+                syncId
             ]);
         }
 
         await client.query('COMMIT');
-        res.json({ success: true, message: "Sync successful" });
+        res.json({ success: true, message: "Sync successful", sync_id: syncId });
 
     } catch (err) {
         await client.query('ROLLBACK');

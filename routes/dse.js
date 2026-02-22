@@ -52,6 +52,19 @@ router.post('/eod-sync', async (req, res) => {
             denominations = {} // Obj { note_500: 10, total: 5000 }
         } = req.body;
 
+        // --- 0. Create Master Sync Log ---
+        const summary = {
+            orders_count: orders?.length || 0,
+            payments_count: payments?.length || 0,
+            expenses_count: expenses?.length || 0,
+            has_denominations: !!denominations
+        };
+        const syncRes = await client.query(
+            "INSERT INTO sync_logs (synced_by, payload_summary, sync_type) VALUES ($1, $2, 'Sales') RETURNING id",
+            [dse_id, JSON.stringify(summary)]
+        );
+        const syncId = syncRes.rows[0].id;
+
         // --- 1. Process Orders ---
         let totalOrderValue = 0;
         for (const order of orders) {
@@ -88,13 +101,13 @@ router.post('/eod-sync', async (req, res) => {
                 soNumber = `${prefix}-${String(current_number).padStart(5, '0')}`;
             }
 
-            // C. Insert Header
+            // C. Insert Header + sync_id
             const orderRes = await client.query(`
                 INSERT INTO sales_orders (
-                    dse_id, customer_id, order_date, total_amount, offline_id, status, latitude, longitude, so_number
-                ) VALUES ($1, $2, $3, $4, $5, 'Confirmed', $6, $7, $8)
+                    dse_id, customer_id, order_date, total_amount, offline_id, status, latitude, longitude, so_number, sync_id
+                ) VALUES ($1, $2, $3, $4, $5, 'Confirmed', $6, $7, $8, $9)
                 RETURNING id
-            `, [dse_id, order.customer_id, date, calculatedTotal, order.offline_no, order.latitude || null, order.longitude || null, soNumber]);
+            `, [dse_id, order.customer_id, date, calculatedTotal, order.offline_no, order.latitude || null, order.longitude || null, soNumber, syncId]);
 
             const newOrderId = orderRes.rows[0].id;
 
@@ -153,9 +166,9 @@ router.post('/eod-sync', async (req, res) => {
                     INSERT INTO customer_payments (
                         payment_number, customer_id, collected_by, amount, payment_mode, payment_date, 
                         transaction_ref, bank_name, cheque_date, deposit_bank,
-                        verification_status, offline_id
+                        verification_status, offline_id, sync_id
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Pending', $11)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Pending', $11, $12)
                     RETURNING id
                 `, [
                     payNumber,
@@ -168,7 +181,8 @@ router.post('/eod-sync', async (req, res) => {
                     pay.bank_name || null,
                     pay.cheque_date || null,
                     pay.deposit_bank || null,
-                    pay.offline_id || null
+                    pay.offline_id || null,
+                    syncId
                 ]);
 
                 if (!payRes.rows || payRes.rows.length === 0) {
@@ -178,12 +192,7 @@ router.post('/eod-sync', async (req, res) => {
                 const paymentId = payRes.rows[0].id;
                 console.log(`Payment created: ${payNumber} (ID: ${paymentId})`);
 
-                // Handle both old and new allocation formats
-                // OLD FORMAT: { invoice_id: 102, amount: 1248 }
-                // NEW FORMAT: { allocations: [{ invoice_id: 102, allocated_amount: 1248, invoice_balance_at_entry: 1248 }] }
-
                 if (pay.allocations && pay.allocations.length > 0) {
-                    // NEW FORMAT: Store DSE-specified allocations with PENDING status
                     for (const alloc of pay.allocations) {
                         await client.query(`
                         INSERT INTO payment_allocations (
@@ -197,7 +206,6 @@ router.post('/eod-sync', async (req, res) => {
                         ]);
                     }
                 } else if (pay.invoice_id) {
-                    // OLD FORMAT: Convert to new format for backward compatibility
                     await client.query(`
                     INSERT INTO payment_allocations (
                         payment_id, invoice_id, amount, status, expected_invoice_balance
@@ -208,19 +216,19 @@ router.post('/eod-sync', async (req, res) => {
                         pay.amount
                     ]);
                 }
-                // If neither, it's an advance payment (no allocations)
             } catch (paymentError) {
                 console.error('Payment insertion error:', paymentError);
-                console.error('Payment data:', JSON.stringify(pay, null, 2));
                 throw new Error(`Failed to insert payment: ${paymentError.message}`);
             }
         }
+
+        // --- 2. Process Expenses ---
         let totalExpense = 0;
         for (const exp of expenses) {
             await client.query(`
-                INSERT INTO dse_expenses (dse_id, expense_date, expense_type, amount, description)
-                VALUES ($1, $2, $3, $4, $5)
-            `, [dse_id, date, exp.type, exp.amount, exp.description]);
+                INSERT INTO dse_expenses (dse_id, expense_date, expense_type, amount, description, sync_id)
+                VALUES ($1, $2, $3, $4, $5, $6)
+            `, [dse_id, date, exp.type, exp.amount, exp.description, syncId]);
             totalExpense += parseFloat(exp.amount || 0);
         }
 
@@ -228,13 +236,13 @@ router.post('/eod-sync', async (req, res) => {
         await client.query(`
             INSERT INTO cash_denominations (
                 dse_id, report_date, 
-                note_500, note_200, note_100, note_50, note_20, note_10, coins, total_amount
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                note_500, note_200, note_100, note_50, note_20, note_10, coins, total_amount, sync_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         `, [
             dse_id, date,
             denominations[500] || 0, denominations[200] || 0, denominations[100] || 0,
             denominations[50] || 0, denominations[20] || 0, denominations[10] || 0,
-            denominations.coins || 0, denominations.total || 0
+            denominations.coins || 0, denominations.total || 0, syncId
         ]);
 
         // --- 4. Create Daily Sales Report ---
@@ -270,6 +278,7 @@ router.post('/eod-sync', async (req, res) => {
 
         res.json({
             success: true,
+            sync_id: syncId,
             report_id: reportRes.rows[0].id,
             message: 'EOD Report Submitted Successfully'
         });
