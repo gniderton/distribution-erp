@@ -473,172 +473,418 @@ router.post('/sync', async (req, res) => {
     }
 });
 
-// --- D. Verification ---
+// --- D. Verification & Settlement Portal ---
 
-// 8. Get Trip Returns (Verification View)
-router.get('/trips/:id/returns', async (req, res) => {
+// 10. List Sync Logs (Manager Dashboard)
+router.get('/sync-logs', async (req, res) => {
     try {
         const result = await pool.query(`
-SELECT
-tr.id, tr.return_type, tr.qty, tr.reason, tr.verification_status,
-    p.product_name, si.invoice_number
-            FROM trip_returns tr
-            JOIN products p ON tr.product_id = p.id
-            LEFT JOIN sales_invoices si ON tr.invoice_id = si.id
-            WHERE tr.trip_id = $1
-    `, [req.params.id]);
+            SELECT 
+                sl.id, sl.trip_id, sl.payload_summary, sl.sync_type, sl.created_at,
+                dt.trip_number, 
+                e.full_name as driver_name
+            FROM sync_logs sl
+            LEFT JOIN delivery_trips dt ON sl.trip_id::bigint = dt.id
+            LEFT JOIN employees e ON dt.driver_id = e.id
+            ORDER BY sl.created_at DESC
+        `);
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// 9. Verify Trip (Manager Approval Gate)
-router.post('/trips/:id/verify', async (req, res) => {
-    const { id } = req.params;
-    const { return_actions, verified_by } = req.body;
-    // return_actions: [{ return_id, action: 'Approve' | 'Reject' }]
+// 11. Consolidated Sync Details (Verification View)
+router.get('/sync/:id/details', async (req, res) => {
+    try {
+        const syncId = req.params.id;
+
+        // A. Header
+        const header = await pool.query("SELECT * FROM sync_logs WHERE id = $1", [syncId]);
+        if (header.rows.length === 0) return res.status(404).json({ error: "Sync not found" });
+
+        // B. Manifest (Deliveries)
+        const manifest = await pool.query(`
+            SELECT 
+                ti.*, si.invoice_number, si.grand_total, si.customer_id, c.customer_name
+            FROM trip_invoices ti
+            JOIN sales_invoices si ON ti.invoice_id = si.id
+            JOIN customers c ON si.customer_id = c.id
+            WHERE ti.sync_id = $1
+        `, [syncId]);
+
+        // C. Returns
+        const returns = await pool.query(`
+            SELECT tr.*, p.product_name, si.invoice_number
+            FROM trip_returns tr
+            JOIN products p ON tr.product_id = p.id
+            LEFT JOIN sales_invoices si ON tr.invoice_id = si.id
+            WHERE tr.sync_id = $1
+        `, [syncId]);
+
+        // D. Payments
+        const payments = await pool.query(`
+            SELECT cp.*, c.customer_name
+            FROM customer_payments cp
+            JOIN customers c ON cp.customer_id = c.id
+            WHERE cp.sync_id = $1
+        `, [syncId]);
+
+        // E. Expenses
+        const expenses = await pool.query(`
+            SELECT * FROM dse_expenses WHERE sync_id = $1
+        `, [syncId]);
+
+        res.json({
+            header: header.rows[0],
+            manifest: manifest.rows,
+            returns: returns.rows,
+            payments: payments.rows,
+            expenses: expenses.rows
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 12. Settlement & Verification Gate (The "Hammer" API)
+router.post('/verify/settle', async (req, res) => {
+    const { sync_id, manifest_verifications, return_verifications, verified_by } = req.body;
+    // manifest_verifications: [{ invoice_id, status: 'Approved' | 'Rejected' | 'Undelivered' }]
+    // return_verifications: [{ return_id, status: 'Approved' | 'Rejected' }]
+
+    if (!sync_id || !verified_by) return res.status(400).json({ error: "sync_id and verified_by are required" });
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // 1. Process Approved Returns (Financial Adjustment)
-        if (return_actions && Array.isArray(return_actions)) {
-            for (const action of return_actions) {
-                const isApproved = action.action === 'Approve';
+        // --- 1. Process Manifest Verifications ---
+        if (manifest_verifications && Array.isArray(manifest_verifications)) {
+            for (const v of manifest_verifications) {
+                // A. Update Junction Status
+                await client.query(`
+                    UPDATE trip_invoices 
+                    SET verification_status = $1, verified_by = $2, verified_at = NOW()
+                    WHERE sync_id = $3 AND invoice_id = $4
+                `, [v.status === 'Approved' ? 'Approved' : 'Rejected', verified_by, sync_id, v.invoice_id]);
 
-                // A. Update Verification Status
+                // B. Handle Special Case: Undelivered (Time/Closed)
+                if (v.status === 'Undelivered') {
+                    // Reset Master Invoice status so it appears in picklist again
+                    await client.query(`
+                        UPDATE sales_invoices SET delivery_status = 'Pending' WHERE id = $1
+                    `, [v.invoice_id]);
+                }
+            }
+        }
+
+        // --- 2. Process Return Verifications (With FIFO Credit Note Logic) ---
+        if (return_verifications && Array.isArray(return_verifications)) {
+            for (const v of return_verifications) {
+                const isApproved = v.status === 'Approved';
+
+                // A. Update Base Return Record
                 const retRes = await client.query(`
                     UPDATE trip_returns 
                     SET verification_status = $1, verified_by = $2, verified_at = NOW()
-                    WHERE id = $3
+                    WHERE id = $3 AND sync_id = $4
                     RETURNING *
-                `, [isApproved ? 'Approved' : 'Rejected', verified_by, action.return_id]);
+                `, [isApproved ? 'Approved' : 'Rejected', verified_by, v.return_id, sync_id]);
 
                 if (isApproved && retRes.rows.length > 0) {
                     const ret = retRes.rows[0];
 
-                    // B. Get Product/Invoice details for financial value
-                    const lineRes = await client.query(`
-                        SELECT sil.rate, sil.tax_percent 
-                        FROM sales_invoice_lines sil 
-                        WHERE sil.invoice_id = $1 AND sil.product_id = $2
-                        LIMIT 1
-                    `, [ret.invoice_id, ret.product_id]);
+                    // [REFINED 67.1] Pricing Engine (Base Rate + Scheme Deduction)
 
-                    const rate = Number(lineRes.rows[0]?.rate || 0);
-                    const taxPct = Number(lineRes.rows[0]?.tax_percent || 0);
-                    const taxable = Number(ret.qty) * rate;
-                    const tax = taxable * (taxPct / 100);
-                    const total = taxable + tax;
+                    // 1. Determine Base Rate (Channel/Brand Pricing)
+                    const custInfo = await client.query(`
+                        SELECT c.id as channel_id, c.price_column FROM channels c 
+                        JOIN customers cust ON cust.channel_id = c.id 
+                        WHERE cust.id = $1
+                    `, [ret.customer_id]);
+                    const defaultPriceCol = custInfo.rows[0]?.price_column || 'retail_rate';
+
+                    const brandOverride = await client.query(`
+                        SELECT ch.price_column FROM customer_brand_pricing cbp
+                        JOIN channels ch ON cbp.channel_id = ch.id
+                        JOIN products p ON p.brand_id = cbp.brand_id
+                        WHERE cbp.customer_id = $1 AND p.id = $2
+                    `, [ret.customer_id, ret.product_id]);
+                    const priceCol = brandOverride.rows[0]?.price_column || defaultPriceCol;
+
+                    let baseRate = 0;
+                    let taxPct = 0;
+
+                    // PRIORITIZE BATCH RATE
+                    let rateInfo;
+                    if (ret.batch_id) {
+                        rateInfo = await client.query(`
+                            SELECT b.${priceCol} as rate, t.tax_percentage 
+                            FROM inventory_batches b
+                            JOIN products p ON b.product_id = p.id
+                            LEFT JOIN taxes t ON p.tax_id = t.id
+                            WHERE b.id = $1
+                        `, [ret.batch_id]);
+                    }
+
+                    if (!rateInfo || rateInfo.rows.length === 0) {
+                        rateInfo = await client.query(`
+                            SELECT p.${priceCol} as rate, t.tax_percentage 
+                            FROM products p LEFT JOIN taxes t ON p.tax_id = t.id WHERE p.id = $1
+                        `, [ret.product_id]);
+                    }
+
+                    baseRate = Number(rateInfo.rows[0]?.rate || 0);
+                    taxPct = Number(rateInfo.rows[0]?.tax_percentage || 0);
+
+                    // 2. Determine Net Valuation (Lowest Price Sold logic)
+                    let netValuation = baseRate;
+                    if (ret.invoice_id) {
+                        const lineRes = await client.query(`
+                            SELECT taxable_amount, shipped_qty FROM sales_invoice_lines 
+                            WHERE invoice_id = $1 AND product_id = $2 LIMIT 1
+                        `, [ret.invoice_id, ret.product_id]);
+                        if (lineRes.rows.length > 0) {
+                            const l = lineRes.rows[0];
+                            netValuation = Number(l.taxable_amount) / (Number(l.shipped_qty) || 1);
+                        }
+                    } else {
+                        const lowRes = await client.query(`
+                            SELECT MIN(taxable_amount/shipped_qty) as min_net 
+                            FROM sales_invoice_lines sil JOIN sales_invoices si ON sil.invoice_id = si.id
+                            WHERE si.customer_id = $1 AND sil.product_id = $2
+                        `, [ret.customer_id, ret.product_id]);
+                        if (lowRes.rows[0]?.min_net) netValuation = Number(lowRes.rows[0].min_net);
+                    }
+
+                    const qtyNum = Number(ret.qty);
+                    const unitScheme = Math.max(0, baseRate - netValuation);
+                    const grossAmount = qtyNum * baseRate;
+                    const schemeAmount = qtyNum * unitScheme;
+
+                    // [REFINED 67.1] Dummy Discount Logic (for Invoice Symmetry)
+                    const discountPercent = 0;
+                    const discountAmount = 0;
+
+                    const taxableAmount = grossAmount - schemeAmount - discountAmount;
+                    const taxAmount = taxableAmount * (taxPct / 100);
+                    const grandTotal = taxableAmount + taxAmount;
+
+                    console.log(`[Settlement] Pricing Calculation:`, {
+                        priceCol, baseRate, netValuation, unitScheme, grossAmount, schemeAmount, discountAmount, taxableAmount, grandTotal
+                    });
 
                     // C. Create Official Sales Return (Credit Note)
                     const yy = new Date().getFullYear().toString().slice(-2);
-                    const seqRes = await client.query("SELECT COUNT(*) FROM sales_returns WHERE return_number LIKE $1", [`SR-${yy}-%`]);
-                    const retNumber = `SR-${yy}-${String(seqRes.rows[0].count + 1).padStart(4, '0')}`;
+                    const sequenceName = `SR-${yy}`;
+                    const seqRes = await client.query("SELECT COUNT(*) FROM sales_returns WHERE return_number LIKE $1", [`${sequenceName}-%`]);
+                    const srNumber = `${sequenceName}-${String(seqRes.rows[0].count + 1).padStart(4, '0')}`;
 
                     const srRes = await client.query(`
                         INSERT INTO sales_returns (
                             return_number, customer_id, invoice_id, return_date, 
                             type, grand_total, total_taxable, total_tax, status, created_by
-                        ) SELECT $1, customer_id, $2, CURRENT_DATE, 'Sales Return', $3, $4, $5, 'Applied', $6
-                          FROM sales_invoices WHERE id = $2
+                        ) VALUES ($1, $2, $3, CURRENT_DATE, 'Sales Return', $4, $5, $6, 'Applied', $7)
                         RETURNING id
-                    `, [retNumber, ret.invoice_id, total, taxable, tax, verified_by]);
+                    `, [srNumber, ret.customer_id, ret.invoice_id, grandTotal, taxableAmount, taxAmount, verified_by]);
 
                     const srId = srRes.rows[0].id;
 
-                    // D. Insert Return Line
+                    // D. Insert SR Line (Now with Breakdown & Dummy Discounts)
                     await client.query(`
                         INSERT INTO sales_return_lines (
-                            return_id, product_id, batch_id, qty, rate, tax_percent, tax_amount, amount, reason
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                    `, [srId, ret.product_id, ret.batch_id, ret.qty, rate, taxPct, tax, total, ret.reason]);
+                            return_id, product_id, batch_id, qty, rate, 
+                            gross_amount, scheme_amount, discount_percent, discount_amount, taxable_amount,
+                            tax_percent, tax_amount, amount, reason
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                    `, [
+                        srId, ret.product_id, ret.batch_id, ret.qty, baseRate,
+                        grossAmount, schemeAmount, discountPercent, discountAmount, taxableAmount,
+                        taxPct, taxAmount, grandTotal, ret.reason
+                    ]);
 
-                    // E. Post GL Entries (Revenue Reversal)
-                    const acc_ar = 1101;
-                    const acc_revenue = 4001;
-                    const acc_gst_cgst = 2011;
-                    const acc_gst_sgst = 2012;
+                    // E. Apply FIFO Financial Allocation
+                    let remainingCredit = grandTotal;
 
-                    let glLines = [
-                        { code: acc_revenue, debit: Number(taxable.toFixed(2)), credit: 0 },
-                        { code: acc_ar, debit: 0, credit: Number(total.toFixed(2)) }
-                    ];
-                    if (tax > 0) {
-                        glLines.push({ code: acc_gst_cgst, debit: Number((tax / 2).toFixed(2)), credit: 0 });
-                        glLines.push({ code: acc_gst_sgst, debit: Number((tax - (tax / 2)).toFixed(2)), credit: 0 });
+                    // E1. Priority 1: Apply to targeted invoice (if any)
+                    if (ret.invoice_id) {
+                        const invRes = await client.query(`
+                            SELECT id, grand_total, amount_paid FROM sales_invoices WHERE id = $1
+                        `, [ret.invoice_id]);
+
+                        if (invRes.rows.length > 0) {
+                            const inv = invRes.rows[0];
+                            const currentBalance = Number(inv.grand_total) - Number(inv.amount_paid);
+                            const usage = Math.min(remainingCredit, currentBalance);
+
+                            if (usage > 0) {
+                                await client.query(`
+                                    UPDATE sales_invoices 
+                                    SET amount_paid = amount_paid + $1,
+                                        status = CASE WHEN (amount_paid + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END
+                                    WHERE id = $2
+                                `, [usage, inv.id]);
+                                remainingCredit -= usage;
+                            }
+                        }
                     }
-                    await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
-                        [new Date(), `Trip Return Adjustment: ${retNumber}`, 'SALES_RET', srId, JSON.stringify(glLines)]);
 
-                    // F. FINANCIAL ADJUSTMENT: Deduct from original invoice grand_total
-                    await client.query(`
-                        UPDATE sales_invoices 
-                        SET grand_total = grand_total - $1,
-                            status = CASE WHEN (grand_total - $1) <= amount_paid THEN 'Paid' ELSE status END
-                        WHERE id = $2
-                    `, [total, ret.invoice_id]);
+                    // E2. Priority 2: FIFO (Oldest Unpaid First)
+                    if (remainingCredit > 0.01) {
+                        const unpaidResult = await client.query(`
+                            SELECT id, (grand_total - amount_paid) as balance 
+                            FROM sales_invoices 
+                            WHERE customer_id = $1 AND status != 'Paid' AND id != $2
+                            ORDER BY invoice_date ASC, id ASC
+                        `, [ret.customer_id, ret.invoice_id || -1]);
 
-                    // G. Update Stock
+                        for (const inv of unpaidResult.rows) {
+                            if (remainingCredit <= 0) break;
+                            const balance = Number(inv.balance);
+                            const usage = Math.min(remainingCredit, balance);
+
+                            if (usage > 0) {
+                                await client.query(`
+                                    UPDATE sales_invoices 
+                                    SET amount_paid = amount_paid + $1,
+                                        status = CASE WHEN (amount_paid + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END
+                                    WHERE id = $2
+                                `, [usage, inv.id]);
+                                remainingCredit -= usage;
+                            }
+                        }
+                    }
+
+                    // F. Stock Update (Intelligent Basket Routing)
                     if (ret.batch_id) {
-                        await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining + $1 WHERE id = $2`, [ret.qty, ret.batch_id]);
-                        await client.query(`INSERT INTO stock_traceability(batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
-                            VALUES($1, $2, $3, 'IN', $4, 'Sales Return', $5)`, [ret.batch_id, ret.product_id, ret.qty, srId, 'Sales Return', `Return from Trip ${id}`]);
+                        let targetStatus = 'Good';
+                        if (ret.return_type === 'Expiry/Damage Return') {
+                            if (ret.condition === 'Damage' || (ret.reason && ret.reason.match(/damage/i))) targetStatus = 'Damage';
+                            else if (ret.condition === 'Expiry' || (ret.reason && ret.reason.match(/expir/i))) targetStatus = 'Expiry';
+                        }
+
+                        const batchInfo = await client.query("SELECT * FROM inventory_batches WHERE id = $1", [ret.batch_id]);
+                        const orig = batchInfo.rows[0];
+                        let finalBatchId = ret.batch_id;
+
+                        console.log(`[Settlement] Stock Routing: Original ID ${ret.batch_id} (${orig.status}), Target Status: ${targetStatus}`);
+
+                        if (orig.status !== targetStatus) {
+                            const existing = await client.query("SELECT id FROM inventory_batches WHERE product_id = $1 AND batch_code = $2 AND status = $3", [orig.product_id, orig.batch_code, targetStatus]);
+                            if (existing.rows.length > 0) {
+                                finalBatchId = existing.rows[0].id;
+                                console.log(`[Settlement] Found existing ${targetStatus} batch: ${finalBatchId}`);
+                            } else {
+                                const clone = await client.query(`
+                                    INSERT INTO inventory_batches (product_id, grn_id, batch_code, mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate, quantity_initial, quantity_remaining, expiry_date, is_active, status)
+                                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, 0, $10, $11, $12) RETURNING id
+                                `, [orig.product_id, orig.grn_id, orig.batch_code, orig.mrp, orig.purchase_rate, orig.distributor_rate, orig.wholesale_rate, orig.dealer_rate, orig.retail_rate, orig.expiry_date, (targetStatus === 'Good'), targetStatus]);
+                                finalBatchId = clone.rows[0].id;
+                                console.log(`[Settlement] Created NEW ${targetStatus} batch: ${finalBatchId}`);
+                            }
+                        }
+
+                        await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining + $1 WHERE id = $2`, [ret.qty, finalBatchId]);
+                        await client.query(`
+                            INSERT INTO stock_traceability(batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
+                            VALUES($1, $2, $3, 'IN', $4, 'Sales Return', $5)
+                        `, [finalBatchId, ret.product_id, ret.qty, srId, `Return to ${targetStatus} basket`]);
                     }
                 }
             }
         }
 
-        // 2. Process Pending Payments associated with this trip
-        // Collect all payments collected during this trip
-        const tripPayments = await client.query(`
-            SELECT cp.id, cp.amount, cp.customer_id, cp.payment_mode, cp.payment_date 
-            FROM customer_payments cp
-            JOIN payment_allocations pa ON cp.id = pa.payment_id
-            JOIN trip_invoices ti ON pa.invoice_id = ti.invoice_id
-            WHERE ti.trip_id = $1 AND cp.verification_status = 'Pending'
-        `, [id]);
-
-        for (const pay of tripPayments.rows) {
-            // A. Mark Verified
-            await client.query(`UPDATE customer_payments SET verification_status = 'Verified', verified_by = $1, verified_at = NOW() WHERE id = $2`, [verified_by, pay.id]);
-
-            // B. Impact Invoices via Allocations
-            const allocs = await client.query(`SELECT * FROM payment_allocations WHERE payment_id = $1 AND status = 'PENDING'`, [pay.id]);
-            for (const alloc of allocs.rows) {
-                await client.query(`
-                    UPDATE sales_invoices 
-                    SET amount_paid = coalesce(amount_paid, 0) + $1,
-                        status = CASE WHEN (coalesce(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END
-                    WHERE id = $2
-                `, [alloc.amount, alloc.invoice_id]);
-                await client.query(`UPDATE payment_allocations SET status = 'ACTIVE' WHERE id = $1`, [alloc.id]);
-            }
-
-            // C. Post GL (AR vs Cash/Bank)
-            const acc_ar = 1101;
-            const acc_target = (pay.payment_mode === 'Cash') ? 1003 : 1002;
-            const ledger = [
-                { code: acc_target, debit: Number(pay.amount), credit: 0 },
-                { code: acc_ar, debit: 0, credit: Number(pay.amount) }
-            ];
-            await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
-                [pay.payment_date || new Date(), `Payment Verified: Trip ${id}`, 'CUST_PAY', pay.id, JSON.stringify(ledger)]);
-        }
-
-        // 3. Finalize Trip Status
-        await client.query(`UPDATE delivery_trips SET status = 'Verified', updated_at = NOW() WHERE id = $1`, [id]);
-
         await client.query('COMMIT');
-        res.json({ success: true, message: 'Trip verified and financial impacts applied.' });
+        res.json({ success: true, message: "Settlement applied successfully" });
+
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Verification Error:', err);
+        console.error('Settlement Error:', err);
         res.status(500).json({ error: err.message });
     } finally {
         client.release();
+    }
+});
+
+// 13. Verify Payments in Bulk (Bridge to existing Payment Verification system)
+router.post('/verify-payments', async (req, res) => {
+    const { payment_ids, verified_by } = req.body;
+    if (!payment_ids || !Array.isArray(payment_ids)) return res.status(400).json({ error: "payment_ids array required" });
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        for (const pid of payment_ids) {
+            // A. Mark Verified
+            const payRes = await client.query(`
+                UPDATE customer_payments 
+                SET verification_status = 'Verified', verified_by = $1, verified_at = NOW() 
+                WHERE id = $2 AND verification_status = 'Pending'
+                RETURNING *
+            `, [verified_by, pid]);
+
+            if (payRes.rows.length > 0) {
+                const pay = payRes.rows[0];
+                // B. Activate Allocations
+                const allocs = await client.query(`SELECT * FROM payment_allocations WHERE payment_id = $1 AND status = 'PENDING'`, [pid]);
+                for (const alloc of allocs.rows) {
+                    await client.query(`
+                        UPDATE sales_invoices 
+                        SET amount_paid = coalesce(amount_paid, 0) + $1,
+                            status = CASE WHEN (coalesce(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END
+                        WHERE id = $2
+                    `, [alloc.amount, alloc.invoice_id]);
+                    await client.query(`UPDATE payment_allocations SET status = 'ACTIVE' WHERE id = $1`, [alloc.id]);
+                }
+
+                // C. Accounting (Cash/Bank vs AR)
+                const acc_ar = 1101;
+                const acc_target = (pay.payment_mode === 'Cash') ? 1003 : 1002;
+                const ledger = [
+                    { code: acc_target, debit: Number(pay.amount), credit: 0 },
+                    { code: acc_ar, debit: 0, credit: Number(pay.amount) }
+                ];
+                await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+                    [pay.payment_date || new Date(), `Settlement Payment Verified: ${pay.payment_number || pay.id}`, 'CUST_PAY', pay.id, JSON.stringify(ledger)]);
+            }
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Payments verified and applied." });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// 14. Finalize Trip (Closing the Loop)
+router.post('/finalize', async (req, res) => {
+    const { trip_id } = req.body;
+    if (!trip_id) return res.status(400).json({ error: "trip_id required" });
+
+    try {
+        // Validation: Ensure no pending items in this trip across all syncs
+        const pendingCheck = await pool.query(`
+            SELECT 
+                (SELECT COUNT(*) FROM trip_invoices WHERE trip_id = $1 AND verification_status = 'Pending') as pending_invoices,
+                (SELECT COUNT(*) FROM trip_returns WHERE trip_id = $1 AND verification_status = 'Pending') as pending_returns,
+                (SELECT COUNT(*) FROM customer_payments cp JOIN sync_logs sl ON cp.sync_id = sl.id WHERE sl.trip_id::bigint = $1 AND cp.verification_status = 'Pending') as pending_payments
+        `, [trip_id]);
+
+        const counts = pendingCheck.rows[0];
+        if (Number(counts.pending_invoices) > 0 || Number(counts.pending_returns) > 0 || Number(counts.pending_payments) > 0) {
+            return res.status(400).json({
+                error: "Cannot finalize trip. There are pending verifications.",
+                details: counts
+            });
+        }
+
+        await pool.query(`UPDATE delivery_trips SET status = 'Verified', updated_at = NOW() WHERE id = $1`, [trip_id]);
+        res.json({ success: true, message: "Trip finalized and completed." });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
