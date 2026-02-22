@@ -150,7 +150,8 @@ pool.query('SELECT NOW()', async (err, res) => {
             { id: '083', path: '083_full_statement_schema.sql' },
             { id: '084', path: '084_fix_bank_amount_constraint.sql' },
             { id: '085', path: '085_enhanced_verification_schema.sql' },
-            { id: '101', path: '101_trip_returns_batch_condition.sql' }
+            { id: '101', path: '101_trip_returns_batch_condition.sql' },
+            { id: '102', path: '102_sync_logs.sql' }
         ];
 
         for (const m of migrations) {

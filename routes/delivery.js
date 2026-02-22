@@ -329,8 +329,21 @@ router.get('/trips/:id/manifest', async (req, res) => {
 router.post('/sync', async (req, res) => {
     const { trip_id, updates, payments, returns, expenses, denominations } = req.body;
     const client = await pool.connect();
-
     try {
+        // 0. Log Sync Attempt (for debugging)
+        const summary = {
+            updates_count: updates?.length || 0,
+            payments_count: payments?.length || 0,
+            returns_count: returns?.length || 0,
+            expenses_count: expenses?.length || 0,
+            has_denominations: !!denominations
+        };
+        await pool.query(
+            "INSERT INTO sync_logs (trip_id, payload_summary) VALUES ($1, $2)",
+            [trip_id, JSON.stringify(summary)]
+        );
+        console.log(`Sync Logged for Trip ${trip_id}:`, summary);
+
         await client.query('BEGIN');
 
         // 1. Update Trip Global Status (Awaiting Verification)
