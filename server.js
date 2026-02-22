@@ -43,6 +43,21 @@ app.get('/', (req, res) => {
     res.json({ message: 'Distribution ERP API is running', status: 'Active' });
 });
 
+// [DEBUG] DB Info
+app.get('/api/debug/db-info', async (req, res) => {
+    try {
+        const result = await pool.query("SELECT current_database(), inet_server_addr(), (SELECT count(*) FROM delivery_trips) as trip_count");
+        res.json({
+            database: result.rows[0].current_database,
+            server_addr: result.rows[0].inet_server_addr,
+            trip_count: result.rows[0].trip_count,
+            env: process.env.NODE_ENV || 'development'
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Import Routes
 const vendorRoutes = require('./routes/vendors');
 const productRoutes = require('./routes/products');
