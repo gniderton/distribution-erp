@@ -432,7 +432,7 @@ router.post('/sync', async (req, res) => {
                 await client.query(`
                     INSERT INTO dse_expenses (dse_id, expense_type, amount, description, status)
                     VALUES ($1, $2, $3, $4, 'Pending')
-                `, [e.collected_by || e.dse_id, e.type || e.mode, e.amount, e.description || 'Trip Expense', 'Pending']);
+                `, [e.collected_by || e.dse_id, e.type || e.mode, e.amount, e.description || 'Trip Expense']);
             }
         }
 
