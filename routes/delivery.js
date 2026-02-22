@@ -406,6 +406,8 @@ router.post('/sync', async (req, res) => {
         if (returns && Array.isArray(returns)) {
             for (const r of returns) {
                 const invId = (r.invoice_id && !isNaN(r.invoice_id)) ? r.invoice_id : null;
+                const batchId = (r.batch_id && !isNaN(r.batch_id)) ? r.batch_id : null;
+
                 await client.query(`
                     INSERT INTO trip_returns (
                         trip_id, invoice_id, product_id, return_type, qty, reason, 
@@ -418,7 +420,7 @@ router.post('/sync', async (req, res) => {
                     r.return_type || 'Instant Rejection',
                     r.qty,
                     r.reason || 'Customer Rejected',
-                    r.batch_id || null,
+                    batchId,
                     r.condition || null
                 ]);
             }
