@@ -513,7 +513,7 @@ router.get('/sync-logs', async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT 
-                sl.id, sl.trip_id, sl.payload_summary, sl.sync_type, sl.created_at,
+                sl.id, sl.trip_id, sl.payload_summary, sl.sync_type, sl.status, sl.created_at,
                 dt.trip_number, 
                 e.full_name as driver_name,
                 (SELECT COUNT(*) FROM trip_invoices WHERE sync_id = sl.id) as manifest_count,
@@ -521,6 +521,29 @@ router.get('/sync-logs', async (req, res) => {
             FROM sync_logs sl
             LEFT JOIN delivery_trips dt ON sl.trip_id::bigint = dt.id
             LEFT JOIN employees e ON dt.driver_id = e.id
+            WHERE sl.status = 'Pending'
+            ORDER BY sl.created_at DESC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 10a. List Checked Sync Logs (History)
+router.get('/sync-logs/history', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                sl.id, sl.trip_id, sl.payload_summary, sl.sync_type, sl.status, sl.created_at,
+                dt.trip_number, 
+                e.full_name as driver_name,
+                (SELECT COUNT(*) FROM trip_invoices WHERE sync_id = sl.id) as manifest_count,
+                (SELECT COUNT(*) FROM trip_returns WHERE sync_id = sl.id) as return_count
+            FROM sync_logs sl
+            LEFT JOIN delivery_trips dt ON sl.trip_id::bigint = dt.id
+            LEFT JOIN employees e ON dt.driver_id = e.id
+            WHERE sl.status = 'Checked'
             ORDER BY sl.created_at DESC
         `);
         res.json(result.rows);
@@ -630,7 +653,7 @@ router.post('/verify/settle', async (req, res) => {
                                 INSERT INTO trip_returns (
                                     trip_id, invoice_id, product_id, customer_id, return_type, qty, reason, 
                                     verification_status, batch_id, sync_id, verified_by, verified_at
-                                ) VALUES ((SELECT trip_id FROM sync_logs WHERE id = $1), $2, $3, $4, 'Instant Rejection', $5, 'Manager Rejected Manifest', 'Approved', $6, $1, $7, NOW())
+                                ) VALUES ((SELECT trip_id::BIGINT FROM sync_logs WHERE id = $1), $2, $3, $4, 'Instant Rejection', $5, 'Manager Rejected Manifest', 'Approved', $6, $1, $7, NOW())
                             `, [sync_id, v.invoice_id, line.product_id, line.customer_id, line.shipped_qty, line.batch_id, verified_by]);
                         } else {
                             // If it exists but was pending, approve it
@@ -651,6 +674,9 @@ router.post('/verify/settle', async (req, res) => {
                 `, [v.status === 'Approved' ? 'Approved' : 'Rejected', verified_by, v.return_id, sync_id]);
             }
         }
+
+        // --- 2.5 Update Sync Status ---
+        await client.query(`UPDATE sync_logs SET status = 'Checked' WHERE id = $1`, [sync_id]);
 
         // --- 3. FINAL CREDIT NOTE GENERATION (For all Approved returns in this sync) ---
         const approvedReturns = await client.query(`
@@ -689,10 +715,15 @@ router.post('/verify/settle', async (req, res) => {
             const taxAmount = taxableAmount * (taxPct / 100);
             const grandTotal = taxableAmount + taxAmount;
 
-            // 3. Create SR Header
-            const yy = new Date().getFullYear().toString().slice(-2);
-            const seqRes = await client.query("SELECT COUNT(*) FROM sales_returns WHERE return_number LIKE $1", [`SR-${yy}-%`]);
-            const srNumber = `SR-${yy}-${String(seqRes.rows[0].count + 1).padStart(4, '0')}`;
+            // 3. Create SR Header (Sequential via document_sequences)
+            const seqUpdate = await client.query(`
+                UPDATE document_sequences 
+                SET current_number = current_number + 1 
+                WHERE document_type = 'SR' 
+                RETURNING prefix, current_number
+            `);
+            if (seqUpdate.rows.length === 0) throw new Error("SR sequence not found in document_sequences");
+            const srNumber = `${seqUpdate.rows[0].prefix}${String(seqUpdate.rows[0].current_number).padStart(4, '0')}`;
 
             const srRes = await client.query(`
                 INSERT INTO sales_returns (return_number, customer_id, invoice_id, return_date, type, grand_total, total_taxable, total_tax, status, created_by)
@@ -713,18 +744,24 @@ router.post('/verify/settle', async (req, res) => {
             let remainingCredit = grandTotal;
             if (ret.invoice_id) {
                 const invUpdate = await client.query(`
-                    UPDATE sales_invoices SET amount_paid = amount_paid + LEAST($1, grand_total - amount_paid),
-                    status = CASE WHEN (amount_paid + LEAST($1, grand_total - amount_paid)) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END
-                    WHERE id = $2 RETURNING (grand_total - amount_paid) as new_balance
+                    UPDATE sales_invoices 
+                    SET amount_paid = COALESCE(amount_paid, 0) + LEAST($1, grand_total - COALESCE(amount_paid, 0)),
+                        status = CASE WHEN (COALESCE(amount_paid, 0) + LEAST($1, grand_total - COALESCE(amount_paid, 0))) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END
+                    WHERE id = $2 RETURNING (grand_total - COALESCE(amount_paid, 0)) as new_balance
                 `, [remainingCredit, ret.invoice_id]);
                 if (invUpdate.rows.length) remainingCredit -= (grandTotal - Number(invUpdate.rows[0].new_balance || 0));
             }
             if (remainingCredit > 0.01) {
-                const unpaid = await client.query(`SELECT id, (grand_total - amount_paid) as bal FROM sales_invoices WHERE customer_id = $1 AND status != 'Paid' ORDER BY invoice_date ASC`, [ret.customer_id]);
+                const unpaid = await client.query(`SELECT id, (grand_total - COALESCE(amount_paid, 0)) as bal FROM sales_invoices WHERE customer_id = $1 AND status != 'Paid' ORDER BY invoice_date ASC`, [ret.customer_id]);
                 for (const inv of unpaid.rows) {
                     const usage = Math.min(remainingCredit, Number(inv.bal));
                     if (usage <= 0) continue;
-                    await client.query(`UPDATE sales_invoices SET amount_paid = amount_paid + $1, status = CASE WHEN (amount_paid + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [usage, inv.id]);
+                    await client.query(`
+                        UPDATE sales_invoices 
+                        SET amount_paid = COALESCE(amount_paid, 0) + $1, 
+                            status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END 
+                        WHERE id = $2
+                    `, [usage, inv.id]);
                     remainingCredit -= usage;
                     if (remainingCredit <= 0) break;
                 }
