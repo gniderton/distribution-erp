@@ -2,6 +2,28 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 
+// GET /api/employees/profile - Filter by Email (for Retool)
+router.get('/profile', async (req, res) => {
+    try {
+        const { email } = req.query;
+        if (!email) return res.status(400).json({ error: 'Email is required' });
+
+        const result = await pool.query(
+            'SELECT id, full_name, employee_code, designation FROM employees WHERE email = $1 LIMIT 1',
+            [email]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Employee not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/employees - List Employees (Filter by Role/Designation)
 router.get('/', async (req, res) => {
     try {

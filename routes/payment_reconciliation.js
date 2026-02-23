@@ -13,7 +13,7 @@ router.get('/list', async (req, res) => {
                 e.full_name as dse_name,
                 dsr.settlement_status,
                 (COALESCE(dsr.total_collection_cash, 0) + COALESCE(dsr.total_collection_cheque, 0) + COALESCE(dsr.total_collection_online, 0)) as total_payment_collection,
-                (SELECT COUNT(*) FROM customer_payments cp WHERE cp.collected_by = dsr.dse_id AND cp.payment_date = dsr.report_date AND cp.verification_status = 'Pending') as pending_count
+                (SELECT COUNT(*) FROM customer_payments cp WHERE cp.report_id = dsr.id AND cp.verification_status = 'Pending') as pending_count
             FROM daily_sales_reports dsr
             JOIN employees e ON dsr.dse_id = e.id
             WHERE dsr.settlement_status = 'Pending'
@@ -64,21 +64,21 @@ router.get('/:id/details', async (req, res) => {
             FROM customer_payments cp
             JOIN customers c ON cp.customer_id = c.id
             LEFT JOIN bank_statement_entries bse ON cp.transaction_ref = bse.bank_ref_id
-            WHERE cp.collected_by = $1 AND cp.payment_date = $2
+            WHERE cp.report_id = $1
             ORDER BY cp.created_at ASC
-        `, [summary.dse_id, summary.report_date]);
+        `, [id]);
 
         // C. Cash Denominations
         const denomsRes = await pool.query(`
-            SELECT * FROM cash_denominations WHERE dse_id = $1 AND report_date = $2
-        `, [summary.dse_id, summary.report_date]);
+            SELECT * FROM cash_denominations WHERE report_id = $1
+        `, [id]);
 
         // D. Expense Stats & List
         const expensesRes = await pool.query(`
             SELECT id, expense_type, amount, description, status, rejection_reason 
             FROM dse_expenses 
-            WHERE dse_id = $1 AND expense_date = $2
-        `, [summary.dse_id, summary.report_date]);
+            WHERE report_id = $1
+        `, [id]);
 
         const dailyExpenseTotal = expensesRes.rows.reduce((sum, e) => sum + Number(e.amount), 0);
 
@@ -372,7 +372,7 @@ router.post('/:id/auto-verify-online', async (req, res) => {
         if (sumRes.rows.length === 0) throw new Error("Report not found");
         const { dse_id, report_date } = sumRes.rows[0];
 
-        const pays = await client.query(`SELECT id, amount, transaction_ref FROM customer_payments WHERE collected_by=$1 AND payment_date=$2 AND payment_mode IN ('NEFT','UPI','Bank Transfer') AND verification_status='Pending'`, [dse_id, report_date]);
+        const pays = await client.query(`SELECT id, amount, transaction_ref FROM customer_payments WHERE report_id=$1 AND payment_mode IN ('NEFT','UPI','Bank Transfer') AND verification_status='Pending'`, [id]);
 
         let count = 0;
         for (let p of pays.rows) {
@@ -405,7 +405,7 @@ router.post('/:id/finalize', async (req, res) => {
             SELECT 
                 SUM(amount) as total, 
                 COUNT(CASE WHEN status = 'Pending' THEN 1 END) as pending_cnt 
-            FROM dse_expenses WHERE dse_id = (SELECT dse_id FROM daily_sales_reports WHERE id=$1) AND expense_date = (SELECT report_date FROM daily_sales_reports WHERE id=$1)
+            FROM dse_expenses WHERE report_id = $1
         `, [id]);
 
         const rptRes = await client.query('SELECT expense_auth_status FROM daily_sales_reports WHERE id=$1', [id]);
@@ -420,9 +420,7 @@ router.post('/:id/finalize', async (req, res) => {
         // B. Payments Check
         const payRes = await client.query(`
             SELECT COUNT(*) as cnt FROM customer_payments 
-            WHERE collected_by = (SELECT dse_id FROM daily_sales_reports WHERE id=$1) 
-              AND payment_date = (SELECT report_date FROM daily_sales_reports WHERE id=$1) 
-              AND verification_status = 'Pending'
+            WHERE report_id = $1 AND verification_status = 'Pending'
         `, [id]);
 
         if (parseInt(payRes.rows[0].cnt) > 0) throw new Error(`${payRes.rows[0].cnt} payments are still Pending.`);

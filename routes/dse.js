@@ -65,6 +65,17 @@ router.post('/eod-sync', async (req, res) => {
         );
         const syncId = syncRes.rows[0].id;
 
+        // --- 0.1 Create/Find Daily Sales Report Record ---
+        // We create it first to get the reportId for child records.
+        // We set sync_id so the report record itself is traceable.
+        const dsrRes = await client.query(`
+            INSERT INTO daily_sales_reports (dse_id, report_date, sync_id)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (dse_id, report_date) DO UPDATE SET sync_id = EXCLUDED.sync_id
+            RETURNING id
+        `, [dse_id, date, syncId]);
+        const reportId = dsrRes.rows[0].id;
+
         // --- 1. Process Orders ---
         let totalOrderValue = 0;
         for (const order of orders) {
@@ -101,15 +112,15 @@ router.post('/eod-sync', async (req, res) => {
                 soNumber = `${prefix}-${String(current_number).padStart(5, '0')}`;
             }
 
-            // C. Insert Header + sync_id
-            const orderRes = await client.query(`
+            // C. Insert Header + sync_id + report_id
+            const oRes = await client.query(`
                 INSERT INTO sales_orders (
-                    dse_id, customer_id, order_date, total_amount, offline_id, status, latitude, longitude, so_number, sync_id
-                ) VALUES ($1, $2, $3, $4, $5, 'Confirmed', $6, $7, $8, $9)
+                    dse_id, customer_id, order_date, total_amount, offline_id, status, latitude, longitude, so_number, sync_id, report_id
+                ) VALUES ($1, $2, $3, $4, $5, 'Confirmed', $6, $7, $8, $9, $10)
                 RETURNING id
-            `, [dse_id, order.customer_id, date, calculatedTotal, order.offline_no, order.latitude || null, order.longitude || null, soNumber, syncId]);
+            `, [dse_id, order.customer_id, date, calculatedTotal, order.offline_no, order.latitude || null, order.longitude || null, soNumber, syncId, reportId]);
 
-            const newOrderId = orderRes.rows[0].id;
+            const newOrderId = oRes.rows[0].id;
 
             // D. Insert Lines
             for (const line of order_items) {
@@ -160,15 +171,15 @@ router.post('/eod-sync', async (req, res) => {
                 if (check.rows.length > 0) nextSeq++;
             } while (check.rows.length > 0);
 
-            // Insert payment with new fields
+            // Insert payment with report_id
             try {
                 const payRes = await client.query(`
                     INSERT INTO customer_payments (
                         payment_number, customer_id, collected_by, amount, payment_mode, payment_date, 
                         transaction_ref, bank_name, cheque_date, deposit_bank,
-                        verification_status, offline_id, sync_id
+                        verification_status, offline_id, sync_id, report_id
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Pending', $11, $12)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Pending', $11, $12, $13)
                     RETURNING id
                 `, [
                     payNumber,
@@ -182,12 +193,9 @@ router.post('/eod-sync', async (req, res) => {
                     pay.cheque_date || null,
                     pay.deposit_bank || null,
                     pay.offline_id || null,
-                    syncId
+                    syncId,
+                    reportId
                 ]);
-
-                if (!payRes.rows || payRes.rows.length === 0) {
-                    throw new Error('Payment insertion returned no rows');
-                }
 
                 const paymentId = payRes.rows[0].id;
                 console.log(`Payment created: ${payNumber} (ID: ${paymentId})`);
@@ -226,9 +234,9 @@ router.post('/eod-sync', async (req, res) => {
         let totalExpense = 0;
         for (const exp of expenses) {
             await client.query(`
-                INSERT INTO dse_expenses (dse_id, expense_date, expense_type, amount, description, sync_id)
-                VALUES ($1, $2, $3, $4, $5, $6)
-            `, [dse_id, date, exp.type, exp.amount, exp.description, syncId]);
+                INSERT INTO dse_expenses (dse_id, expense_date, expense_type, amount, description, sync_id, report_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `, [dse_id, date, exp.type, exp.amount, exp.description, syncId, reportId]);
             totalExpense += parseFloat(exp.amount || 0);
         }
 
@@ -236,42 +244,35 @@ router.post('/eod-sync', async (req, res) => {
         await client.query(`
             INSERT INTO cash_denominations (
                 dse_id, report_date, 
-                note_500, note_200, note_100, note_50, note_20, note_10, coins, total_amount, sync_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                note_500, note_200, note_100, note_50, note_20, note_10, coins, total_amount, sync_id, report_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         `, [
             dse_id, date,
             denominations[500] || 0, denominations[200] || 0, denominations[100] || 0,
             denominations[50] || 0, denominations[20] || 0, denominations[10] || 0,
-            denominations.coins || 0, denominations.total || 0, syncId
+            denominations.coins || 0, denominations.total || 0, syncId, reportId
         ]);
 
-        // --- 4. Create Daily Sales Report ---
-        // Calculate Totals from passed arrays (or DB queries if possible)
+        // --- 4. Finalize Daily Sales Report Totals ---
         const totalCash = payments.filter(p => p.mode === 'Cash').reduce((acc, p) => acc + (p.amount || 0), 0);
         const totalCheque = payments.filter(p => p.mode === 'Cheque').reduce((acc, p) => acc + (p.amount || 0), 0);
         const totalOnline = payments.filter(p => p.mode === 'Online').reduce((acc, p) => acc + (p.amount || 0), 0);
 
-        const reportRes = await client.query(`
-            INSERT INTO daily_sales_reports (
-                dse_id, report_date, 
-                total_orders, total_order_value,
-                total_collection_cash, total_collection_cheque, total_collection_online,
-                total_expense
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            ON CONFLICT (dse_id, report_date) DO UPDATE SET
-                total_orders = EXCLUDED.total_orders,
-                total_order_value = EXCLUDED.total_order_value,
-                total_collection_cash = EXCLUDED.total_collection_cash,
-                total_collection_cheque = EXCLUDED.total_collection_cheque,
-                total_collection_online = EXCLUDED.total_collection_online,
-                total_expense = EXCLUDED.total_expense,
+        await client.query(`
+            UPDATE daily_sales_reports SET
+                total_orders = $1,
+                total_order_value = $2,
+                total_collection_cash = $3,
+                total_collection_cheque = $4,
+                total_collection_online = $5,
+                total_expense = $6,
                 submitted_at = NOW()
-            RETURNING id
+            WHERE id = $7
         `, [
-            dse_id, date,
             orders.length, totalOrderValue,
             totalCash, totalCheque, totalOnline,
-            totalExpense
+            totalExpense,
+            reportId
         ]);
 
         await client.query('COMMIT');
@@ -279,7 +280,7 @@ router.post('/eod-sync', async (req, res) => {
         res.json({
             success: true,
             sync_id: syncId,
-            report_id: reportRes.rows[0].id,
+            report_id: reportId,
             message: 'EOD Report Submitted Successfully'
         });
 
