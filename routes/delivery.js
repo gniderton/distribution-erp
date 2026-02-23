@@ -675,8 +675,13 @@ router.post('/verify/settle', async (req, res) => {
             }
         }
 
-        // --- 2.5 Update Sync Status ---
+        // --- 2.5 Update Sync Status & Trip Status ---
         await client.query(`UPDATE sync_logs SET status = 'Checked' WHERE id = $1`, [sync_id]);
+        await client.query(`
+            UPDATE delivery_trips 
+            SET status = 'Verified', updated_at = NOW() 
+            WHERE id = (SELECT trip_id::BIGINT FROM sync_logs WHERE id = $1)
+        `, [sync_id]);
 
         // --- 3. FINAL CREDIT NOTE GENERATION (For all Approved returns in this sync) ---
         const approvedReturns = await client.query(`
