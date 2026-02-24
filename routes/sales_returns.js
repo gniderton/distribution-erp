@@ -82,7 +82,7 @@ router.get('/:id', async (req, res) => {
             SELECT 
                 srl.*, 
                 p.product_name,
-                ib.batch_number
+                ib.batch_code as batch_number
             FROM sales_return_lines srl
             JOIN products p ON srl.product_id = p.id
             LEFT JOIN inventory_batches ib ON srl.batch_id = ib.id
