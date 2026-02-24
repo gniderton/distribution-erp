@@ -718,7 +718,8 @@ router.post('/verify/settle', async (req, res) => {
             const schemeAmount = qtyNum * unitScheme;
             const taxableAmount = grossAmount - schemeAmount;
             const taxAmount = taxableAmount * (taxPct / 100);
-            const grandTotal = taxableAmount + taxAmount;
+            const rawGrandTotal = taxableAmount + taxAmount;
+            const grandTotal = Math.round(rawGrandTotal); // Round to Zero decimal places
 
             // 3. Create SR Header (Sequential via document_sequences)
             const seqUpdate = await client.query(`
@@ -744,6 +745,16 @@ router.post('/verify/settle', async (req, res) => {
 
             // 5. Update Trip Return with Link
             await client.query(`UPDATE trip_returns SET sales_return_id = $1 WHERE id = $2`, [srId, ret.id]);
+
+            // 5.1 Post Journal Entry
+            const acc_ar = 1101;
+            const acc_sr = 4003;
+            const ledgerLines = [
+                { code: acc_sr, debit: Number(grandTotal), credit: 0 },
+                { code: acc_ar, debit: 0, credit: Number(grandTotal) }
+            ];
+            await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+                [new Date(), `Sales Return: ${srNumber}`, 'SALES_RETURN', srId, JSON.stringify(ledgerLines)]);
 
             // 6. FIFO Credit Application
             let remainingCredit = grandTotal;

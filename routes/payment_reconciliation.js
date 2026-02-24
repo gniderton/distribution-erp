@@ -372,7 +372,7 @@ router.post('/:id/auto-verify-online', async (req, res) => {
         if (sumRes.rows.length === 0) throw new Error("Report not found");
         const { dse_id, report_date } = sumRes.rows[0];
 
-        const pays = await client.query(`SELECT id, amount, transaction_ref FROM customer_payments WHERE report_id=$1 AND payment_mode IN ('NEFT','UPI','Bank Transfer') AND verification_status='Pending'`, [id]);
+        const pays = await client.query(`SELECT id, amount, transaction_ref, payment_date, payment_number, payment_mode FROM customer_payments WHERE report_id=$1 AND payment_mode IN ('NEFT','UPI','Bank Transfer') AND verification_status='Pending'`, [id]);
 
         let count = 0;
         for (let p of pays.rows) {
@@ -383,6 +383,17 @@ router.post('/:id/auto-verify-online', async (req, res) => {
                 const st = newC >= Number(b.amount) ? 'Exhausted' : 'Partially Consumed';
                 await client.query(`UPDATE bank_statement_entries SET consumed_amount=$1, status=$2 WHERE id=$3`, [newC, st, b.id]);
                 await client.query(`UPDATE customer_payments SET verification_status='Verified', bank_statement_entry_id=$1, verified_by=$2, verified_at=NOW() WHERE id=$3`, [b.id, user_id, p.id]);
+
+                // Post Journal Entry
+                const acc_ar = 1101;
+                const acc_bank = 1002;
+                const ledgerLines = [
+                    { code: acc_bank, debit: Number(p.amount), credit: 0 },
+                    { code: acc_ar, debit: 0, credit: Number(p.amount) }
+                ];
+                await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+                    [p.payment_date || new Date(), `Customer Payment (Online Auto): ${p.payment_number}`, 'CUST_PAY', p.id, JSON.stringify(ledgerLines)]);
+
                 count++;
             }
         }
@@ -457,7 +468,7 @@ router.patch('/:id/verify-cash', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Get Payment Info
-        const payRes = await client.query('SELECT amount, payment_mode FROM customer_payments WHERE id = $1', [id]);
+        const payRes = await client.query('SELECT amount, payment_mode, payment_date, payment_number FROM customer_payments WHERE id = $1', [id]);
         if (payRes.rows.length === 0) throw new Error('Payment not found');
 
         const payment = payRes.rows[0];
@@ -488,6 +499,16 @@ router.patch('/:id/verify-cash', async (req, res) => {
             WHERE id = $3
         `, [JSON.stringify(denominations), user_id, id]);
 
+        // Post Journal Entry
+        const acc_ar = 1101;
+        const acc_cash = 1003;
+        const ledgerLines = [
+            { code: acc_cash, debit: Number(payment.amount), credit: 0 },
+            { code: acc_ar, debit: 0, credit: Number(payment.amount) }
+        ];
+        await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+            [payment.payment_date || new Date(), `Customer Payment (Cash): ${payment.payment_number}`, 'CUST_PAY', id, JSON.stringify(ledgerLines)]);
+
         await client.query('COMMIT');
         res.json({ success: true, message: 'Cash Verified Successfully' });
 
@@ -504,8 +525,16 @@ router.patch('/:id/verify-cheque', async (req, res) => {
     const { id } = req.params;
     const { cheque_number, cheque_date, bank_name, user_id, verification_notes } = req.body;
 
+    const client = await pool.connect();
     try {
-        await pool.query(`
+        await client.query('BEGIN');
+
+        // 1. Get Payment Info
+        const payRes = await client.query('SELECT amount, payment_date, payment_number FROM customer_payments WHERE id = $1', [id]);
+        if (payRes.rows.length === 0) throw new Error('Payment not found');
+        const payment = payRes.rows[0];
+
+        await client.query(`
             UPDATE customer_payments 
             SET verification_status = 'Verified',
                 transaction_ref = $1, -- Update/Confirm Cheque No
@@ -524,8 +553,20 @@ router.patch('/:id/verify-cheque', async (req, res) => {
             id
         ]);
 
+        // Post Journal Entry
+        const acc_ar = 1101;
+        const acc_bank = 1002;
+        const ledgerLines = [
+            { code: acc_bank, debit: Number(payment.amount), credit: 0 },
+            { code: acc_ar, debit: 0, credit: Number(payment.amount) }
+        ];
+        await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+            [payment.payment_date || new Date(), `Customer Payment (Cheque): ${payment.payment_number}`, 'CUST_PAY', id, JSON.stringify(ledgerLines)]);
+
+        await client.query('COMMIT');
         res.json({ success: true, message: 'Cheque Verified' });
     } catch (e) {
+        await client.query('ROLLBACK');
         res.status(500).json({ error: e.message });
     }
 });
@@ -540,9 +581,10 @@ router.patch('/:id/verify-online', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Get Payment
-        const payRes = await client.query('SELECT amount FROM customer_payments WHERE id = $1', [id]);
+        const payRes = await client.query('SELECT amount, payment_date, payment_number FROM customer_payments WHERE id = $1', [id]);
         if (payRes.rows.length === 0) throw new Error('Payment not found');
         const payAmount = Number(payRes.rows[0].amount);
+        const payment = payRes.rows[0];
 
         // 2. Get Bank Entry
         const bankRes = await client.query('SELECT amount, consumed_amount FROM bank_statement_entries WHERE id = $1', [bank_stmt_id]);
@@ -574,6 +616,16 @@ router.patch('/:id/verify-online', async (req, res) => {
                 verified_at = NOW()
             WHERE id = $3
         `, [bank_stmt_id, user_id, id]);
+
+        // Post Journal Entry
+        const acc_ar = 1101;
+        const acc_bank = 1002;
+        const ledgerLines = [
+            { code: acc_bank, debit: payAmount, credit: 0 },
+            { code: acc_ar, debit: 0, credit: payAmount }
+        ];
+        await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
+            [payment.payment_date || new Date(), `Customer Payment (Online Link): ${payment.payment_number}`, 'CUST_PAY', id, JSON.stringify(ledgerLines)]);
 
         await client.query('COMMIT');
         res.json({ success: true });
