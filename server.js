@@ -92,6 +92,7 @@ app.use('/api/categories', require('./routes/categories')); // Categories for dr
 // [NEW] Finance Module
 app.use('/api/finance/reconciliation', require('./routes/payment_reconciliation'));
 app.use('/api/finance/reconciliation/bank', require('./routes/bank_recon'));
+app.use('/api/finance/accounting', require('./routes/accounting'));
 
 // [TEMP] Migration Endpoint to fix Combo Schema
 app.get('/api/fix-combo-db', async (req, res) => {
