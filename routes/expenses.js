@@ -49,6 +49,20 @@ router.get('/categories', async (req, res) => {
     }
 });
 
+// 2b. Get Payment Sources (Cash & Bank Accounts)
+router.get('/payment-sources', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT id, bank_name, current_balance FROM bank_accounts 
+            WHERE is_active = true 
+            ORDER BY bank_name ASC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 3. Record New Expense
 router.post('/', async (req, res) => {
     const {
