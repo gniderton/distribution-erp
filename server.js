@@ -88,6 +88,7 @@ app.use('/api/sales-orders', require('./routes/sales_orders')); // [NEW] Sales A
 app.use('/api/schemes', require('./routes/schemes')); // [NEW] Scheme Engine
 app.use('/api/channels', require('./routes/channels')); // [NEW] Channel Maaping
 app.use('/api/categories', require('./routes/categories')); // Categories for dropdowns
+app.use('/api/sales-returns', require('./routes/sales_returns')); // [NEW] Credit Notes
 
 // [NEW] Finance Module
 app.use('/api/finance/reconciliation', require('./routes/payment_reconciliation'));
