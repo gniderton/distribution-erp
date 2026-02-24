@@ -6,8 +6,6 @@ const { pool } = require('../config/db');
 router.get('/unified', async (req, res) => {
     try {
         const {
-            limit = 50,
-            offset = 0,
             status,
             customer_id,
             route_id,
@@ -124,8 +122,7 @@ router.get('/unified', async (req, res) => {
             paramCount++;
         }
 
-        query += ` ORDER BY so.id DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-        params.push(limit, offset);
+        query += ` ORDER BY so.id DESC`;
 
         const result = await pool.query(query, params);
         res.json(result.rows);
