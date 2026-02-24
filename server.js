@@ -94,6 +94,7 @@ app.use('/api/sales-returns', require('./routes/sales_returns')); // [NEW] Credi
 app.use('/api/finance/reconciliation', require('./routes/payment_reconciliation'));
 app.use('/api/finance/reconciliation/bank', require('./routes/bank_recon'));
 app.use('/api/finance/accounting', require('./routes/accounting'));
+app.use('/api/finance/expenses', require('./routes/expenses')); // [NEW] Expenses Portal
 app.use('/api', require('./routes/accounting')); // [NEW] Alias for shorter paths like /api/journal-entries
 
 // [TEMP] Migration Endpoint to fix Combo Schema
