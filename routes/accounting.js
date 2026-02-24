@@ -77,4 +77,55 @@ router.get('/journal-entries/:id', async (req, res) => {
     }
 });
 
+// 3. General Ledger (Flattened list of all transaction lines)
+router.get('/general-ledger', async (req, res) => {
+    try {
+        const { start_date, end_date, account_id, reference_type } = req.query;
+        let query = `
+            SELECT 
+                jl.id as line_id,
+                je.id as entry_id,
+                je.transaction_date,
+                je.description,
+                je.reference_type,
+                je.reference_id,
+                coa.code as account_code,
+                coa.name as account_name,
+                jl.debit,
+                jl.credit
+            FROM journal_lines jl
+            JOIN journal_entries je ON jl.journal_entry_id = je.id
+            JOIN chart_of_accounts coa ON jl.account_id = coa.id
+            WHERE 1=1
+        `;
+        const params = [];
+        let paramCount = 1;
+
+        if (start_date) {
+            query += ` AND je.transaction_date >= $${paramCount++}`;
+            params.push(start_date);
+        }
+        if (end_date) {
+            query += ` AND je.transaction_date <= $${paramCount++}`;
+            params.push(end_date);
+        }
+        if (account_id) {
+            query += ` AND jl.account_id = $${paramCount++}`;
+            params.push(account_id);
+        }
+        if (reference_type) {
+            query += ` AND je.reference_type = $${paramCount++}`;
+            params.push(reference_type);
+        }
+
+        query += ` ORDER BY je.transaction_date DESC, je.id DESC, jl.id ASC`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('General Ledger API Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
