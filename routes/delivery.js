@@ -521,7 +521,7 @@ router.get('/sync-logs', async (req, res) => {
             FROM sync_logs sl
             LEFT JOIN delivery_trips dt ON sl.trip_id::bigint = dt.id
             LEFT JOIN employees e ON dt.driver_id = e.id
-            WHERE sl.status = 'Pending'
+            WHERE sl.status = 'Pending' AND sl.sync_type = 'Delivery'
             ORDER BY sl.created_at DESC
         `);
         res.json(result.rows);
@@ -543,7 +543,7 @@ router.get('/sync-logs/history', async (req, res) => {
             FROM sync_logs sl
             LEFT JOIN delivery_trips dt ON sl.trip_id::bigint = dt.id
             LEFT JOIN employees e ON dt.driver_id = e.id
-            WHERE sl.status = 'Checked'
+            WHERE sl.status = 'Checked' AND sl.sync_type = 'Delivery'
             ORDER BY sl.created_at DESC
         `);
         res.json(result.rows);
