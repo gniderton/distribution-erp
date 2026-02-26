@@ -84,6 +84,7 @@ router.post('/', async (req, res) => {
 
     const client = await pool.connect();
     try {
+        console.log('--- Record Expense Payload ---', req.body);
         await client.query('BEGIN');
 
         // 0. Generate Sequential Expense Number
