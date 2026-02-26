@@ -2685,7 +2685,23 @@ utils.showNotification({
 }
 ```
 
-### 3. UI Layout Tips
+### 3. UI Component Mapping
+| Component Type | **Name (ID)** | Configuration / Value |
+| :--- | :--- | :--- |
+| **Date** | `dateIncome` | Default: `{{ moment() }}` |
+| **Select** | `selIncomeCat` | Data: `{{ q_getIncomeCats.data }}` <br> Value: `id`, Label: `name` |
+| **Select** | `selDestAcc` | Data: `{{ q_getBankAccounts.data }}` <br> Value: `id`, Label: `bank_name` |
+| **Switch / Toggle** | `swGST` | Label: `Is Taxable Income?` |
+| **Number** | `numIncomeAmount`| **Simple Total** (Used ONLY when GST is OFF) | **Hidden**: `{{ swGST.value }}` |
+| **Number** | `numTaxAmountIncome`| **Base Amount** (Excl. GST - Used when GST is ON) | **Hidden**: `{{ !swGST.value }}` |
+| **Number** | `numTaxAmount` | **GST Amount Only** (Used when GST is ON) | **Hidden**: `{{ !swGST.value }}` |
+| **Text** | `txtGSTNo` | Payer's GST No | **Hidden**: `{{ !swGST.value }}` |
+| **Label / Text** | `lblGrandTotal` | **Final Total**: `{{ swGST.value ? (numTaxAmountIncome.value + numTaxAmount.value) : numIncomeAmount.value }}` |
+| **Text Input** | `txtReceivedFrom` | Placeholder: `e.g. Interest or Payer Name` |
+| **Text Input** | `txtRefNo` | Placeholder: `Cheque or Txn ID` |
+| **Text Area** | `txtDesc` | Placeholder: `Extra details...` |
+
+### 4. UI Layout Tips
 1.  **Tab**: Add an "Other Income" tab in your Finance Dashboard.
 2.  **Form**: A simple form on the left or in a modal with fields for Date, Category, Bank/Cash Account, Amount, and Payer Name.
 3.  **Table**: On the right, show a list of recent entries using `q_getIncomeRecords.data`.
