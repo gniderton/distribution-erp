@@ -10,7 +10,8 @@ router.get('/', async (req, res) => {
             SELECT 
                 ex.*, 
                 coa.name as category_name,
-                ba.bank_name as payment_source_name
+                ba.bank_name as payment_source_name,
+                ex.expense_number
             FROM expenses ex
             JOIN chart_of_accounts coa ON ex.category_account_id = coa.id
             JOIN bank_accounts ba ON ex.payment_source_id = ba.id
@@ -85,6 +86,17 @@ router.post('/', async (req, res) => {
     try {
         await client.query('BEGIN');
 
+        // 0. Generate Sequential Expense Number
+        const seqRes = await client.query(`
+            UPDATE document_sequences 
+            SET current_number = current_number + 1 
+            WHERE document_type = 'EXPENSE' 
+            RETURNING prefix, current_number
+        `);
+        if (seqRes.rows.length === 0) throw new Error("Expense sequence not found");
+        const { prefix, current_number } = seqRes.rows[0];
+        const expenseNumber = `${prefix}${current_number.toString().padStart(5, '0')}`;
+
         // 1. Get Source Account Code (Cash/Bank)
         const sourceRes = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [payment_source_id]);
         if (sourceRes.rows.length === 0) throw new Error("Invalid Payment Source");
@@ -126,14 +138,14 @@ router.post('/', async (req, res) => {
                 expense_date, category_account_id, payment_source_id, 
                 taxable_amount, tax_amount, grand_total, is_gst_expense,
                 vendor_name, bill_no, gst_no, description, reference_no,
-                created_by, journal_entry_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                created_by, journal_entry_id, expense_number
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING id
         `, [
             expense_date || new Date(), category_account_id, payment_source_id,
             taxable_amount, tax_amount, grand_total, is_gst_expense,
             vendor_name, bill_no, gst_no, description, reference_no,
-            user_id, journalEntryId
+            user_id, journalEntryId, expenseNumber
         ]);
         const expenseId = expenseRes.rows[0].id;
 
