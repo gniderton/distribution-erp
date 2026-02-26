@@ -2673,9 +2673,9 @@ utils.showNotification({
   "transaction_date": "{{ dateIncome.value }}",
   "category_account_id": {{ selIncomeCat.value }},
   "destination_account_id": {{ selDestAcc.value }},
-  "amount": {{ swGST.value ? (numTaxAmountIncome.value + numTaxAmount.value) : numIncomeAmount.value }},
+  "amount": {{ swGST.value ? (numTaxAmountIncome.value + numGstAmount.value) : numIncomeAmount.value }},
   "taxable_amount": {{ swGST.value ? numTaxAmountIncome.value : numIncomeAmount.value }},
-  "tax_amount": {{ swGST.value ? numTaxAmount.value : 0 }},
+  "tax_amount": {{ swGST.value ? numGstAmount.value : 0 }},
   "is_gst_income": {{ swGST.value }},
   "gst_no": "{{ txtGSTNo.value }}",
   "received_from": "{{ txtReceivedFrom.value }}",
@@ -2694,9 +2694,9 @@ utils.showNotification({
 | **Switch / Toggle** | `swGST` | Label: `Is Taxable Income?` |
 | **Number** | `numIncomeAmount`| **Simple Total** (Used ONLY when GST is OFF) | **Hidden**: `{{ swGST.value }}` |
 | **Number** | `numTaxAmountIncome`| **Base Amount** (Excl. GST - Used when GST is ON) | **Hidden**: `{{ !swGST.value }}` |
-| **Number** | `numTaxAmount` | **GST Amount Only** (Used when GST is ON) | **Hidden**: `{{ !swGST.value }}` |
+| **Number** | `numGstAmount` | **GST Amount Only** (Used when GST is ON) | **Hidden**: `{{ !swGST.value }}` |
 | **Text** | `txtGSTNo` | Payer's GST No | **Hidden**: `{{ !swGST.value }}` |
-| **Label / Text** | `lblGrandTotal` | **Final Total**: `{{ swGST.value ? (numTaxAmountIncome.value + numTaxAmount.value) : numIncomeAmount.value }}` |
+| **Label / Text** | `lblGrandTotal` | **Final Total**: `{{ swGST.value ? (numTaxAmountIncome.value + numGstAmount.value) : numIncomeAmount.value }}` |
 | **Text Input** | `txtReceivedFrom` | Placeholder: `e.g. Interest or Payer Name` |
 | **Text Input** | `txtRefNo` | Placeholder: `Cheque or Txn ID` |
 | **Text Area** | `txtDesc` | Placeholder: `Extra details...` |
