@@ -324,14 +324,46 @@ router.post('/bulk-update', async (req, res) => {
                 }
 
             } else if (item.type === 'expense') {
-                await client.query(`
+                const itemAction = item.action || action;
+                const itemReason = item.reason || reason;
+
+                const resExp = await client.query(`
                     UPDATE dse_expenses 
                     SET status = $1, rejection_reason = $2, verified_by = $3, verified_at = NOW()
-                    WHERE id = $4
-                `, [action, reason, user_id, item.id]);
+                    WHERE id = $4 AND status = 'Pending'
+                    RETURNING *
+                `, [itemAction, itemReason, user_id, item.id]);
 
-                // Note: Expenses currently do not trigger GL entries on creation (they are just claims),
-                // so no reversal needed yet. Future Phase: If expenses are Paid out, then GL needed.
+                if (resExp.rows.length > 0 && itemAction === 'Verified') {
+                    const exp = resExp.rows[0];
+
+                    // Map Expense Type to GL Code
+                    const typeMap = {
+                        'Fuel': 5010,
+                        'Food': 5011,
+                        'Transit': 5011,
+                        'Repair': 5012,
+                        'Other': 5013
+                    };
+                    const expenseCode = typeMap[exp.expense_type] || 5013;
+
+                    // Resolve "Cash in Hand" for trigger
+                    const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE '%cash%' LIMIT 1");
+                    const cashBankId = bRes.rows[0]?.id;
+
+                    const ledgerLines = [
+                        { code: expenseCode, debit: Number(exp.amount), credit: 0 },
+                        { code: 1003, debit: 0, credit: Number(exp.amount), bank_account_id: cashBankId }
+                    ];
+
+                    await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [
+                        exp.expense_date || new Date(),
+                        `DSE Expense: ${exp.expense_type} - ${exp.description || ''}`,
+                        'DSE_EXPENSE',
+                        exp.id,
+                        JSON.stringify(ledgerLines)
+                    ]);
+                }
             }
         }
 
