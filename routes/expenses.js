@@ -84,17 +84,26 @@ router.post('/', async (req, res) => {
 
     const client = await pool.connect();
     try {
-        const receivedKeys = Object.keys(req.body);
-        console.log('--- Record Expense Keys Received ---', receivedKeys);
+        const receivedKeys = Object.keys(req.body || {});
+        const contentType = req.headers['content-type'];
+        console.log('--- Record Expense Request Details ---');
+        console.log('Content-Type:', contentType);
+        console.log('Body Type:', typeof req.body);
+        console.log('Keys Received:', receivedKeys);
 
         // Handle Retool sending strings like "undefined" or "null"
-        const cleanID = (val) => (val === 'undefined' || val === 'null' || val === '') ? null : val;
+        const cleanID = (val) => (val === 'undefined' || val === 'null' || val === '' || val === undefined) ? null : val;
 
         const pSourceId = cleanID(payment_source_id);
         const pCatId = cleanID(category_account_id);
 
         if (!pSourceId) {
-            throw new Error(`payment_source_id is missing or undefined. Found keys: [${receivedKeys.join(', ')}]. Body Value: "${payment_source_id}"`);
+            let errorMsg = `payment_source_id is missing. `;
+            if (!contentType || !contentType.includes('application/json')) {
+                errorMsg += `CRITICAL: Your Retool "Content-Type" header is "${contentType}". It MUST be "application/json". `;
+            }
+            errorMsg += `Received keys: [${receivedKeys.join(', ')}]. Body Value: "${payment_source_id}"`;
+            throw new Error(errorMsg);
         }
 
         await client.query('BEGIN');
