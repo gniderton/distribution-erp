@@ -2705,7 +2705,19 @@ utils.showNotification({
 1.  **Tab**: Add an "Other Income" tab in your Finance Dashboard.
 2.  **Form**: A simple form on the left or in a modal with fields for Date, Category, Bank/Cash Account, Amount, and Payer Name.
 3.  **Table**: On the right, show a list of recent entries using `q_getIncomeRecords.data`.
-4.  **Success Event**: After `q_recordIncome` succeeds:
-    *   Show Notification: "Income Recorded: {{ data.income_number }}"
-    *   Refresh: `q_getIncomeRecords.trigger()`
-    *   Clear: `formIncome.clear()`
+4.  **Success Event**: On `q_recordIncome` success, run this **Script** to notify and reset:
+    ```javascript
+    utils.showNotification({ title: "Success", description: "Income Recorded: " + data.income_number, notificationType: "success" });
+    q_getIncomeRecords.trigger();
+    // Manual Reset
+    swGST.setValue(false);
+    numIncomeAmount.clearValue();
+    numTaxAmountIncome.clearValue();
+    numGstAmount.clearValue();
+    txtGSTNo.clearValue();
+    txtReceivedFrom.clearValue();
+    txtRefNo.clearValue();
+    txtDesc.clearValue();
+    selIncomeCat.clearValue();
+    dateIncome.setValue(moment());
+    ```
