@@ -2707,7 +2707,7 @@ utils.showNotification({
 3.  **Table**: On the right, show a list of recent entries using `q_getIncomeRecords.data`.
 4.  **Success Event**: On `q_recordIncome` success, run this **Script** to notify and reset:
     ```javascript
-    utils.showNotification({ title: "Success", description: "Income Recorded: " + data.income_number, notificationType: "success" });
+    utils.showNotification({ title: "Success", description: "Income Recorded: " + q_recordIncome.data.income_number, notificationType: "success" });
     q_getIncomeRecords.trigger();
     // Manual Reset
     swGST.setValue(false);
