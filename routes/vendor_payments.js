@@ -52,19 +52,6 @@ router.post('/', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // [NEW] 0. Update Bank Balance (If linked)
-        if (bank_account_id) {
-            const numericAmount = Number(amount);
-            // If Payment (Money Out), Subtract. If Refund (Money In), Add.
-            const balanceChange = (type === 'PAYMENT') ? -numericAmount : numericAmount;
-
-            await client.query(`
-                UPDATE bank_accounts 
-                SET current_balance = current_balance + $1 
-                WHERE id = $2
-            `, [balanceChange, bank_account_id]);
-        }
-
         // 0.5 Generate Payment Number
         const seqRes = await client.query(`
             SELECT id, prefix, current_number 
@@ -105,21 +92,13 @@ router.post('/', async (req, res) => {
             // Dr Accounts Payable (Liability decreases), Cr Bank (Asset decreases)
             ledgerLines = [
                 { code: acc_ap, debit: Number(amount), credit: 0 },
-                { code: acc_bank, debit: 0, credit: Number(amount) }
+                { code: acc_bank, debit: 0, credit: Number(amount), bank_account_id: bank_account_id }
             ];
         } else {
             description = `Refund In: ${paymentNumber}`;
-            // Dr Bank (Asset increases), Cr Accounts Payable (Liability reduces 'receivable' or effectively negative payable)
-            // Wait, Refunds usually reduce the "Advance" or "Credit Note" balance. 
-            // If we treat it as money back, it reduces the Vendor Balance (which is Credit). 
-            // Dr Bank, Cr AP is correct (AP becomes more positive/credit-heavy? No).
-            // Normal AP is Credit Balance. Payment (Dr AP) reduces it to 0. 
-            // Refund (Money In) means we got money back. 
-            // Dr Bank (Asset Up). Cr AP (Liability Up? No, Cr AP means we owe them).
-            // If we receive a refund, it means they owed US money (Debit Balance). 
-            // So Cr AP reduces that Debit Balance back to 0. Correct.
+            // Dr Bank (Asset increases), Cr Accounts Payable
             ledgerLines = [
-                { code: acc_bank, debit: Number(amount), credit: 0 },
+                { code: acc_bank, debit: Number(amount), credit: 0, bank_account_id: bank_account_id },
                 { code: acc_ap, debit: 0, credit: Number(amount) }
             ];
         }

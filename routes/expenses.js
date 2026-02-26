@@ -132,17 +132,16 @@ router.post('/', async (req, res) => {
         if (is_gst_expense && Number(tax_amount) > 0) {
             // DR Expense (Taxable)
             journalLines.push({ code: categoryCode, debit: Number(taxable_amount), credit: 0 });
-            // DR GST Input (Assuming SGST + CGST split 50/50 for simplicity, or just CGST/SGST total to one if needed)
-            // For general India context, we use CGST (1011) and SGST (1012)
+            // DR GST Input
             const halfTax = Number(tax_amount) / 2;
             journalLines.push({ code: 1011, debit: halfTax, credit: 0 });
             journalLines.push({ code: 1012, debit: halfTax, credit: 0 });
-            // CR Payment Account
-            journalLines.push({ code: paymentAccountCode, debit: 0, credit: Number(grand_total) });
+            // CR Payment Account (Link to bank_account_id)
+            journalLines.push({ code: paymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: resolvedPaymentSourceId });
         } else {
             // Simple Expense
             journalLines.push({ code: categoryCode, debit: Number(grand_total), credit: 0 });
-            journalLines.push({ code: paymentAccountCode, debit: 0, credit: Number(grand_total) });
+            journalLines.push({ code: paymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: resolvedPaymentSourceId });
         }
 
         // 4. Create Journal Entry using DB function

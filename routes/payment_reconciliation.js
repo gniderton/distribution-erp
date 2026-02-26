@@ -263,8 +263,18 @@ router.post('/bulk-update', async (req, res) => {
                     const acc_cash = 1003;
                     const targetAcc = (pay.payment_mode === 'Cash') ? acc_cash : acc_bank;
 
+                    // Resolve bank account ID for trigger
+                    let bankAccountId = null;
+                    if (pay.payment_mode === 'Cash') {
+                        const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE '%cash%' LIMIT 1");
+                        bankAccountId = bRes.rows[0]?.id;
+                    } else if (pay.bank_name) {
+                        const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE $1 LIMIT 1", [`%${pay.bank_name}%`]);
+                        bankAccountId = bRes.rows[0]?.id;
+                    }
+
                     const ledgerLines = [
-                        { code: targetAcc, debit: Number(pay.amount), credit: 0 },
+                        { code: targetAcc, debit: Number(pay.amount), credit: 0, bank_account_id: bankAccountId },
                         { code: acc_ar, debit: 0, credit: Number(pay.amount) }
                     ];
 
@@ -388,7 +398,7 @@ router.post('/:id/auto-verify-online', async (req, res) => {
                 const acc_ar = 1101;
                 const acc_bank = 1002;
                 const ledgerLines = [
-                    { code: acc_bank, debit: Number(p.amount), credit: 0 },
+                    { code: acc_bank, debit: Number(p.amount), credit: 0, bank_account_id: b.id },
                     { code: acc_ar, debit: 0, credit: Number(p.amount) }
                 ];
                 await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
@@ -502,8 +512,12 @@ router.patch('/:id/verify-cash', async (req, res) => {
         // Post Journal Entry
         const acc_ar = 1101;
         const acc_cash = 1003;
+
+        const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE '%cash%' LIMIT 1");
+        const bankAccountId = bRes.rows[0]?.id;
+
         const ledgerLines = [
-            { code: acc_cash, debit: Number(payment.amount), credit: 0 },
+            { code: acc_cash, debit: Number(payment.amount), credit: 0, bank_account_id: bankAccountId },
             { code: acc_ar, debit: 0, credit: Number(payment.amount) }
         ];
         await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
@@ -556,8 +570,12 @@ router.patch('/:id/verify-cheque', async (req, res) => {
         // Post Journal Entry
         const acc_ar = 1101;
         const acc_bank = 1002;
+
+        const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE $1 LIMIT 1", [`%${bank_name}%`]);
+        const bankAccountId = bRes.rows[0]?.id;
+
         const ledgerLines = [
-            { code: acc_bank, debit: Number(payment.amount), credit: 0 },
+            { code: acc_bank, debit: Number(payment.amount), credit: 0, bank_account_id: bankAccountId },
             { code: acc_ar, debit: 0, credit: Number(payment.amount) }
         ];
         await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
@@ -620,8 +638,19 @@ router.patch('/:id/verify-online', async (req, res) => {
         // Post Journal Entry
         const acc_ar = 1101;
         const acc_bank = 1002;
+
+        // Get bank details for this entry
+        const stmtRes = await client.query("SELECT bank_name FROM bank_statement_entries WHERE id = $1", [bank_stmt_id]);
+        const stmtBankName = stmtRes.rows[0]?.bank_name;
+
+        let bankAccountId = null;
+        if (stmtBankName) {
+            const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE $1 LIMIT 1", [`%${stmtBankName}%`]);
+            bankAccountId = bRes.rows[0]?.id;
+        }
+
         const ledgerLines = [
-            { code: acc_bank, debit: payAmount, credit: 0 },
+            { code: acc_bank, debit: payAmount, credit: 0, bank_account_id: bankAccountId },
             { code: acc_ar, debit: 0, credit: payAmount }
         ];
         await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
