@@ -38,7 +38,7 @@ router.get('/list', async (req, res) => {
 // [NEW] 1b. List Reconciliation Expenses (Filtered)
 router.get('/expenses', async (req, res) => {
     try {
-        const { status, dse_id, date } = req.query;
+        const { status, dse_id, date, report_id } = req.query;
         let query = `
             SELECT 
                 de.*,
@@ -61,6 +61,10 @@ router.get('/expenses', async (req, res) => {
         if (date) {
             params.push(date);
             query += ` AND de.expense_date = $${params.length}`;
+        }
+        if (report_id) {
+            params.push(report_id);
+            query += ` AND de.report_id = $${params.length}`;
         }
         query += ` ORDER BY de.expense_date DESC, de.created_at DESC`;
 
