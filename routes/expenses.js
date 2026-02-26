@@ -84,6 +84,13 @@ router.post('/', async (req, res) => {
 
     const client = await pool.connect();
     try {
+        const receivedKeys = Object.keys(req.body);
+        console.log('--- Record Expense Keys Received ---', receivedKeys);
+
+        if (!payment_source_id) {
+            throw new Error(`payment_source_id is missing. Received keys: [${receivedKeys.join(', ')}]. Please check for typos (snake_case vs camelCase).`);
+        }
+
         await client.query('BEGIN');
 
         // 0. Generate Sequential Expense Number
