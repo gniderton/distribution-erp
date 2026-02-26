@@ -84,31 +84,17 @@ router.post('/', async (req, res) => {
 
     const client = await pool.connect();
     try {
-        const receivedKeys = Object.keys(req.body || {});
-        const contentType = req.headers['content-type'];
-        console.log('--- Record Expense Request Details ---');
-        console.log('Content-Type:', contentType);
-        console.log('Body Type:', typeof req.body);
-        console.log('Keys Received:', receivedKeys);
+        await client.query('BEGIN');
 
         // Handle Retool sending strings like "undefined" or "null"
         const cleanID = (val) => (val === 'undefined' || val === 'null' || val === '' || val === undefined) ? null : val;
-
         const pSourceId = cleanID(payment_source_id);
         const pCatId = cleanID(category_account_id);
 
-        if (!pSourceId) {
-            let errorMsg = `payment_source_id is missing. `;
-            if (!contentType || !contentType.includes('application/json')) {
-                errorMsg += `CRITICAL: Your Retool "Content-Type" header is "${contentType}". It MUST be "application/json". `;
-            }
-            errorMsg += `Received keys: [${receivedKeys.join(', ')}]. Body Value: "${payment_source_id}"`;
-            throw new Error(errorMsg);
-        }
+        if (!pSourceId) throw new Error("payment_source_id is missing");
+        if (!pCatId) throw new Error("category_account_id is missing");
 
-        await client.query('BEGIN');
-
-        // 0. Generate Sequential Expense Number
+        // Use sequential expense number
         const seqRes = await client.query(`
             UPDATE document_sequences 
             SET current_number = current_number + 1 
@@ -128,7 +114,7 @@ router.post('/', async (req, res) => {
         }
 
         if (sourceRes.rows.length === 0) {
-            throw new Error(`Invalid Payment Source: Could not find account with ID/Name "${pSourceId}"`);
+            throw new Error(`Invalid Payment Source ID/Name: "${pSourceId}"`);
         }
 
         const bankRecord = sourceRes.rows[0];
