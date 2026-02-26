@@ -35,6 +35,42 @@ router.get('/list', async (req, res) => {
     }
 });
 
+// [NEW] 1b. List Reconciliation Expenses (Filtered)
+router.get('/expenses', async (req, res) => {
+    try {
+        const { status, dse_id, date } = req.query;
+        let query = `
+            SELECT 
+                de.*,
+                e.full_name as dse_name,
+                dsr.report_date
+            FROM dse_expenses de
+            JOIN employees e ON de.dse_id = e.id
+            JOIN daily_sales_reports dsr ON de.report_id = dsr.id
+            WHERE 1=1
+        `;
+        const params = [];
+        if (status) {
+            params.push(status);
+            query += ` AND de.status = $${params.length}`;
+        }
+        if (dse_id) {
+            params.push(dse_id);
+            query += ` AND de.dse_id = $${params.length}`;
+        }
+        if (date) {
+            params.push(date);
+            query += ` AND de.expense_date = $${params.length}`;
+        }
+        query += ` ORDER BY de.expense_date DESC, de.created_at DESC`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 2. Get Report Details (Screen 2)
 router.get('/:id/details', async (req, res) => {
     const { id } = req.params;
@@ -697,6 +733,48 @@ router.patch('/:id/verify-online', async (req, res) => {
     } finally {
         client.release();
     }
+});
+
+// D. Specific Expense Approval (for Retool)
+router.post('/expenses/approve', async (req, res) => {
+    const { expense_ids, user_id } = req.body;
+    if (!Array.isArray(expense_ids)) {
+        return res.status(400).json({ error: "expense_ids must be an array" });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Map types to GL
+        const typeMap = { 'Fuel': 5010, 'Food': 5011, 'Transit': 5011, 'Repair': 5012, 'Other': 5013 };
+        const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE '%cash%' LIMIT 1");
+        const cashBankId = bRes.rows[0]?.id;
+
+        for (const id of expense_ids) {
+            const resExp = await client.query(`
+                UPDATE dse_expenses SET status = 'Verified', verified_by = $1, verified_at = NOW()
+                WHERE id = $2 AND status = 'Pending' RETURNING *
+            `, [user_id, id]);
+
+            if (resExp.rows.length > 0) {
+                const exp = resExp.rows[0];
+                const expenseCode = typeMap[exp.expense_type] || 5013;
+                const ledgerLines = [
+                    { code: expenseCode, debit: Number(exp.amount), credit: 0 },
+                    { code: 1003, debit: 0, credit: Number(exp.amount), bank_account_id: cashBankId }
+                ];
+                await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [
+                    exp.expense_date || new Date(), `DSE Expense: ${exp.expense_type}`, 'DSE_EXPENSE', exp.id, JSON.stringify(ledgerLines)
+                ]);
+            }
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, count: expense_ids.length });
+    } catch (e) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: e.message });
+    } finally { client.release(); }
 });
 
 module.exports = router;
