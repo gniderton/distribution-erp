@@ -749,57 +749,74 @@ router.patch('/:id/verify-online', async (req, res) => {
     }
 });
 
-// D. Specific Expense Approval (for Retool)
-router.post('/expenses/approve', async (req, res) => {
-    const { expense_ids, user_id } = req.body;
-    if (!Array.isArray(expense_ids)) {
-        return res.status(400).json({ error: "expense_ids must be an array" });
-    }
+// D. Specific Expense Process (for Retool - Approval or Rejection)
+router.post('/expenses/:id/process', async (req, res) => {
+    const { id } = req.params;
+    const { action, reason, bank_account_id, user_id } = req.body; // action: 'Verified' | 'Rejected'
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // Map types to GL
-        const typeMap = { 'Fuel': 5010, 'Food': 5011, 'Transit': 5011, 'Repair': 5012, 'Other': 5013 };
-        const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE '%cash%' LIMIT 1");
-        const cashBankId = bRes.rows[0]?.id;
+        if (action === 'Rejected') {
+            const result = await client.query(`
+                UPDATE dse_expenses 
+                SET status = 'Rejected', rejection_reason = $1, verified_by = $2, verified_at = NOW()
+                WHERE id = $3 AND status = 'Pending'
+                RETURNING *
+            `, [reason || 'No reason provided', user_id, id]);
 
-        for (const id of expense_ids) {
-            const resExp = await client.query(`
-                UPDATE dse_expenses SET status = 'Verified', verified_by = $1, verified_at = NOW()
-                WHERE id = $2 AND status = 'Pending' RETURNING *
-            `, [user_id, id]);
-
-            if (resExp.rows.length > 0) {
-                const exp = resExp.rows[0];
-                const expenseCode = typeMap[exp.expense_type] || 5013;
-
-                let creditAcc = 1003; // Default Cash (Account 1003)
-                let bankAccountId = exp.bank_account_id;
-
-                if (exp.payment_mode === 'Card' || exp.payment_mode === 'Online') {
-                    creditAcc = 1002; // Bank Account
-                }
-
-                if (!bankAccountId && creditAcc === 1003) {
-                    bankAccountId = cashBankId;
-                }
-
-                const ledgerLines = [
-                    { code: expenseCode, debit: Number(exp.amount), credit: 0 },
-                    { code: creditAcc, debit: 0, credit: Number(exp.amount), bank_account_id: bankAccountId }
-                ];
-                await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [
-                    exp.expense_date || new Date(), `DSE Expense: ${exp.expense_type}`, 'DSE_EXPENSE', exp.id, JSON.stringify(ledgerLines)
-                ]);
-            }
+            if (result.rows.length === 0) throw new Error("Expense not found or not Pending");
         }
+        else if (action === 'Verified') {
+            const resExp = await client.query(`
+                UPDATE dse_expenses 
+                SET status = 'Verified', verified_by = $1, verified_at = NOW(),
+                    bank_account_id = COALESCE($2, bank_account_id)
+                WHERE id = $3 AND status = 'Pending' RETURNING *
+            `, [user_id, bank_account_id, id]);
+
+            if (resExp.rows.length === 0) throw new Error("Expense not found or not Pending");
+
+            const exp = resExp.rows[0];
+            const typeMap = { 'Fuel': 5010, 'Food': 5011, 'Transit': 5011, 'Repair': 5012, 'Other': 5013 };
+            const expenseCode = typeMap[exp.expense_type] || 5013;
+
+            // Resolve Bank Account
+            let creditAcc = 1003; // Default Cash
+            let finalBankAccountId = bank_account_id || exp.bank_account_id;
+
+            // If a bank_account_id is provided, check if it's a Bank or Cash account
+            // For now, if bank_account_id exists, we assume it's Bank Account (1002) unless it's the specific "Cash" record.
+            if (finalBankAccountId) {
+                const bRes = await client.query("SELECT bank_name FROM bank_accounts WHERE id = $1", [finalBankAccountId]);
+                const bName = bRes.rows[0]?.bank_name || '';
+                if (bName.toLowerCase().includes('cash')) {
+                    creditAcc = 1003;
+                } else {
+                    creditAcc = 1002;
+                }
+            } else {
+                // No ID? Default to Cash Account 1003 and resolve ID
+                const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE '%cash%' LIMIT 1");
+                finalBankAccountId = bRes.rows[0]?.id;
+            }
+
+            const ledgerLines = [
+                { code: expenseCode, debit: Number(exp.amount), credit: 0 },
+                { code: creditAcc, debit: 0, credit: Number(exp.amount), bank_account_id: finalBankAccountId }
+            ];
+
+            await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [
+                exp.expense_date || new Date(), `DSE Expense Approved: ${exp.expense_type}`, 'DSE_EXPENSE', exp.id, JSON.stringify(ledgerLines)
+            ]);
+        }
+
         await client.query('COMMIT');
-        res.json({ success: true, count: expense_ids.length });
+        res.json({ success: true, message: `Expense ${action}` });
     } catch (e) {
         await client.query('ROLLBACK');
-        res.status(500).json({ error: e.message });
+        res.status(400).json({ error: e.message });
     } finally { client.release(); }
 });
 
