@@ -95,6 +95,7 @@ app.use('/api/finance/reconciliation', require('./routes/payment_reconciliation'
 app.use('/api/finance/reconciliation/bank', require('./routes/bank_recon'));
 app.use('/api/finance/accounting', require('./routes/accounting'));
 app.use('/api/finance/expenses', require('./routes/expenses')); // [NEW] Expenses Portal
+app.use('/api/finance/other-income', require('./routes/other_income')); // [NEW] Non-Operating Income
 app.use('/api', require('./routes/accounting')); // [NEW] Alias for shorter paths like /api/journal-entries
 
 // [TEMP] Migration Endpoint to fix Combo Schema
@@ -155,7 +156,8 @@ pool.query('SELECT NOW()', async (err, res) => {
             { id: '084', path: '084_fix_bank_amount_constraint.sql' },
             { id: '085', path: '085_enhanced_verification_schema.sql' },
             { id: '101', path: '101_trip_returns_batch_condition.sql' },
-            { id: '102', path: '102_sync_logs.sql' }
+            { id: '102', path: '102_sync_logs.sql' },
+            { id: '114', path: '114_other_income_schema.sql' }
         ];
 
         for (const m of migrations) {

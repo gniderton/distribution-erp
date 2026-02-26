@@ -1996,13 +1996,6 @@ Create these queries in your **Vendor Profile Module**:
         }
         ```
 
-        {
-          "address_line": {{txtNewAddress.value}},
-          "city": {{txtNewCity.value}},
-          "state_code": {{selNewState.value}},
-          "district": {{selNewDistrict.value}},
-          "pin_code": {{txtNewPin.value}},
-          "is_default": {{chkNewDefault.value}}
         }
         ```
 
@@ -2548,9 +2541,6 @@ Since Retool tables can't easily filter dropdowns *per row* based on another col
     utils.showNotification({ title: "Loaded", description: tableRows.length + " rows for review." });
     ```
 
-**3.2 jsCommitSmartUpdates**
-*   **Goal**: Take data from the Table (including any last-minute edits) and send to Backend.
-*   **Code**:
     ```javascript
     // We take data from the TABLE, because the user might have edited it there!
     const rows = tblReviewUpdates.data; 
@@ -2579,3 +2569,123 @@ Since Retool tables can't easily filter dropdowns *per row* based on another col
         onFailure: (e) => utils.showNotification({ title: "Error", description: e.message, notificationType: "error" })
     });
     ```
+
+---
+
+## Phase 23: DSE / Delivery Expenses Settlement
+*Goal: Process (Approve/Reject) DSE expenses from the Finance Settlement modal.*
+
+### 1. The Listing Query (`q_getExpenses`)
+*   **Resource**: REST API (`GET`)
+*   **URL**: `api/finance/reconciliation/expenses`
+*   **URL Parameters**:
+    *   `report_id`: `{{ tblPendingDSR.selectedRow.id }}`
+*   **Run on Page Load**: No (Trigger when modal opens)
+
+### 2. The Process Query (`q_processExpense`)
+*   **Method**: `POST`
+*   **URL**: `{{ apiBaseUrl.value }}/api/finance/reconciliation/expenses/{{ override_id }}/process`
+*   **Body Type**: **JSON**
+*   **Body Content (Copy EXACTLY)**:
+```json
+{
+  "action": "{{ action }}", 
+  "reason": "{{ reason }}",
+  "bank_account_id": {{ bank_account_id }},
+  "user_id": {{ current_user.id }}
+}
+```
+> **CRITICAL**: Do NOT put quotes `""` around `{{ bank_account_id }}`. It must be sent as a Number.
+
+### 3. Button Logic (Row Action JS)
+
+#### Button: "Approve" (Row Action)
+```javascript
+// 1. Get the pending changes (Handles both New and Legacy tables)
+const changes = tableExpenses.changesetArray || tableExpenses.recordUpdates || [];
+const rowChange = changes.find(x => x.id == currentRow.id);
+
+// 2. Pick the bank account (draft first, then original)
+const bankId = rowChange?.bank_account_id || currentRow.bank_account_id;
+
+// Optional: Log to debug console
+console.log("Processing Row ID:", currentRow.id, "Account ID:", bankId);
+
+// 3. Trigger the Processing
+await q_processExpense.trigger({
+  additionalScope: {
+    override_id: currentRow.id,
+    action: 'Verified',
+    bank_account_id: bankId || null 
+  }
+});
+
+// 4. Refresh & Notify
+q_getExpenses.trigger();
+utils.showNotification({ 
+  title: 'Approved', 
+  description: 'Expense posted to Ledger', 
+  notificationType: 'success' 
+});
+```
+
+#### Button: "Reject" (Row Action)
+```javascript
+// 1. Get pending changes
+const changes = tableExpenses.changesetArray || tableExpenses.recordUpdates || [];
+const rowChange = changes.find(x => x.id == currentRow.id);
+
+// 2. Pick the reason (draft first, then original)
+const reason = rowChange?.rejection_reason || currentRow.rejection_reason;
+
+await q_processExpense.trigger({
+  additionalScope: {
+    override_id: currentRow.id,
+    action: 'Rejected',
+    reason: reason || 'No reason provided'
+  }
+});
+
+q_getExpenses.trigger();
+utils.showNotification({ 
+  title: 'Rejected', 
+  description: 'Expense rejected', 
+  notificationType: 'error' 
+});
+```
+
+---
+
+## Phase 24: Other Income (Non-Operating) Portal
+*Goal: Record miscellaneous income like Interest, Scrap Sales, or Profit on Assets.*
+
+### 1. Data Queries
+*   **`q_getIncomeRecords`**: `GET /api/finance/other-income` (Filter by `start_date`, `end_date`).
+*   **`q_getIncomeCats`**: `GET /api/finance/other-income/categories` (To populate Category dropdown).
+*   **`q_getBankAccounts`**: `GET /api/bank-accounts` (To populate Destination Account dropdown).
+
+### 2. The Record Income Query (`q_recordIncome`)
+*   **Resource**: REST API (`POST`)
+*   **URL**: `api/finance/other-income`
+*   **Body Content**:
+```json
+{
+  "transaction_date": "{{ dateIncome.value }}",
+  "category_account_id": {{ selIncomeCat.value }},
+  "destination_account_id": {{ selDestAcc.value }},
+  "amount": {{ numIncomeAmount.value }},
+  "received_from": "{{ txtReceivedFrom.value }}",
+  "reference_no": "{{ txtRefNo.value }}",
+  "description": "{{ txtDesc.value }}",
+  "user_id": {{ current_user.id }}
+}
+```
+
+### 3. UI Layout Tips
+1.  **Tab**: Add an "Other Income" tab in your Finance Dashboard.
+2.  **Form**: A simple form on the left or in a modal with fields for Date, Category, Bank/Cash Account, Amount, and Payer Name.
+3.  **Table**: On the right, show a list of recent entries using `q_getIncomeRecords.data`.
+4.  **Success Event**: After `q_recordIncome` succeeds:
+    *   Show Notification: "Income Recorded: {{ data.income_number }}"
+    *   Refresh: `q_getIncomeRecords.trigger()`
+    *   Clear: `formIncome.clear()`
