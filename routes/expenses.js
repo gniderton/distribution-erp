@@ -84,7 +84,6 @@ router.post('/', async (req, res) => {
 
     const client = await pool.connect();
     try {
-        console.log('--- Record Expense Payload ---', req.body);
         await client.query('BEGIN');
 
         // 0. Generate Sequential Expense Number
@@ -99,10 +98,23 @@ router.post('/', async (req, res) => {
         const expenseNumber = `${prefix}${current_number.toString().padStart(5, '0')}`;
 
         // 1. Get Source Account Code (Cash/Bank)
-        const sourceRes = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [payment_source_id]);
-        if (sourceRes.rows.length === 0) throw new Error("Invalid Payment Source");
-        const isCash = sourceRes.rows[0].bank_name.toLowerCase().includes('cash');
+        let sourceRes;
+        if (!isNaN(payment_source_id)) {
+            // It's a numeric ID
+            sourceRes = await client.query('SELECT id, bank_name FROM bank_accounts WHERE id = $1', [payment_source_id]);
+        } else {
+            // Fallback: Check if it's the bank name (common Retool config mistake)
+            sourceRes = await client.query('SELECT id, bank_name FROM bank_accounts WHERE bank_name = $1', [payment_source_id]);
+        }
+
+        if (sourceRes.rows.length === 0) {
+            throw new Error(`Invalid Payment Source: Received "${payment_source_id}". Please ensure your Select component sends the ID.`);
+        }
+
+        const bankRecord = sourceRes.rows[0];
+        const isCash = bankRecord.bank_name.toLowerCase().includes('cash');
         const paymentAccountCode = isCash ? 1003 : 1002;
+        const resolvedPaymentSourceId = bankRecord.id;
 
         // 2. Get Expense Category Detail
         const catRes = await client.query('SELECT code, name FROM chart_of_accounts WHERE id = $1', [category_account_id]);
@@ -143,7 +155,7 @@ router.post('/', async (req, res) => {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING id
         `, [
-            expense_date || new Date(), category_account_id, payment_source_id,
+            expense_date || new Date(), category_account_id, resolvedPaymentSourceId,
             taxable_amount, tax_amount, grand_total, is_gst_expense,
             vendor_name, bill_no, gst_no, description, reference_no,
             user_id, journalEntryId, expenseNumber
