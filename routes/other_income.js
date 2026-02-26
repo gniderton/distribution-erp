@@ -92,10 +92,23 @@ router.post('/', async (req, res) => {
         const crAccountCode = catRes.rows[0].code;
 
         // 3. Prepare Journal Lines
-        const journalLines = [
-            { code: drAccountCode, debit: Number(amount), credit: 0, bank_account_id: destination_account_id },
-            { code: crAccountCode, debit: 0, credit: Number(amount) }
-        ];
+        const journalLines = [];
+        if (is_gst_income && Number(tax_amount) > 0) {
+            // DR Bank/Cash (Asset) - Received Grand Total
+            journalLines.push({ code: drAccountCode, debit: Number(amount), credit: 0, bank_account_id: destination_account_id });
+
+            // CR Income (Revenue) - Only Taxable Amount
+            journalLines.push({ code: crAccountCode, debit: 0, credit: Number(taxable_amount) });
+
+            // CR GST Output (Liability) - Tax
+            const halfTax = Number(tax_amount) / 2;
+            journalLines.push({ code: 2011, debit: 0, credit: halfTax }); // CGST Output
+            journalLines.push({ code: 2012, debit: 0, credit: halfTax }); // SGST Output
+        } else {
+            // Simple Income
+            journalLines.push({ code: drAccountCode, debit: Number(amount), credit: 0, bank_account_id: destination_account_id });
+            journalLines.push({ code: crAccountCode, debit: 0, credit: Number(amount) });
+        }
 
         // 4. Create Journal Entry
         const jeRes = await client.query(
@@ -108,13 +121,15 @@ router.post('/', async (req, res) => {
         const insertRes = await client.query(`
             INSERT INTO other_income (
                 income_number, transaction_date, category_account_id, 
-                destination_account_id, amount, received_from, 
-                reference_no, description, created_by, journal_entry_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                destination_account_id, amount, taxable_amount, tax_amount, 
+                is_gst_income, gst_no, received_from, reference_no, 
+                description, created_by, journal_entry_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING id
         `, [
             incomeNumber, transaction_date || new Date(), category_account_id,
-            destination_account_id, amount, received_from,
+            destination_account_id, amount, taxable_amount || amount, tax_amount || 0,
+            is_gst_income || false, gst_no, received_from,
             reference_no, description, user_id, journalEntryId
         ]);
         const incomeId = insertRes.rows[0].id;
