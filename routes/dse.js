@@ -234,9 +234,15 @@ router.post('/eod-sync', async (req, res) => {
         let totalExpense = 0;
         for (const exp of expenses) {
             await client.query(`
-                INSERT INTO dse_expenses (dse_id, expense_date, expense_type, amount, description, sync_id, report_id)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-            `, [dse_id, date, exp.type, exp.amount, exp.description, syncId, reportId]);
+                INSERT INTO dse_expenses (
+                    dse_id, expense_date, expense_type, amount, description, sync_id, report_id, 
+                    payment_mode, bank_account_id
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            `, [
+                dse_id, date, exp.type, exp.amount, exp.description, syncId, reportId,
+                exp.payment_mode || 'Cash', exp.bank_account_id || null
+            ]);
             totalExpense += parseFloat(exp.amount || 0);
         }
 

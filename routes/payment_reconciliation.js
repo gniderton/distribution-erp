@@ -383,13 +383,23 @@ router.post('/bulk-update', async (req, res) => {
                     };
                     const expenseCode = typeMap[exp.expense_type] || 5013;
 
-                    // Resolve "Cash in Hand" for trigger
-                    const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE '%cash%' LIMIT 1");
-                    const cashBankId = bRes.rows[0]?.id;
+                    // Resolve Credit Account for trigger
+                    let creditAcc = 1003; // Default Cash (Account 1003)
+                    let bankAccountId = exp.bank_account_id;
+
+                    if (exp.payment_mode === 'Card' || exp.payment_mode === 'Online') {
+                        creditAcc = 1002; // Bank Account
+                    }
+
+                    // If it's Cash and no bankAccountId provided, auto-resolve "Cash in Hand"
+                    if (!bankAccountId && creditAcc === 1003) {
+                        const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE '%cash%' LIMIT 1");
+                        bankAccountId = bRes.rows[0]?.id;
+                    }
 
                     const ledgerLines = [
                         { code: expenseCode, debit: Number(exp.amount), credit: 0 },
-                        { code: 1003, debit: 0, credit: Number(exp.amount), bank_account_id: cashBankId }
+                        { code: creditAcc, debit: 0, credit: Number(exp.amount), bank_account_id: bankAccountId }
                     ];
 
                     await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [
@@ -760,9 +770,21 @@ router.post('/expenses/approve', async (req, res) => {
             if (resExp.rows.length > 0) {
                 const exp = resExp.rows[0];
                 const expenseCode = typeMap[exp.expense_type] || 5013;
+
+                let creditAcc = 1003; // Default Cash (Account 1003)
+                let bankAccountId = exp.bank_account_id;
+
+                if (exp.payment_mode === 'Card' || exp.payment_mode === 'Online') {
+                    creditAcc = 1002; // Bank Account
+                }
+
+                if (!bankAccountId && creditAcc === 1003) {
+                    bankAccountId = cashBankId;
+                }
+
                 const ledgerLines = [
                     { code: expenseCode, debit: Number(exp.amount), credit: 0 },
-                    { code: 1003, debit: 0, credit: Number(exp.amount), bank_account_id: cashBankId }
+                    { code: creditAcc, debit: 0, credit: Number(exp.amount), bank_account_id: bankAccountId }
                 ];
                 await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [
                     exp.expense_date || new Date(), `DSE Expense: ${exp.expense_type}`, 'DSE_EXPENSE', exp.id, JSON.stringify(ledgerLines)
