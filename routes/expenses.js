@@ -87,8 +87,14 @@ router.post('/', async (req, res) => {
         const receivedKeys = Object.keys(req.body);
         console.log('--- Record Expense Keys Received ---', receivedKeys);
 
-        if (!payment_source_id) {
-            throw new Error(`payment_source_id is missing. Received keys: [${receivedKeys.join(', ')}]. Please check for typos (snake_case vs camelCase).`);
+        // Handle Retool sending strings like "undefined" or "null"
+        const cleanID = (val) => (val === 'undefined' || val === 'null' || val === '') ? null : val;
+
+        const pSourceId = cleanID(payment_source_id);
+        const pCatId = cleanID(category_account_id);
+
+        if (!pSourceId) {
+            throw new Error(`payment_source_id is missing or undefined. Found keys: [${receivedKeys.join(', ')}]. Body Value: "${payment_source_id}"`);
         }
 
         await client.query('BEGIN');
@@ -106,16 +112,14 @@ router.post('/', async (req, res) => {
 
         // 1. Get Source Account Code (Cash/Bank)
         let sourceRes;
-        if (!isNaN(payment_source_id)) {
-            // It's a numeric ID
-            sourceRes = await client.query('SELECT id, bank_name FROM bank_accounts WHERE id = $1', [payment_source_id]);
+        if (!isNaN(pSourceId)) {
+            sourceRes = await client.query('SELECT id, bank_name FROM bank_accounts WHERE id = $1', [pSourceId]);
         } else {
-            // Fallback: Check if it's the bank name (common Retool config mistake)
-            sourceRes = await client.query('SELECT id, bank_name FROM bank_accounts WHERE bank_name = $1', [payment_source_id]);
+            sourceRes = await client.query('SELECT id, bank_name FROM bank_accounts WHERE bank_name = $1', [pSourceId]);
         }
 
         if (sourceRes.rows.length === 0) {
-            throw new Error(`Invalid Payment Source: Received "${payment_source_id}". Please ensure your Select component sends the ID.`);
+            throw new Error(`Invalid Payment Source: Could not find account with ID/Name "${pSourceId}"`);
         }
 
         const bankRecord = sourceRes.rows[0];
@@ -124,7 +128,8 @@ router.post('/', async (req, res) => {
         const resolvedPaymentSourceId = bankRecord.id;
 
         // 2. Get Expense Category Detail
-        const catRes = await client.query('SELECT code, name FROM chart_of_accounts WHERE id = $1', [category_account_id]);
+        const catRes = await client.query('SELECT code, name FROM chart_of_accounts WHERE id = $1', [pCatId]);
+        if (catRes.rows.length === 0) throw new Error(`Invalid Category ID: ${pCatId}`);
         const categoryCode = catRes.rows[0].code;
 
         // 3. Prepare Journal Lines
@@ -162,7 +167,7 @@ router.post('/', async (req, res) => {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING id
         `, [
-            expense_date || new Date(), category_account_id, resolvedPaymentSourceId,
+            expense_date || new Date(), pCatId, resolvedPaymentSourceId,
             taxable_amount, tax_amount, grand_total, is_gst_expense,
             vendor_name, bill_no, gst_no, description, reference_no,
             user_id, journalEntryId, expenseNumber
