@@ -3,7 +3,7 @@ const router = express.Router();
 const { pool } = require('../config/db');
 
 // @route   POST /api/finance/assets
-// @desc    Record an asset purchase
+// @desc    Record an asset purchase (Always on Credit)
 router.post('/', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -15,10 +15,7 @@ router.post('/', async (req, res) => {
             useful_life_years,
             salvage_value,
             asset_account_code,
-            payment_mode, // 'Bank', 'Cash', 'Credit'
-            bank_account_id,
             vendor_id,
-            transaction_ref,
             remarks
         } = req.body;
 
@@ -35,22 +32,16 @@ router.post('/', async (req, res) => {
 
         const assetId = assetRes.rows[0].id;
 
-        // 2. Prepare Accounting Entry
+        // 2. Accounting Entry (Always Credit Purchase)
         const acc_asset = asset_account_code;
-        const acc_bank = 1002;
-        const acc_cash = 1003;
         const acc_ap = 2001;
-
-        let creditAcc = acc_bank;
-        if (payment_mode === 'Cash') creditAcc = acc_cash;
-        if (payment_mode === 'Credit') creditAcc = acc_ap;
 
         const ledgerLines = [
             { code: acc_asset, debit: Number(purchase_cost), credit: 0 },
-            { code: creditAcc, debit: 0, credit: Number(purchase_cost), bank_account_id: (payment_mode === 'Bank') ? bank_account_id : null }
+            { code: acc_ap, debit: 0, credit: Number(purchase_cost) }
         ];
 
-        const description = `Asset Purchase: ${asset_name} (${category})`;
+        const description = `Asset Purchase (Credit): ${asset_name} (${category})`;
         const journalId = await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`,
             [purchase_date, description, 'ASSET_PURCHASE', assetId, JSON.stringify(ledgerLines)]);
 
@@ -80,7 +71,9 @@ router.get('/', async (req, res) => {
             SELECT 
                 a.*,
                 COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'DEPRECIATION'), 0) as total_depreciation,
-                (a.purchase_cost - COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'DEPRECIATION'), 0)) as net_book_value
+                COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'PAYMENT'), 0) as total_paid,
+                (a.purchase_cost - COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'DEPRECIATION'), 0)) as net_book_value,
+                (a.purchase_cost - COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'PAYMENT'), 0)) as balance_payable
             FROM assets a
             ORDER BY a.purchase_date DESC
         `);
@@ -247,7 +240,7 @@ router.post('/:id/sale', async (req, res) => {
 
         let debitAcc = (payment_mode === 'Cash') ? acc_cash : acc_bank;
         let ledgerLines = [
-            { code: debitAcc, debit: proceeds, credit: 0, bank_account_id: (payment_mode === 'Bank') ? bank_account_id : null },
+            { code: debitAcc, debit: proceeds, credit: 0, bank_account_id: (payment_mode === 'Bank' || payment_mode === 'Online') ? bank_account_id : null },
             { code: acc_accum_dep, debit: accumDep, credit: 0 },
             { code: acc_asset, debit: 0, credit: cost }
         ];
@@ -284,38 +277,86 @@ router.post('/:id/sale', async (req, res) => {
 });
 
 // @route   POST /api/finance/assets/payment
-// @desc    Record payment for an asset purchased on credit
+// @desc    Record payment for an asset (Unified Modes: Cash, Online, Cheque)
 router.post('/payment', async (req, res) => {
     const client = await pool.connect();
     try {
-        const { asset_id, amount, payment_date, payment_mode, bank_account_id, remarks } = req.body;
+        const {
+            asset_id,
+            amount,
+            payment_date,
+            payment_mode,
+            bank_account_id,
+            bank_statement_entry_id,
+            cheque_no,
+            cheque_date,
+            bank_name,
+            remarks
+        } = req.body;
 
         await client.query('BEGIN');
 
         // 1. Get Asset Info
         const assetRes = await client.query('SELECT asset_name FROM assets WHERE id = $1', [asset_id]);
         if (assetRes.rows.length === 0) throw new Error('Asset not found');
+        const assetName = assetRes.rows[0].asset_name;
 
         // 2. Accounting Entry
         const acc_ap = 2001;
         const acc_bank = 1002;
         const acc_cash = 1003;
+        const acc_chq_issued = 2004;
 
-        let creditAcc = (payment_mode === 'Cash') ? acc_cash : acc_bank;
+        let creditAcc = acc_bank;
+        if (payment_mode === 'Cash') creditAcc = acc_cash;
+        if (payment_mode === 'Cheque') creditAcc = acc_chq_issued;
+
         const ledgerLines = [
             { code: acc_ap, debit: Number(amount), credit: 0 },
-            { code: creditAcc, debit: 0, credit: Number(amount), bank_account_id: (payment_mode === 'Bank') ? bank_account_id : null }
+            { code: creditAcc, debit: 0, credit: Number(amount), bank_account_id: (payment_mode !== 'Cash') ? bank_account_id : null }
         ];
 
-        const description = `Asset Payment: ${assetRes.rows[0].asset_name}`;
+        const description = `Asset Payment (${payment_mode}): ${assetName}`;
         const journalRes = await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`,
             [payment_date, description, 'ASSET_PAYMENT', asset_id, JSON.stringify(ledgerLines)]);
+
+        const journalId = journalRes.rows[0].create_journal_entry;
+
+        // 3. Record Transaction in asset_transactions
+        await client.query(`
+            INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, journal_entry_id, remarks)
+            VALUES ($1, 'PAYMENT', $2, $3, $4, $5)
+        `, [asset_id, payment_date, amount, journalId, remarks]);
+
+        // 4. Handle Online (Bank Statement Consumption)
+        if (payment_mode === 'Online' && bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
+                    status = CASE 
+                        WHEN (debit_amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [amount, bank_statement_entry_id]);
+        }
+
+        // 5. Handle Cheque Entry
+        if (payment_mode === 'Cheque') {
+            await client.query(`
+                INSERT INTO cheques (
+                    cheque_number, cheque_date, bank_name, amount, 
+                    type, party_type, reference_type, reference_id, status
+                ) VALUES ($1, $2, $3, $4, 'OUTGOING', 'VENDOR', 'ASSET_PAYMENT', $5, 'PENDING')
+            `, [cheque_no, cheque_date || payment_date, bank_name || 'Own Bank', amount, asset_id]);
+        }
 
         await client.query('COMMIT');
         res.json({ success: true, message: 'Payment recorded' });
 
     } catch (err) {
         await client.query('ROLLBACK');
+        console.error('Asset Payment Error:', err.message);
         res.status(500).json({ error: err.message });
     } finally {
         client.release();
