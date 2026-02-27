@@ -168,8 +168,15 @@ router.post('/', async (req, res) => {
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Payment Error:', err.message);
-        res.status(500).json({ error: 'Server Error recording payment' });
+        console.error('--- VENDOR PAYMENT ERROR ---');
+        console.error('Message:', err.message);
+        console.error('Code:', err.code);
+        console.error('Stack:', err.stack);
+        res.status(500).json({
+            error: 'Server Error recording payment',
+            details: err.message,
+            code: err.code
+        });
     } finally {
         client.release();
     }

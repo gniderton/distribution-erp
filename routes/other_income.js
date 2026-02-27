@@ -182,8 +182,14 @@ router.post('/', async (req, res) => {
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Record Other Income Error:', err);
-        res.status(500).json({ error: err.message });
+        console.error('--- OTHER INCOME ERROR ---');
+        console.error('Message:', err.message);
+        console.error('Code:', err.code);
+        res.status(500).json({
+            error: 'Server Error recording income',
+            details: err.message,
+            code: err.code
+        });
     } finally {
         client.release();
     }

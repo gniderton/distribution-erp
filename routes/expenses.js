@@ -208,8 +208,14 @@ router.post('/', async (req, res) => {
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Record Expense Error:', err);
-        res.status(500).json({ error: err.message });
+        console.error('--- EXPENSE RECORDING ERROR ---');
+        console.error('Message:', err.message);
+        console.error('Code:', err.code);
+        res.status(500).json({
+            error: 'Server Error recording expense',
+            details: err.message,
+            code: err.code
+        });
     } finally {
         client.release();
     }
