@@ -113,6 +113,74 @@ router.post('/:id/clear', async (req, res) => {
     }
 });
 
+// 2b. Bulk Mark Cheques as Cleared
+router.post('/bulk-clear', async (req, res) => {
+    const { cheque_ids, clearance_date, bank_account_id, user_id, remarks } = req.body;
+
+    if (!cheque_ids || !Array.isArray(cheque_ids) || cheque_ids.length === 0) {
+        return res.status(400).json({ error: 'No cheque IDs provided' });
+    }
+    if (!bank_account_id) {
+        return res.status(400).json({ error: 'Bank Account is required for clearing' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        for (const id of cheque_ids) {
+            // 1. Get Cheque Info
+            const chqRes = await client.query('SELECT * FROM cheques WHERE id = $1 AND status = \'PENDING\'', [id]);
+            if (chqRes.rows.length === 0) continue; // Skip already processed or non-existent
+            const chq = chqRes.rows[0];
+
+            // 2. Update status
+            await client.query(`
+                UPDATE cheques 
+                SET status = 'CLEARED', 
+                    clearance_date = $1, 
+                    bank_account_id = $2, 
+                    remarks = $3,
+                    updated_at = NOW()
+                WHERE id = $4
+            `, [clearance_date || new Date(), bank_account_id, remarks, id]);
+
+            // 3. Post Accounting Entry
+            const acc_bank = 1002;
+            const acc_cheque_in_hand = 1004;
+            const acc_cheque_issued = 2004;
+
+            let ledgerLines = [];
+            if (chq.type === 'INCOMING') {
+                ledgerLines = [
+                    { code: acc_bank, debit: Number(chq.amount), credit: 0, bank_account_id: bank_account_id },
+                    { code: acc_cheque_in_hand, debit: 0, credit: Number(chq.amount) }
+                ];
+            } else {
+                ledgerLines = [
+                    { code: acc_cheque_issued, debit: Number(chq.amount), credit: 0 },
+                    { code: acc_bank, debit: 0, credit: Number(chq.amount), bank_account_id: bank_account_id }
+                ];
+            }
+
+            await client.query('SELECT create_journal_entry($1, $2, \'CHQ_CLEAR\', $3, $4)', [
+                clearance_date || new Date(),
+                `Bulk Cheque Cleared: ${chq.cheque_number} (${chq.bank_name})`,
+                id,
+                JSON.stringify(ledgerLines)
+            ]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: `Successfully cleared ${cheque_ids.length} cheques` });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // 3. Mark Cheque as Bounced
 router.post('/:id/bounce', async (req, res) => {
     const { id } = req.params;
