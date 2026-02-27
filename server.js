@@ -160,7 +160,8 @@ pool.query('SELECT NOW()', async (err, res) => {
             { id: '102', path: '102_sync_logs.sql' },
             { id: '114', path: '114_other_income_schema.sql' },
             { id: '115', path: '115_other_income_gst.sql' },
-            { id: '116', path: '116_cheque_management.sql' }
+            { id: '116', path: '116_cheque_management.sql' },
+            { id: '117', path: '117_make_bank_cols_nullable.sql' }
         ];
 
         for (const m of migrations) {

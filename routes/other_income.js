@@ -88,13 +88,17 @@ router.post('/', async (req, res) => {
 
         // 2. Get Account Codes
         // Destination (Bank/Cash/Cheque)
-        const destRes = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [destination_account_id]);
-        if (destRes.rows.length === 0) throw new Error("Invalid Destination Account");
-        const isCash = destRes.rows[0].bank_name.toLowerCase().includes('cash');
+        let drAccountCode = 1002; // Default Bank
+        let isCash = false;
 
-        let drAccountCode = isCash ? 1003 : 1002;
         if (payment_mode === 'Cheque') {
             drAccountCode = 1004; // Cheques in Hand
+        } else {
+            if (!destination_account_id) throw new Error("Destination Account is required for Cash/Online payments");
+            const destRes = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [destination_account_id]);
+            if (destRes.rows.length === 0) throw new Error("Invalid Destination Account");
+            isCash = destRes.rows[0].bank_name.toLowerCase().includes('cash');
+            drAccountCode = isCash ? 1003 : 1002;
         }
 
         // Income Category

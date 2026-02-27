@@ -50,6 +50,10 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Vendor and Valid Amount required' });
         }
 
+        if (mode !== 'Cheque' && !bank_account_id) {
+            return res.status(400).json({ error: 'Bank Account is required for Cash/Online payments' });
+        }
+
         await client.query('BEGIN');
 
         // 0.5 Generate Payment Number
@@ -95,7 +99,7 @@ router.post('/', async (req, res) => {
             // Dr Accounts Payable (Liability decreases), Cr Bank/Cheque Issued
             ledgerLines = [
                 { code: acc_ap, debit: Number(amount), credit: 0 },
-                { code: targetAcc, debit: 0, credit: Number(amount), bank_account_id: bank_account_id }
+                { code: targetAcc, debit: 0, credit: Number(amount), bank_account_id: (mode === 'Cheque') ? null : bank_account_id }
             ];
 
             if (mode === 'Cheque') {

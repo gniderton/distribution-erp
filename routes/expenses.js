@@ -79,6 +79,10 @@ router.post('/', async (req, res) => {
         gst_no,
         description,
         reference_no,
+        payment_mode,
+        cheque_no,
+        cheque_date: chq_date,
+        bank_name: chq_bank_name,
         user_id
     } = req.body;
 
@@ -91,7 +95,7 @@ router.post('/', async (req, res) => {
         const pSourceId = cleanID(payment_source_id);
         const pCatId = cleanID(category_account_id);
 
-        if (!pSourceId) throw new Error("payment_source_id is missing");
+        if (payment_mode !== 'Cheque' && !pSourceId) throw new Error("payment_source_id is missing");
         if (!pCatId) throw new Error("category_account_id is missing");
 
         // Use sequential expense number
@@ -105,22 +109,26 @@ router.post('/', async (req, res) => {
         const { prefix, current_number } = seqRes.rows[0];
         const expenseNumber = `${prefix}${current_number.toString().padStart(5, '0')}`;
 
-        // 1. Get Source Account Code (Cash/Bank)
-        let sourceRes;
-        if (!isNaN(pSourceId)) {
-            sourceRes = await client.query('SELECT id, bank_name FROM bank_accounts WHERE id = $1', [pSourceId]);
+        // 1. Get Source Account Code (Cash/Bank/Cheque)
+        let resolvedPaymentSourceId = pSourceId;
+        let paymentAccountCode = 1002; // Default Bank
+
+        if (payment_mode === 'Cheque') {
+            paymentAccountCode = 2004; // Cheques Issued
         } else {
-            sourceRes = await client.query('SELECT id, bank_name FROM bank_accounts WHERE bank_name = $1', [pSourceId]);
-        }
+            let sourceRes;
+            if (!isNaN(pSourceId)) {
+                sourceRes = await client.query('SELECT id, bank_name FROM bank_accounts WHERE id = $1', [pSourceId]);
+            } else {
+                sourceRes = await client.query('SELECT id, bank_name FROM bank_accounts WHERE bank_name = $1', [pSourceId]);
+            }
+            if (sourceRes.rows.length === 0) throw new Error(`Invalid Payment Source: "${pSourceId}"`);
 
-        if (sourceRes.rows.length === 0) {
-            throw new Error(`Invalid Payment Source ID/Name: "${pSourceId}"`);
+            const bankRecord = sourceRes.rows[0];
+            const isCash = bankRecord.bank_name.toLowerCase().includes('cash');
+            paymentAccountCode = isCash ? 1003 : 1002;
+            resolvedPaymentSourceId = bankRecord.id;
         }
-
-        const bankRecord = sourceRes.rows[0];
-        const isCash = bankRecord.bank_name.toLowerCase().includes('cash');
-        const paymentAccountCode = isCash ? 1003 : 1002;
-        const resolvedPaymentSourceId = bankRecord.id;
 
         // 2. Get Expense Category Detail
         const catRes = await client.query('SELECT code, name FROM chart_of_accounts WHERE id = $1', [pCatId]);
@@ -129,32 +137,24 @@ router.post('/', async (req, res) => {
 
         // 3. Prepare Journal Lines
         const journalLines = [];
-        const acc_cheque_issued = 2004;
-        const isCheque = reference_no && reference_no.toLowerCase().includes('chq'); // Basic check or check req.body.payment_mode
-        const finalPaymentAccountCode = isCheque ? acc_cheque_issued : paymentAccountCode;
-
         if (is_gst_expense && Number(tax_amount) > 0) {
-            // DR Expense (Taxable)
             journalLines.push({ code: categoryCode, debit: Number(taxable_amount), credit: 0 });
-            // DR GST Input
             const halfTax = Number(tax_amount) / 2;
             journalLines.push({ code: 1011, debit: halfTax, credit: 0 });
             journalLines.push({ code: 1012, debit: halfTax, credit: 0 });
-            // CR Payment Account (Link to bank_account_id if not cheque)
-            journalLines.push({ code: finalPaymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: isCheque ? null : resolvedPaymentSourceId });
+            journalLines.push({ code: paymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: payment_mode === 'Cheque' ? null : resolvedPaymentSourceId });
         } else {
-            // Simple Expense
             journalLines.push({ code: categoryCode, debit: Number(grand_total), credit: 0 });
-            journalLines.push({ code: finalPaymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: isCheque ? null : resolvedPaymentSourceId });
+            journalLines.push({ code: paymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: payment_mode === 'Cheque' ? null : resolvedPaymentSourceId });
         }
 
-        if (isCheque) {
+        if (payment_mode === 'Cheque') {
             await client.query(`
                 INSERT INTO cheques (
                     cheque_number, cheque_date, bank_name, amount, 
                     type, party_type, party_id, reference_type, reference_id, status
                 ) VALUES ($1, $2, $3, $4, 'OUTGOING', 'EXPENSE', NULL, 'EXPENSE', NULL, 'PENDING')
-            `, [reference_no, expense_date || new Date(), 'Own Bank', grand_total]);
+            `, [cheque_no || reference_no, chq_date || expense_date || new Date(), chq_bank_name || 'Own Bank', grand_total]);
         }
 
         // 4. Create Journal Entry using DB function
