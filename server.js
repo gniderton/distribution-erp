@@ -167,7 +167,8 @@ pool.query('SELECT NOW()', async (err, res) => {
             { id: '118', path: '118_link_bank_statements.sql' },
             { id: '119', path: '119_fix_bank_statement_constraint.sql' },
             { id: '120', path: '120_unblock_vendor_payments_reconciliation.sql' },
-            { id: '121', path: '121_asset_management_schema.sql' }
+            { id: '121', path: '121_asset_management_schema.sql' },
+            { id: '122', path: '122_add_gst_to_assets.sql' }
         ];
 
         for (const m of migrations) {

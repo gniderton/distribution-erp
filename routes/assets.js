@@ -16,7 +16,13 @@ router.post('/', async (req, res) => {
             salvage_value,
             asset_account_code,
             vendor_id,
-            remarks
+            remarks,
+            is_gst_purchase,     // Added
+            taxable_amount,      // Added
+            tax_amount,          // Added
+            gst_no,              // Added
+            bill_no,             // Added
+            created_by           // Added
         } = req.body;
 
         await client.query('BEGIN');
@@ -25,23 +31,40 @@ router.post('/', async (req, res) => {
         const assetRes = await client.query(`
             INSERT INTO assets (
                 asset_name, category, purchase_date, purchase_cost, 
-                useful_life_years, salvage_value, asset_account_code, vendor_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                useful_life_years, salvage_value, asset_account_code, vendor_id,
+                is_gst_purchase, taxable_amount, tax_amount, gst_no, bill_no, created_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING id
-        `, [asset_name, category, purchase_date, purchase_cost, useful_life_years, salvage_value, asset_account_code, vendor_id]);
+        `, [
+            asset_name, category, purchase_date, purchase_cost,
+            useful_life_years, salvage_value, asset_account_code, vendor_id,
+            is_gst_purchase || false, taxable_amount || 0, tax_amount || 0, gst_no, bill_no, created_by
+        ]);
 
         const assetId = assetRes.rows[0].id;
 
         // 2. Accounting Entry (Always Credit Purchase)
         const acc_asset = asset_account_code;
         const acc_ap = 2001;
+        const acc_cgst = 1011;
+        const acc_sgst = 1012;
 
-        const ledgerLines = [
-            { code: acc_asset, debit: Number(purchase_cost), credit: 0 },
-            { code: acc_ap, debit: 0, credit: Number(purchase_cost) }
-        ];
+        const ledgerLines = [];
 
-        const description = `Asset Purchase (Credit): ${asset_name} (${category})`;
+        if (is_gst_purchase && Number(tax_amount) > 0) {
+            // Split entry for GST
+            ledgerLines.push({ code: acc_asset, debit: Number(taxable_amount), credit: 0 });
+            const halfTax = Number(tax_amount) / 2;
+            ledgerLines.push({ code: acc_cgst, debit: halfTax, credit: 0 });
+            ledgerLines.push({ code: acc_sgst, debit: halfTax, credit: 0 });
+            ledgerLines.push({ code: acc_ap, debit: 0, credit: Number(purchase_cost) });
+        } else {
+            // Simple entry
+            ledgerLines.push({ code: acc_asset, debit: Number(purchase_cost), credit: 0 });
+            ledgerLines.push({ code: acc_ap, debit: 0, credit: Number(purchase_cost) });
+        }
+
+        const description = `Asset Purchase (Credit): ${asset_name} ${bill_no ? '(Bill: ' + bill_no + ')' : ''}`;
         const journalId = await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`,
             [purchase_date, description, 'ASSET_PURCHASE', assetId, JSON.stringify(ledgerLines)]);
 
