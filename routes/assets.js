@@ -136,6 +136,82 @@ router.post('/depreciate', async (req, res) => {
     }
 });
 
+// @route   POST /api/finance/assets/auto-depreciate
+// @desc    Bulk record monthly depreciation for all active assets
+router.post('/auto-depreciate', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { period_date } = req.body; // e.g. "2026-02-28" - represents the month
+        if (!period_date) return res.status(400).json({ error: 'Period date is required' });
+
+        const date = new Date(period_date);
+        const month = date.getMonth() + 1;
+        const year = date.getFullYear();
+
+        await client.query('BEGIN');
+
+        // 1. Get all active assets
+        const assetsRes = await client.query(`
+            SELECT id, asset_name, purchase_cost, salvage_value, useful_life_years, accum_dep_account_code
+            FROM assets 
+            WHERE status = 'Active'
+        `);
+
+        let count = 0;
+        let totalAmount = 0;
+
+        for (const asset of assetsRes.rows) {
+            // 2. Check if already depreciated for this month/year
+            const checkRes = await client.query(`
+                SELECT id FROM asset_transactions 
+                WHERE asset_id = $1 
+                  AND transaction_type = 'DEPRECIATION'
+                  AND EXTRACT(MONTH FROM transaction_date) = $2
+                  AND EXTRACT(YEAR FROM transaction_date) = $3
+            `, [asset.id, month, year]);
+
+            if (checkRes.rows.length > 0) continue; // Skip if already done
+
+            // 3. Calculate Monthly Depreciation (Straight Line)
+            const monthlyDep = (Number(asset.purchase_cost) - Number(asset.salvage_value || 0)) / (Number(asset.useful_life_years) * 12);
+            const amount = Number(monthlyDep.toFixed(2));
+
+            if (amount <= 0) continue;
+
+            // 4. Accounting Entry
+            const acc_dep_exp = 5020;
+            const acc_accum_dep = asset.accum_dep_account_code || 1210;
+            const ledgerLines = [
+                { code: acc_dep_exp, debit: amount, credit: 0 },
+                { code: acc_accum_dep, debit: 0, credit: amount }
+            ];
+
+            const description = `Auto-Depreciation (${month}/${year}): ${asset.asset_name}`;
+            const journalRes = await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`,
+                [period_date, description, 'DEPRECIATION', asset.id, JSON.stringify(ledgerLines)]);
+
+            // 5. Transaction Record
+            await client.query(`
+                INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, journal_entry_id, remarks)
+                VALUES ($1, 'DEPRECIATION', $2, $3, $4, 'Auto-generated bulk entry')
+            `, [asset.id, period_date, amount, journalRes.rows[0].create_journal_entry]);
+
+            count++;
+            totalAmount += amount;
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, assets_processed: count, total_amount: totalAmount.toFixed(2) });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Auto-Depreciation Error:', err.message);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // @route   POST /api/finance/assets/:id/sale
 // @desc    Record sale or disposal of an asset
 router.post('/:id/sale', async (req, res) => {
