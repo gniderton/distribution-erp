@@ -84,16 +84,29 @@ router.post('/', async (req, res) => {
         // 1b. Create Accounting Entry (Ledger)
         const acc_ap = 2001;
         const acc_bank = 1002;
+        const acc_cheque_issued = 2004;
         let ledgerLines = [];
         let description = '';
 
         if (type === 'PAYMENT') {
             description = `Payment Out: ${paymentNumber}`;
-            // Dr Accounts Payable (Liability decreases), Cr Bank (Asset decreases)
+            const targetAcc = (mode === 'Cheque') ? acc_cheque_issued : acc_bank;
+
+            // Dr Accounts Payable (Liability decreases), Cr Bank/Cheque Issued
             ledgerLines = [
                 { code: acc_ap, debit: Number(amount), credit: 0 },
-                { code: acc_bank, debit: 0, credit: Number(amount), bank_account_id: bank_account_id }
+                { code: targetAcc, debit: 0, credit: Number(amount), bank_account_id: bank_account_id }
             ];
+
+            if (mode === 'Cheque') {
+                // Ensure specific cheque fields are in body or use transaction_ref
+                await client.query(`
+                    INSERT INTO cheques (
+                        cheque_number, cheque_date, bank_name, amount, 
+                        type, party_type, party_id, reference_type, reference_id, status
+                    ) VALUES ($1, $2, $3, $4, 'OUTGOING', 'VENDOR', $5, 'VENDOR_PAYMENT', $6, 'PENDING')
+                `, [transaction_ref, req.body.cheque_date || payment_date, req.body.bank_name || 'Own Bank', amount, vendor_id, paymentId]);
+            }
         } else {
             description = `Refund In: ${paymentNumber}`;
             // Dr Bank (Asset increases), Cr Accounts Payable

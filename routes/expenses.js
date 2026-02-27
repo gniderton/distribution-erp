@@ -129,6 +129,10 @@ router.post('/', async (req, res) => {
 
         // 3. Prepare Journal Lines
         const journalLines = [];
+        const acc_cheque_issued = 2004;
+        const isCheque = reference_no && reference_no.toLowerCase().includes('chq'); // Basic check or check req.body.payment_mode
+        const finalPaymentAccountCode = isCheque ? acc_cheque_issued : paymentAccountCode;
+
         if (is_gst_expense && Number(tax_amount) > 0) {
             // DR Expense (Taxable)
             journalLines.push({ code: categoryCode, debit: Number(taxable_amount), credit: 0 });
@@ -136,12 +140,21 @@ router.post('/', async (req, res) => {
             const halfTax = Number(tax_amount) / 2;
             journalLines.push({ code: 1011, debit: halfTax, credit: 0 });
             journalLines.push({ code: 1012, debit: halfTax, credit: 0 });
-            // CR Payment Account (Link to bank_account_id)
-            journalLines.push({ code: paymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: resolvedPaymentSourceId });
+            // CR Payment Account (Link to bank_account_id if not cheque)
+            journalLines.push({ code: finalPaymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: isCheque ? null : resolvedPaymentSourceId });
         } else {
             // Simple Expense
             journalLines.push({ code: categoryCode, debit: Number(grand_total), credit: 0 });
-            journalLines.push({ code: paymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: resolvedPaymentSourceId });
+            journalLines.push({ code: finalPaymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: isCheque ? null : resolvedPaymentSourceId });
+        }
+
+        if (isCheque) {
+            await client.query(`
+                INSERT INTO cheques (
+                    cheque_number, cheque_date, bank_name, amount, 
+                    type, party_type, party_id, reference_type, reference_id, status
+                ) VALUES ($1, $2, $3, $4, 'OUTGOING', 'EXPENSE', NULL, 'EXPENSE', NULL, 'PENDING')
+            `, [reference_no, expense_date || new Date(), 'Own Bank', grand_total]);
         }
 
         // 4. Create Journal Entry using DB function

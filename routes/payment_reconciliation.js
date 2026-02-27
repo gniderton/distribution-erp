@@ -301,13 +301,30 @@ router.post('/bulk-update', async (req, res) => {
                     const acc_ar = 1101;
                     const acc_bank = 1002;
                     const acc_cash = 1003;
-                    const targetAcc = (pay.payment_mode === 'Cash') ? acc_cash : acc_bank;
+                    const acc_cheque_in_hand = 1004;
+
+                    let targetAcc;
+                    if (pay.payment_mode === 'Cash') targetAcc = acc_cash;
+                    else if (pay.payment_mode === 'Cheque') targetAcc = acc_cheque_in_hand;
+                    else targetAcc = acc_bank;
 
                     // Resolve bank account ID for trigger
                     let bankAccountId = null;
                     if (pay.payment_mode === 'Cash') {
                         const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE '%cash%' LIMIT 1");
                         bankAccountId = bRes.rows[0]?.id;
+                    } else if (pay.payment_mode === 'Cheque') {
+                        // Cheques in hand don't hit a specific bank account yet
+                        bankAccountId = null;
+
+                        // [NEW] Insert into cheques table
+                        await client.query(`
+                            INSERT INTO cheques (
+                                cheque_number, cheque_date, bank_name, amount, 
+                                type, party_type, party_id, reference_type, reference_id, status
+                            ) VALUES ($1, $2, $3, $4, 'INCOMING', 'CUSTOMER', $5, 'CUSTOMER_PAYMENT', $6, 'PENDING')
+                        `, [pay.transaction_ref, pay.cheque_date, pay.bank_name, pay.amount, pay.customer_id, pay.id]);
+
                     } else if (pay.bank_name) {
                         const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE $1 LIMIT 1", [`%${pay.bank_name}%`]);
                         bankAccountId = bRes.rows[0]?.id;
@@ -626,7 +643,7 @@ router.patch('/:id/verify-cheque', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Get Payment Info
-        const payRes = await client.query('SELECT amount, payment_date, payment_number FROM customer_payments WHERE id = $1', [id]);
+        const payRes = await client.query('SELECT amount, payment_date, payment_number, customer_id FROM customer_payments WHERE id = $1', [id]);
         if (payRes.rows.length === 0) throw new Error('Payment not found');
         const payment = payRes.rows[0];
 
@@ -651,13 +668,18 @@ router.patch('/:id/verify-cheque', async (req, res) => {
 
         // Post Journal Entry
         const acc_ar = 1101;
-        const acc_bank = 1002;
+        const acc_cheque_in_hand = 1004;
 
-        const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE $1 LIMIT 1", [`%${bank_name}%`]);
-        const bankAccountId = bRes.rows[0]?.id;
+        // [NEW] Insert into cheques table
+        await client.query(`
+            INSERT INTO cheques (
+                cheque_number, cheque_date, bank_name, amount, 
+                type, party_type, party_id, reference_type, reference_id, status
+            ) VALUES ($1, $2, $3, $4, 'INCOMING', 'CUSTOMER', $5, 'CUSTOMER_PAYMENT', $6, 'PENDING')
+        `, [cheque_number, cheque_date, bank_name, payment.amount, payment.customer_id, id]);
 
         const ledgerLines = [
-            { code: acc_bank, debit: Number(payment.amount), credit: 0, bank_account_id: bankAccountId },
+            { code: acc_cheque_in_hand, debit: Number(payment.amount), credit: 0 },
             { code: acc_ar, debit: 0, credit: Number(payment.amount) }
         ];
         await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
