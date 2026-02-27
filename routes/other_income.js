@@ -62,6 +62,7 @@ router.post('/', async (req, res) => {
         tax_amount,
         is_gst_income,
         gst_no,
+        received_from,
         reference_no,
         description,
         payment_mode,
