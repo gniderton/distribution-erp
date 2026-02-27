@@ -263,7 +263,7 @@ async function getBalanceChangeReason(invoiceId, expectedBalance, currentBalance
     // Check for other payments
     const payRes = await pool.query(`
         SELECT p.payment_number, pa.amount
-        FROM payment_allocations pa
+        FROM customer_payment_allocations pa
         JOIN customer_payments p ON pa.payment_id = p.id
         WHERE pa.invoice_id = $1 AND pa.status = 'ACTIVE'
         ORDER BY p.created_at DESC
@@ -374,7 +374,7 @@ router.post('/', async (req, res) => {
         if (allocations && allocations.length > 0) {
             for (const alloc of allocations) {
                 await client.query(`
-                    INSERT INTO payment_allocations (
+                    INSERT INTO customer_payment_allocations (
                         payment_id, invoice_id, amount, status, expected_invoice_balance
                     ) VALUES ($1, $2, $3, 'PENDING', $4)
                 `, [
@@ -745,7 +745,7 @@ router.get('/:id', async (req, res) => {
                 si.invoice_number,
                 si.invoice_date,
                 si.grand_total as invoice_amount
-            FROM payment_allocations pa
+            FROM customer_payment_allocations pa
             JOIN sales_invoices si ON pa.invoice_id = si.id
             WHERE pa.payment_id = $1
             ORDER BY si.invoice_date ASC

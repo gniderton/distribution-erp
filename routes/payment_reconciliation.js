@@ -196,7 +196,7 @@ router.post('/bulk-update', async (req, res) => {
                     // 1. Check for DSE-specified allocations (PENDING status)
                     const pendingAllocRes = await client.query(`
                         SELECT pa.*, si.grand_total, COALESCE(si.amount_paid, 0) as current_paid
-                        FROM payment_allocations pa
+                        FROM customer_payment_allocations pa
                         JOIN sales_invoices si ON pa.invoice_id = si.id
                         WHERE pa.payment_id = $1 AND pa.status = 'PENDING'
                         ORDER BY si.invoice_date ASC
@@ -216,7 +216,7 @@ router.post('/bulk-update', async (req, res) => {
                             if (currentBalance <= 0) {
                                 // Invoice fully paid - skip and mark as REVERSED
                                 await client.query(`
-                                    UPDATE payment_allocations 
+                                    UPDATE customer_payment_allocations 
                                     SET status = 'REVERSED' 
                                     WHERE id = $1
                                 `, [pendingAlloc.id]);
@@ -228,7 +228,7 @@ router.post('/bulk-update', async (req, res) => {
 
                             // Update allocation to ACTIVE status with adjusted amount
                             await client.query(`
-                                UPDATE payment_allocations 
+                                UPDATE customer_payment_allocations 
                                 SET status = 'ACTIVE', amount = $1
                                 WHERE id = $2
                             `, [allocateAmount, pendingAlloc.id]);
@@ -269,7 +269,7 @@ router.post('/bulk-update', async (req, res) => {
 
                             // Create new allocation (FIFO auto-resolution)
                             await client.query(`
-                                INSERT INTO payment_allocations (payment_id, invoice_id, amount, status)
+                                INSERT INTO customer_payment_allocations (payment_id, invoice_id, amount, status)
                                 VALUES ($1, $2, $3, 'ACTIVE')
                             `, [pay.id, inv.id, allocate]);
 
@@ -344,7 +344,7 @@ router.post('/bulk-update', async (req, res) => {
                     // 1. Reverse allocations
                     const allocRes = await client.query(`
                         SELECT invoice_id, amount 
-                        FROM payment_allocations 
+                        FROM customer_payment_allocations 
                         WHERE payment_id = $1
                     `, [pay.id]);
 
@@ -362,7 +362,7 @@ router.post('/bulk-update', async (req, res) => {
                     }
 
                     // Delete allocations
-                    await client.query(`DELETE FROM payment_allocations WHERE payment_id = $1`, [pay.id]);
+                    await client.query(`DELETE FROM customer_payment_allocations WHERE payment_id = $1`, [pay.id]);
 
                     // 2. Post GL Reversal
                     const acc_ar = 1101;

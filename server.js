@@ -163,7 +163,8 @@ pool.query('SELECT NOW()', async (err, res) => {
             { id: '116', path: '116_cheque_management.sql' },
             { id: '117', path: '117_make_bank_cols_nullable.sql' },
             { id: '118', path: '118_link_bank_statements.sql' },
-            { id: '119', path: '119_fix_bank_statement_constraint.sql' }
+            { id: '119', path: '119_fix_bank_statement_constraint.sql' },
+            { id: '120', path: '120_unblock_vendor_payments_reconciliation.sql' }
         ];
 
         for (const m of migrations) {
