@@ -92,6 +92,8 @@ app.use('/api/sales-returns', require('./routes/sales_returns')); // [NEW] Credi
 
 // [NEW] Finance Module
 app.use('/api/finance/reconciliation', require('./routes/payment_reconciliation'));
+const assetsRoutes = require('./routes/assets');
+app.use('/api/assets', assetsRoutes); // [NEW] Asset Management
 app.use('/api/finance/reconciliation/bank', require('./routes/bank_recon'));
 app.use('/api/finance/accounting', require('./routes/accounting'));
 app.use('/api/finance/expenses', require('./routes/expenses')); // [NEW] Expenses Portal
@@ -164,7 +166,8 @@ pool.query('SELECT NOW()', async (err, res) => {
             { id: '117', path: '117_make_bank_cols_nullable.sql' },
             { id: '118', path: '118_link_bank_statements.sql' },
             { id: '119', path: '119_fix_bank_statement_constraint.sql' },
-            { id: '120', path: '120_unblock_vendor_payments_reconciliation.sql' }
+            { id: '120', path: '120_unblock_vendor_payments_reconciliation.sql' },
+            { id: '121', path: '121_asset_management_schema.sql' }
         ];
 
         for (const m of migrations) {
