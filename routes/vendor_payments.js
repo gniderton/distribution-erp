@@ -41,7 +41,8 @@ router.post('/', async (req, res) => {
             remarks,
             allocations, // Array of { invoice_id, amount }
             transaction_type, // 'PAYMENT' (default) or 'REFUND' (Money In)
-            bank_account_id // [NEW] Optional Bank Account ID
+            bank_account_id, // [NEW] Optional Bank Account ID
+            bank_statement_entry_id
         } = req.body;
 
         const type = (transaction_type === 'REFUND') ? 'REFUND' : 'PAYMENT';
@@ -78,10 +79,10 @@ router.post('/', async (req, res) => {
         // 1. Create Payment Record (Linked to Bank)
         const paymentRes = await client.query(`
             INSERT INTO vendor_payments 
-            (vendor_id, amount, payment_date, payment_mode, transaction_ref, remarks, transaction_type, bank_account_id, payment_number)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            (vendor_id, amount, payment_date, payment_mode, transaction_ref, remarks, transaction_type, bank_account_id, payment_number, bank_statement_entry_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id, payment_number
-        `, [vendor_id, amount, payment_date, mode, transaction_ref, remarks, type, bank_account_id, paymentNumber]);
+        `, [vendor_id, amount, payment_date, mode, transaction_ref, remarks, type, bank_account_id, paymentNumber, bank_statement_entry_id]);
 
         const paymentId = paymentRes.rows[0].id;
 
@@ -129,11 +130,10 @@ router.post('/', async (req, res) => {
             paymentId,
             JSON.stringify(ledgerLines)
         ]);
-        if (type === 'PAYMENT' && allocations && Array.isArray(allocations) && allocations.length > 0) {
 
+        if (type === 'PAYMENT' && allocations && Array.isArray(allocations) && allocations.length > 0) {
             // SECURITY CHECK: Ensure user isn't allocating more than they paid
             const totalAllocated = allocations.reduce((sum, a) => sum + Number(a.amount || 0), 0);
-            // Allow small float variance (e.g. 0.01)
             if (totalAllocated > (Number(amount) + 0.01)) {
                 await client.query('ROLLBACK');
                 return res.status(400).json({ error: `Allocation Sum (${totalAllocated}) exceeds Payment Amount (${amount})` });
@@ -150,13 +150,21 @@ router.post('/', async (req, res) => {
             }
         }
 
-        await client.query('COMMIT');
+        // 5. Handle Bank Statement Consumption (Online Mode)
+        if (mode === 'Online' && bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
+                    status = CASE 
+                        WHEN (debit_amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [amount, bank_statement_entry_id]);
+        }
 
-        res.status(201).json({
-            success: true,
-            message: 'Payment Recorded',
-            id: paymentId
-        });
+        await client.query('COMMIT');
+        res.status(201).json({ success: true, message: 'Payment Recorded', id: paymentId });
 
     } catch (err) {
         await client.query('ROLLBACK');

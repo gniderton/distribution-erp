@@ -69,6 +69,7 @@ router.post('/', async (req, res) => {
         cheque_no,
         cheque_date: chq_date,
         bank_name,
+        bank_statement_entry_id,
         user_id
     } = req.body;
 
@@ -139,14 +140,14 @@ router.post('/', async (req, res) => {
                 income_number, transaction_date, category_account_id, 
                 destination_account_id, amount, taxable_amount, tax_amount, 
                 is_gst_income, gst_no, received_from, reference_no, 
-                description, created_by, journal_entry_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                description, created_by, journal_entry_id, bank_statement_entry_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING id
         `, [
             incomeNumber, transaction_date || new Date(), category_account_id,
             destination_account_id, amount, taxable_amount || amount, tax_amount || 0,
             is_gst_income || false, gst_no, received_from,
-            reference_no, description, user_id, journalEntryId
+            reference_no, description, user_id, journalEntryId, bank_statement_entry_id
         ]);
         const incomeId = insertRes.rows[0].id;
 
@@ -161,6 +162,19 @@ router.post('/', async (req, res) => {
                     party_type, party_id, reference_type, reference_id, status
                 ) VALUES ($1, $2, $3, $4, 'INCOMING', 'OTHER_INCOME', NULL, 'OTHER_INCOME', $5, 'PENDING')
             `, [cheque_no, chq_date || transaction_date || new Date(), bank_name || 'N/A', amount, incomeId]);
+        }
+
+        // 8. Handle Bank Statement Consumption (Online Mode)
+        if (payment_mode === 'Online' && bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
+                    status = CASE 
+                        WHEN (credit_amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [amount, bank_statement_entry_id]);
         }
 
         await client.query('COMMIT');

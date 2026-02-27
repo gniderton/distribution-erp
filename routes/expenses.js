@@ -83,6 +83,7 @@ router.post('/', async (req, res) => {
         cheque_no,
         cheque_date: chq_date,
         bank_name: chq_bank_name,
+        bank_statement_entry_id,
         user_id
     } = req.body;
 
@@ -148,14 +149,6 @@ router.post('/', async (req, res) => {
             journalLines.push({ code: paymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: payment_mode === 'Cheque' ? null : resolvedPaymentSourceId });
         }
 
-        if (payment_mode === 'Cheque') {
-            await client.query(`
-                INSERT INTO cheques (
-                    cheque_number, cheque_date, bank_name, amount, 
-                    type, party_type, party_id, reference_type, reference_id, status
-                ) VALUES ($1, $2, $3, $4, 'OUTGOING', 'EXPENSE', NULL, 'EXPENSE', NULL, 'PENDING')
-            `, [cheque_no || reference_no, chq_date || expense_date || new Date(), chq_bank_name || 'Own Bank', grand_total]);
-        }
 
         // 4. Create Journal Entry using DB function
         const jeRes = await client.query(
@@ -170,14 +163,14 @@ router.post('/', async (req, res) => {
                 expense_date, category_account_id, payment_source_id, 
                 taxable_amount, tax_amount, grand_total, is_gst_expense,
                 vendor_name, bill_no, gst_no, description, reference_no,
-                created_by, journal_entry_id, expense_number
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                created_by, journal_entry_id, expense_number, bank_statement_entry_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             RETURNING id
         `, [
             expense_date || new Date(), pCatId, resolvedPaymentSourceId,
             taxable_amount, tax_amount, grand_total, is_gst_expense,
             vendor_name, bill_no, gst_no, description, reference_no,
-            user_id, journalEntryId, expenseNumber
+            user_id, journalEntryId, expenseNumber, bank_statement_entry_id
         ]);
         const expenseId = expenseRes.rows[0].id;
 
@@ -186,6 +179,29 @@ router.post('/', async (req, res) => {
             "UPDATE journal_entries SET reference_id = $1 WHERE id = $2",
             [expenseId, journalEntryId]
         );
+
+        // 7. Handle Cheque Entry
+        if (payment_mode === 'Cheque') {
+            await client.query(`
+                INSERT INTO cheques (
+                    cheque_number, cheque_date, bank_name, amount, 
+                    type, party_type, party_id, reference_type, reference_id, status
+                ) VALUES ($1, $2, $3, $4, 'OUTGOING', 'EXPENSE', NULL, 'EXPENSE', $5, 'PENDING')
+            `, [cheque_no || reference_no, chq_date || expense_date || new Date(), chq_bank_name || 'Own Bank', grand_total, expenseId]);
+        }
+
+        // 8. Handle Bank Statement Consumption (Online Mode)
+        if (payment_mode === 'Online' && bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
+                    status = CASE 
+                        WHEN (debit_amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [grand_total, bank_statement_entry_id]);
+        }
 
         await client.query('COMMIT');
         res.json({ success: true, expense_id: expenseId, journal_entry_id: journalEntryId });
