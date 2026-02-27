@@ -62,9 +62,12 @@ router.post('/', async (req, res) => {
         tax_amount,
         is_gst_income,
         gst_no,
-        received_from,
         reference_no,
         description,
+        payment_mode,
+        cheque_no,
+        cheque_date: chq_date,
+        bank_name,
         user_id
     } = req.body;
 
@@ -84,11 +87,15 @@ router.post('/', async (req, res) => {
         const incomeNumber = `${prefix}${current_number.toString().padStart(5, '0')}`;
 
         // 2. Get Account Codes
-        // Destination (Bank/Cash)
+        // Destination (Bank/Cash/Cheque)
         const destRes = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [destination_account_id]);
         if (destRes.rows.length === 0) throw new Error("Invalid Destination Account");
         const isCash = destRes.rows[0].bank_name.toLowerCase().includes('cash');
-        const drAccountCode = isCash ? 1003 : 1002;
+
+        let drAccountCode = isCash ? 1003 : 1002;
+        if (payment_mode === 'Cheque') {
+            drAccountCode = 1004; // Cheques in Hand
+        }
 
         // Income Category
         const catRes = await client.query('SELECT code, name FROM chart_of_accounts WHERE id = $1', [category_account_id]);
@@ -140,6 +147,16 @@ router.post('/', async (req, res) => {
 
         // 6. Update JE with Reference ID
         await client.query("UPDATE journal_entries SET reference_id = $1 WHERE id = $2", [incomeId, journalEntryId]);
+
+        // 7. Handle Cheque Entry
+        if (payment_mode === 'Cheque') {
+            await client.query(`
+                INSERT INTO cheques (
+                    cheque_number, cheque_date, bank_name, amount, type,
+                    party_type, party_id, reference_type, reference_id, status
+                ) VALUES ($1, $2, $3, $4, 'INCOMING', 'OTHER_INCOME', NULL, 'OTHER_INCOME', $5, 'PENDING')
+            `, [cheque_no, chq_date || transaction_date || new Date(), bank_name || 'N/A', amount, incomeId]);
+        }
 
         await client.query('COMMIT');
         res.json({ success: true, income_id: incomeId, income_number: incomeNumber });

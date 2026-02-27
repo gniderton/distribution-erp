@@ -249,7 +249,7 @@ router.post('/:id/bounce', async (req, res) => {
         }
 
         // 5. Customer Penalty (Debit Note)
-        if (chq.type === 'INCOMING' && Number(customer_penalty) > 0) {
+        if (chq.type === 'INCOMING' && Number(customer_penalty) > 0 && chq.party_id) {
             // 5a. Generate Penalty Invoice / Debit Note Number
             const yy = new Date().getFullYear().toString().slice(-2);
             const seqRes = await client.query("UPDATE document_sequences SET current_number = current_number + 1 WHERE document_type = 'DEBIT_NOTE' RETURNING prefix, current_number");
