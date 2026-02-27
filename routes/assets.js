@@ -283,4 +283,43 @@ router.post('/:id/sale', async (req, res) => {
     }
 });
 
+// @route   POST /api/finance/assets/payment
+// @desc    Record payment for an asset purchased on credit
+router.post('/payment', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { asset_id, amount, payment_date, payment_mode, bank_account_id, remarks } = req.body;
+
+        await client.query('BEGIN');
+
+        // 1. Get Asset Info
+        const assetRes = await client.query('SELECT asset_name FROM assets WHERE id = $1', [asset_id]);
+        if (assetRes.rows.length === 0) throw new Error('Asset not found');
+
+        // 2. Accounting Entry
+        const acc_ap = 2001;
+        const acc_bank = 1002;
+        const acc_cash = 1003;
+
+        let creditAcc = (payment_mode === 'Cash') ? acc_cash : acc_bank;
+        const ledgerLines = [
+            { code: acc_ap, debit: Number(amount), credit: 0 },
+            { code: creditAcc, debit: 0, credit: Number(amount), bank_account_id: (payment_mode === 'Bank') ? bank_account_id : null }
+        ];
+
+        const description = `Asset Payment: ${assetRes.rows[0].asset_name}`;
+        const journalRes = await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`,
+            [payment_date, description, 'ASSET_PAYMENT', asset_id, JSON.stringify(ledgerLines)]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Payment recorded' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
