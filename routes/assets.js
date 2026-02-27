@@ -363,4 +363,26 @@ router.post('/payment', async (req, res) => {
     }
 });
 
+// @route   GET /api/finance/assets/categories
+// @desc    Get list of asset categories
+router.get('/categories', async (req, res) => {
+    res.json(['Vehicles', 'Machinery', 'Furniture', 'Electronics', 'Buildings', 'Land', 'Software']);
+});
+
+// @route   GET /api/finance/assets/accounts
+// @desc    Get asset-related accounts from COA
+router.get('/accounts', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT id, code, name 
+            FROM chart_of_accounts 
+            WHERE type = 'ASSET' AND code BETWEEN 1200 AND 1299
+            ORDER BY code ASC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
