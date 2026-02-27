@@ -184,7 +184,7 @@ router.post('/bulk-clear', async (req, res) => {
 // 3. Mark Cheque as Bounced
 router.post('/:id/bounce', async (req, res) => {
     const { id } = req.params;
-    const { bounce_date, bounce_charges, remarks, user_id } = req.body;
+    const { bounce_date, bounce_reason, bank_charges, customer_penalty, user_id } = req.body;
 
     const client = await pool.connect();
     try {
@@ -195,61 +195,99 @@ router.post('/:id/bounce', async (req, res) => {
         if (chqRes.rows.length === 0) throw new Error('Cheque not found or already processed');
         const chq = chqRes.rows[0];
 
-        // 2. Update status
+        // 2. Update status and reason
         await client.query(`
             UPDATE cheques 
             SET status = 'BOUNCED', 
                 remarks = $1,
                 updated_at = NOW()
             WHERE id = $2
-        `, [remarks, id]);
+        `, [bounce_reason, id]);
 
-        // 3. Post Accounting Entry (Reversal)
         const acc_ar = 1101;
         const acc_ap = 2001;
+        const acc_bank = 1002;
         const acc_cheque_in_hand = 1004;
         const acc_cheque_issued = 2004;
-        const acc_bank_charges = 5005; // Assuming 5005 is Bank Charges
+        const acc_bank_charges = 5005;
+        const acc_misc_income = 4103;
 
-        let ledgerLines = [];
+        // 3. Reversal Entry
+        let reversalLines = [];
         if (chq.type === 'INCOMING') {
-            // Incoming Bounce: Dr AR (Party owes us again), Cr Cheques in Hand (Asset cleared)
-            ledgerLines = [
+            reversalLines = [
                 { code: acc_ar, debit: Number(chq.amount), credit: 0 },
                 { code: acc_cheque_in_hand, debit: 0, credit: Number(chq.amount) }
             ];
-
-            // Add bounce charges to the Party if specified
-            if (Number(bounce_charges) > 0) {
-                ledgerLines.push({ code: acc_ar, debit: Number(bounce_charges), credit: 0 });
-                ledgerLines.push({ code: acc_bank_charges, debit: 0, credit: Number(bounce_charges) });
-            }
         } else {
-            // Outgoing Bounce: Dr Cheques Issued (Clearing account), Cr AP (We owe them again)
-            ledgerLines = [
+            reversalLines = [
                 { code: acc_cheque_issued, debit: Number(chq.amount), credit: 0 },
                 { code: acc_ap, debit: 0, credit: Number(chq.amount) }
             ];
-
-            // Charges paid for own cheque bounce
-            if (Number(bounce_charges) > 0) {
-                ledgerLines.push({ code: acc_bank_charges, debit: Number(bounce_charges), credit: 0 });
-                // Note: Need a bank account here, but since it's a bounce we might skip bank line or credit AP
-                ledgerLines.push({ code: acc_ap, debit: 0, credit: Number(bounce_charges) });
-            }
         }
 
-        await client.query('SELECT create_journal_entry($1, $2, \'CHQ_BOUNCE\', $3, $4)', [
+        await client.query('SELECT create_journal_entry($1, $2, \'CHQ_BOUNCE_REV\', $3, $4)', [
             bounce_date || new Date(),
-            `Cheque Bounced: ${chq.cheque_number} (${chq.bank_name})`,
+            `Bounce Reversal: ${chq.cheque_number} - ${bounce_reason}`,
             id,
-            JSON.stringify(ledgerLines)
+            JSON.stringify(reversalLines)
         ]);
 
+        // 4. Record Bank Charges (Expense)
+        if (Number(bank_charges) > 0) {
+            // Dr Bank Charges (5005), Cr Bank (1002)
+            const chargeLines = [
+                { code: acc_bank_charges, debit: Number(bank_charges), credit: 0 },
+                { code: acc_bank, debit: 0, credit: Number(bank_charges), bank_account_id: chq.bank_account_id }
+            ];
+            await client.query('SELECT create_journal_entry($1, $2, \'CHQ_BOUNCE_FEE\', $3, $4)', [
+                bounce_date || new Date(),
+                `Bank Charges (Bounce): ${chq.cheque_number}`,
+                id,
+                JSON.stringify(chargeLines)
+            ]);
+        }
+
+        // 5. Customer Penalty (Debit Note)
+        if (chq.type === 'INCOMING' && Number(customer_penalty) > 0) {
+            // 5a. Generate Penalty Invoice / Debit Note Number
+            const yy = new Date().getFullYear().toString().slice(-2);
+            const seqRes = await client.query("UPDATE document_sequences SET current_number = current_number + 1 WHERE document_type = 'DEBIT_NOTE' RETURNING prefix, current_number");
+
+            let penaltyDocNo = `PEN-${yy}-${Date.now().toString().slice(-4)}`;
+            if (seqRes.rows.length > 0) {
+                penaltyDocNo = `${seqRes.rows[0].prefix}${seqRes.rows[0].current_number.toString().padStart(5, '0')}`;
+            }
+
+            // 5b. Create Record in sales_invoices (marking as Debit Note / Penalty)
+            await client.query(`
+                INSERT INTO sales_invoices (
+                    invoice_number, customer_id, invoice_date, grand_total, amount_paid, 
+                    status, description, created_by
+                ) VALUES ($1, $2, $3, $4, 0, 'Unpaid', $5, $6)
+            `, [
+                penaltyDocNo, chq.party_id, bounce_date || new Date(), customer_penalty,
+                `Cheque Bounce Penalty: ${chq.cheque_number} - ${bounce_reason}`, user_id
+            ]);
+
+            // 5c. GL Entry for Penalty: Dr AR (1101), Cr Misc Income (4103)
+            const penaltyLines = [
+                { code: acc_ar, debit: Number(customer_penalty), credit: 0 },
+                { code: acc_misc_income, debit: 0, credit: Number(customer_penalty) }
+            ];
+            await client.query('SELECT create_journal_entry($1, $2, \'CHQ_BOUNCE_PENALTY\', $3, $4)', [
+                bounce_date || new Date(),
+                `Customer Penalty: ${chq.cheque_number}`,
+                id,
+                JSON.stringify(penaltyLines)
+            ]);
+        }
+
         await client.query('COMMIT');
-        res.json({ success: true, message: 'Cheque marked as Bounced' });
+        res.json({ success: true, message: 'Cheque marked as Bounced and all penalties processed' });
     } catch (err) {
         await client.query('ROLLBACK');
+        console.error('Bounce Error:', err);
         res.status(500).json({ error: err.message });
     } finally {
         client.release();
