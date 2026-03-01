@@ -228,77 +228,6 @@ router.post('/auto-depreciate', async (req, res) => {
     }
 });
 
-// @route   POST /api/finance/assets/:id/sale
-// @desc    Record sale or disposal of an asset
-router.post('/:id/sale', async (req, res) => {
-    const client = await pool.connect();
-    try {
-        const { id } = req.params;
-        const { sale_date, sale_amount, payment_mode, bank_account_id, remarks } = req.body;
-
-        await client.query('BEGIN');
-
-        // 1. Get Asset Info & Total Dep
-        const assetRes = await client.query(`
-            SELECT a.*, 
-                COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'DEPRECIATION'), 0) as total_dep
-            FROM assets a WHERE a.id = $1
-        `, [id]);
-
-        if (assetRes.rows.length === 0) throw new Error('Asset not found');
-        const asset = assetRes.rows[0];
-        const cost = Number(asset.purchase_cost);
-        const accumDep = Number(asset.total_dep);
-        const bv = cost - accumDep;
-        const proceeds = Number(sale_amount);
-        const gainLoss = proceeds - bv;
-
-        // 2. Accounting Entry
-        const acc_asset = asset.asset_account_code;
-        const acc_accum_dep = asset.accum_dep_account_code || 1210;
-        const acc_bank = 1002;
-        const acc_cash = 1003;
-        const acc_gain = 4010;
-        const acc_loss = 5021;
-
-        let debitAcc = (payment_mode === 'Cash') ? acc_cash : acc_bank;
-        let ledgerLines = [
-            { code: debitAcc, debit: proceeds, credit: 0, bank_account_id: (payment_mode === 'Bank' || payment_mode === 'Online') ? bank_account_id : null },
-            { code: acc_accum_dep, debit: accumDep, credit: 0 },
-            { code: acc_asset, debit: 0, credit: cost }
-        ];
-
-        if (gainLoss > 0) {
-            ledgerLines.push({ code: acc_gain, debit: 0, credit: gainLoss });
-        } else if (gainLoss < 0) {
-            ledgerLines.push({ code: acc_loss, debit: Math.abs(gainLoss), credit: 0 });
-        }
-
-        const journalRes = await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`,
-            [sale_date, `Sale of Asset: ${asset.asset_name}`, 'ASSET_SALE', id, JSON.stringify(ledgerLines)]);
-
-        const journalId = journalRes.rows[0].create_journal_entry;
-
-        // 3. Mark Asset as Sold
-        await client.query('UPDATE assets SET status = $1 WHERE id = $2', ['Sold', id]);
-
-        // 4. Record Transaction
-        await client.query(`
-            INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, journal_entry_id, remarks)
-            VALUES ($1, 'SALE', $2, $3, $4, $5)
-        `, [id, sale_date, proceeds, journalId, remarks]);
-
-        await client.query('COMMIT');
-        res.json({ success: true, gain_loss: gainLoss });
-
-    } catch (err) {
-        await client.query('ROLLBACK');
-        res.status(500).json({ error: err.message });
-    } finally {
-        client.release();
-    }
-});
-
 // @route   POST /api/finance/assets/payment
 // @desc    Record payment for an asset (Unified Modes: Cash, Online, Cheque)
 router.post('/payment', async (req, res) => {
@@ -320,8 +249,13 @@ router.post('/payment', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Get Asset Info
-        const assetRes = await client.query('SELECT asset_name FROM assets WHERE id = $1', [asset_id]);
-        if (assetRes.rows.length === 0) throw new Error('Asset not found');
+        const parsedAssetId = parseInt(asset_id);
+        const assetRes = await client.query('SELECT asset_name FROM assets WHERE id = $1', [parsedAssetId]);
+
+        if (assetRes.rows.length === 0) {
+            console.error(`Asset not found for ID: ${asset_id} (parsed: ${parsedAssetId})`);
+            return res.status(400).json({ error: 'Asset not found', asset_id: asset_id });
+        }
         const assetName = assetRes.rows[0].asset_name;
 
         // 2. Accounting Entry
@@ -380,7 +314,122 @@ router.post('/payment', async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Asset Payment Error:', err.message);
-        res.status(500).json({ error: err.message });
+        res.status(400).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// @route   POST /api/finance/assets/:id/sale
+// @desc    Record sale or disposal of an asset
+router.post('/:id/sale', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const {
+            sale_date,
+            sale_amount,
+            payment_mode,
+            bank_account_id,
+            remarks,
+            sale_buyer_name,      // Added
+            sale_buyer_gst,       // Added
+            sale_is_gst,          // Added
+            sale_taxable_amount,  // Added
+            sale_tax_amount,       // Added
+            sale_invoice_no       // Added
+        } = req.body;
+
+        await client.query('BEGIN');
+
+        // 1. Get Asset Info & Total Dep
+        const assetRes = await client.query(`
+            SELECT a.*, 
+                COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'DEPRECIATION'), 0) as total_dep
+            FROM assets a WHERE a.id = $1
+        `, [id]);
+
+        if (assetRes.rows.length === 0) {
+            return res.status(400).json({ error: 'Asset not found', asset_id: id });
+        }
+        const asset = assetRes.rows[0];
+        const cost = Number(asset.purchase_cost);
+        const accumDep = Number(asset.total_dep);
+        const bv = cost - accumDep;
+        const proceeds = Number(sale_amount);
+
+        // Use Taxable Amount for Gain/Loss calculation if GST is involved
+        const netProceeds = sale_is_gst ? Number(sale_taxable_amount) : proceeds;
+        const gainLoss = netProceeds - bv;
+
+        // 2. Accounting Entry
+        const acc_asset = asset.asset_account_code;
+        const acc_accum_dep = asset.accum_dep_account_code || 1210;
+        const acc_bank = 1002;
+        const acc_cash = 1003;
+        const acc_gain = 4010;
+        const acc_loss = 5021;
+        const acc_cgst_out = 2011;
+        const acc_sgst_out = 2012;
+
+        let debitAcc = (payment_mode === 'Cash') ? acc_cash : acc_bank;
+
+        // Start building Ledger Lines
+        let ledgerLines = [
+            { code: debitAcc, debit: proceeds, credit: 0, bank_account_id: (payment_mode !== 'Cash') ? bank_account_id : null },
+            { code: acc_accum_dep, debit: accumDep, credit: 0 },
+            { code: acc_asset, debit: 0, credit: cost }
+        ];
+
+        // Handle GST Output
+        if (sale_is_gst && Number(sale_tax_amount) > 0) {
+            const halfTax = Number(sale_tax_amount) / 2;
+            ledgerLines.push({ code: acc_cgst_out, debit: 0, credit: halfTax });
+            ledgerLines.push({ code: acc_sgst_out, debit: 0, credit: halfTax });
+        }
+
+        // Handle Gain/Loss
+        if (gainLoss > 0) {
+            ledgerLines.push({ code: acc_gain, debit: 0, credit: gainLoss });
+        } else if (gainLoss < 0) {
+            ledgerLines.push({ code: acc_loss, debit: Math.abs(gainLoss), credit: 0 });
+        }
+
+        const journalRes = await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`,
+            [sale_date, `Sale of Asset: ${asset.asset_name} ${sale_invoice_no ? '(Inv: ' + sale_invoice_no + ')' : ''}`, 'ASSET_SALE', id, JSON.stringify(ledgerLines)]);
+
+        const journalId = journalRes.rows[0].create_journal_entry;
+
+        // 3. Mark Asset as Sold & Save Buyer/GST Details
+        await client.query(`
+            UPDATE assets SET 
+                status = $1,
+                sale_buyer_name = $3,
+                sale_buyer_gst = $4,
+                sale_is_gst = $5,
+                sale_taxable_amount = $6,
+                sale_tax_amount = $7,
+                sale_invoice_no = $8
+            WHERE id = $2
+        `, [
+            'Sold', id,
+            sale_buyer_name, sale_buyer_gst, sale_is_gst || false,
+            sale_taxable_amount || 0, sale_tax_amount || 0, sale_invoice_no
+        ]);
+
+        // 4. Record Transaction
+        await client.query(`
+            INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, journal_entry_id, remarks)
+            VALUES ($1, 'SALE', $2, $3, $4, $5)
+        `, [id, sale_date, proceeds, journalId, remarks]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, gain_loss: gainLoss });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Asset Sale Error:', err.message);
+        res.status(400).json({ error: err.message });
     } finally {
         client.release();
     }
