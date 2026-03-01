@@ -485,7 +485,7 @@ router.post('/:id/auto-verify-online', async (req, res) => {
 
         let count = 0;
         for (let p of pays.rows) {
-            const match = await client.query(`SELECT id, amount, consumed_amount FROM bank_statement_entries WHERE bank_ref_id=$1 AND (amount-consumed_amount)>=$2 AND status!='Exhausted' LIMIT 1`, [p.transaction_ref, p.amount]);
+            const match = await client.query(`SELECT id, amount, consumed_amount, bank_account_id FROM bank_statement_entries WHERE bank_ref_id=$1 AND (amount-consumed_amount)>=$2 AND status!='Exhausted' LIMIT 1`, [p.transaction_ref, p.amount]);
             if (match.rows.length > 0) {
                 const b = match.rows[0];
                 const newC = Number(b.consumed_amount) + Number(p.amount);
@@ -497,7 +497,7 @@ router.post('/:id/auto-verify-online', async (req, res) => {
                 const acc_ar = 1101;
                 const acc_bank = 1002;
                 const ledgerLines = [
-                    { code: acc_bank, debit: Number(p.amount), credit: 0, bank_account_id: b.id },
+                    { code: acc_bank, debit: Number(p.amount), credit: 0, bank_account_id: b.bank_account_id },
                     { code: acc_ar, debit: 0, credit: Number(p.amount) }
                 ];
                 await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',

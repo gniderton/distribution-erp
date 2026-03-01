@@ -33,13 +33,18 @@ router.post('/upload', async (req, res) => {
     try {
         const client = await pool.connect();
         try {
-            // Resolve bank_name if bank_type is a numeric ID
+            let { bank_account_id } = req.body;
+
+            // Resolve bank_name and account_id if bank_type is a numeric ID (Retool default)
             if (!isNaN(bank_type)) {
-                const bankLookup = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [bank_type]);
+                bank_account_id = parseInt(bank_type);
+                const bankLookup = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [bank_account_id]);
                 if (bankLookup.rows.length > 0) {
                     bank_type = bankLookup.rows[0].bank_name;
                 }
             }
+
+            if (!bank_account_id) return res.status(400).json({ error: "Missing 'bank_account_id'. Please select an account from api/bank-accounts." });
 
             const typeNormalized = bank_type.toLowerCase();
 
@@ -68,9 +73,10 @@ router.post('/upload', async (req, res) => {
                 await client.query(`
                     INSERT INTO bank_statement_entries (
                         transaction_date, bank_name, particulars, bank_ref_id, 
-                        debit_amount, credit_amount, amount, upload_batch_id
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                    ON CONFLICT (transaction_date, particulars, debit_amount, credit_amount) DO NOTHING
+                        debit_amount, credit_amount, amount, upload_batch_id,
+                        bank_account_id
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    ON CONFLICT (bank_account_id, transaction_date, particulars, bank_ref_id, debit_amount, credit_amount) DO NOTHING
                 `, [
                     entry.transaction_date,
                     entry.bank_name,
@@ -79,7 +85,8 @@ router.post('/upload', async (req, res) => {
                     entry.debit_amount || 0,
                     entry.credit_amount || 0,
                     entry.credit_amount || 0, // Legacy amount column = credit
-                    batchId
+                    batchId,
+                    bank_account_id
                 ]);
             }
 

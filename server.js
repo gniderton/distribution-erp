@@ -100,6 +100,7 @@ app.use('/api/finance/expenses', require('./routes/expenses')); // [NEW] Expense
 app.use('/api/finance/other-income', require('./routes/other_income')); // [NEW] Non-Operating Income
 app.use('/api/finance/cheques', require('./routes/cheques')); // [NEW] Cheque Management
 app.use('/api/finance/transfers', require('./routes/transfers')); // [NEW] Internal Transfers
+app.use('/api/finance/loans', require('./routes/loans')); // [NEW] Loan Management
 app.use('/api', require('./routes/accounting')); // [NEW] Alias for shorter paths like /api/journal-entries
 
 // [TEMP] Migration Endpoint to fix Combo Schema
@@ -176,7 +177,9 @@ pool.query('SELECT NOW()', async (err, res) => {
             { id: '126', path: '126_add_addresses_to_asset_sale.sql' },
             { id: '127', path: '127_add_sale_created_by_to_assets.sql' },
             { id: '128', path: '128_internal_transfers_schema.sql' },
-            { id: '129', path: '129_add_recon_to_transfers.sql' }
+            { id: '129', path: '129_add_recon_to_transfers.sql' },
+            { id: '130', path: '130_link_statement_to_account.sql' },
+            { id: '131', path: '131_loan_management_schema.sql' }
         ];
 
         for (const m of migrations) {
