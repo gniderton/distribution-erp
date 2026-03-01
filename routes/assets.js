@@ -651,6 +651,30 @@ router.post('/:id/sale-payment', async (req, res) => {
     }
 });
 
+// @route   GET /api/finance/assets/depreciations
+// @desc    Get all depreciation transactions
+router.get('/depreciations', async (req, res) => {
+    try {
+        const { asset_id } = req.query;
+        let query = `
+            SELECT at.*, a.asset_name
+            FROM asset_transactions at
+            JOIN assets a ON at.asset_id = a.id
+            WHERE at.transaction_type = 'DEPRECIATION'
+        `;
+        const params = [];
+        if (asset_id) {
+            params.push(asset_id);
+            query += ` AND at.asset_id = $${params.length}`;
+        }
+        query += ` ORDER BY at.transaction_date DESC, at.id DESC`;
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // @route   GET /api/finance/assets/categories
 // @desc    Get list of asset categories
 router.get('/categories', async (req, res) => {
