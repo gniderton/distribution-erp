@@ -60,6 +60,11 @@ router.post('/', async (req, res) => {
 
         // 1. Generate Loan Number
         const seqRes = await client.query("SELECT prefix || current_number as code, id FROM document_sequences WHERE document_type = 'LOAN' FOR UPDATE");
+
+        if (seqRes.rows.length === 0) {
+            throw new Error("Document sequence for 'LOAN' not found in document_sequences table. Please ensure migrations have been applied.");
+        }
+
         const loanNumber = seqRes.rows[0].code;
         await client.query("UPDATE document_sequences SET current_number = current_number + 1 WHERE id = $1", [seqRes.rows[0].id]);
 
