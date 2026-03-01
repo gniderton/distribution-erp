@@ -99,6 +99,7 @@ app.use('/api/finance/accounting', require('./routes/accounting'));
 app.use('/api/finance/expenses', require('./routes/expenses')); // [NEW] Expenses Portal
 app.use('/api/finance/other-income', require('./routes/other_income')); // [NEW] Non-Operating Income
 app.use('/api/finance/cheques', require('./routes/cheques')); // [NEW] Cheque Management
+app.use('/api/finance/transfers', require('./routes/transfers')); // [NEW] Internal Transfers
 app.use('/api', require('./routes/accounting')); // [NEW] Alias for shorter paths like /api/journal-entries
 
 // [TEMP] Migration Endpoint to fix Combo Schema
@@ -173,7 +174,8 @@ pool.query('SELECT NOW()', async (err, res) => {
             { id: '124', path: '124_asset_sale_receivable.sql' },
             { id: '125', path: '125_asset_sale_gst_hsn_seq.sql' },
             { id: '126', path: '126_add_addresses_to_asset_sale.sql' },
-            { id: '127', path: '127_add_sale_created_by_to_assets.sql' }
+            { id: '127', path: '127_add_sale_created_by_to_assets.sql' },
+            { id: '128', path: '128_internal_transfers_schema.sql' }
         ];
 
         for (const m of migrations) {
