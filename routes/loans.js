@@ -59,9 +59,9 @@ router.post('/', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Generate Loan Number
-        const seqRes = await client.query("SELECT prefix || next_val as code, id FROM document_sequences WHERE prefix = 'LOAN-' FOR UPDATE");
+        const seqRes = await client.query("SELECT prefix || current_number as code, id FROM document_sequences WHERE document_type = 'LOAN' FOR UPDATE");
         const loanNumber = seqRes.rows[0].code;
-        await client.query("UPDATE document_sequences SET next_val = next_val + 1 WHERE id = $1", [seqRes.rows[0].id]);
+        await client.query("UPDATE document_sequences SET current_number = current_number + 1 WHERE id = $1", [seqRes.rows[0].id]);
 
         // 2. Insert Loan
         const loanRes = await client.query(`

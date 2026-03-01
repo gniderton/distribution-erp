@@ -58,8 +58,8 @@ INSERT INTO chart_of_accounts (code, name, type) VALUES
 ON CONFLICT (code) DO NOTHING;
 
 -- 4. Setup Document Sequence
-INSERT INTO document_sequences (prefix, next_val, description) 
-VALUES ('LOAN-', 1, 'Loan Management Sequence')
+INSERT INTO document_sequences (document_type, prefix, current_number, description) 
+VALUES ('LOAN', 'LOAN-', 1, 'Loan Management Sequence')
 ON CONFLICT (prefix) DO NOTHING;
 
 -- 5. Indexes
