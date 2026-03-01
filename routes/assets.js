@@ -229,7 +229,7 @@ router.post('/auto-depreciate', async (req, res) => {
 });
 
 // @route   POST /api/finance/assets/payment
-// @desc    Record payment for an asset (Unified Modes: Cash, Online, Cheque)
+// @desc    Record payment for an asset purchase (Unified Modes: Cash, Online, Cheque)
 router.post('/payment', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -273,7 +273,7 @@ router.post('/payment', async (req, res) => {
             { code: creditAcc, debit: 0, credit: Number(amount), bank_account_id: (payment_mode !== 'Cash') ? bank_account_id : null }
         ];
 
-        const description = `Asset Payment (${payment_mode}): ${assetName}`;
+        const description = `Asset Purchase Payment (${payment_mode}): ${assetName}`;
         const journalRes = await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`,
             [payment_date, description, 'ASSET_PAYMENT', asset_id, JSON.stringify(ledgerLines)]);
 
@@ -320,8 +320,110 @@ router.post('/payment', async (req, res) => {
     }
 });
 
+// @route   GET /api/assets/ping
+// @desc    Check if assets API is active
+router.get('/ping', (req, res) => {
+    res.json({ status: 'Asset API Active', timestamp: new Date() });
+});
+
+// @route   POST /api/finance/assets/:id/sale-payment
+// @desc    Record payment received for a sold asset
+router.post('/:id/sale-payment', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const {
+            amount,
+            payment_date,
+            payment_mode,
+            bank_account_id,
+            bank_statement_entry_id,
+            cheque_no,
+            cheque_date,
+            bank_name,
+            remarks,
+            online_reference_no  // Added
+        } = req.body;
+
+        await client.query('BEGIN');
+
+        // 1. Get Asset Info
+        const assetRes = await client.query('SELECT asset_name, sale_balance_receivable FROM assets WHERE id = $1', [id]);
+        if (assetRes.rows.length === 0) return res.status(404).json({ error: 'Asset not found' });
+
+        const asset = assetRes.rows[0];
+
+        // 2. Accounting Entry (Debit Bank/Cash, Credit AR)
+        const acc_ar = 1001;
+        const acc_bank = 1002;
+        const acc_cash = 1003;
+        const acc_chq_in_hand = 1005;
+
+        let debitAcc = acc_bank;
+        if (payment_mode === 'Cash') debitAcc = acc_cash;
+        if (payment_mode === 'Cheque') debitAcc = acc_chq_in_hand;
+
+        const ledgerLines = [
+            { code: debitAcc, debit: Number(amount), credit: 0, bank_account_id: (payment_mode !== 'Cash' && payment_mode !== 'Cheque') ? bank_account_id : null },
+            { code: acc_ar, debit: 0, credit: Number(amount) }
+        ];
+
+        const description = `Asset Sale Payment (${payment_mode})${online_reference_no ? ' Ref: ' + online_reference_no : ''}: ${asset.asset_name}`;
+        const journalRes = await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`,
+            [payment_date, description, 'ASSET_SALE_PAYMENT', id, JSON.stringify(ledgerLines)]);
+
+        const journalId = journalRes.rows[0].create_journal_entry;
+
+        // 3. Update Asset Receivable Balance
+        await client.query(`
+            UPDATE assets 
+            SET sale_balance_receivable = sale_balance_receivable - $1 
+            WHERE id = $2
+        `, [amount, id]);
+
+        // 4. Record Transaction
+        await client.query(`
+            INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, journal_entry_id, remarks)
+            VALUES ($1, 'SALE_PAYMENT', $2, $3, $4, $5)
+        `, [id, payment_date, amount, journalId, `${remarks || ''}${online_reference_no ? ' (Ref: ' + online_reference_no + ')' : ''}`.trim()]);
+
+        // 5. Handle Bank Statement (Reconciliation)
+        if (payment_mode === 'Online' && bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
+                    status = CASE 
+                        WHEN (credit_amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [amount, bank_statement_entry_id]);
+        }
+
+        // 6. Handle Cheque Entry (Incoming)
+        if (payment_mode === 'Cheque') {
+            await client.query(`
+                INSERT INTO cheques (
+                    cheque_number, cheque_date, bank_name, amount, 
+                    type, party_type, reference_type, reference_id, status
+                ) VALUES ($1, $2, $3, $4, 'INCOMING', 'CUSTOMER', 'ASSET_SALE_PAYMENT', $5, 'PENDING')
+            `, [cheque_no, cheque_date || payment_date, bank_name, amount, id]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Sale payment recorded' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Asset Sale Payment Error:', err.message);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // @route   POST /api/finance/assets/:id/sale
-// @desc    Record sale or disposal of an asset
+// @desc    Record sale or disposal of an asset (Always on Credit)
 router.post('/:id/sale', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -329,22 +431,35 @@ router.post('/:id/sale', async (req, res) => {
         const {
             sale_date,
             sale_amount,
-            payment_mode,
-            bank_account_id,
             remarks,
-            sale_buyer_name,      // Added
-            sale_buyer_gst,       // Added
-            sale_is_gst,          // Added
-            sale_taxable_amount,  // Added
-            sale_tax_amount,       // Added
-            sale_invoice_no       // Added
+            sale_buyer_name,
+            sale_buyer_gst,
+            sale_is_gst,
+            sale_taxable_amount,
+            sale_tax_amount,
+            sale_hsn_code,
+            sale_buyer_address,    // Added
+            sale_delivery_address,   // Added
+            created_by            // Added
         } = req.body;
+
+        if (!sale_date) return res.status(400).json({ error: 'Sale date is required' });
 
         await client.query('BEGIN');
 
-        // 1. Get Asset Info & Total Dep
+        // 1. Generate Auto Invoice Number
+        const seqRes = await client.query(`
+            UPDATE document_sequences
+            SET current_number = current_number + 1
+            WHERE document_type = 'ASSET_SALE_INV'
+            RETURNING prefix || LPAD(current_number::text, 4, '0') as invoice_no
+        `);
+        if (seqRes.rows.length === 0) throw new Error('Sequence for ASSET_SALE_INV not found');
+        const sale_invoice_no = seqRes.rows[0].invoice_no;
+
+        // 2. Get Asset Info & Total Dep
         const assetRes = await client.query(`
-            SELECT a.*, 
+            SELECT a.*,
                 COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'DEPRECIATION'), 0) as total_dep
             FROM assets a WHERE a.id = $1
         `, [id]);
@@ -362,21 +477,17 @@ router.post('/:id/sale', async (req, res) => {
         const netProceeds = sale_is_gst ? Number(sale_taxable_amount) : proceeds;
         const gainLoss = netProceeds - bv;
 
-        // 2. Accounting Entry
+        // 3. Accounting Entry (Debit AR)
         const acc_asset = asset.asset_account_code;
         const acc_accum_dep = asset.accum_dep_account_code || 1210;
-        const acc_bank = 1002;
-        const acc_cash = 1003;
+        const acc_ar = 1001;
         const acc_gain = 4010;
         const acc_loss = 5021;
         const acc_cgst_out = 2011;
         const acc_sgst_out = 2012;
 
-        let debitAcc = (payment_mode === 'Cash') ? acc_cash : acc_bank;
-
-        // Start building Ledger Lines
         let ledgerLines = [
-            { code: debitAcc, debit: proceeds, credit: 0, bank_account_id: (payment_mode !== 'Cash') ? bank_account_id : null },
+            { code: acc_ar, debit: proceeds, credit: 0 },
             { code: acc_accum_dep, debit: accumDep, credit: 0 },
             { code: acc_asset, debit: 0, credit: cost }
         ];
@@ -396,40 +507,145 @@ router.post('/:id/sale', async (req, res) => {
         }
 
         const journalRes = await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`,
-            [sale_date, `Sale of Asset: ${asset.asset_name} ${sale_invoice_no ? '(Inv: ' + sale_invoice_no + ')' : ''}`, 'ASSET_SALE', id, JSON.stringify(ledgerLines)]);
+            [sale_date, `Asset Sale (Credit): ${asset.asset_name} (Inv: ${sale_invoice_no})`, 'ASSET_SALE', id, JSON.stringify(ledgerLines)]);
 
         const journalId = journalRes.rows[0].create_journal_entry;
 
-        // 3. Mark Asset as Sold & Save Buyer/GST Details
+        // 4. Mark Asset as Sold & Save Buyer/GST Details
         await client.query(`
-            UPDATE assets SET 
+            UPDATE assets SET
                 status = $1,
                 sale_buyer_name = $3,
                 sale_buyer_gst = $4,
                 sale_is_gst = $5,
                 sale_taxable_amount = $6,
                 sale_tax_amount = $7,
-                sale_invoice_no = $8
+                sale_invoice_no = $8,
+                sale_invoice_number = $8,
+                sale_total_amount = $9,
+                sale_balance_receivable = $9,
+                sale_hsn_code = $10,
+                sale_buyer_address = $11,
+                sale_delivery_address = $12,
+                sale_created_by = $13
             WHERE id = $2
         `, [
             'Sold', id,
             sale_buyer_name, sale_buyer_gst, sale_is_gst || false,
-            sale_taxable_amount || 0, sale_tax_amount || 0, sale_invoice_no
+            sale_taxable_amount || 0, sale_tax_amount || 0, sale_invoice_no,
+            proceeds, sale_hsn_code, sale_buyer_address, sale_delivery_address,
+            created_by
         ]);
 
-        // 4. Record Transaction
+        // 5. Record Transaction
         await client.query(`
             INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, journal_entry_id, remarks)
             VALUES ($1, 'SALE', $2, $3, $4, $5)
         `, [id, sale_date, proceeds, journalId, remarks]);
 
         await client.query('COMMIT');
-        res.json({ success: true, gain_loss: gainLoss });
+        res.json({ success: true, gain_loss: gainLoss, invoice_no: sale_invoice_no });
 
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Asset Sale Error:', err.message);
         res.status(400).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// @route   POST /api/finance/assets/:id/sale-payment
+// @desc    Record payment received for a sold asset
+router.post('/:id/sale-payment', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const {
+            amount,
+            payment_date,
+            payment_mode,
+            bank_account_id,
+            bank_statement_entry_id,
+            cheque_no,
+            cheque_date,
+            bank_name,
+            remarks,
+            online_reference_no  // Added
+        } = req.body;
+
+        await client.query('BEGIN');
+
+        // 1. Get Asset Info
+        const assetRes = await client.query('SELECT asset_name, sale_balance_receivable FROM assets WHERE id = $1', [id]);
+        if (assetRes.rows.length === 0) return res.status(404).json({ error: 'Asset not found' });
+
+        const asset = assetRes.rows[0];
+
+        // 2. Accounting Entry (Debit Bank/Cash, Credit AR)
+        const acc_ar = 1001;
+        const acc_bank = 1002;
+        const acc_cash = 1003;
+        const acc_chq_in_hand = 1005;
+
+        let debitAcc = acc_bank;
+        if (payment_mode === 'Cash') debitAcc = acc_cash;
+        if (payment_mode === 'Cheque') debitAcc = acc_chq_in_hand;
+
+        const ledgerLines = [
+            { code: debitAcc, debit: Number(amount), credit: 0, bank_account_id: (payment_mode !== 'Cash' && payment_mode !== 'Cheque') ? bank_account_id : null },
+            { code: acc_ar, debit: 0, credit: Number(amount) }
+        ];
+
+        const description = `Asset Sale Payment (${payment_mode})${online_reference_no ? ' Ref: ' + online_reference_no : ''}: ${asset.asset_name}`;
+        const journalRes = await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`,
+            [payment_date, description, 'ASSET_SALE_PAYMENT', id, JSON.stringify(ledgerLines)]);
+
+        const journalId = journalRes.rows[0].create_journal_entry;
+
+        // 3. Update Asset Receivable Balance
+        await client.query(`
+            UPDATE assets 
+            SET sale_balance_receivable = sale_balance_receivable - $1 
+            WHERE id = $2
+        `, [amount, id]);
+
+        // 4. Record Transaction
+        await client.query(`
+            INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, journal_entry_id, remarks)
+            VALUES ($1, 'SALE_PAYMENT', $2, $3, $4, $5)
+        `, [id, payment_date, amount, journalId, `${remarks || ''}${online_reference_no ? ' (Ref: ' + online_reference_no + ')' : ''}`.trim()]);
+
+        // 5. Handle Bank Statement (Reconciliation)
+        if (payment_mode === 'Online' && bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
+                    status = CASE 
+                        WHEN (credit_amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [amount, bank_statement_entry_id]);
+        }
+
+        // 6. Handle Cheque Entry (Incoming)
+        if (payment_mode === 'Cheque') {
+            await client.query(`
+                INSERT INTO cheques (
+                    cheque_number, cheque_date, bank_name, amount, 
+                    type, party_type, reference_type, reference_id, status
+                ) VALUES ($1, $2, $3, $4, 'INCOMING', 'CUSTOMER', 'ASSET_SALE_PAYMENT', $5, 'PENDING')
+            `, [cheque_no, cheque_date || payment_date, bank_name, amount, id]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Sale payment recorded' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Asset Sale Payment Error:', err.message);
+        res.status(500).json({ error: err.message });
     } finally {
         client.release();
     }

@@ -169,7 +169,11 @@ pool.query('SELECT NOW()', async (err, res) => {
             { id: '120', path: '120_unblock_vendor_payments_reconciliation.sql' },
             { id: '121', path: '121_asset_management_schema.sql' },
             { id: '122', path: '122_add_gst_to_assets.sql' },
-            { id: '123', path: '123_add_sale_gst_to_assets.sql' }
+            { id: '123', path: '123_add_sale_gst_to_assets.sql' },
+            { id: '124', path: '124_asset_sale_receivable.sql' },
+            { id: '125', path: '125_asset_sale_gst_hsn_seq.sql' },
+            { id: '126', path: '126_add_addresses_to_asset_sale.sql' },
+            { id: '127', path: '127_add_sale_created_by_to_assets.sql' }
         ];
 
         for (const m of migrations) {
