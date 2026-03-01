@@ -179,7 +179,8 @@ pool.query('SELECT NOW()', async (err, res) => {
             { id: '128', path: '128_internal_transfers_schema.sql' },
             { id: '129', path: '129_add_recon_to_transfers.sql' },
             { id: '130', path: '130_link_statement_to_account.sql' },
-            { id: '131', path: '131_loan_management_schema.sql' }
+            { id: '131', path: '131_loan_management_schema.sql' },
+            { id: '132', path: '132_add_loan_sequence.sql' }
         ];
 
         for (const m of migrations) {
