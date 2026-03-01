@@ -175,7 +175,8 @@ pool.query('SELECT NOW()', async (err, res) => {
             { id: '125', path: '125_asset_sale_gst_hsn_seq.sql' },
             { id: '126', path: '126_add_addresses_to_asset_sale.sql' },
             { id: '127', path: '127_add_sale_created_by_to_assets.sql' },
-            { id: '128', path: '128_internal_transfers_schema.sql' }
+            { id: '128', path: '128_internal_transfers_schema.sql' },
+            { id: '129', path: '129_add_recon_to_transfers.sql' }
         ];
 
         for (const m of migrations) {

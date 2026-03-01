@@ -3,7 +3,7 @@ const router = express.Router();
 const { pool } = require('../config/db');
 
 // @route   POST /api/finance/transfers
-// @desc    Record an internal transfer between accounts (Cash to Bank, etc.)
+// @desc    Record an internal transfer between accounts (Cash to Bank, Bank to Bank, Bank to Cash)
 router.post('/', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -14,7 +14,10 @@ router.post('/', async (req, res) => {
             transfer_date,
             payment_mode,
             reference_no,
-            remarks
+            remarks,
+            from_bank_statement_entry_id, // Linked debit entry (for Bank to Bank/Cash)
+            to_bank_statement_entry_id,   // Linked credit entry (for Cash/Bank to Bank)
+            denominations                // Cash denominations JSON
         } = req.body;
 
         if (from_account_id === to_account_id) {
@@ -59,13 +62,48 @@ router.post('/', async (req, res) => {
         const transferRes = await client.query(`
             INSERT INTO internal_transfers (
                 transfer_date, from_account_id, to_account_id, amount, 
-                payment_mode, reference_no, remarks, journal_entry_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                payment_mode, reference_no, remarks, journal_entry_id,
+                from_bank_statement_entry_id, to_bank_statement_entry_id, denominations
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING id
-        `, [transfer_date, from_account_id, to_account_id, amount, payment_mode, reference_no, remarks, journalId]);
+        `, [
+            transfer_date, from_account_id, to_account_id, amount,
+            payment_mode, reference_no, remarks, journalId,
+            from_bank_statement_entry_id, to_bank_statement_entry_id,
+            denominations ? JSON.stringify(denominations) : null
+        ]);
+
+        const transferId = transferRes.rows[0].id;
+
+        // 5. Update Bank Statement Entries (Reconciliation)
+        // From side (Debit entry in bank statement = money going out)
+        if (from_bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
+                    status = CASE 
+                        WHEN (debit_amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [amount, from_bank_statement_entry_id]);
+        }
+
+        // To side (Credit entry in bank statement = money coming in)
+        if (to_bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
+                    status = CASE 
+                        WHEN (credit_amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [amount, to_bank_statement_entry_id]);
+        }
 
         await client.query('COMMIT');
-        res.status(201).json({ success: true, transfer_id: transferRes.rows[0].id });
+        res.status(201).json({ success: true, transfer_id: transferId });
 
     } catch (err) {
         await client.query('ROLLBACK');
