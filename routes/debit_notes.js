@@ -425,4 +425,40 @@ router.put('/:id', async (req, res) => {
     }
 });
 
+
+// @route   GET /api/debit-notes/:id/items
+// @desc    Get all items for a specific Debit Note
+router.get('/:id/items', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(`
+            SELECT 
+                ROW_NUMBER() OVER (ORDER BY dnl.id) as "S.No",
+                p.ean_code as "EAN Code",
+                p.product_name as "Item Name",
+                p.mrp as "MRP",
+                dnl.rate as "Price",
+                dnl.qty as "Qty",
+                0 as "Sch",
+                0 as "Disc %",
+                t.tax_percentage as "GST %",
+                (dnl.qty * dnl.rate) as "Gross $",
+                0 as "Disc. $",
+                ROUND((dnl.amount / (1 + (COALESCE(t.tax_percentage, 0)/100.0)))::numeric, 2) as "Taxable $",
+                ROUND((dnl.amount - (dnl.amount / (1 + (COALESCE(t.tax_percentage, 0)/100.0))))::numeric, 2) as "GST $",
+                dnl.amount as "Net $",
+                dnl.batch_number as "Batch No",
+                dnl.product_id as "_product_id"
+            FROM debit_note_lines dnl
+            JOIN products p ON dnl.product_id = p.id
+            LEFT JOIN taxes t ON p.tax_id = t.id
+            WHERE dnl.debit_note_id = $1
+        `, [id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('List Debit Note Items Error:', err.message);
+        res.status(500).json({ error: 'Server Error' });
+    }
+});
+
 module.exports = router;

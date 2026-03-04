@@ -141,14 +141,13 @@ app.get('/api/reset-sales-data', async (req, res) => {
 const fs = require('fs');
 const path = require('path');
 
-// Database Connection Test & Server Start
-pool.query('SELECT NOW()', async (err, res) => {
-    if (err) {
-        console.error('Database Connection Failed:', err);
-    } else {
+// --- Database Initialization & Migration ---
+async function initializeDatabase() {
+    try {
+        console.log('Connecting to database...');
+        const res = await pool.query('SELECT NOW()');
         console.log('Database Connected Successfully:', res.rows[0].now);
 
-        // --- AUTO-MIGRATION SECTION (TEMPORARY FIX) ---
         const migrations = [
             { id: '040', path: '040_fix_grn_rounding.sql' },
             { id: '041', path: '041_smart_gst_logic.sql' },
@@ -191,21 +190,23 @@ pool.query('SELECT NOW()', async (err, res) => {
                     await pool.query(sql);
                     console.log(`Mig ${m.id} Applied/Verified`);
                 } catch (e) {
-                    // Ignore "already exists" errors (42P07, 42710)
                     if (e.code === '42P07' || e.code === '42710') {
-                        console.log(`Mig ${m.id} already exists, skipping.`);
+                        console.log(`Mig ${m.id} already exists`);
                     } else {
                         console.error(`Mig ${m.id} Failed:`, e.message);
                     }
                 }
             }
         }
-        // ----------------------------------------------
-        // ----------------------------------------------
-        // ----------------------------------------------
-
-        app.listen(port, () => {
-            console.log(`Server running on http://localhost:${port}`);
-        });
+    } catch (err) {
+        console.error('CRITICAL: Database Initialization Failed!', err.message);
+        // We don't exit here because the server should still listen to report its status
     }
+}
+
+// Start Server Immediately (Satisfies Render Health Checks)
+app.listen(port, () => {
+    console.log(`Server is booting up and listening on port ${port}...`);
+    // Run initialization in background
+    initializeDatabase();
 });
