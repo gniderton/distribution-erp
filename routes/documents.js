@@ -41,6 +41,38 @@ router.get('/next/:docType', async (req, res) => {
 });
 
 /**
+ * GET /api/documents/all-sequences
+ * Returns all active document sequences formatted for the UI.
+ */
+router.get('/all-sequences', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT document_type, prefix, current_number 
+            FROM document_sequences 
+            WHERE is_active = true
+            ORDER BY document_type ASC
+        `);
+
+        const formattedResult = result.rows.map(row => {
+            const current = Number(row.current_number);
+            const next = current + 1;
+            return {
+                document_type: row.document_type,
+                prefix: row.prefix,
+                current_number: current,
+                next_number: next,
+                formatted: `${row.prefix}${next}`
+            };
+        });
+
+        res.json(formattedResult);
+    } catch (err) {
+        console.error('Fetch All Sequences Error:', err.message);
+        res.status(500).json({ error: 'Server Error' });
+    }
+});
+
+/**
  * POST /api/documents/increment/:docType
  * Increments the document sequence and returns the new value.
  */
