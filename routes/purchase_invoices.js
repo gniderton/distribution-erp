@@ -3,35 +3,61 @@ const router = express.Router();
 const { pool } = require('../config/db');
 
 // @route   GET /api/purchase-invoices
-// @desc    Get all Purchase Invoices (GRNs)
+// @desc    Get all Purchase Invoices (with optional filters)
 router.get('/', async (req, res) => {
     try {
-        const result = await pool.query(`
-            SELECT 
-                pi.id,
-                pi.invoice_number, -- Added this!
-                pi.vendor_invoice_number,
-                pi.vendor_id, -- Needed for Frontend Filtering
-                pi.purchase_order_id, -- Needed for Correction Mode Pre-fill
-                pi.vendor_invoice_date,
-                pi.received_date,
-                pi.status,
-                pi.grand_total,
-                COALESCE(pa.paid_amount, 0) as paid_amount,
-                COALESCE(dn.dn_amount, 0) as dn_amount,
-                CASE 
-                    WHEN pi.status IN ('Reversed', 'Cancelled') THEN 0
-                    ELSE (pi.grand_total - COALESCE(pa.paid_amount, 0) - COALESCE(dn.dn_amount, 0))
-                END as balance,
-                v.vendor_name as vendor_name,
-                ph.po_number,
-                -- Added Lines JSON for View/Correction (Updated with Full Details)
+        const { vendor_id, pending_only } = req.query;
+        let queryParams = [];
+        let whereConditions = [];
+
+        if (vendor_id) {
+            queryParams.push(vendor_id);
+            whereConditions.push(`pi.vendor_id = $${queryParams.length}`);
+        }
+
+        const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+        const baseQuery = `
+            WITH invoice_summary AS (
+                SELECT 
+                    pi.id,
+                    pi.invoice_number,
+                    pi.vendor_invoice_number,
+                    pi.vendor_id,
+                    pi.purchase_order_id,
+                    pi.vendor_invoice_date,
+                    pi.received_date,
+                    pi.status,
+                    pi.grand_total,
+                    v.vendor_name,
+                    ph.po_number,
+                    COALESCE(pa.paid_amount, 0) as paid_amount,
+                    COALESCE(dn.dn_amount, 0) as dn_amount,
+                    CASE 
+                        WHEN pi.status IN ('Reversed', 'Cancelled') THEN 0
+                        ELSE (pi.grand_total - COALESCE(pa.paid_amount, 0) - COALESCE(dn.dn_amount, 0))
+                    END as balance
+                FROM purchase_invoice_headers pi
+                JOIN vendors v ON pi.vendor_id = v.id
+                LEFT JOIN purchase_order_headers ph ON pi.purchase_order_id = ph.id
+                LEFT JOIN (
+                    SELECT purchase_invoice_id, SUM(amount) as paid_amount 
+                    FROM payment_allocations 
+                    GROUP BY purchase_invoice_id
+                ) pa ON pi.id = pa.purchase_invoice_id
+                LEFT JOIN (
+                    SELECT purchase_invoice_id, SUM(amount) as dn_amount 
+                    FROM debit_note_allocations 
+                    GROUP BY purchase_invoice_id
+                ) dn ON pi.id = dn.purchase_invoice_id
+                ${whereClause}
+            )
+            SELECT *,
                 (
                     SELECT json_agg(json_build_object(
                         '_product_id', pl.product_id,
                         'Item Name', p.product_name,
                         'Ean code', p.ean_code,
-                        -- MRP: Matches Frontend 'MRP'
                         'MRP', COALESCE((SELECT mrp FROM inventory_batches ib WHERE ib.purchase_invoice_line_id = pl.id LIMIT 1), p.mrp),
                         'Qty', pl.accepted_qty,
                         'Price', pl.rate,
@@ -41,11 +67,8 @@ router.get('/', async (req, res) => {
                         'Taxable', (pl.amount - pl.tax_amount),
                         'GST $', pl.tax_amount,
                         'Net $', pl.amount,
-                        'GST $', pl.tax_amount,
-                        'Net $', pl.amount,
                         'Batch No', (SELECT batch_code FROM inventory_batches ib WHERE ib.purchase_invoice_line_id = pl.id LIMIT 1),
                         'Expiry', (SELECT expiry_date FROM inventory_batches ib WHERE ib.purchase_invoice_line_id = pl.id LIMIT 1),
-                        -- Fallback Logic: If Master Link is broken, Calculate % from Amount
                         'Tax %', COALESCE(t.tax_percentage, ROUND((pl.tax_amount / NULLIF(pl.amount - pl.tax_amount, 0)) * 100, 2), 0),
                         'Tax Name', CASE 
                             WHEN t.tax_name IS NOT NULL THEN t.tax_name 
@@ -56,27 +79,14 @@ router.get('/', async (req, res) => {
                     FROM purchase_invoice_lines pl
                     JOIN products p ON pl.product_id = p.id
                     LEFT JOIN taxes t ON p.tax_id = t.id
-                    WHERE pl.purchase_invoice_header_id = pi.id
+                    WHERE pl.purchase_invoice_header_id = invoice_summary.id
                 ) as lines_json
-            FROM purchase_invoice_headers pi
-            JOIN vendors v ON pi.vendor_id = v.id
-            LEFT JOIN purchase_order_headers ph ON pi.purchase_order_id = ph.id
-            LEFT JOIN (
-                SELECT purchase_invoice_id, SUM(amount) as paid_amount 
-                FROM payment_allocations 
-                GROUP BY purchase_invoice_id
-            ) pa ON pi.id = pa.purchase_invoice_id
-            LEFT JOIN (
-                SELECT purchase_invoice_id, SUM(amount) as dn_amount 
-                FROM debit_note_allocations 
-                GROUP BY purchase_invoice_id
-            ) dn ON pi.id = dn.purchase_invoice_id
-            ORDER BY pi.id DESC
-        `);
+            FROM invoice_summary
+            ${pending_only === 'true' ? 'WHERE balance > 0' : ''}
+            ORDER BY id DESC
+        `;
 
-        // Retool expects an array
-        // Logic: Balance = Grand Total - Paid Allocations - DN Allocations
-
+        const result = await pool.query(baseQuery, queryParams);
         res.json(result.rows);
     } catch (err) {
         console.error(err.message);
