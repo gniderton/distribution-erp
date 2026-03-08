@@ -2,8 +2,36 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 
+// @route   GET /api/debit-notes
+// @desc    Get all Debit Notes (with optional vendor_id filter)
+router.get('/', async (req, res) => {
+    try {
+        const { vendor_id } = req.query;
+        let query = `
+            SELECT dn.*, v.vendor_name, pi.invoice_number as linked_invoice_number
+            FROM debit_notes dn
+            JOIN vendors v ON dn.vendor_id = v.id
+            LEFT JOIN purchase_invoice_headers pi ON dn.linked_invoice_id = pi.id
+        `;
+        const params = [];
+
+        if (vendor_id) {
+            query += ` WHERE dn.vendor_id = $1`;
+            params.push(vendor_id);
+        }
+
+        query += ` ORDER BY dn.debit_note_date DESC`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('List Debit Notes Error:', err.message);
+        res.status(500).json({ error: 'Server Error' });
+    }
+});
+
 // @route   GET /api/debit-notes/vendor/:id
-// @desc    Get all Debit Notes for a Vendor
+// @desc    Get all Debit Notes for a Vendor (Legacy)
 router.get('/vendor/:id', async (req, res) => {
     try {
         const { id } = req.params;
