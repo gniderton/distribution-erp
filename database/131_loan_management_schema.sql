@@ -59,7 +59,8 @@ ON CONFLICT (code) DO NOTHING;
 
 -- 4. Setup Document Sequence
 INSERT INTO document_sequences (document_type, prefix, current_number) 
-VALUES ('LOAN', 'LOAN-', 1);
+VALUES ('LOAN', 'LOAN-', 1)
+ON CONFLICT (document_type) DO NOTHING;
 
 -- 5. Indexes
 CREATE INDEX IF NOT EXISTS idx_loans_party ON loans(party_type, party_id);

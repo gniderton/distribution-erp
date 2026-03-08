@@ -39,5 +39,5 @@ CREATE INDEX idx_other_income_destination ON other_income(destination_account_id
 
 -- 3. Register Document Sequence
 INSERT INTO document_sequences (document_type, prefix, current_number, company_settings_id, branch_id)
-SELECT 'OTHER_INCOME', 'INC-', 0, 1, 1
-WHERE NOT EXISTS (SELECT 1 FROM document_sequences WHERE document_type = 'OTHER_INCOME');
+VALUES ('OTHER_INCOME', 'INC-', 0, 1, 1)
+ON CONFLICT (document_type) DO NOTHING;

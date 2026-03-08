@@ -28,5 +28,5 @@ CREATE TABLE IF NOT EXISTS cheques (
 
 -- 3. Add sequence if not exists
 INSERT INTO document_sequences (document_type, prefix, current_number)
-SELECT 'CHQ', 'CHQ-', 0
-WHERE NOT EXISTS (SELECT 1 FROM document_sequences WHERE document_type = 'CHQ');
+VALUES ('CHQ', 'CHQ-', 0)
+ON CONFLICT (document_type) DO NOTHING;

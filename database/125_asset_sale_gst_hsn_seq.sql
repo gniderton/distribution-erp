@@ -5,5 +5,5 @@ ADD COLUMN IF NOT EXISTS sale_invoice_number VARCHAR(50) UNIQUE;
 
 -- Seed sequence for Asset Sale Invoice
 INSERT INTO document_sequences (document_type, prefix, current_number, is_active)
-SELECT 'ASSET_SALE_INV', 'ASI-', 0, true
-WHERE NOT EXISTS (SELECT 1 FROM document_sequences WHERE document_type = 'ASSET_SALE_INV');
+VALUES ('ASSET_SALE_INV', 'ASI-', 0, true)
+ON CONFLICT (document_type) DO NOTHING;
