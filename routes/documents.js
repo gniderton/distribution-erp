@@ -3,6 +3,74 @@ const router = express.Router();
 const carbone = require('carbone');
 const path = require('path');
 const fs = require('fs');
+const { pool } = require('../config/db');
+
+/**
+ * GET /api/documents/next/:docType
+ * Returns the next available number for a document type without incrementing it.
+ * Useful for UI display.
+ */
+router.get('/next/:docType', async (req, res) => {
+    try {
+        const { docType } = req.params;
+        const result = await pool.query(`
+            SELECT prefix, current_number 
+            FROM document_sequences 
+            WHERE document_type = $1 AND is_active = true
+            LIMIT 1
+        `, [docType]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: `Sequence for ${docType} not found` });
+        }
+
+        const { prefix, current_number } = result.rows[0];
+        const nextNumber = Number(current_number) + 1;
+        const formatted = `${prefix}${nextNumber}`;
+
+        res.json({ 
+            prefix, 
+            current_number: Number(current_number), 
+            next_number: nextNumber, 
+            formatted 
+        });
+    } catch (err) {
+        console.error('Fetch Next Number Error:', err.message);
+        res.status(500).json({ error: 'Server Error' });
+    }
+});
+
+/**
+ * POST /api/documents/increment/:docType
+ * Increments the document sequence and returns the new value.
+ */
+router.post('/increment/:docType', async (req, res) => {
+    try {
+        const { docType } = req.params;
+        const result = await pool.query(`
+            UPDATE document_sequences 
+            SET current_number = current_number + 1
+            WHERE document_type = $1 AND is_active = true
+            RETURNING prefix, current_number
+        `, [docType]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: `Sequence for ${docType} not found` });
+        }
+
+        const { prefix, current_number } = result.rows[0];
+        const formatted = `${prefix}${current_number}`;
+
+        res.json({ 
+            prefix, 
+            current_number: Number(current_number), 
+            formatted 
+        });
+    } catch (err) {
+        console.error('Increment Sequence Error:', err.message);
+        res.status(500).json({ error: 'Server Error' });
+    }
+});
 
 /**
  * POST /api/documents/generate-pdf
