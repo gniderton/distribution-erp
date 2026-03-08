@@ -1,51 +1,44 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../config/db');
+const carbone = require('carbone');
+const path = require('path');
+const fs = require('fs');
 
-// GET /api/documents/next/:type - Get next number for a document type (Preview)
-router.get('/next/:type', async (req, res) => {
-    try {
-        const { type } = req.params;
-        const result = await pool.query(
-            'SELECT current_number + 1 as next_num, prefix FROM document_sequences WHERE document_type = $1',
-            [type]
-        );
+/**
+ * POST /api/documents/generate-pdf
+ * Merges data with an Excel template and returns a PDF.
+ * Body: { template: "po.xlsx", data: { ... } }
+ */
+router.post('/generate-pdf', (req, res) => {
+    const { template, data } = req.body;
 
-        if (result.rows.length === 0) {
-            return res.json({ next_num: 1, prefix: 'PREVIEW-' });
+    if (!template || !data) {
+        return res.status(400).json({ error: 'Missing template name or data' });
+    }
+
+    const templatePath = path.join(__dirname, '../templates', template);
+
+    if (!fs.existsSync(templatePath)) {
+        return res.status(404).json({ error: `Template ${template} not found` });
+    }
+
+    const options = {
+        convertTo: 'pdf'
+    };
+
+    carbone.render(templatePath, data, options, (err, result) => {
+        if (err) {
+            console.error('Carbone Error:', err);
+            return res.status(500).json({ error: 'Failed to generate PDF', details: err.message });
         }
 
-        res.json({
-            next_num: parseInt(result.rows[0].next_num),
-            prefix: result.rows[0].prefix
-        });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+        // Set name of the download file
+        const fileName = template.replace('.xlsx', '.pdf');
 
-// GET /api/documents/sequences - List all
-router.get('/sequences', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM document_sequences ORDER BY id ASC');
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// PUT /api/documents/sequences/:id - Update prefix/current number
-router.put('/sequences/:id', async (req, res) => {
-    try {
-        const { prefix, current_number } = req.body;
-        await pool.query(
-            'UPDATE document_sequences SET prefix = COALESCE($1, prefix), current_number = COALESCE($2, current_number) WHERE id = $3',
-            [prefix, current_number, req.params.id]
-        );
-        res.json({ success: true, message: 'Sequence Updated' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+        res.send(result);
+    });
 });
 
 module.exports = router;

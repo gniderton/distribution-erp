@@ -69,7 +69,7 @@ app.use('/api/products', require('./routes/products'));
 app.use('/api/master', require('./routes/masterData'));
 app.use('/api/purchase-orders', require('./routes/purchase_orders'));
 app.use('/api/purchase-invoices', require('./routes/purchase_invoices')); // NEW Route
-app.use('/api/documents', require('./routes/documents'));
+app.use('/api/documents', require('./routes/documents')); // PDF & Sequence Management
 app.use('/api/bank-accounts', require('./routes/bank_accounts'));
 app.use('/api/sales', require('./routes/sales'));
 app.use('/api/sales', require('./routes/unified_sales')); // Unified orders + invoices view
