@@ -78,6 +78,7 @@ router.get('/', async (req, res) => {
         b.brand_name,
         c.category_name,
         t.tax_name,
+        t.tax_percentage,
         h.hsn_code
       FROM products p
       LEFT JOIN brands b ON p.brand_id = b.id
