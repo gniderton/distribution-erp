@@ -53,11 +53,11 @@ router.get('/all-sequences', async (req, res) => {
             ORDER BY document_type ASC
         `);
 
-        const formattedResult = result.rows.map(row => {
+        const formattedResult = {};
+        result.rows.forEach(row => {
             const current = Number(row.current_number);
             const next = current + 1;
-            return {
-                document_type: row.document_type,
+            formattedResult[row.document_type] = {
                 prefix: row.prefix,
                 current_number: current,
                 next_number: next,
