@@ -101,9 +101,15 @@ router.get('/:id', async (req, res) => {
             SELECT 
                 ph.*, 
                 v.vendor_name,
-                v.gst as vendor_gst
+                v.vendor_code,
+                v.contact_no,
+                v.vendor_address_id,
+                v.gst as vendor_gst,
+                va.address_line as vendor_address,
+                va.pin_code as vendor_pin_code
             FROM purchase_order_headers ph
             LEFT JOIN vendors v ON ph.vendor_id = v.id
+            LEFT JOIN vendor_addresses va ON v.vendor_address_id = va.id
             WHERE ph.id = $1
         `, [id]);
 
@@ -111,19 +117,25 @@ router.get('/:id', async (req, res) => {
             return res.status(404).json({ error: 'Purchase Order not found' });
         }
 
-        // 2. Fetch Lines (Joined with Products)
-        // Fixed: Join on p.id, removed bad columns
+        // 2. Fetch Lines (Joined with Products, Categories, Brands, HSN)
         const linesRes = await pool.query(`
             SELECT 
                 pl.*,
                 p.product_name,
                 p.ean_code,
+                p.product_code,
+                c.category_name,
+                b.brand_name,
+                h.hsn_code,
                 p.category_id,
                 p.purchase_rate,
                 COALESCE(t.tax_percentage, 0) as tax_percent, 
                 p.mrp as product_mrp
             FROM purchase_order_lines pl
             LEFT JOIN products p ON pl.product_id = p.id
+            LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN brands b ON p.brand_id = b.id
+            LEFT JOIN hsn_codes h ON p.hsn_id = h.id
             LEFT JOIN taxes t ON p.tax_id = t.id
             WHERE pl.purchase_order_header_id = $1
             ORDER BY pl.id ASC
