@@ -24,7 +24,7 @@ router.get('/unified', async (req, res) => {
                 so.dse_id,
                 e.full_name as dse_name,
                 so.order_date,
-                so.delivery_date,
+                COALESCE((SELECT delivery_time::DATE FROM trip_invoices WHERE invoice_id = si.id AND delivery_time IS NOT NULL ORDER BY delivery_time DESC LIMIT 1), so.delivery_date) as delivery_date,
                 so.status,
                 so.total_amount as order_total,
                 so.tax_amount as order_tax,
@@ -50,6 +50,7 @@ router.get('/unified', async (req, res) => {
                 si.total_sgst,
                 (si.total_cgst + si.total_sgst) as total_gst,
                 si.status as invoice_status,
+                si.delivery_status,
                 si.paid_amount,
                 si.balance_amount,
                 
@@ -160,6 +161,8 @@ router.get('/unified/:id', async (req, res) => {
                 (SELECT SUM(scheme_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_scheme_amount,
                 (SELECT SUM(discount_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_discount_amount,
                 si.status as invoice_status,
+                si.delivery_status,
+                COALESCE((SELECT delivery_time::DATE FROM trip_invoices WHERE invoice_id = si.id AND delivery_time IS NOT NULL ORDER BY delivery_time DESC LIMIT 1), so.delivery_date) as actual_delivery_date,
                 
                 -- Order lines
                 (
