@@ -51,8 +51,12 @@ router.get('/unified', async (req, res) => {
                 (si.total_cgst + si.total_sgst) as total_gst,
                 si.status as invoice_status,
                 si.delivery_status,
-                si.paid_amount,
-                si.balance_amount,
+                CASE WHEN si.id IS NOT NULL THEN
+                    COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id), 0)
+                ELSE 0 END as paid_amount,
+                CASE WHEN si.id IS NOT NULL THEN
+                    si.grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id), 0)
+                ELSE 0 END as balance_amount,
                 
                 -- Computed fields for frontend
                 CASE 
@@ -73,6 +77,7 @@ router.get('/unified', async (req, res) => {
             FROM sales_orders so
             LEFT JOIN sales_invoices si ON si.sales_order_id = so.id
             LEFT JOIN customers c ON c.id = so.customer_id
+            LEFT JOIN routes r ON c.route_id = r.id
             LEFT JOIN employees e ON e.id = so.dse_id
             WHERE 1=1
         `;
@@ -145,6 +150,10 @@ router.get('/unified/:id', async (req, res) => {
                 c.customer_name,
                 c.customer_phone,
                 c.gstin,
+                r.route_name as route,
+                ca.address_line1 as customer_address,
+                ca.city as district,
+                ca.pincode as pin_code,
                 e.full_name as dse_name,
                 
                 -- Invoice header
@@ -155,8 +164,12 @@ router.get('/unified/:id', async (req, res) => {
                 si.total_taxable,
                 si.total_cgst,
                 si.total_sgst,
-                si.paid_amount,
-                si.balance_amount,
+                CASE WHEN si.id IS NOT NULL THEN
+                    COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id), 0)
+                ELSE 0 END as paid_amount,
+                CASE WHEN si.id IS NOT NULL THEN
+                    si.grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id), 0)
+                ELSE 0 END as balance_amount,
                 (SELECT SUM(gross_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_gross_amount,
                 (SELECT SUM(scheme_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_scheme_amount,
                 (SELECT SUM(discount_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_discount_amount,
@@ -191,8 +204,15 @@ router.get('/unified/:id', async (req, res) => {
                     SELECT json_agg(
                         json_build_object(
                             'id', sil.id,
+                            's_no', sil.id,
                             'product_id', sil.product_id,
                             'product_name', p.product_name,
+                            'product_code', p.product_code,
+                            'ean_code', p.ean_code,
+                            'category_name', cat.category_name,
+                            'brand_name', b.brand_name,
+                            'batch_code', ib.batch_code,
+                            'expiry_date', ib.expiry_date,
                             'shipped_qty', sil.shipped_qty,
                             'rate', sil.rate,
                             'mrp', sil.mrp,
@@ -208,12 +228,17 @@ router.get('/unified/:id', async (req, res) => {
                     )
                     FROM sales_invoice_lines sil
                     LEFT JOIN products p ON p.id = sil.product_id
+                    LEFT JOIN categories cat ON p.category_id = cat.id
+                    LEFT JOIN brands b ON p.brand_id = b.id
+                    LEFT JOIN inventory_batches ib ON sil.batch_id = ib.id
                     WHERE sil.invoice_id = si.id
                 ) as invoice_lines
                 
             FROM sales_orders so
             LEFT JOIN sales_invoices si ON si.sales_order_id = so.id
             LEFT JOIN customers c ON c.id = so.customer_id
+            LEFT JOIN routes r ON c.route_id = r.id
+            LEFT JOIN customer_addresses ca ON ca.customer_id = c.id AND ca.is_default_billing = true
             LEFT JOIN employees e ON e.id = so.dse_id
             WHERE so.id = $1
         `;
