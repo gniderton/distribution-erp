@@ -203,35 +203,40 @@ router.get('/unified/:id', async (req, res) => {
                 (
                     SELECT json_agg(
                         json_build_object(
-                            'id', sil.id,
-                            's_no', sil.id,
-                            'product_id', sil.product_id,
+                            'id', il.id,
+                            's_no', il.s_no,
+                            'product_id', il.product_id,
                             'product_name', p.product_name,
                             'product_code', p.product_code,
                             'ean_code', p.ean_code,
+                            'hsn_code', h.hsn_code,
                             'category_name', cat.category_name,
                             'brand_name', b.brand_name,
                             'batch_code', ib.batch_code,
                             'expiry_date', ib.expiry_date,
-                            'shipped_qty', sil.shipped_qty,
-                            'rate', sil.rate,
-                            'mrp', sil.mrp,
-                            'gross_amount', sil.gross_amount,
-                            'scheme_amount', sil.scheme_amount,
-                            'discount_percent', sil.discount_percent,
-                            'discount_amount', sil.discount_amount,
-                            'taxable_amount', sil.taxable_amount,
-                            'tax_percent', sil.tax_percent,
-                            'tax_amount', sil.tax_amount,
-                            'amount', sil.amount
+                            'shipped_qty', il.shipped_qty,
+                            'rate', il.rate,
+                            'mrp', il.mrp,
+                            'gross_amount', il.gross_amount,
+                            'scheme_amount', il.scheme_amount,
+                            'discount_percent', il.discount_percent,
+                            'discount_amount', il.discount_amount,
+                            'taxable_amount', il.taxable_amount,
+                            'tax_percent', il.tax_percent,
+                            'tax_amount', il.tax_amount,
+                            'amount', il.amount
                         )
                     )
-                    FROM sales_invoice_lines sil
-                    LEFT JOIN products p ON p.id = sil.product_id
+                    FROM (
+                        SELECT *, row_number() OVER (ORDER BY id ASC) as s_no 
+                        FROM sales_invoice_lines 
+                        WHERE invoice_id = si.id
+                    ) il
+                    LEFT JOIN products p ON p.id = il.product_id
                     LEFT JOIN categories cat ON p.category_id = cat.id
                     LEFT JOIN brands b ON p.brand_id = b.id
-                    LEFT JOIN inventory_batches ib ON sil.batch_id = ib.id
-                    WHERE sil.invoice_id = si.id
+                    LEFT JOIN hsn_codes h ON p.hsn_id = h.id
+                    LEFT JOIN inventory_batches ib ON il.batch_id = ib.id
                 ) as invoice_lines
                 
             FROM sales_orders so
