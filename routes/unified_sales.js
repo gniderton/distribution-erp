@@ -51,6 +51,15 @@ router.get('/unified', async (req, res) => {
                 (si.total_cgst + si.total_sgst) as total_gst,
                 si.status as invoice_status,
                 si.delivery_status,
+                
+                -- Customer Geographics
+                c.gstin,
+                r.route_name as route,
+                ca.address_line1 as customer_address,
+                ca.city as district,
+                ca.pincode as pin_code,
+
+                -- Real-time Payment Calculations
                 CASE WHEN si.id IS NOT NULL THEN
                     COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id), 0)
                 ELSE 0 END as paid_amount,
@@ -78,6 +87,7 @@ router.get('/unified', async (req, res) => {
             LEFT JOIN sales_invoices si ON si.sales_order_id = so.id
             LEFT JOIN customers c ON c.id = so.customer_id
             LEFT JOIN routes r ON c.route_id = r.id
+            LEFT JOIN customer_addresses ca ON ca.customer_id = c.id AND ca.is_default = true
             LEFT JOIN employees e ON e.id = so.dse_id
             WHERE 1=1
         `;
