@@ -74,6 +74,72 @@ router.get('/', async (req, res) => {
             FROM inventory_batches ib 
             WHERE ib.product_id = p.id
         ), 0) as stock_value_total_bought,
+
+        -- 1. Total Units Bought (Ever)
+        COALESCE((SELECT SUM(quantity_initial) FROM inventory_batches WHERE product_id = p.id), 0) as total_units_bought,
+
+        -- 2. Total Units Sold (Ever)
+        COALESCE((SELECT SUM(shipped_qty) FROM sales_invoice_lines WHERE product_id = p.id), 0) as total_units_sold,
+
+        -- 3. Sales Value Taxable (Pure Revenue)
+        COALESCE((SELECT SUM(taxable_amount) FROM sales_invoice_lines WHERE product_id = p.id), 0) as sales_value_taxable,
+
+        -- 4. Exact COGS for Sold Items
+        COALESCE((
+            SELECT SUM(ABS(st.quantity_change) * ib.purchase_rate) 
+            FROM stock_traceability st 
+            JOIN inventory_batches ib ON ib.id = st.batch_id 
+            WHERE st.product_id = p.id AND st.reference_type = 'Sales Invoice' AND st.transaction_type = 'OUT'
+        ), 0) as total_cogs_value,
+
+        -- 5. Gross Margin Amount (Sales Taxable - Exact COGS)
+        (
+            COALESCE((SELECT SUM(taxable_amount) FROM sales_invoice_lines WHERE product_id = p.id), 0) - 
+            COALESCE((
+                SELECT SUM(ABS(st.quantity_change) * ib.purchase_rate) 
+                FROM stock_traceability st 
+                JOIN inventory_batches ib ON ib.id = st.batch_id 
+                WHERE st.product_id = p.id AND st.reference_type = 'Sales Invoice' AND st.transaction_type = 'OUT'
+            ), 0)
+        ) as margin_amount,
+
+        -- 6. Margin Percentage
+        CASE 
+            WHEN COALESCE((SELECT SUM(taxable_amount) FROM sales_invoice_lines WHERE product_id = p.id), 0) > 0 
+            THEN ROUND(( 
+                (
+                    COALESCE((SELECT SUM(taxable_amount) FROM sales_invoice_lines WHERE product_id = p.id), 0) - 
+                    COALESCE((SELECT SUM(ABS(st.quantity_change) * ib.purchase_rate) FROM stock_traceability st JOIN inventory_batches ib ON ib.id = st.batch_id WHERE st.product_id = p.id AND st.reference_type = 'Sales Invoice' AND st.transaction_type = 'OUT'), 0)
+                ) / COALESCE((SELECT SUM(taxable_amount) FROM sales_invoice_lines WHERE product_id = p.id), 1) 
+            ) * 100, 2) 
+            ELSE 0 
+        END as margin_percentage,
+
+        -- 7. Total Units Returned
+        COALESCE((SELECT SUM(qty) FROM sales_return_lines WHERE product_id = p.id AND return_to_stock = true), 0) as total_units_returned,
+
+        -- 8. Total Units Adjusted (Shrinkage/Gain)
+        COALESCE((SELECT SUM(quantity_change) FROM stock_traceability WHERE product_id = p.id AND transaction_type = 'ADJUSTMENT'), 0) as total_units_adjusted,
+
+        -- 9. In Transit Quantity
+        COALESCE((
+            SELECT SUM(sil.shipped_qty) 
+            FROM sales_invoice_lines sil 
+            JOIN sales_invoices si ON si.id = sil.invoice_id 
+            WHERE sil.product_id = p.id AND si.delivery_status = 'In Transit'
+        ), 0) as in_transit_qty,
+
+        -- 10. Last Sold Date
+        (
+            SELECT MAX(si.invoice_date) 
+            FROM sales_invoices si 
+            JOIN sales_invoice_lines sil ON si.id = sil.invoice_id 
+            WHERE sil.product_id = p.id
+        ) as last_sold_date,
+
+        -- 11. Last Purchased Date
+        (SELECT MAX(created_at) FROM inventory_batches WHERE product_id = p.id) as last_purchased_date,
+        
         
         b.brand_name,
         c.category_name,
