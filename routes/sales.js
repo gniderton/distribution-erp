@@ -1462,4 +1462,266 @@ router.post('/bulk-invoice-generate', async (req, res) => {
     }
 });
 
+// POST /api/sales/invoices/:id/unlock-for-edit - Reverses an invoice to unlock its SO
+router.post('/invoices/:id/unlock-for-edit', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const invoiceId = req.params.id;
+        await client.query('BEGIN');
+
+        // 1. Validations
+        const invRes = await client.query('SELECT * FROM sales_invoices WHERE id = $1', [invoiceId]);
+        if (invRes.rows.length === 0) throw new Error('Invoice not found');
+        const inv = invRes.rows[0];
+
+        if (Number(inv.paid_amount) > 0) throw new Error('Cannot edit an invoice with existing payments. Remove payments first.');
+        if (inv.delivery_status === 'Delivered' || inv.delivery_status === 'In Transit') throw new Error('Cannot edit a dispatched/delivered invoice.');
+        if (inv.is_gst_filed) throw new Error('Cannot edit an invoice because GST has already been filed.');
+        
+        // Date check: <= 10 days
+        const invDate = new Date(inv.invoice_date);
+        const today = new Date();
+        const diffTime = Math.abs(today - invDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        if (diffDays > 10) throw new Error('Cannot edit an invoice older than 10 days.');
+
+        const orderId = inv.sales_order_id;
+        if (!orderId) throw new Error('Invoice is not linked to a Sales Order.');
+
+        // 2. Reversal Ledger
+        await client.query(`DELETE FROM journal_entries WHERE reference_type = 'SALES_INV' AND reference_id = $1`, [invoiceId]);
+        await client.query(`DELETE FROM journal_entries WHERE reference_type = 'COGS' AND reference_id = $1`, [invoiceId]);
+
+        // 3. Reversal Stock
+        const traces = await client.query(`SELECT * FROM stock_traceability WHERE reference_type = 'Sales Invoice' AND reference_id = $1`, [invoiceId]);
+        for (const trace of traces.rows) {
+            if (trace.transaction_type === 'OUT' || trace.transaction_type === 'OUT-TRANSIT') {
+                const qtyBack = Math.abs(Number(trace.quantity_change));
+                await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining + $1 WHERE id = $2`, [qtyBack, trace.batch_id]);
+                // Delete the trace to wipe the record of the mistake
+                await client.query(`DELETE FROM stock_traceability WHERE id = $1`, [trace.id]);
+            }
+        }
+
+        // 4. Unlink Sales Order
+        await client.query(`UPDATE sales_orders SET status = 'Approved' WHERE id = $1`, [orderId]);
+        await client.query(`UPDATE sales_order_lines SET dispatched_qty = 0, cancelled_qty = 0 WHERE sales_order_id = $1`, [orderId]);
+
+        // 5. Delete Invoice lines and header
+        await client.query(`DELETE FROM sales_invoice_lines WHERE invoice_id = $1`, [invoiceId]);
+        await client.query(`DELETE FROM sales_invoices WHERE id = $1`, [invoiceId]);
+
+        await client.query('COMMIT');
+
+        res.json({
+            success: true,
+            message: 'Invoice unlocked. Sales Order ready for edit.',
+            sales_order_id: orderId,
+            original_invoice_number: inv.invoice_number,
+            original_invoice_date: inv.invoice_date
+        });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Unlock Error:", err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// POST /api/sales/invoices/regenerate - Re-generates an invoice explicitly forcing the old Date and Number
+router.post('/invoices/regenerate', async (req, res) => {
+    // This is identical to bulk-invoice-generate, except it explicitly forces Number and Date
+    let { sales_order_id, original_invoice_number, original_invoice_date } = req.body;
+    
+    if (!sales_order_id || !original_invoice_number || !original_invoice_date) {
+        return res.status(400).json({ error: 'Missing required parameters for regeneration' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Fetch Order Header
+        const soRes = await client.query('SELECT * FROM sales_orders WHERE id = $1 FOR UPDATE', [sales_order_id]);
+        if (soRes.rows.length === 0) throw new Error(`Order ${sales_order_id} not found`);
+        const so = soRes.rows[0];
+        if (so.status === 'Invoiced') throw new Error(`Order ${so.so_number} already invoiced`);
+
+        // 2. Fetch Order Lines
+        const linesRes = await client.query('SELECT * FROM sales_order_lines WHERE sales_order_id = $1', [sales_order_id]);
+        let lines = linesRes.rows;
+
+        // Scheme Logic
+        const orderedItems = lines.map(l => ({ product_id: l.product_id, qty: l.ordered_qty }));
+        const { freeItems, priceSlabs } = await calculateFreeItems(orderedItems, so.customer_id, client);
+
+        const freeMap = {};
+        for (const free of freeItems) {
+            if (!freeMap[free.product_id]) freeMap[free.product_id] = { qty: 0, reasons: [] };
+            freeMap[free.product_id].qty += free.qty;
+            freeMap[free.product_id].reasons.push(free.reason);
+        }
+
+        // Update Tier Applied
+        for (const line of lines) {
+            const reasons = [];
+            if (freeMap[line.product_id]) reasons.push(...freeMap[line.product_id].reasons);
+            if (priceSlabs[line.product_id]) reasons.push(priceSlabs[line.product_id].reason);
+            if (reasons.length > 0) {
+                await client.query('UPDATE sales_order_lines SET tier_applied = $1 WHERE id = $2', [reasons.join(', '), line.id]);
+            }
+        }
+
+        // 3. Create Invoice Header (FORCED NUMBER AND DATE)
+        const invHeadRes = await client.query(`
+            INSERT INTO sales_invoices(invoice_number, sales_order_id, customer_id, status, grand_total, invoice_date)
+        VALUES($1, $2, $3, 'Unpaid', 0, $4) RETURNING id
+        `, [original_invoice_number, sales_order_id, so.customer_id, original_invoice_date]);
+        const invId = invHeadRes.rows[0].id;
+
+        // Pricing Overrides
+        const custTierRes = await client.query(`SELECT c.price_column FROM channels c JOIN customers cust ON cust.channel_id = c.id WHERE cust.id = $1`, [so.customer_id]);
+        const defaultRateColumn = custTierRes.rows[0]?.price_column || 'dealer_rate';
+        const overridesRes = await client.query(`SELECT b.brand_id, ch.price_column FROM customer_brand_pricing b JOIN channels ch ON b.channel_id = ch.id WHERE b.customer_id = $1`, [so.customer_id]);
+        const overrideMap = {};
+        overridesRes.rows.forEach(r => overrideMap[r.brand_id] = r.price_column);
+
+        let invTotal = 0; let invTax = 0; let totalCOGS = 0;
+
+        // 4. Stock Allocation
+        const allPids = new Set([ ...lines.map(l => String(l.product_id)), ...Object.keys(freeMap) ]);
+        const pidsArray = Array.from(allPids).map(Number);
+        const productsRes = await client.query(`SELECT p.id, p.brand_id, p.tax_id, t.tax_percentage as tax_bracket FROM products p LEFT JOIN taxes t ON p.tax_id = t.id WHERE p.id = ANY($1)`, [pidsArray]);
+        const prodMeta = {};
+        productsRes.rows.forEach(p => prodMeta[String(p.id)] = p);
+
+        for (const pid of allPids) {
+            const line = lines.find(l => String(l.product_id) === pid);
+            const freeData = freeMap[pid];
+            const freeQty = freeData ? freeData.qty : 0;
+            const paidQty = line ? Number(line.ordered_qty) : 0;
+            let qtyToFulfill = paidQty + freeQty;
+
+            if (qtyToFulfill <= 0) continue;
+            const pInfo = prodMeta[pid];
+            if (!pInfo) continue;
+
+            const brandId = pInfo.brand_id;
+            const taxPct = Number(pInfo.tax_bracket || 0);
+            const rateColumn = overrideMap[brandId] || defaultRateColumn;
+            const lineTaxRaw = line ? Number(line.tax_percent) : 0;
+            const lineTaxPercent = lineTaxRaw > 0 ? lineTaxRaw : taxPct;
+
+            const batchesRes = await client.query(`
+                SELECT id, quantity_remaining, mrp, purchase_rate,
+                        distributor_rate, wholesale_rate, dealer_rate, retail_rate
+                FROM inventory_batches 
+                WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
+                ORDER BY created_at ASC FOR UPDATE
+            `, [pid]);
+
+            const mrpGroups = {};
+            for (const batch of batchesRes.rows) {
+                if (qtyToFulfill <= 0) break;
+                const take = Math.min(qtyToFulfill, batch.quantity_remaining);
+                const batchRate = Number(batch[rateColumn]) || 0;
+                const batchMrp = Number(batch.mrp || 0);
+
+                if (!mrpGroups[batchMrp]) mrpGroups[batchMrp] = { qty: 0, gross: 0, cogs: 0, slabDeduction: 0, rate: batchRate };
+
+                if (priceSlabs[pid]) {
+                    const targetNet = Number(priceSlabs[pid].special_price);
+                    const targetExcl = targetNet / (1 + (taxPct / 100));
+                    const unitDeduction = Math.max(0, batchRate - targetExcl);
+                    mrpGroups[batchMrp].slabDeduction += (take * unitDeduction);
+                }
+
+                await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batch.id]);
+                await client.query(`INSERT INTO stock_traceability(batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes) VALUES($1, $2, $3, 'OUT', $4, 'Sales Invoice', $5)`, [batch.id, pid, -take, invId, 'Regenerated stock for ' + original_invoice_number]);
+
+                mrpGroups[batchMrp].qty += take;
+                mrpGroups[batchMrp].gross += (take * batchRate);
+                mrpGroups[batchMrp].cogs += (Number(batch.purchase_rate) || 0) * take;
+                qtyToFulfill -= take;
+            }
+
+            // Insert Invoice Lines
+            let remainingFree = freeQty;
+            for (const [mrpVal, group] of Object.entries(mrpGroups)) {
+                if (group.qty <= 0) continue;
+                const groupFree = Math.min(remainingFree, group.qty);
+                remainingFree -= groupFree;
+
+                const freeItemValue = groupFree * group.rate;
+                const lineScheme = freeItemValue + group.slabDeduction;
+
+                const lineGross = group.qty * group.rate;
+                const taxableValue = lineGross - lineScheme;
+                const taxValue = taxableValue * (lineTaxPercent / 100);
+                const netValue = taxableValue + taxValue;
+
+                await client.query(`
+                    INSERT INTO sales_invoice_lines (
+                        invoice_id, product_id, shipped_qty, rate, mrp, 
+                        gross_amount, scheme_amount, taxable_amount, 
+                        tax_percent, tax_amount, amount
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                `, [invId, pid, group.qty, group.rate, mrpVal, lineGross, lineScheme, taxableValue, lineTaxPercent, taxValue, netValue]);
+
+                invTotal += netValue; invTax += taxValue; totalCOGS += group.cogs;
+            }
+
+            if (line) {
+                const shippedForThisLine = paidQty - Math.max(0, qtyToFulfill - freeQty);
+                const finalDispatched = Number(line.dispatched_qty || 0) + shippedForThisLine;
+                const shortage = paidQty - finalDispatched;
+                await client.query(`UPDATE sales_order_lines SET dispatched_qty = $1, cancelled_qty = $2 WHERE id = $3`, [finalDispatched, shortage, line.id]);
+            }
+        }
+
+        if (invTotal === 0) throw new Error("Zero stock available for this order. No invoice generated.");
+
+        const roundedTotal = Math.round(invTotal);
+        const roundOff = Number((roundedTotal - invTotal).toFixed(2));
+        const roundedTax = Number(invTax.toFixed(2));
+        const taxable = Number((roundedTotal - roundedTax - roundOff).toFixed(2));
+        const cgst = Number((roundedTax / 2).toFixed(2));
+        const sgst = Number((roundedTax - cgst).toFixed(2));
+
+        await client.query('UPDATE sales_invoices SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4, round_off = $5 WHERE id = $6', [roundedTotal, taxable, cgst, sgst, roundOff, invId]);
+
+        // Accounting 
+        const acc_revenue = 4001; const acc_ar = 1101; const acc_gst_cgst = 2011; const acc_gst_sgst = 2012; const acc_cogs = 5001; const acc_inventory = 1001; const acc_round = 5003;
+
+        let invoiceLines = [{ code: acc_ar, debit: roundedTotal, credit: 0 }, { code: acc_revenue, debit: 0, credit: taxable }];
+        if (roundedTax > 0) { invoiceLines.push({ code: acc_gst_cgst, debit: 0, credit: cgst }); invoiceLines.push({ code: acc_gst_sgst, debit: 0, credit: sgst }); }
+        if (roundOff !== 0) {
+            if (roundOff > 0) invoiceLines.push({ code: acc_round, debit: 0, credit: Math.abs(roundOff) });
+            else invoiceLines.push({ code: acc_round, debit: Math.abs(roundOff), credit: 0 });
+        }
+
+        await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [new Date(), 'Regenerated Invoice: ' + original_invoice_number, 'SALES_INV', invId, JSON.stringify(invoiceLines)]);
+
+        if (totalCOGS > 0) {
+            const roundedCOGS = Number(totalCOGS.toFixed(2));
+            const cogsLines = [{ code: acc_cogs, debit: roundedCOGS, credit: 0 }, { code: acc_inventory, debit: 0, credit: roundedCOGS }];
+            await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [new Date(), 'COGS for ' + original_invoice_number, 'COGS', invId, JSON.stringify(cogsLines)]);
+        }
+
+        await client.query("UPDATE sales_orders SET status = 'Invoiced' WHERE id = $1", [sales_order_id]);
+        await client.query('COMMIT');
+        
+        res.json({ success: true, status: 'Success', invoice_number: original_invoice_number });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Regenerate Error:", err);
+        res.status(500).json({ error: err.stack || err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
