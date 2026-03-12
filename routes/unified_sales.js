@@ -87,7 +87,7 @@ router.get('/unified', async (req, res) => {
             LEFT JOIN sales_invoices si ON si.sales_order_id = so.id
             LEFT JOIN customers c ON c.id = so.customer_id
             LEFT JOIN routes r ON c.route_id = r.id
-            LEFT JOIN customer_addresses ca ON ca.customer_id = c.id AND ca.is_default = true
+            LEFT JOIN customer_addresses ca ON ca.customer_id = c.id AND ca.is_default_billing = true
             LEFT JOIN employees e ON e.id = so.dse_id
             WHERE 1=1
         `;
