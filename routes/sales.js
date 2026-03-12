@@ -1504,7 +1504,7 @@ router.post('/invoices/:id/unlock-for-edit', async (req, res) => {
         }
 
         // 4. Unlink Sales Order
-        await client.query(`UPDATE sales_orders SET status = 'Approved' WHERE id = $1`, [orderId]);
+        await client.query(`UPDATE sales_orders SET status = 'Confirmed' WHERE id = $1`, [orderId]);
         await client.query(`UPDATE sales_order_lines SET dispatched_qty = 0, cancelled_qty = 0 WHERE sales_order_id = $1`, [orderId]);
 
         // 5. Delete Invoice lines and header
