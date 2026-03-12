@@ -1,0 +1,17 @@
+{
+  "toolscriptVersion": "1.0.0",
+  "version": "43.0.9",
+  "pageUuid": "64f97f7c-edfc-11f0-bce5-2b3cdadc2f93",
+  "appTemplate": {
+    "appMaxWidth": "100%",
+    "pageCodeFolders": {
+      "object": {
+        "Inventory_Management": {
+          "array": []
+        }
+      }
+    },
+    "rootScreen": "Inventory_Management",
+    "version": "3.348.0"
+  }
+}

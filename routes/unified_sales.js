@@ -147,6 +147,7 @@ router.get('/unified/:id', async (req, res) => {
         const query = `
             SELECT 
                 so.*,
+                so.id as order_id,
                 c.customer_name,
                 c.customer_phone,
                 c.gstin,

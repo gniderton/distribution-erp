@@ -1,0 +1,115 @@
+﻿[
+  {
+    "app": "ERP MasterData",
+    "id": "443a199a-f027-11f0-bc76-af7bcf7604b0",
+    "tabs": [
+      "Banks",
+      "Brands",
+      "Categories",
+      "Tax",
+      "HSN"
+    ]
+  },
+  {
+    "app": "Finance Settlement Portal",
+    "id": "cb372150-029b-11f1-b32b-bfbdd8108318",
+    "tabs": [
+      "Payment Verification",
+      "Financial Statement",
+      "Expenses",
+      "Income",
+      "Cheque Management",
+      "Assets",
+      "Internal Transfer",
+      "Loans",
+      " }}",
+      "Bank Statement",
+      "PENDING",
+      "CLEARED",
+      "BOUNCED",
+      "INCOMING",
+      "OUTGOING"
+    ]
+  },
+  {
+    "app": "Inventory",
+    "id": "64f97f7c-edfc-11f0-bce5-2b3cdadc2f93",
+    "tabs": [
+      "Dashboard",
+      "Procurement",
+      "Inwarding",
+      "Vendors",
+      "Products",
+      "Home",
+      "Pending Bills",
+      "Ledger",
+      "Debit Note",
+      "Profile",
+      "Cash",
+      "Online",
+      "Cheque",
+      "Flat Amount",
+      "Item Return",
+      "PAYMENT",
+      "REFUND",
+      "Print / Download PDF",
+      "Send on WhatsApp",
+      "Reverse / Void GRN",
+      "Enter New GRN",
+      "Add Products",
+      "Export",
+      "Import Bulk Edit",
+      "Import Products",
+      "Stock Adjustments",
+      "Brand Profile",
+      "Action 4",
+      "Action 5"
+    ]
+  },
+  {
+    "app": "Sales Module",
+    "id": "b2b1f272-fb4d-11f0-b1d4-fb9fd449b0a4",
+    "tabs": [
+      "Sales Order",
+      "Invoices",
+      "Returns & Adjustments",
+      "Payments",
+      "tabOrders",
+      "tabInvoices"
+    ]
+  },
+  {
+    "app": "Scheme Management",
+    "id": "b898e814-fffb-11f0-abf7-03b127129f71",
+    "tabs": [
+      "From the Same Group",
+      "Different Product",
+      "Products",
+      "Brand",
+      "Category",
+      "BUY_GET_FREE",
+      "COMBO",
+      "PRICE_SLAB ",
+      "Same Product",
+      "Distributor",
+      "Wholesale",
+      "Dealer",
+      "Retail"
+    ]
+  },
+  {
+    "app": "Supply Chain",
+    "id": "e3a3213e-07c9-11f1-a89d-bf5833e37277",
+    "tabs": [
+      "Pending",
+      "Pick List",
+      "Delivery Instructions",
+      "Delivery List",
+      "Invoice Verification",
+      "Returns Verification",
+      "In Progress",
+      "Verified",
+      "Awaiting Verification"
+    ]
+  }
+]

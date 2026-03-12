@@ -1,0 +1,175 @@
+{
+    "clientSchemaVersion": 5,
+    "serverSchemaVersion": 1,
+    "exportedApplication": {
+        "name": "Inventory Management Master",
+        "slug": "inventory-management",
+        "color": "#F6F0EB",
+        "icon": "bag",
+        "applicationVersion": 2,
+        "collapseInvisibleWidgets": true,
+        "isPublic": false,
+        "forkingEnabled": false
+    },
+    "datasourceList": [],
+    "pageList": [
+        {
+            "unpublishedPage": {
+                "name": "Inventory",
+                "slug": "inventory",
+                "isDefault": true,
+                "isHidden": false,
+                "layouts": [
+                    {
+                        "viewMode": false,
+                        "dsl": {
+                            "widgetName": "MainContainer",
+                            "widgetId": "0",
+                            "type": "CANVAS_WIDGET",
+                            "children": [
+                                {
+                                    "widgetName": "MainTabs",
+                                    "type": "TABS_WIDGET",
+                                    "tabsObj": {
+                                        "tab1": {
+                                            "label": "Dashboard",
+                                            "id": "tab1",
+                                            "index": 0
+                                        },
+                                        "tab2": {
+                                            "label": "Procurement",
+                                            "id": "tab2",
+                                            "index": 1
+                                        },
+                                        "tab3": {
+                                            "label": "Inwarding",
+                                            "id": "tab3",
+                                            "index": 2
+                                        },
+                                        "tab4": {
+                                            "label": "Vendors",
+                                            "id": "tab4",
+                                            "index": 3
+                                        },
+                                        "tab5": {
+                                            "label": "Products",
+                                            "id": "tab5",
+                                            "index": 4
+                                        }
+                                    },
+                                    "children": [
+                                        {
+                                            "widgetName": "cv_tab1",
+                                            "type": "CANVAS_WIDGET",
+                                            "tabId": "tab1",
+                                            "children": [
+                                                {
+                                                    "widgetName": "txtDashTitle",
+                                                    "type": "TEXT_WIDGET",
+                                                    "text": "## Inventory Dashboard"
+                                                },
+                                                {
+                                                    "widgetName": "txtDashSub",
+                                                    "type": "TEXT_WIDGET",
+                                                    "text": "Select a module from the tabs above."
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "widgetName": "cv_tab2",
+                                            "type": "CANVAS_WIDGET",
+                                            "tabId": "tab2",
+                                            "children": [
+                                                {
+                                                    "widgetName": "btnCreatePO",
+                                                    "type": "BUTTON_WIDGET",
+                                                    "text": "Create PO",
+                                                    "onClick": "{{ showModal('modalCreatePO') }}"
+                                                },
+                                                {
+                                                    "widgetName": "tblPOs",
+                                                    "type": "TABLE_WIDGET_V2",
+                                                    "tableData": "{{ getPOs.data || [] }}"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "widgetName": "modalCreatePO",
+                                    "type": "MODAL_WIDGET",
+                                    "width": "80%",
+                                    "children": [
+                                        {
+                                            "widgetName": "cv_modalCreatePO",
+                                            "type": "CANVAS_WIDGET",
+                                            "children": [
+                                                {
+                                                    "widgetName": "txtModalTitle",
+                                                    "type": "TEXT_WIDGET",
+                                                    "text": "### Create Purchase Order"
+                                                },
+                                                {
+                                                    "widgetName": "selVendor",
+                                                    "type": "SELECT_WIDGET",
+                                                    "options": "{{ Vendors.data.map(v => ({ label: v.vendor_name, value: v.id })) }}"
+                                                },
+                                                {
+                                                    "widgetName": "tblPOItems",
+                                                    "type": "TABLE_WIDGET_V2",
+                                                    "tableData": "{{ appsmith.store.poLines || [] }}"
+                                                },
+                                                {
+                                                    "widgetName": "btnSubmitPO",
+                                                    "type": "BUTTON_WIDGET",
+                                                    "text": "Submit PO",
+                                                    "onClick": "{{ JSObject_PO.createPO() }}"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            "publishedPage": {
+                "name": "Inventory",
+                "slug": "inventory",
+                "layouts": []
+            }
+        }
+    ],
+    "actionList": [
+        {
+            "name": "Vendors",
+            "actionConfiguration": {
+                "method": "GET",
+                "path": "api/vendors"
+            }
+        },
+        {
+            "name": "Products",
+            "actionConfiguration": {
+                "method": "GET",
+                "path": "api/products"
+            }
+        },
+        {
+            "name": "getPOs",
+            "actionConfiguration": {
+                "method": "GET",
+                "path": "api/purchase-orders"
+            }
+        }
+    ],
+    "actionCollectionList": [
+        {
+            "name": "JSObject_PO",
+            "body": "export default {\n  createPO: async () => {\n    // Logic for PO creation\n    await postPO.run();\n    closeModal('modalCreatePO');\n  }\n}"
+        }
+    ],
+    "editModeTheme": {},
+    "publishedTheme": {}
+}

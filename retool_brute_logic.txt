@@ -1,0 +1,5194 @@
+=== 025059e3 ===
+/* --- UNIFIED VIEW SCRIPT (MATCHES CREATE KEYS) --- */
+const data = getPOById.data;
+
+if (!data || !data.header) {
+  utils.showNotification({ title: "Error", description: "No Data", notificationType: "error" });
+  return;
+}
+
+// 1. SET VIEW MODE (Safety)
+varPOMode.setValue('VIEW'); // <--- ADDED THIS ✅
+
+// 2. Map Header
+vendorDropdown.setValue(data.header.vendor_id);
+poNumber2.setValue(data.header.po_number);
+date5.setValue(data.header.po_date);
+date6.setValue(data.header.delivery_date);
+
+// 3. Map Lines (Targeting EXACT Keys from Create Script)
+const formattedLines = data.lines.map((row, index) => {
+    // Inputs
+    const qty = Number(row.ordered_qty);
+    const rate = Number(row.rate);
+    const discPct = Number(row.discount_percent || 0);
+    const scheme = Number(row.scheme_amount || 0);
+    
+    // Math
+    const gross = qty * rate;
+    const discAmt = (gross - scheme) * (discPct / 100);
+    const taxAmt = Number(row.tax_amount);
+    const net = Number(row.amount);
+    
+    return {
+        "S.No": index + 1,              
+        "EAN Code": row.ean_code,       
+        "Item Name": row.product_name,  
+        "MRP": Number(row.mrp),         
+        "Price": rate,
+        "Qty": qty,
+        "Sch": scheme,
+        "Disc %": discPct,
+        "GST %": 5,                     
+        "Gross $": gross,               
+        "Disc. $": discAmt,             
+        "Taxable $": net - taxAmt,      
+        "GST $": taxAmt,                
+        "Net $": net,                   
+        "_product_id": row.product_id
+    };
+});
+
+// 4. Reset & Set
+poLines.setValue([]); 
+poLines.setValue(formattedLines);
+
+// 5. Show Drawer
+drawerCreatePO.show();
+----------------------------------------
+
+=== 03c1217a ===
+const fileData = fileBulkUpload.parsedValue[0];
+// Helper to find column even if casing doesn't match
+const get = (row, key) => {
+    const found = Object.keys(row).find(k => k.toLowerCase().replace(/[^a-z]/g, '') === key.toLowerCase().replace(/[^a-z]/g, ''));
+    return found ? row[found] : "";
+};
+const cleanRows = fileData.map(r => ({
+    "Product ID":     get(r, "Product ID") || get(r, "ID"),
+    "Product Name":   get(r, "Product Name"),
+    "MRP":            get(r, "MRP"),
+    "Purchase Rate":  get(r, "Purchase Rate"),
+    "Distributor":    get(r, "Distributor Rate"),
+    "Wholesale":      get(r, "Wholesale Rate"),
+    "Dealer":         get(r, "Dealer Rate"),
+    "Retail":         get(r, "Retail Rate"),
+    "Case Qty":       get(r, "Case Qty"),
+    "UOM":            get(r, "UOM"),
+    "Model No":       get(r, "Model Number"),
+    "Min Stock":      get(r, "Min Stock"),
+    "Length":         get(r, "Length(cm)"),
+    "Width":          get(r, "Width(cm)"),
+    "Height":         get(r, "Height(cm)"),
+    "Weight":         get(r, "Weight(kg)"),
+    "Description":    get(r, "Description")
+}));
+varBulkData.setValue(cleanRows);
+utils.showNotification({ title: "Loaded", description: `Review ${cleanRows.length} items below.` });
+----------------------------------------
+
+=== 0a421e23 ===
+api/stock/adjust/batches/{{ selAdjProduct.value }}?
+----------------------------------------
+
+=== 0d2f5ee6 ===
+/* --- SCENARIO B: ADD MISSING PRODUCTS --- */
+const currentRows = piLines.value || [];
+const allProducts = Products.data.data || Products.data; // Check structure
+const vID = vendorDropdownGRN.value;
+if (!allProducts || !vID) return;
+// Filter for Vendor + NOT in current table
+const missingProds = allProducts.filter(p => 
+    Number(p.vendor_id) === Number(vID) &&
+    !currentRows.find(row => Number(row._product_id) === Number(p.id))
+);
+const newRows = missingProds.map((p, i) => {
+  // 1. Initial Values (Qty 0)
+  const qty = 0;
+  const price = Number(p.purchase_rate);
+  const mrp = Number(p.mrp);
+  const taxPct = Number(p.tax_percent || 5);
+  
+  // 2. Calculations (All 0 since Qty is 0)
+  const gross = 0;
+  const discAmt = 0;
+  const taxable = 0;
+  const taxAmt = 0;
+  const net = 0;
+  return {
+      "S.No": currentRows.length + i + 1,
+      "EAN Code": p.ean_code || "",
+      "Item Name": p.product_name,
+      "MRP": mrp,
+      "Price": price,
+      "Qty": qty,
+      "Sch": 0,
+      "Disc %": 0,
+      "GST %": taxPct,
+      "Gross $": gross,
+      "Disc. $": discAmt,
+      "Taxable $": taxable,
+      "GST $": taxAmt,
+      "Net $": net,
+      "Batch No": "",
+      "Expiry": null,
+      "_product_id": p.id
+  };
+});
+// Append to table
+piLines.setValue([...currentRows, ...newRows]);
+utils.showNotification({ title: "Items Added", description: `Added ${newRows.length} other products.`, notificationType: "success" });
+----------------------------------------
+
+=== 12c3b750 ===
+/* --- FINAL UPDATE LOGIC V3 --- */
+console.log("=== STARTING UPDATE ===");
+
+// 1. GET SOURCE (Handles View & Edit Modes)
+const sourceData = poTable.data || poLines.value || [];
+
+// 2. FILTER & MAP (Bulletproof Keys)
+const validLines = sourceData
+  .filter(r => Number(r['Qty'] || r['qty'] || r['ordered_qty'] || 0) > 0)
+  .map(r => ({
+      product_id:         r._product_id || r.product_id,
+      ordered_qty:        Number(r['Qty'] || r['qty'] || r['ordered_qty']),
+      mrp:                Number(r['MRP'] || r['mrp']),
+      price:              Number(r['Price'] || r['price'] || r['purchase_rate']),
+      scheme_amount:      Number(r['Sch'] || r['scheme_amount'] || 0),
+      discount_percent:   Number(r['Disc %'] || r['Disc'] || r['discount_percent'] || 0),
+      tax_percent:        Number(r['GST %'] || r['tax_percent'] || 5)
+  }));
+
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+
+const vID = Number(vendorDropdown.value) || Number(selected_vendor_id) || 0;
+if (vID === 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Vendor", notificationType: "error" });
+   return;
+}
+
+// 3. PREPARE PAYLOAD
+const dbPayload = {
+    vendor_id:      vID,
+    remarks:        "Updated via Retool Manager", 
+    lines:          validLines
+};
+
+// 4. SEND TO SERVER (Trigger the REST Query)
+utils.showNotification({ title: "Updating...", description: "Please wait...", notificationType: "info" });
+const result = await updatePOQuery.trigger({ additionalScope: { payload: dbPayload } });
+
+// 5. SUCCESS & CLEANUP
+if (result?.success !== false) {
+  utils.showNotification({ title: "Success", description: "PO Updated!", notificationType: "success" });
+  
+  // --- IMPORTANT: REPLACE WITH YOUR QUERY NAME ---
+  // If your dashboard query is named 'getPOs', write getPOs.trigger()
+  // If you don't know it, you can comment this line out for now.
+  try {
+     getPOList.trigger(); 
+  } catch(e) { console.warn("List refresh failed (Check Query Name)"); }
+  
+  drawerCreatePO.hide();
+  poLines.setValue([]);
+}
+----------------------------------------
+
+=== 1ca042bc ===
+api/stock/adjust/batches/{{ selAdjProduct.value }}?
+----------------------------------------
+
+=== 1d6afee0 ===
+/* --- UNIFIED GRN SAVE LOGIC --- */
+// 1. Validate Lines
+const rawLines = piLines.value || [];
+const validLines = rawLines.filter(row => row.Qty && Number(row.Qty) > 0);
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+const vID = vendorDropdownGRN.value;
+if (!vID) {
+   utils.showNotification({ title: "Error", description: "Select a Vendor", notificationType: "error" });
+   return;
+}
+// 2. Prepare Payload
+const dbLines = validLines.map(row => ({
+    // Ensure you map your Column IDs correctly here!
+    product_id:         Number(row._product_id),
+    ordered_qty:        0, 
+    accepted_qty:       Number(row.Qty),
+    rate:               Number(row.Price),
+    discount_percent:   Number(row['Disc %'] || 0),
+    scheme_amount:      Number(row.Sch || 0),
+    tax_amount:         Number(row['GST $'] || 0),
+    amount:             Number(row['Net $'] || 0),
+    batch_number:       row["Batch No"] ? row["Batch No"].toString() : "",
+    expiry_date:        row.Expiry ? moment(row.Expiry).format("YYYY-MM-DD") : null,
+    mrp:                Number(row.MRP || 0)
+}));
+const totalNet = dbLines.reduce((acc, x) => acc + x.amount, 0); 
+const totalTax = dbLines.reduce((acc, x) => acc + x.tax_amount, 0);
+const finalPayload = {
+    vendor_id:          Number(vID),
+    purchase_order_id: Number(ChoosePo.value || 0),
+    invoice_number:     vendorInvoiceNo.value,
+    invoice_date:       dateVendorInvoice.value, // Ensure Moment/Date format matches
+    received_date:      dateReceived.value,
+    total_net:          totalNet,
+    tax_amount:         totalTax,
+    grand_total:        Math.round(totalNet + totalTax),
+    lines:              dbLines,
+    
+    // --- TRACEABILITY MAGIC ---
+    // If varCorrectionID has a value, we link this new GRN to the old one!
+    parent_invoice_id:  varCorrectionID.value || null 
+};
+// 3. Save & Send
+await varGRNPayload.setValue(finalPayload);
+// Trigger Query
+apiCreateGRN.trigger({
+    onSuccess: function(data) {
+        utils.showNotification({ title: "Success", description: "GRN Saved!", notificationType: "success" });
+        
+        // 4. CLEANUP (Critical)
+        piLines.setValue([]);
+        vendorDropdownGRN.clearValue();
+        vendorInvoiceNo.setValue("");
+        dateVendorInvoice.clearValue();
+        varGRNPayload.setValue({});
+        
+        // Reset Correction Mode
+        varCorrectionID.setValue(null);
+        varCorrectionData.setValue({});
+        
+        modalFrameGRN.close();
+    },
+    onFailure: function(err) {
+        console.error(err);
+        utils.showNotification({ title: "Failed", description: err.message, notificationType: "error" });
+    }
+});
+----------------------------------------
+
+=== 1d9a45da ===
+utils.showNotification({ title: "Success", description: `Imported ${varImportData.value.length} items`, notificationType: "success" });
+varImportData.setValue([]); // Clear valid list
+// Now the Modal will automatically reveal the Error Table (if any errors exist)
+if (varImportErrors.value.length === 0) {
+   modalFrameImport. hide(); // Close if no errors left
+}
+----------------------------------------
+
+=== 205244ce ===
+const allBills = getGRNList.data; // This comes from the Transformer above
+const vID = varSelectedVendor.value.id;
+// Simple JS Filter
+return allBills.filter(bill => 
+    bill['Vendor ID'] === vID && 
+    bill['Balance $'] > 0
+);
+----------------------------------------
+
+=== 21afa3b5 ===
+api/products
+----------------------------------------
+
+=== 225aa83a ===
+api/vendor-payments/ledger/{{ varSelectedVendor.value.id }}
+----------------------------------------
+
+=== 24b15979 ===
+api/purchase-invoices?
+----------------------------------------
+
+=== 27de7ed4 ===
+/* --- UNIFIED VIEW SCRIPT (MATCHES CREATE KEYS) --- */
+const data = getPOById.data;
+
+if (!data || !data.header) {
+  utils.showNotification({ title: "Error", description: "No Data", notificationType: "error" });
+  return;
+}
+
+// 1. SET VIEW MODE (Safety)
+varPOMode.setValue('VIEW'); // <--- ADDED THIS ✅
+
+// 2. Map Header
+vendorDropdown.setValue(data.header.vendor_id);
+poNumber2.setValue(data.header.po_number);
+date5.setValue(data.header.po_date);
+date6.setValue(data.header.delivery_date);
+
+// 3. Map Lines (Targeting EXACT Keys from Create Script)
+const formattedLines = data.lines.map((row, index) => {
+    // Inputs
+    const qty = Number(row.ordered_qty);
+    const rate = Number(row.rate);
+    const discPct = Number(row.discount_percent || 0);
+    const scheme = Number(row.scheme_amount || 0);
+    
+    // Math
+    const gross = qty * rate;
+    const discAmt = (gross - scheme) * (discPct / 100);
+    const taxAmt = Number(row.tax_amount);
+    const net = Number(row.amount);
+    
+    return {
+        "S.No": index + 1,              
+        "EAN Code": row.ean_code,       
+        "Item Name": row.product_name,  
+        "MRP": Number(row.mrp),         
+        "Price": rate,
+        "Qty": qty,
+        "Sch": scheme,
+        "Disc %": discPct,
+        "GST %": 5,                     
+        "Gross $": gross,               
+        "Disc. $": discAmt,             
+        "Taxable $": net - taxAmt,      
+        "GST $": taxAmt,                
+        "Net $": net,                   
+        "_product_id": row.product_id
+    };
+});
+
+// 4. Reset & Set
+poLines.setValue([]); 
+poLines.setValue(formattedLines);
+
+// 5. Show Drawer
+drawerCreatePO.show();
+----------------------------------------
+
+=== 2bb86968 ===
+api/master/banks
+----------------------------------------
+
+=== 2e5321bf ===
+api/purchase-invoices
+----------------------------------------
+
+=== 317ce2a1 ===
+api/products/{{ varProductViewId.value }}/stats
+----------------------------------------
+
+=== 3834278b ===
+const isItemMode = dnMode.value === "Item Return";
+let amount = 0;
+let lines = [];
+if (isItemMode) {
+    // Calculate from Table (Map to Backend Keys)
+    const rawLines = tblDebitLines.data; 
+    
+    lines = rawLines.map(row => ({
+        product_id: row._product_id, // Map from '_product_id'
+        qty: Number(row.Qty),
+        rate: Number(row.Price), // Map from 'Price'
+        batch_number: row['Batch No'] || "", // Map from 'Batch No'
+        return_type: row.Reason || "Damage",
+        amount: Number(row['Net $']) || (Number(row.Qty) * Number(row.Price))
+    })).filter(l => l.qty > 0);
+    amount = _.sumBy(lines, 'amount');
+} else {
+    // Manual Amount
+    amount = Number(dnAmount.value);
+}
+if (!amount || amount <= 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Amount", notificationType: "error" });
+   return;
+}
+apiCreateDebitNote.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: varSelectedVendor.value.id,
+            amount: amount,
+            debit_note_date: moment(dnDate.value).format("YYYY-MM-DD"),
+            reason: dnReason.value,
+            linked_invoice_id: selLinkedBill.value || null, // New field
+            lines: isItemMode ? lines : [] 
+        }
+    },
+    onSuccess: function(data) {
+         // data contains { dn_number: 'GD-CLT-DN-26-1' }
+        utils.showNotification({ title: "Debit Note Created", description: data.dn_number, notificationType: "success" });
+        
+        // Show the number in the box
+        try { txtDNNumber.setValue(data.dn_number); } catch(e) {}
+        modalDebitNote.close();
+        getVendorLedger.trigger();
+    }
+});
+----------------------------------------
+
+=== 3882f0a1 ===
+api/purchase-invoices
+----------------------------------------
+
+=== 390d2a27 ===
+/* --- FINAL UPDATE LOGIC V3 --- */
+console.log("=== STARTING UPDATE ===");
+
+// 1. GET SOURCE (Handles View & Edit Modes)
+const sourceData = poTable.data || poLines.value || [];
+
+// 2. FILTER & MAP (Bulletproof Keys)
+const validLines = sourceData
+  .filter(r => Number(r['Qty'] || r['qty'] || r['ordered_qty'] || 0) > 0)
+  .map(r => ({
+      product_id:         r._product_id || r.product_id,
+      ordered_qty:        Number(r['Qty'] || r['qty'] || r['ordered_qty']),
+      mrp:                Number(r['MRP'] || r['mrp']),
+      price:              Number(r['Price'] || r['price'] || r['purchase_rate']),
+      scheme_amount:      Number(r['Sch'] || r['scheme_amount'] || 0),
+      discount_percent:   Number(r['Disc %'] || r['Disc'] || r['discount_percent'] || 0),
+      tax_percent:        Number(r['GST %'] || r['tax_percent'] || 5)
+  }));
+
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+
+const vID = Number(vendorDropdown.value) || Number(selected_vendor_id) || 0;
+if (vID === 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Vendor", notificationType: "error" });
+   return;
+}
+
+// 3. PREPARE PAYLOAD
+const dbPayload = {
+    vendor_id:      vID,
+    remarks:        "Updated via Retool Manager", 
+    lines:          validLines
+};
+
+// 4. SEND TO SERVER (Trigger the REST Query)
+utils.showNotification({ title: "Updating...", description: "Please wait...", notificationType: "info" });
+const result = await updatePOQuery.trigger({ additionalScope: { payload: dbPayload } });
+
+// 5. SUCCESS & CLEANUP
+if (result?.success !== false) {
+  utils.showNotification({ title: "Success", description: "PO Updated!", notificationType: "success" });
+  
+  // --- IMPORTANT: REPLACE WITH YOUR QUERY NAME ---
+  // If your dashboard query is named 'getPOs', write getPOs.trigger()
+  // If you don't know it, you can comment this line out for now.
+  try {
+     getPOList.trigger(); 
+  } catch(e) { console.warn("List refresh failed (Check Query Name)"); }
+  
+  drawerCreatePO.hide();
+  poLines.setValue([]);
+}
+----------------------------------------
+
+=== 3e04f9fa ===
+const allBills = getGRNList.data; // This comes from the Transformer above
+const vID = varSelectedVendor.value.id;
+// Simple JS Filter
+return allBills.filter(bill => 
+    bill['Vendor ID'] === vID && 
+    bill['Balance $'] > 0
+);
+----------------------------------------
+
+=== 3ff8e71f ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== 44423a9c ===
+utils.showNotification({ title: "Success", description: `Imported ${varImportData.value.length} items`, notificationType: "success" });
+varImportData.setValue([]); // Clear valid list
+// Now the Modal will automatically reveal the Error Table (if any errors exist)
+if (varImportErrors.value.length === 0) {
+   modalFrameImport. hide(); // Close if no errors left
+}
+----------------------------------------
+
+=== 4a8977e7 ===
+api/purchase-invoices?
+----------------------------------------
+
+=== 593fbfb3 ===
+api/vendor-payments/ledger/{{ varSelectedVendor.value.id }}
+----------------------------------------
+
+=== 5d4f484e ===
+api/vendor-payments/ledger/{{ varSelectedVendor.value.id }}
+----------------------------------------
+
+=== 625d8468 ===
+const all = Products.data.data || Products.data || []; 
+// Group By Brand
+const grouped = _.groupBy(all, 'brand_name');
+// Return Array for ListView
+return Object.keys(grouped).map((brandName, index) => {
+    const products = grouped[brandName];
+    // Grab the brand_id from the first product
+    const brandId = products[0] ? products[0].brand_id : index; 
+    // 1. Taxable Stock Value (Current Value of Goods on Hand - Taxable)
+    const valStockTaxable = _.sumBy(products, p => Number(p.stock_value_cost || 0));
+    // 2. Total Bought Value (Historical Value of All Goods Purchased - Taxable)
+    const valTotalBought = _.sumBy(products, p => Number(p.stock_value_total_bought || 0));
+    return {
+        id: brandId,
+        brand_name: brandName,
+        product_count: products.length,
+        val_stock_taxable: valStockTaxable.toFixed(2),
+        val_total_bought: valTotalBought.toFixed(2),
+        products: products.sort((a,b) => a.product_name.localeCompare(b.product_name))
+    };
+}).sort((a,b) => a.brand_name.localeCompare(b.brand_name));
+----------------------------------------
+
+=== 70a5182c ===
+/* --- UNIFIED VIEW SCRIPT (MATCHES CREATE KEYS) --- */
+const data = getPOById.data;
+
+if (!data || !data.header) {
+  utils.showNotification({ title: "Error", description: "No Data", notificationType: "error" });
+  return;
+}
+
+// 1. SET VIEW MODE (Safety)
+varPOMode.setValue('VIEW'); // <--- ADDED THIS ✅
+
+// 2. Map Header
+vendorDropdown.setValue(data.header.vendor_id);
+poNumber2.setValue(data.header.po_number);
+date5.setValue(data.header.po_date);
+date6.setValue(data.header.delivery_date);
+
+// 3. Map Lines (Targeting EXACT Keys from Create Script)
+const formattedLines = data.lines.map((row, index) => {
+    // Inputs
+    const qty = Number(row.ordered_qty);
+    const rate = Number(row.rate);
+    const discPct = Number(row.discount_percent || 0);
+    const scheme = Number(row.scheme_amount || 0);
+    
+    // Math
+    const gross = qty * rate;
+    const discAmt = (gross - scheme) * (discPct / 100);
+    const taxAmt = Number(row.tax_amount);
+    const net = Number(row.amount);
+    
+    return {
+        "S.No": index + 1,              
+        "EAN Code": row.ean_code,       
+        "Item Name": row.product_name,  
+        "MRP": Number(row.mrp),         
+        "Price": rate,
+        "Qty": qty,
+        "Sch": scheme,
+        "Disc %": discPct,
+        "GST %": 5,                     
+        "Gross $": gross,               
+        "Disc. $": discAmt,             
+        "Taxable $": net - taxAmt,      
+        "GST $": taxAmt,                
+        "Net $": net,                   
+        "_product_id": row.product_id
+    };
+});
+
+// 4. Reset & Set
+poLines.setValue([]); 
+poLines.setValue(formattedLines);
+
+// 5. Show Drawer
+drawerCreatePO.show();
+----------------------------------------
+
+=== 71a7f2e2 ===
+const all = Products.data.data || Products.data || []; 
+// Group By Brand
+const grouped = _.groupBy(all, 'brand_name');
+// Return Array for ListView
+return Object.keys(grouped).map((brandName, index) => {
+    const products = grouped[brandName];
+    // Grab the brand_id from the first product
+    const brandId = products[0] ? products[0].brand_id : index; 
+    // 1. Taxable Stock Value (Current Value of Goods on Hand - Taxable)
+    const valStockTaxable = _.sumBy(products, p => Number(p.stock_value_cost || 0));
+    // 2. Total Bought Value (Historical Value of All Goods Purchased - Taxable)
+    const valTotalBought = _.sumBy(products, p => Number(p.stock_value_total_bought || 0));
+    return {
+        id: brandId,
+        brand_name: brandName,
+        product_count: products.length,
+        val_stock_taxable: valStockTaxable.toFixed(2),
+        val_total_bought: valTotalBought.toFixed(2),
+        products: products.sort((a,b) => a.product_name.localeCompare(b.product_name))
+    };
+}).sort((a,b) => a.brand_name.localeCompare(b.brand_name));
+----------------------------------------
+
+=== 742c640b ===
+/* --- SAVE & PRINT SCRIPT --- */
+
+// 1. FILTER INPUTS
+const rawLines = poLines.value;
+const validLines = rawLines.filter(row => Number(row.Qty) > 0);
+
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+if (!vendorDropdown.value) {
+   utils.showNotification({ title: "Error", description: "Select a Vendor", notificationType: "error" });
+   return;
+}
+
+// 2. PREPARE PAYLOAD
+// Note: We use the local Component names directly
+const dbPayloadLines = validLines.map(row => ({
+    product_id:         row._product_id,
+    ordered_qty:        Number(row.Qty),
+    mrp:                Number(row.MRP),
+    price:              Number(row.Price),
+    scheme_amount:      Number(row.Sch || 0),
+    discount_percent:   Number(row['Disc %'] || 0),
+    tax_percent:        Number(row['GST %'] || 0)
+}));
+
+const dbPayload = {
+    vendor_id:      vendorDropdown.value,
+    remarks:        "", 
+    lines:          dbPayloadLines
+};
+
+// 3. SEND TO SERVER
+utils.showNotification({ title: "Saving...", description: "Please wait...", notificationType: "info" });
+const result = await submitPO.trigger({ additionalScope: { payload: dbPayload } });
+
+if (result?.success) {
+  
+  // 4. PREPARE PRINT DATA (For the Hidden Table)
+  const formattedPrintLines = validLines.map((row, i) => ({
+      "S.No": i+1,
+      "EAN Code": row['EAN Code'] || "",
+      "Item Name": row['Item Name'],
+      "MRP": Number(row.MRP).toFixed(2),
+      "Rate": Number(row.Price).toFixed(2),
+      "Qty": Number(row.Qty),
+      "Gross Amt": Number(row['Gross $'] || 0).toFixed(2),
+      "Sch": Number(row.Sch || 0),
+      "Disc %": Number(row['Disc %'] || 0),
+      "Disc Amt": Number(row['Disc $'] || 0).toFixed(2),
+      "Taxable": Number(row['Taxable $']).toFixed(2),
+      "GST %": Number(row['GST %'] || 0),
+      "GST Amt": Number(row['GST $']).toFixed(2),
+      "Net Amount": Number(row['Net $']).toFixed(2)
+  }));
+  
+  // Update Global Variable (Print State)
+  await printState.setValue({
+      poNumber: result.po_number,
+      date: new Date().toLocaleDateString(),
+      vendorName: vendorDropdown.selectedLabel, // Uses Label (Name) instead of ID
+      lines: formattedPrintLines
+  });
+  
+  // 5. PRINT (Magic Swap)
+  isPrinting.setValue(true);
+  utils.showNotification({ title: "Generating PDF...", description: "Please wait...", notificationType: "info" });
+  await new Promise(r => setTimeout(r, 2500)); // Wait for render
+
+  // 6. DOWNLOAD
+  utils.downloadPage(result.po_number, { 
+      componentsToInclude: ['poTablePrint'], // Make sure this Container/Table ID is correct!
+      scale: 0.6 
+  });
+  
+  // 7. CLEANUP
+  await new Promise(r => setTimeout(r, 1000));
+  isPrinting.setValue(false);
+  poLines.setValue([]);
+  vendorDropdown.setValue(null);
+  getNextPO.trigger();
+  
+  // 8. CLOSE DRAWER (New Step for UI)
+  drawerCreatePO.hide();
+}
+----------------------------------------
+
+=== 7d367d48 ===
+api/vendor-payments/ledger/{{ varSelectedVendor.value.id }}
+----------------------------------------
+
+=== 840edda7 ===
+/* --- GRN TABLE CELL CHANGE (RECALCULATE) --- */
+console.log("=== DEBUG: GRN Update ===");
+
+// 1. Get Changes
+const changes = GRNTable.changesetArray || [];
+if (changes.length === 0) return;
+
+// 2. Safety Check (Ensure Variable is Ready)
+if (!piLines.value || piLines.value.length === 0) {
+  piLines.setValue(GRNTable.data || []);
+  GRNTable.clearChangeset(); // Clear to prevent loops
+  return;
+}
+
+const change = changes[0];
+// Use _product_id to find the row (Fallback to product_id)
+const targetProductId = change._product_id || change.product_id; 
+
+// 3. Find Row Index
+const targetIndex = piLines.value.findIndex((row) => 
+    row._product_id === targetProductId || row.product_id === targetProductId
+);
+
+if (targetIndex === -1) {
+    console.error("Product not found in piLines:", targetProductId);
+    return;
+}
+
+// 4. Update & Recalculate Logic
+const updatedData = piLines.value.map((row, index) => {
+    if (index !== targetIndex) return row;
+
+    console.log(`✅ Updating GRN Row ${index}`);
+
+    // Merge changes (this keeps Batch No, Expiry, etc.)
+    const mergedRow = { ...row, ...change };
+
+    // Parse Numbers
+    const Qty = Number(mergedRow.Qty) || 0;
+    const Price = Number(mergedRow.Price) || 0;
+    const Sch = Number(mergedRow.Sch) || 0;
+    const DiscPct = Number(mergedRow["Disc %"]) || 0;
+    const GstPct = Number(mergedRow["GST %"]) || 5;
+
+    // Math (Standard ERP Logic)
+    const Gross = Qty * Price;
+    const DiscAmt = (Gross - Sch) * (DiscPct / 100);
+    const Taxable = Gross - Sch - DiscAmt;
+    const GstAmt = Taxable * (GstPct / 100);
+    const Net = Taxable + GstAmt;
+
+    return {
+        ...mergedRow,
+        "Qty": Qty,
+        "Price": Price,
+        "Sch": Sch,
+        "Disc %": DiscPct,
+        "GST %": GstPct,
+        // Save rounded values
+        "Gross $": parseFloat(Gross.toFixed(2)),
+        "Disc. $": parseFloat(DiscAmt.toFixed(2)),
+        "Taxable $": parseFloat(Taxable.toFixed(2)),
+        "GST $": parseFloat(GstAmt.toFixed(2)),
+        "Net $": parseFloat(Net.toFixed(2))
+    };
+});
+
+// 5. Commit
+piLines.setValue(updatedData);
+GRNTable.clearChangeset();
+----------------------------------------
+
+=== 957f3106 ===
+const vendor = varSelectedVendor.value;
+const totalAmount = payAmount.value;
+const isRefund = payType.value === 'REFUND';
+
+// Validate
+if (!totalAmount || totalAmount <= 0) {
+    utils.showNotification({ title: "Error", description: "Enter valid amount", notificationType: "error" });
+    return;
+}
+
+let allocations = [];
+// ONLY calculate allocations if it is a PAYMENT
+if (!isRefund) {
+    const selectedBills = tblPendingBills.selectedSourceRows || []; 
+    if (selectedBills.length > 0) {
+        // FIFO Logic
+        let remainingPayment = Number(totalAmount);
+        for (const bill of selectedBills) {
+            if (remainingPayment <= 0) break;
+            const billBalance = Number(bill['Balance $']);
+            const allocAmount = Math.min(billBalance, remainingPayment);
+            
+            if (allocAmount > 0) {
+                allocations.push({
+                    invoice_id: bill.id,
+                    amount: allocAmount
+                });
+                remainingPayment -= allocAmount;
+            }
+        }
+    }
+}
+
+// Trigger API
+apiMakePayment.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: vendor.id,
+            amount: totalAmount,
+            payment_date: moment(payDate.value).format("YYYY-MM-DD"),
+            mode: payMode.value,
+            // [NEW] Unified Reference logic
+            transaction_ref: payMode.value === 'Online' ? selBankRefVendor.selectedItem.bank_ref_id : (payMode.value === 'Cheque' ? payChqNo.value : payRef.value),
+            bank_statement_entry_id: payMode.value === 'Online' ? selBankRefVendor.selectedItem.id : null,
+            remarks: payRemarks.value,
+            transaction_type: payType.value,
+            allocations: isRefund ? [] : allocations,
+            bank_account_id: selPaymentBank.value,
+            // [NEW] Cheque Details
+            cheque_no: payChqNo.value,
+            cheque_date: payChqDate.value,
+            bank_name: payChqBank.value
+        }
+    },
+    onSuccess: function() {
+        modalMakePayment.close();
+        getVendorLedger.trigger();
+        getVendorPendingBills.trigger();
+        utils.showNotification({ title: "Success", description: "Transaction Recorded", notificationType: "success" });
+    }
+});
+
+----------------------------------------
+
+=== 9604814d ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== 9778ef35 ===
+api/purchase-invoices/{{ tblGrn.selectedRow.id }}/reverse
+----------------------------------------
+
+=== 98df4e51 ===
+const old = varCorrectionData.value;
+if (!old) {
+  utils.showNotification({title: "Error", description: "No correction data found.", notificationType: "error"});
+  return;
+}
+// 1. Pre-fill Inputs (Using Your Confirmed Names)
+// Vendor Dropdown
+if (typeof vendorDropdownGRN !== 'undefined') {
+   vendorDropdownGRN.setValue(old.vendor_id);
+}
+// Invoice Number
+vendorInvoiceNo.setValue(old.vendor_invoice_number);
+// Purchase Order (Restore Link)
+if (old.purchase_order_id) {
+   ChoosePo.setValue(old.purchase_order_id);
+}
+// Invoice Date
+dateVendorInvoice.setValue(old.vendor_invoice_date);
+// Receive Date
+dateReceived.setValue(old.received_date);
+// 2. Pre-fill Lines 
+// We use 'piLines' because that is what the Save script uses.
+if (old.lines || old.lines_json) {
+   piLines.setValue(old.lines || old.lines_json);
+}
+utils.showNotification({title: "Data Loaded", description: "Edit the mistake and Click Save."});
+----------------------------------------
+
+=== 9b6227d8 ===
+/* --- SAVE & PRINT SCRIPT --- */
+
+// 1. FILTER INPUTS
+const rawLines = poLines.value;
+const validLines = rawLines.filter(row => Number(row.Qty) > 0);
+
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+if (!vendorDropdown.value) {
+   utils.showNotification({ title: "Error", description: "Select a Vendor", notificationType: "error" });
+   return;
+}
+
+// 2. PREPARE PAYLOAD
+// Note: We use the local Component names directly
+const dbPayloadLines = validLines.map(row => ({
+    product_id:         row._product_id,
+    ordered_qty:        Number(row.Qty),
+    mrp:                Number(row.MRP),
+    price:              Number(row.Price),
+    scheme_amount:      Number(row.Sch || 0),
+    discount_percent:   Number(row['Disc %'] || 0),
+    tax_percent:        Number(row['GST %'] || 0)
+}));
+
+const dbPayload = {
+    vendor_id:      vendorDropdown.value,
+    remarks:        "", 
+    lines:          dbPayloadLines
+};
+
+// 3. SEND TO SERVER
+utils.showNotification({ title: "Saving...", description: "Please wait...", notificationType: "info" });
+const result = await submitPO.trigger({ additionalScope: { payload: dbPayload } });
+
+if (result?.success) {
+  
+  // 4. PREPARE PRINT DATA (For the Hidden Table)
+  const formattedPrintLines = validLines.map((row, i) => ({
+      "S.No": i+1,
+      "EAN Code": row['EAN Code'] || "",
+      "Item Name": row['Item Name'],
+      "MRP": Number(row.MRP).toFixed(2),
+      "Rate": Number(row.Price).toFixed(2),
+      "Qty": Number(row.Qty),
+      "Gross Amt": Number(row['Gross $'] || 0).toFixed(2),
+      "Sch": Number(row.Sch || 0),
+      "Disc %": Number(row['Disc %'] || 0),
+      "Disc Amt": Number(row['Disc $'] || 0).toFixed(2),
+      "Taxable": Number(row['Taxable $']).toFixed(2),
+      "GST %": Number(row['GST %'] || 0),
+      "GST Amt": Number(row['GST $']).toFixed(2),
+      "Net Amount": Number(row['Net $']).toFixed(2)
+  }));
+  
+  // Update Global Variable (Print State)
+  await printState.setValue({
+      poNumber: result.po_number,
+      date: new Date().toLocaleDateString(),
+      vendorName: vendorDropdown.selectedLabel, // Uses Label (Name) instead of ID
+      lines: formattedPrintLines
+  });
+  
+  // 5. PRINT (Magic Swap)
+  isPrinting.setValue(true);
+  utils.showNotification({ title: "Generating PDF...", description: "Please wait...", notificationType: "info" });
+  await new Promise(r => setTimeout(r, 2500)); // Wait for render
+
+  // 6. DOWNLOAD
+  utils.downloadPage(result.po_number, { 
+      componentsToInclude: ['poTablePrint'], // Make sure this Container/Table ID is correct!
+      scale: 0.6 
+  });
+  
+  // 7. CLEANUP
+  await new Promise(r => setTimeout(r, 1000));
+  isPrinting.setValue(false);
+  poLines.setValue([]);
+  vendorDropdown.setValue(null);
+  getNextPO.trigger();
+  
+  // 8. CLOSE DRAWER (New Step for UI)
+  drawerCreatePO.hide();
+}
+----------------------------------------
+
+=== 9f80700f ===
+/* --- SAVE & PRINT SCRIPT --- */
+
+// 1. FILTER INPUTS
+const rawLines = poLines.value;
+const validLines = rawLines.filter(row => Number(row.Qty) > 0);
+
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+if (!vendorDropdown.value) {
+   utils.showNotification({ title: "Error", description: "Select a Vendor", notificationType: "error" });
+   return;
+}
+
+// 2. PREPARE PAYLOAD
+// Note: We use the local Component names directly
+const dbPayloadLines = validLines.map(row => ({
+    product_id:         row._product_id,
+    ordered_qty:        Number(row.Qty),
+    mrp:                Number(row.MRP),
+    price:              Number(row.Price),
+    scheme_amount:      Number(row.Sch || 0),
+    discount_percent:   Number(row['Disc %'] || 0),
+    tax_percent:        Number(row['GST %'] || 0)
+}));
+
+const dbPayload = {
+    vendor_id:      vendorDropdown.value,
+    remarks:        "", 
+    lines:          dbPayloadLines
+};
+
+// 3. SEND TO SERVER
+utils.showNotification({ title: "Saving...", description: "Please wait...", notificationType: "info" });
+const result = await submitPO.trigger({ additionalScope: { payload: dbPayload } });
+
+if (result?.success) {
+  
+  // 4. PREPARE PRINT DATA (For the Hidden Table)
+  const formattedPrintLines = validLines.map((row, i) => ({
+      "S.No": i+1,
+      "EAN Code": row['EAN Code'] || "",
+      "Item Name": row['Item Name'],
+      "MRP": Number(row.MRP).toFixed(2),
+      "Rate": Number(row.Price).toFixed(2),
+      "Qty": Number(row.Qty),
+      "Gross Amt": Number(row['Gross $'] || 0).toFixed(2),
+      "Sch": Number(row.Sch || 0),
+      "Disc %": Number(row['Disc %'] || 0),
+      "Disc Amt": Number(row['Disc $'] || 0).toFixed(2),
+      "Taxable": Number(row['Taxable $']).toFixed(2),
+      "GST %": Number(row['GST %'] || 0),
+      "GST Amt": Number(row['GST $']).toFixed(2),
+      "Net Amount": Number(row['Net $']).toFixed(2)
+  }));
+  
+  // Update Global Variable (Print State)
+  await printState.setValue({
+      poNumber: result.po_number,
+      date: new Date().toLocaleDateString(),
+      vendorName: vendorDropdown.selectedLabel, // Uses Label (Name) instead of ID
+      lines: formattedPrintLines
+  });
+  
+  // 5. PRINT (Magic Swap)
+  isPrinting.setValue(true);
+  utils.showNotification({ title: "Generating PDF...", description: "Please wait...", notificationType: "info" });
+  await new Promise(r => setTimeout(r, 2500)); // Wait for render
+
+  // 6. DOWNLOAD
+  utils.downloadPage(result.po_number, { 
+      componentsToInclude: ['poTablePrint'], // Make sure this Container/Table ID is correct!
+      scale: 0.6 
+  });
+  
+  // 7. CLEANUP
+  await new Promise(r => setTimeout(r, 1000));
+  isPrinting.setValue(false);
+  poLines.setValue([]);
+  vendorDropdown.setValue(null);
+  getNextPO.trigger();
+  
+  // 8. CLOSE DRAWER (New Step for UI)
+  drawerCreatePO.hide();
+}
+----------------------------------------
+
+=== CancelBtn ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== EditGrnTable ===
+/* --- GRN TABLE CELL CHANGE (RECALCULATE) --- */
+console.log("=== DEBUG: GRN Update ===");
+
+// 1. Get Changes
+const changes = GRNTable.changesetArray || [];
+if (changes.length === 0) return;
+
+// 2. Safety Check (Ensure Variable is Ready)
+if (!piLines.value || piLines.value.length === 0) {
+  piLines.setValue(GRNTable.data || []);
+  GRNTable.clearChangeset(); // Clear to prevent loops
+  return;
+}
+
+const change = changes[0];
+// Use _product_id to find the row (Fallback to product_id)
+const targetProductId = change._product_id || change.product_id; 
+
+// 3. Find Row Index
+const targetIndex = piLines.value.findIndex((row) => 
+    row._product_id === targetProductId || row.product_id === targetProductId
+);
+
+if (targetIndex === -1) {
+    console.error("Product not found in piLines:", targetProductId);
+    return;
+}
+
+// 4. Update & Recalculate Logic
+const updatedData = piLines.value.map((row, index) => {
+    if (index !== targetIndex) return row;
+
+    console.log(`✅ Updating GRN Row ${index}`);
+
+    // Merge changes (this keeps Batch No, Expiry, etc.)
+    const mergedRow = { ...row, ...change };
+
+    // Parse Numbers
+    const Qty = Number(mergedRow.Qty) || 0;
+    const Price = Number(mergedRow.Price) || 0;
+    const Sch = Number(mergedRow.Sch) || 0;
+    const DiscPct = Number(mergedRow["Disc %"]) || 0;
+    const GstPct = Number(mergedRow["GST %"]) || 5;
+
+    // Math (Standard ERP Logic)
+    const Gross = Qty * Price;
+    const DiscAmt = (Gross - Sch) * (DiscPct / 100);
+    const Taxable = Gross - Sch - DiscAmt;
+    const GstAmt = Taxable * (GstPct / 100);
+    const Net = Taxable + GstAmt;
+
+    return {
+        ...mergedRow,
+        "Qty": Qty,
+        "Price": Price,
+        "Sch": Sch,
+        "Disc %": DiscPct,
+        "GST %": GstPct,
+        // Save rounded values
+        "Gross $": parseFloat(Gross.toFixed(2)),
+        "Disc. $": parseFloat(DiscAmt.toFixed(2)),
+        "Taxable $": parseFloat(Taxable.toFixed(2)),
+        "GST $": parseFloat(GstAmt.toFixed(2)),
+        "Net $": parseFloat(Net.toFixed(2))
+    };
+});
+
+// 5. Commit
+piLines.setValue(updatedData);
+GRNTable.clearChangeset();
+----------------------------------------
+
+=== PopulateProductsTablebyVendors ===
+/* --- 3. CREATE SCRIPT (Unified Keys) --- */
+
+// 0. Scope Check (Safety)
+let vID = null;
+try { vID = selected_vendor_id; } catch (e) { return; } 
+
+// 1. Reset Table
+poLines.setValue([]);
+varPOMode.setValue('CREATE');
+
+if (!Products.data || !vID) { return; }
+
+// 2. Map Clean List
+const newLines = Products.data.data
+    .filter(p => Number(p.vendor_id) === Number(vID))
+    .map((p, index) => ({
+      "S.No": index + 1,
+      "EAN Code": p.ean_code,
+      "Item Name": p.product_name,
+      "MRP": Number(p.mrp),
+      "Price": Number(p.purchase_rate),
+      "Qty": 0,
+      "Sch": 0,
+      "Disc %": 0,
+      "GST %": 5,
+      "Gross $": 0,
+      "Disc. $": 0,
+      "Taxable $": 0,
+      "GST $": 0,
+      "Net $": 0,
+      "_product_id": p.id
+    }));
+
+poLines.setValue(newLines);
+----------------------------------------
+
+=== Products ===
+api/products
+----------------------------------------
+
+=== Tax ===
+api/master/taxes
+----------------------------------------
+
+=== Vendors ===
+api/vendors
+----------------------------------------
+
+=== a8af40a4 ===
+utils.showNotification({ title: "Success", description: `Imported ${varImportData.value.length} items`, notificationType: "success" });
+varImportData.setValue([]); // Clear valid list
+// Now the Modal will automatically reveal the Error Table (if any errors exist)
+if (varImportErrors.value.length === 0) {
+   modalFrameImport. hide(); // Close if no errors left
+}
+----------------------------------------
+
+=== a93a0ae7 ===
+/* --- UNIFIED GRN SAVE LOGIC --- */
+// 1. Validate Lines
+const rawLines = piLines.value || [];
+const validLines = rawLines.filter(row => row.Qty && Number(row.Qty) > 0);
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+const vID = vendorDropdownGRN.value;
+if (!vID) {
+   utils.showNotification({ title: "Error", description: "Select a Vendor", notificationType: "error" });
+   return;
+}
+// 2. Prepare Payload
+const dbLines = validLines.map(row => ({
+    // Ensure you map your Column IDs correctly here!
+    product_id:         Number(row._product_id),
+    ordered_qty:        0, 
+    accepted_qty:       Number(row.Qty),
+    rate:               Number(row.Price),
+    discount_percent:   Number(row['Disc %'] || 0),
+    scheme_amount:      Number(row.Sch || 0),
+    tax_amount:         Number(row['GST $'] || 0),
+    amount:             Number(row['Net $'] || 0),
+    batch_number:       row["Batch No"] ? row["Batch No"].toString() : "",
+    expiry_date:        row.Expiry ? moment(row.Expiry).format("YYYY-MM-DD") : null,
+    mrp:                Number(row.MRP || 0)
+}));
+const totalNet = dbLines.reduce((acc, x) => acc + x.amount, 0); 
+const totalTax = dbLines.reduce((acc, x) => acc + x.tax_amount, 0);
+const finalPayload = {
+    vendor_id:          Number(vID),
+    purchase_order_id: Number(ChoosePo.value || 0),
+    invoice_number:     vendorInvoiceNo.value,
+    invoice_date:       dateVendorInvoice.value, // Ensure Moment/Date format matches
+    received_date:      dateReceived.value,
+    total_net:          totalNet,
+    tax_amount:         totalTax,
+    grand_total:        Math.round(totalNet + totalTax),
+    lines:              dbLines,
+    
+    // --- TRACEABILITY MAGIC ---
+    // If varCorrectionID has a value, we link this new GRN to the old one!
+    parent_invoice_id:  varCorrectionID.value || null 
+};
+// 3. Save & Send
+await varGRNPayload.setValue(finalPayload);
+// Trigger Query
+apiCreateGRN.trigger({
+    onSuccess: function(data) {
+        utils.showNotification({ title: "Success", description: "GRN Saved!", notificationType: "success" });
+        
+        // 4. CLEANUP (Critical)
+        piLines.setValue([]);
+        vendorDropdownGRN.clearValue();
+        vendorInvoiceNo.setValue("");
+        dateVendorInvoice.clearValue();
+        varGRNPayload.setValue({});
+        
+        // Reset Correction Mode
+        varCorrectionID.setValue(null);
+        varCorrectionData.setValue({});
+        
+        modalFrameGRN.close();
+    },
+    onFailure: function(err) {
+        console.error(err);
+        utils.showNotification({ title: "Failed", description: err.message, notificationType: "error" });
+    }
+});
+----------------------------------------
+
+=== adae4500 ===
+api/master/brands
+----------------------------------------
+
+=== addRestOfProducts ===
+/* --- SCENARIO B: ADD MISSING PRODUCTS --- */
+const currentRows = piLines.value || [];
+const allProducts = Products.data.data || Products.data; // Check structure
+const vID = vendorDropdownGRN.value;
+if (!allProducts || !vID) return;
+// Filter for Vendor + NOT in current table
+const missingProds = allProducts.filter(p => 
+    Number(p.vendor_id) === Number(vID) &&
+    !currentRows.find(row => Number(row._product_id) === Number(p.id))
+);
+const newRows = missingProds.map((p, i) => {
+  // 1. Initial Values (Qty 0)
+  const qty = 0;
+  const price = Number(p.purchase_rate);
+  const mrp = Number(p.mrp);
+  const taxPct = Number(p.tax_percent || 5);
+  
+  // 2. Calculations (All 0 since Qty is 0)
+  const gross = 0;
+  const discAmt = 0;
+  const taxable = 0;
+  const taxAmt = 0;
+  const net = 0;
+  return {
+      "S.No": currentRows.length + i + 1,
+      "EAN Code": p.ean_code || "",
+      "Item Name": p.product_name,
+      "MRP": mrp,
+      "Price": price,
+      "Qty": qty,
+      "Sch": 0,
+      "Disc %": 0,
+      "GST %": taxPct,
+      "Gross $": gross,
+      "Disc. $": discAmt,
+      "Taxable $": taxable,
+      "GST $": taxAmt,
+      "Net $": net,
+      "Batch No": "",
+      "Expiry": null,
+      "_product_id": p.id
+  };
+});
+// Append to table
+piLines.setValue([...currentRows, ...newRows]);
+utils.showNotification({ title: "Items Added", description: `Added ${newRows.length} other products.`, notificationType: "success" });
+----------------------------------------
+
+=== addRestOfProductsButton ===
+/* --- SCENARIO B: ADD MISSING PRODUCTS --- */
+const currentRows = piLines.value || [];
+const allProducts = Products.data.data || Products.data; // Check structure
+const vID = vendorDropdownGRN.value;
+if (!allProducts || !vID) return;
+// Filter for Vendor + NOT in current table
+const missingProds = allProducts.filter(p => 
+    Number(p.vendor_id) === Number(vID) &&
+    !currentRows.find(row => Number(row._product_id) === Number(p.id))
+);
+const newRows = missingProds.map((p, i) => {
+  // 1. Initial Values (Qty 0)
+  const qty = 0;
+  const price = Number(p.purchase_rate);
+  const mrp = Number(p.mrp);
+  const taxPct = Number(p.tax_percent || 5);
+  
+  // 2. Calculations (All 0 since Qty is 0)
+  const gross = 0;
+  const discAmt = 0;
+  const taxable = 0;
+  const taxAmt = 0;
+  const net = 0;
+  return {
+      "S.No": currentRows.length + i + 1,
+      "EAN Code": p.ean_code || "",
+      "Item Name": p.product_name,
+      "MRP": mrp,
+      "Price": price,
+      "Qty": qty,
+      "Sch": 0,
+      "Disc %": 0,
+      "GST %": taxPct,
+      "Gross $": gross,
+      "Disc. $": discAmt,
+      "Taxable $": taxable,
+      "GST $": taxAmt,
+      "Net $": net,
+      "Batch No": "",
+      "Expiry": null,
+      "_product_id": p.id
+  };
+});
+// Append to table
+piLines.setValue([...currentRows, ...newRows]);
+utils.showNotification({ title: "Items Added", description: `Added ${newRows.length} other products.`, notificationType: "success" });
+----------------------------------------
+
+=== ae6c93cb ===
+const fileData = fileBulkUpload.parsedValue[0];
+// Helper to find column even if casing doesn't match
+const get = (row, key) => {
+    const found = Object.keys(row).find(k => k.toLowerCase().replace(/[^a-z]/g, '') === key.toLowerCase().replace(/[^a-z]/g, ''));
+    return found ? row[found] : "";
+};
+const cleanRows = fileData.map(r => ({
+    "Product ID":     get(r, "Product ID") || get(r, "ID"),
+    "Product Name":   get(r, "Product Name"),
+    "MRP":            get(r, "MRP"),
+    "Purchase Rate":  get(r, "Purchase Rate"),
+    "Distributor":    get(r, "Distributor Rate"),
+    "Wholesale":      get(r, "Wholesale Rate"),
+    "Dealer":         get(r, "Dealer Rate"),
+    "Retail":         get(r, "Retail Rate"),
+    "Case Qty":       get(r, "Case Qty"),
+    "UOM":            get(r, "UOM"),
+    "Model No":       get(r, "Model Number"),
+    "Min Stock":      get(r, "Min Stock"),
+    "Length":         get(r, "Length(cm)"),
+    "Width":          get(r, "Width(cm)"),
+    "Height":         get(r, "Height(cm)"),
+    "Weight":         get(r, "Weight(kg)"),
+    "Description":    get(r, "Description")
+}));
+varBulkData.setValue(cleanRows);
+utils.showNotification({ title: "Loaded", description: `Review ${cleanRows.length} items below.` });
+----------------------------------------
+
+=== apiAddAddress ===
+api/vendors/{{ tblVendors.selectedRow.id }}/addresses
+----------------------------------------
+
+=== apiBulkImport ===
+api/products/import
+----------------------------------------
+
+=== apiBulkUpdate ===
+api/products/bulk-update
+----------------------------------------
+
+=== apiCreateDebitNote ===
+api/debit-notes
+----------------------------------------
+
+=== apiCreateGRN ===
+api/purchase-invoices
+----------------------------------------
+
+=== apiCreateProduct ===
+api/products
+----------------------------------------
+
+=== apiCreateStockAdjustment ===
+api/stock/adjust
+----------------------------------------
+
+=== apiCreateVendor ===
+api/vendors
+----------------------------------------
+
+=== apiGetAddresses ===
+api/vendors/{{ tblVendors.selectedRow.id }}/addresses
+----------------------------------------
+
+=== apiGetBank ===
+api/master/banks
+----------------------------------------
+
+=== apiGetBatches ===
+api/stock/adjust/batches/{{ selAdjProduct.value }}?
+----------------------------------------
+
+=== apiGetProductStats ===
+api/products/{{ varProductViewId.value }}/stats
+----------------------------------------
+
+=== apiGetVendor ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== apiMakePayment ===
+api/vendor-payments
+----------------------------------------
+
+=== apiReverseGRN ===
+api/purchase-invoices/{{ tblGrn.selectedRow.id }}/reverse
+----------------------------------------
+
+=== apiUpdateVendor ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== b43076b1 ===
+api/stock/adjust/batches/{{ selAdjProduct.value }}?
+----------------------------------------
+
+=== b59e20c5 ===
+/* --- UNIFIED VIEW SCRIPT (MATCHES CREATE KEYS) --- */
+const data = getPOById.data;
+
+if (!data || !data.header) {
+  utils.showNotification({ title: "Error", description: "No Data", notificationType: "error" });
+  return;
+}
+
+// 1. SET VIEW MODE (Safety)
+varPOMode.setValue('VIEW'); // <--- ADDED THIS ✅
+
+// 2. Map Header
+vendorDropdown.setValue(data.header.vendor_id);
+poNumber2.setValue(data.header.po_number);
+date5.setValue(data.header.po_date);
+date6.setValue(data.header.delivery_date);
+
+// 3. Map Lines (Targeting EXACT Keys from Create Script)
+const formattedLines = data.lines.map((row, index) => {
+    // Inputs
+    const qty = Number(row.ordered_qty);
+    const rate = Number(row.rate);
+    const discPct = Number(row.discount_percent || 0);
+    const scheme = Number(row.scheme_amount || 0);
+    
+    // Math
+    const gross = qty * rate;
+    const discAmt = (gross - scheme) * (discPct / 100);
+    const taxAmt = Number(row.tax_amount);
+    const net = Number(row.amount);
+    
+    return {
+        "S.No": index + 1,              
+        "EAN Code": row.ean_code,       
+        "Item Name": row.product_name,  
+        "MRP": Number(row.mrp),         
+        "Price": rate,
+        "Qty": qty,
+        "Sch": scheme,
+        "Disc %": discPct,
+        "GST %": 5,                     
+        "Gross $": gross,               
+        "Disc. $": discAmt,             
+        "Taxable $": net - taxAmt,      
+        "GST $": taxAmt,                
+        "Net $": net,                   
+        "_product_id": row.product_id
+    };
+});
+
+// 4. Reset & Set
+poLines.setValue([]); 
+poLines.setValue(formattedLines);
+
+// 5. Show Drawer
+drawerCreatePO.show();
+----------------------------------------
+
+=== bbec462a ===
+api/vendor-payments/ledger/{{ varSelectedVendor.value.id }}
+----------------------------------------
+
+=== btnConfirmImport ===
+utils.showNotification({ title: "Success", description: `Imported ${varImportData.value.length} items`, notificationType: "success" });
+varImportData.setValue([]); // Clear valid list
+// Now the Modal will automatically reveal the Error Table (if any errors exist)
+if (varImportErrors.value.length === 0) {
+   modalFrameImport. hide(); // Close if no errors left
+}
+----------------------------------------
+
+=== btnDownloadErrors ===
+utils.showNotification({ title: "Success", description: `Imported ${varImportData.value.length} items`, notificationType: "success" });
+varImportData.setValue([]); // Clear valid list
+// Now the Modal will automatically reveal the Error Table (if any errors exist)
+if (varImportErrors.value.length === 0) {
+   modalFrameImport. hide(); // Close if no errors left
+}
+----------------------------------------
+
+=== btnDownloadTemplate ===
+/* --- SAVE & PRINT SCRIPT --- */
+
+// 1. FILTER INPUTS
+const rawLines = poLines.value;
+const validLines = rawLines.filter(row => Number(row.Qty) > 0);
+
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+if (!vendorDropdown.value) {
+   utils.showNotification({ title: "Error", description: "Select a Vendor", notificationType: "error" });
+   return;
+}
+
+// 2. PREPARE PAYLOAD
+// Note: We use the local Component names directly
+const dbPayloadLines = validLines.map(row => ({
+    product_id:         row._product_id,
+    ordered_qty:        Number(row.Qty),
+    mrp:                Number(row.MRP),
+    price:              Number(row.Price),
+    scheme_amount:      Number(row.Sch || 0),
+    discount_percent:   Number(row['Disc %'] || 0),
+    tax_percent:        Number(row['GST %'] || 0)
+}));
+
+const dbPayload = {
+    vendor_id:      vendorDropdown.value,
+    remarks:        "", 
+    lines:          dbPayloadLines
+};
+
+// 3. SEND TO SERVER
+utils.showNotification({ title: "Saving...", description: "Please wait...", notificationType: "info" });
+const result = await submitPO.trigger({ additionalScope: { payload: dbPayload } });
+
+if (result?.success) {
+  
+  // 4. PREPARE PRINT DATA (For the Hidden Table)
+  const formattedPrintLines = validLines.map((row, i) => ({
+      "S.No": i+1,
+      "EAN Code": row['EAN Code'] || "",
+      "Item Name": row['Item Name'],
+      "MRP": Number(row.MRP).toFixed(2),
+      "Rate": Number(row.Price).toFixed(2),
+      "Qty": Number(row.Qty),
+      "Gross Amt": Number(row['Gross $'] || 0).toFixed(2),
+      "Sch": Number(row.Sch || 0),
+      "Disc %": Number(row['Disc %'] || 0),
+      "Disc Amt": Number(row['Disc $'] || 0).toFixed(2),
+      "Taxable": Number(row['Taxable $']).toFixed(2),
+      "GST %": Number(row['GST %'] || 0),
+      "GST Amt": Number(row['GST $']).toFixed(2),
+      "Net Amount": Number(row['Net $']).toFixed(2)
+  }));
+  
+  // Update Global Variable (Print State)
+  await printState.setValue({
+      poNumber: result.po_number,
+      date: new Date().toLocaleDateString(),
+      vendorName: vendorDropdown.selectedLabel, // Uses Label (Name) instead of ID
+      lines: formattedPrintLines
+  });
+  
+  // 5. PRINT (Magic Swap)
+  isPrinting.setValue(true);
+  utils.showNotification({ title: "Generating PDF...", description: "Please wait...", notificationType: "info" });
+  await new Promise(r => setTimeout(r, 2500)); // Wait for render
+
+  // 6. DOWNLOAD
+  utils.downloadPage(result.po_number, { 
+      componentsToInclude: ['poTablePrint'], // Make sure this Container/Table ID is correct!
+      scale: 0.6 
+  });
+  
+  // 7. CLEANUP
+  await new Promise(r => setTimeout(r, 1000));
+  isPrinting.setValue(false);
+  poLines.setValue([]);
+  vendorDropdown.setValue(null);
+  getNextPO.trigger();
+  
+  // 8. CLOSE DRAWER (New Step for UI)
+  drawerCreatePO.hide();
+}
+----------------------------------------
+
+=== btnLoadCorrectionData ===
+const old = varCorrectionData.value;
+if (!old) {
+  utils.showNotification({title: "Error", description: "No correction data found.", notificationType: "error"});
+  return;
+}
+// 1. Pre-fill Inputs (Using Your Confirmed Names)
+// Vendor Dropdown
+if (typeof vendorDropdownGRN !== 'undefined') {
+   vendorDropdownGRN.setValue(old.vendor_id);
+}
+// Invoice Number
+vendorInvoiceNo.setValue(old.vendor_invoice_number);
+// Purchase Order (Restore Link)
+if (old.purchase_order_id) {
+   ChoosePo.setValue(old.purchase_order_id);
+}
+// Invoice Date
+dateVendorInvoice.setValue(old.vendor_invoice_date);
+// Receive Date
+dateReceived.setValue(old.received_date);
+// 2. Pre-fill Lines 
+// We use 'piLines' because that is what the Save script uses.
+if (old.lines || old.lines_json) {
+   piLines.setValue(old.lines || old.lines_json);
+}
+utils.showNotification({title: "Data Loaded", description: "Edit the mistake and Click Save."});
+----------------------------------------
+
+=== btnSaveProduct ===
+api/master/brands
+----------------------------------------
+
+=== btnSmartExport ===
+const fileData = fileBulkUpload.parsedValue[0];
+// Helper to find column even if casing doesn't match
+const get = (row, key) => {
+    const found = Object.keys(row).find(k => k.toLowerCase().replace(/[^a-z]/g, '') === key.toLowerCase().replace(/[^a-z]/g, ''));
+    return found ? row[found] : "";
+};
+const cleanRows = fileData.map(r => ({
+    "Product ID":     get(r, "Product ID") || get(r, "ID"),
+    "Product Name":   get(r, "Product Name"),
+    "MRP":            get(r, "MRP"),
+    "Purchase Rate":  get(r, "Purchase Rate"),
+    "Distributor":    get(r, "Distributor Rate"),
+    "Wholesale":      get(r, "Wholesale Rate"),
+    "Dealer":         get(r, "Dealer Rate"),
+    "Retail":         get(r, "Retail Rate"),
+    "Case Qty":       get(r, "Case Qty"),
+    "UOM":            get(r, "UOM"),
+    "Model No":       get(r, "Model Number"),
+    "Min Stock":      get(r, "Min Stock"),
+    "Length":         get(r, "Length(cm)"),
+    "Width":          get(r, "Width(cm)"),
+    "Height":         get(r, "Height(cm)"),
+    "Weight":         get(r, "Weight(kg)"),
+    "Description":    get(r, "Description")
+}));
+varBulkData.setValue(cleanRows);
+utils.showNotification({ title: "Loaded", description: `Review ${cleanRows.length} items below.` });
+----------------------------------------
+
+=== btnUpdateInfo ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== button11 ===
+const isItemMode = dnMode.value === "Item Return";
+let amount = 0;
+let lines = [];
+if (isItemMode) {
+    // Calculate from Table (Map to Backend Keys)
+    const rawLines = tblDebitLines.data; 
+    
+    lines = rawLines.map(row => ({
+        product_id: row._product_id, // Map from '_product_id'
+        qty: Number(row.Qty),
+        rate: Number(row.Price), // Map from 'Price'
+        batch_number: row['Batch No'] || "", // Map from 'Batch No'
+        return_type: row.Reason || "Damage",
+        amount: Number(row['Net $']) || (Number(row.Qty) * Number(row.Price))
+    })).filter(l => l.qty > 0);
+    amount = _.sumBy(lines, 'amount');
+} else {
+    // Manual Amount
+    amount = Number(dnAmount.value);
+}
+if (!amount || amount <= 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Amount", notificationType: "error" });
+   return;
+}
+apiCreateDebitNote.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: varSelectedVendor.value.id,
+            amount: amount,
+            debit_note_date: moment(dnDate.value).format("YYYY-MM-DD"),
+            reason: dnReason.value,
+            linked_invoice_id: selLinkedBill.value || null, // New field
+            lines: isItemMode ? lines : [] 
+        }
+    },
+    onSuccess: function(data) {
+         // data contains { dn_number: 'GD-CLT-DN-26-1' }
+        utils.showNotification({ title: "Debit Note Created", description: data.dn_number, notificationType: "success" });
+        
+        // Show the number in the box
+        try { txtDNNumber.setValue(data.dn_number); } catch(e) {}
+        modalDebitNote.close();
+        getVendorLedger.trigger();
+    }
+});
+----------------------------------------
+
+=== button13 ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== button14 ===
+api/master/banks
+----------------------------------------
+
+=== button4 ===
+/* --- FINAL UPDATE LOGIC V3 --- */
+console.log("=== STARTING UPDATE ===");
+
+// 1. GET SOURCE (Handles View & Edit Modes)
+const sourceData = poTable.data || poLines.value || [];
+
+// 2. FILTER & MAP (Bulletproof Keys)
+const validLines = sourceData
+  .filter(r => Number(r['Qty'] || r['qty'] || r['ordered_qty'] || 0) > 0)
+  .map(r => ({
+      product_id:         r._product_id || r.product_id,
+      ordered_qty:        Number(r['Qty'] || r['qty'] || r['ordered_qty']),
+      mrp:                Number(r['MRP'] || r['mrp']),
+      price:              Number(r['Price'] || r['price'] || r['purchase_rate']),
+      scheme_amount:      Number(r['Sch'] || r['scheme_amount'] || 0),
+      discount_percent:   Number(r['Disc %'] || r['Disc'] || r['discount_percent'] || 0),
+      tax_percent:        Number(r['GST %'] || r['tax_percent'] || 5)
+  }));
+
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+
+const vID = Number(vendorDropdown.value) || Number(selected_vendor_id) || 0;
+if (vID === 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Vendor", notificationType: "error" });
+   return;
+}
+
+// 3. PREPARE PAYLOAD
+const dbPayload = {
+    vendor_id:      vID,
+    remarks:        "Updated via Retool Manager", 
+    lines:          validLines
+};
+
+// 4. SEND TO SERVER (Trigger the REST Query)
+utils.showNotification({ title: "Updating...", description: "Please wait...", notificationType: "info" });
+const result = await updatePOQuery.trigger({ additionalScope: { payload: dbPayload } });
+
+// 5. SUCCESS & CLEANUP
+if (result?.success !== false) {
+  utils.showNotification({ title: "Success", description: "PO Updated!", notificationType: "success" });
+  
+  // --- IMPORTANT: REPLACE WITH YOUR QUERY NAME ---
+  // If your dashboard query is named 'getPOs', write getPOs.trigger()
+  // If you don't know it, you can comment this line out for now.
+  try {
+     getPOList.trigger(); 
+  } catch(e) { console.warn("List refresh failed (Check Query Name)"); }
+  
+  drawerCreatePO.hide();
+  poLines.setValue([]);
+}
+----------------------------------------
+
+=== button5 ===
+/* --- FINAL UPDATE LOGIC V3 --- */
+console.log("=== STARTING UPDATE ===");
+
+// 1. GET SOURCE (Handles View & Edit Modes)
+const sourceData = poTable.data || poLines.value || [];
+
+// 2. FILTER & MAP (Bulletproof Keys)
+const validLines = sourceData
+  .filter(r => Number(r['Qty'] || r['qty'] || r['ordered_qty'] || 0) > 0)
+  .map(r => ({
+      product_id:         r._product_id || r.product_id,
+      ordered_qty:        Number(r['Qty'] || r['qty'] || r['ordered_qty']),
+      mrp:                Number(r['MRP'] || r['mrp']),
+      price:              Number(r['Price'] || r['price'] || r['purchase_rate']),
+      scheme_amount:      Number(r['Sch'] || r['scheme_amount'] || 0),
+      discount_percent:   Number(r['Disc %'] || r['Disc'] || r['discount_percent'] || 0),
+      tax_percent:        Number(r['GST %'] || r['tax_percent'] || 5)
+  }));
+
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+
+const vID = Number(vendorDropdown.value) || Number(selected_vendor_id) || 0;
+if (vID === 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Vendor", notificationType: "error" });
+   return;
+}
+
+// 3. PREPARE PAYLOAD
+const dbPayload = {
+    vendor_id:      vID,
+    remarks:        "Updated via Retool Manager", 
+    lines:          validLines
+};
+
+// 4. SEND TO SERVER (Trigger the REST Query)
+utils.showNotification({ title: "Updating...", description: "Please wait...", notificationType: "info" });
+const result = await updatePOQuery.trigger({ additionalScope: { payload: dbPayload } });
+
+// 5. SUCCESS & CLEANUP
+if (result?.success !== false) {
+  utils.showNotification({ title: "Success", description: "PO Updated!", notificationType: "success" });
+  
+  // --- IMPORTANT: REPLACE WITH YOUR QUERY NAME ---
+  // If your dashboard query is named 'getPOs', write getPOs.trigger()
+  // If you don't know it, you can comment this line out for now.
+  try {
+     getPOList.trigger(); 
+  } catch(e) { console.warn("List refresh failed (Check Query Name)"); }
+  
+  drawerCreatePO.hide();
+  poLines.setValue([]);
+}
+----------------------------------------
+
+=== button6 ===
+api/purchase-invoices?
+----------------------------------------
+
+=== button7 ===
+/* --- UNIFIED GRN SAVE LOGIC --- */
+// 1. Validate Lines
+const rawLines = piLines.value || [];
+const validLines = rawLines.filter(row => row.Qty && Number(row.Qty) > 0);
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+const vID = vendorDropdownGRN.value;
+if (!vID) {
+   utils.showNotification({ title: "Error", description: "Select a Vendor", notificationType: "error" });
+   return;
+}
+// 2. Prepare Payload
+const dbLines = validLines.map(row => ({
+    // Ensure you map your Column IDs correctly here!
+    product_id:         Number(row._product_id),
+    ordered_qty:        0, 
+    accepted_qty:       Number(row.Qty),
+    rate:               Number(row.Price),
+    discount_percent:   Number(row['Disc %'] || 0),
+    scheme_amount:      Number(row.Sch || 0),
+    tax_amount:         Number(row['GST $'] || 0),
+    amount:             Number(row['Net $'] || 0),
+    batch_number:       row["Batch No"] ? row["Batch No"].toString() : "",
+    expiry_date:        row.Expiry ? moment(row.Expiry).format("YYYY-MM-DD") : null,
+    mrp:                Number(row.MRP || 0)
+}));
+const totalNet = dbLines.reduce((acc, x) => acc + x.amount, 0); 
+const totalTax = dbLines.reduce((acc, x) => acc + x.tax_amount, 0);
+const finalPayload = {
+    vendor_id:          Number(vID),
+    purchase_order_id: Number(ChoosePo.value || 0),
+    invoice_number:     vendorInvoiceNo.value,
+    invoice_date:       dateVendorInvoice.value, // Ensure Moment/Date format matches
+    received_date:      dateReceived.value,
+    total_net:          totalNet,
+    tax_amount:         totalTax,
+    grand_total:        Math.round(totalNet + totalTax),
+    lines:              dbLines,
+    
+    // --- TRACEABILITY MAGIC ---
+    // If varCorrectionID has a value, we link this new GRN to the old one!
+    parent_invoice_id:  varCorrectionID.value || null 
+};
+// 3. Save & Send
+await varGRNPayload.setValue(finalPayload);
+// Trigger Query
+apiCreateGRN.trigger({
+    onSuccess: function(data) {
+        utils.showNotification({ title: "Success", description: "GRN Saved!", notificationType: "success" });
+        
+        // 4. CLEANUP (Critical)
+        piLines.setValue([]);
+        vendorDropdownGRN.clearValue();
+        vendorInvoiceNo.setValue("");
+        dateVendorInvoice.clearValue();
+        varGRNPayload.setValue({});
+        
+        // Reset Correction Mode
+        varCorrectionID.setValue(null);
+        varCorrectionData.setValue({});
+        
+        modalFrameGRN.close();
+    },
+    onFailure: function(err) {
+        console.error(err);
+        utils.showNotification({ title: "Failed", description: err.message, notificationType: "error" });
+    }
+});
+----------------------------------------
+
+=== button9 ===
+const vendor = varSelectedVendor.value;
+const totalAmount = payAmount.value;
+const isRefund = payType.value === 'REFUND';
+
+// Validate
+if (!totalAmount || totalAmount <= 0) {
+    utils.showNotification({ title: "Error", description: "Enter valid amount", notificationType: "error" });
+    return;
+}
+
+let allocations = [];
+// ONLY calculate allocations if it is a PAYMENT
+if (!isRefund) {
+    const selectedBills = tblPendingBills.selectedSourceRows || []; 
+    if (selectedBills.length > 0) {
+        // FIFO Logic
+        let remainingPayment = Number(totalAmount);
+        for (const bill of selectedBills) {
+            if (remainingPayment <= 0) break;
+            const billBalance = Number(bill['Balance $']);
+            const allocAmount = Math.min(billBalance, remainingPayment);
+            
+            if (allocAmount > 0) {
+                allocations.push({
+                    invoice_id: bill.id,
+                    amount: allocAmount
+                });
+                remainingPayment -= allocAmount;
+            }
+        }
+    }
+}
+
+// Trigger API
+apiMakePayment.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: vendor.id,
+            amount: totalAmount,
+            payment_date: moment(payDate.value).format("YYYY-MM-DD"),
+            mode: payMode.value,
+            // [NEW] Unified Reference logic
+            transaction_ref: payMode.value === 'Online' ? selBankRefVendor.selectedItem.bank_ref_id : (payMode.value === 'Cheque' ? payChqNo.value : payRef.value),
+            bank_statement_entry_id: payMode.value === 'Online' ? selBankRefVendor.selectedItem.id : null,
+            remarks: payRemarks.value,
+            transaction_type: payType.value,
+            allocations: isRefund ? [] : allocations,
+            bank_account_id: selPaymentBank.value,
+            // [NEW] Cheque Details
+            cheque_no: payChqNo.value,
+            cheque_date: payChqDate.value,
+            bank_name: payChqBank.value
+        }
+    },
+    onSuccess: function() {
+        modalMakePayment.close();
+        getVendorLedger.trigger();
+        getVendorPendingBills.trigger();
+        utils.showNotification({ title: "Success", description: "Transaction Recorded", notificationType: "success" });
+    }
+});
+
+----------------------------------------
+
+=== c0130446 ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== c11b8df0 ===
+const isItemMode = dnMode.value === "Item Return";
+let amount = 0;
+let lines = [];
+if (isItemMode) {
+    // Calculate from Table (Map to Backend Keys)
+    const rawLines = tblDebitLines.data; 
+    
+    lines = rawLines.map(row => ({
+        product_id: row._product_id, // Map from '_product_id'
+        qty: Number(row.Qty),
+        rate: Number(row.Price), // Map from 'Price'
+        batch_number: row['Batch No'] || "", // Map from 'Batch No'
+        return_type: row.Reason || "Damage",
+        amount: Number(row['Net $']) || (Number(row.Qty) * Number(row.Price))
+    })).filter(l => l.qty > 0);
+    amount = _.sumBy(lines, 'amount');
+} else {
+    // Manual Amount
+    amount = Number(dnAmount.value);
+}
+if (!amount || amount <= 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Amount", notificationType: "error" });
+   return;
+}
+apiCreateDebitNote.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: varSelectedVendor.value.id,
+            amount: amount,
+            debit_note_date: moment(dnDate.value).format("YYYY-MM-DD"),
+            reason: dnReason.value,
+            linked_invoice_id: selLinkedBill.value || null, // New field
+            lines: isItemMode ? lines : [] 
+        }
+    },
+    onSuccess: function(data) {
+         // data contains { dn_number: 'GD-CLT-DN-26-1' }
+        utils.showNotification({ title: "Debit Note Created", description: data.dn_number, notificationType: "success" });
+        
+        // Show the number in the box
+        try { txtDNNumber.setValue(data.dn_number); } catch(e) {}
+        modalDebitNote.close();
+        getVendorLedger.trigger();
+    }
+});
+----------------------------------------
+
+=== c7f67e36 ===
+api/purchase-invoices?
+----------------------------------------
+
+=== chkNewDefault ===
+return {
+  "Andhra Pradesh": [
+    "Anantapur", "Chittoor", "East Godavari", "Guntur", "Kadapa",
+    "Krishna", "Kurnool", "Nellore", "Prakasam",
+    "Srikakulam", "Visakhapatnam", "Vizianagaram",
+    "West Godavari"
+  ],
+
+  "Arunachal Pradesh": [
+    "Anjaw", "Changlang", "Dibang Valley", "East Kameng",
+    "East Siang", "Kurung Kumey", "Lohit", "Lower Dibang Valley",
+    "Lower Subansiri", "Papum Pare", "Tawang",
+    "Tirap", "Upper Siang", "Upper Subansiri", "West Kameng", "West Siang"
+  ],
+
+  "Assam": [
+    "Baksa", "Barpeta", "Biswanath", "Bongaigaon", "Cachar",
+    "Charaideo", "Chirang", "Darrang", "Dhemaji", "Dhubri",
+    "Dibrugarh", "Goalpara", "Golaghat", "Hailakandi",
+    "Hojai", "Jorhat", "Kamrup", "Kamrup Metropolitan",
+    "Karbi Anglong", "Karimganj", "Kokrajhar", "Lakhimpur",
+    "Majuli", "Morigaon", "Nagaon", "Nalbari",
+    "Sivasagar", "Sonitpur", "South Salmara",
+    "Tinsukia", "Udalguri", "West Karbi Anglong"
+  ],
+
+  "Bihar": [
+    "Araria", "Arwal", "Aurangabad", "Banka", "Begusarai",
+    "Bhagalpur", "Bhojpur", "Buxar", "Darbhanga",
+    "East Champaran", "Gaya", "Gopalganj", "Jamui",
+    "Jehanabad", "Kaimur", "Katihar", "Khagaria",
+    "Kishanganj", "Lakhisarai", "Madhepura", "Madhubani",
+    "Munger", "Muzaffarpur", "Nalanda", "Nawada",
+    "Patna", "Purnia", "Rohtas", "Saharsa",
+    "Samastipur", "Saran", "Sheikhpura", "Sheohar",
+    "Sitamarhi", "Siwan", "Supaul", "Vaishali",
+    "West Champaran"
+  ],
+
+  "Chhattisgarh": [
+    "Balod", "Baloda Bazar", "Balrampur", "Bastar",
+    "Bemetara", "Bijapur", "Bilaspur", "Dantewada",
+    "Dhamtari", "Durg", "Gariaband", "Gaurela-Pendra-Marwahi",
+    "Janjgir-Champa", "Jashpur", "Kabirdham", "Kanker",
+    "Kondagaon", "Korba", "Koriya", "Mahasamund",
+    "Mungeli", "Narayanpur", "Raigarh", "Raipur",
+    "Rajnandgaon", "Sukma", "Surajpur", "Surguja"
+  ],
+
+  "Goa": ["North Goa", "South Goa"],
+
+  "Gujarat": [
+    "Ahmedabad", "Amreli", "Anand", "Aravalli", "Banaskantha",
+    "Bharuch", "Bhavnagar", "Botad", "Chhota Udaipur",
+    "Dahod", "Dang", "Devbhoomi Dwarka", "Gandhinagar",
+    "Gir Somnath", "Jamnagar", "Junagadh", "Kheda",
+    "Kutch", "Mahisagar", "Mehsana", "Morbi",
+    "Narmada", "Navsari", "Panchmahal", "Patan",
+    "Porbandar", "Rajkot", "Sabarkantha", "Surat",
+    "Surendranagar", "Tapi", "Vadodara", "Valsad"
+  ],
+
+  "Haryana": [
+    "Ambala", "Bhiwani", "Charkhi Dadri", "Faridabad",
+    "Fatehabad", "Gurugram", "Hisar", "Jhajjar",
+    "Jind", "Kaithal", "Karnal", "Kurukshetra",
+    "Mahendragarh", "Nuh", "Palwal", "Panchkula",
+    "Panipat", "Rewari", "Rohtak", "Sirsa",
+    "Sonipat", "Yamunanagar"
+  ],
+
+  "Himachal Pradesh": [
+    "Bilaspur", "Chamba", "Hamirpur", "Kangra",
+    "Kinnaur", "Kullu", "Lahaul and Spiti",
+    "Mandi", "Shimla", "Sirmaur", "Solan", "Una"
+  ],
+
+  "Jharkhand": [
+    "Bokaro", "Chatra", "Deoghar", "Dhanbad", "Dumka",
+    "East Singhbhum", "Garhwa", "Giridih", "Godda",
+    "Gumla", "Hazaribagh", "Jamtara", "Khunti",
+    "Koderma", "Latehar", "Lohardaga", "Pakur",
+    "Palamu", "Ramgarh", "Ranchi", "Sahebganj",
+    "Seraikela Kharsawan", "Simdega", "West Singhbhum"
+  ],
+
+  "Karnataka": [
+    "Bagalkot", "Ballari", "Belagavi", "Bengaluru Rural",
+    "Bengaluru Urban", "Bidar", "Chamarajanagar",
+    "Chikkaballapur", "Chikkamagaluru", "Chitradurga",
+    "Dakshina Kannada", "Davangere", "Dharwad",
+    "Gadag", "Hassan", "Haveri", "Kalaburagi",
+    "Kodagu", "Kolar", "Koppal", "Mandya",
+    "Mysuru", "Raichur", "Ramanagara", "Shivamogga",
+    "Tumakuru", "Udupi", "Uttara Kannada", "Vijayapura",
+    "Yadgir"
+  ],
+
+  "Kerala": [
+    "Alappuzha", "Ernakulam", "Idukki", "Kannur",
+    "Kasaragod", "Kollam", "Kottayam", "Kozhikode",
+    "Malappuram", "Palakkad", "Pathanamthitta",
+    "Thiruvananthapuram", "Thrissur", "Wayanad"
+  ],
+
+  "Madhya Pradesh": [
+    "Agar Malwa", "Alirajpur", "Anuppur", "Ashoknagar",
+    "Balaghat", "Barwani", "Betul", "Bhind",
+    "Bhopal", "Burhanpur", "Chhatarpur", "Chhindwara",
+    "Damoh", "Datia", "Dewas", "Dhar", "Dindori",
+    "Guna", "Gwalior", "Harda", "Hoshangabad",
+    "Indore", "Jabalpur", "Jhabua", "Katni",
+    "Khandwa", "Khargone", "Mandla", "Mandsaur",
+    "Morena", "Narsinghpur", "Neemuch", "Panna",
+    "Raisen", "Rajgarh", "Ratlam", "Rewa",
+    "Sagar", "Satna", "Sehore", "Seoni",
+    "Shahdol", "Shajapur", "Sheopur", "Shivpuri",
+    "Sidhi", "Singrauli", "Tikamgarh", "Ujjain",
+    "Umaria", "Vidisha"
+  ],
+
+  "Maharashtra": [
+    "Ahmednagar", "Akola", "Amravati", "Aurangabad",
+    "Beed", "Bhandara", "Buldhana", "Chandrapur",
+    "Dhule", "Gadchiroli", "Gondia", "Hingoli",
+    "Jalgaon", "Jalna", "Kolhapur", "Latur",
+    "Mumbai City", "Mumbai Suburban", "Nagpur",
+    "Nanded", "Nandurbar", "Nashik", "Osmanabad",
+    "Palghar", "Parbhani", "Pune", "Raigad",
+    "Ratnagiri", "Sangli", "Satara", "Sindhudurg",
+    "Solapur", "Thane", "Wardha", "Washim", "Yavatmal"
+  ],
+
+  "Tamil Nadu": [
+    "Ariyalur", "Chengalpattu", "Chennai", "Coimbatore",
+    "Cuddalore", "Dharmapuri", "Dindigul", "Erode",
+    "Kallakurichi", "Kanchipuram", "Kanyakumari",
+    "Karur", "Krishnagiri", "Madurai", "Nagapattinam",
+    "Namakkal", "Nilgiris", "Perambalur", "Pudukkottai",
+    "Ramanathapuram", "Ranipet", "Salem",
+    "Sivaganga", "Tenkasi", "Thanjavur", "Theni",
+    "Thoothukudi", "Tiruchirappalli", "Tirunelveli",
+    "Tirupathur", "Tiruppur", "Tiruvallur",
+    "Tiruvannamalai", "Tiruvarur", "Vellore",
+    "Viluppuram", "Virudhunagar"
+  ],
+
+  "Telangana": [
+    "Adilabad", "Bhadradri Kothagudem", "Hyderabad",
+    "Jagtial", "Jangaon", "Jayashankar Bhupalpally",
+    "Jogulamba Gadwal", "Kamareddy", "Karimnagar",
+    "Khammam", "Komaram Bheem", "Mahabubabad",
+    "Mahbubnagar", "Mancherial", "Medak",
+    "Medchal–Malkajgiri", "Mulugu", "Nagarkurnool",
+    "Nalgonda", "Narayanpet", "Nirmal",
+    "Nizamabad", "Peddapalli", "Rajanna Sircilla",
+    "Ranga Reddy", "Sangareddy", "Siddipet",
+    "Suryapet", "Vikarabad", "Wanaparthy",
+    "Warangal Rural", "Warangal Urban", "Yadadri Bhuvanagiri"
+  ],
+
+  "Uttar Pradesh": [
+    "Agra", "Aligarh", "Allahabad", "Ambedkar Nagar",
+    "Amethi", "Amroha", "Auraiya", "Azamgarh",
+    "Baghpat", "Bahraich", "Ballia", "Balrampur",
+    "Banda", "Barabanki", "Bareilly", "Basti",
+    "Bhadohi", "Bijnor", "Budaun", "Bulandshahr",
+    "Chandauli", "Chitrakoot", "Deoria", "Etah",
+    "Etawah", "Faizabad", "Farrukhabad", "Fatehpur",
+    "Firozabad", "Gautam Buddha Nagar", "Ghaziabad",
+    "Ghazipur", "Gonda", "Gorakhpur", "Hamirpur",
+    "Hapur", "Hardoi", "Hathras", "Jalaun",
+    "Jaunpur", "Jhansi", "Kannauj", "Kanpur Dehat",
+    "Kanpur Nagar", "Kasganj", "Kaushambi",
+    "Kushinagar", "Lakhimpur Kheri", "Lalitpur",
+    "Lucknow", "Maharajganj", "Mahoba", "Mainpuri",
+    "Mathura", "Mau", "Meerut", "Mirzapur",
+    "Moradabad", "Muzaffarnagar", "Pilibhit",
+    "Pratapgarh", "Raebareli", "Rampur",
+    "Saharanpur", "Sambhal", "Sant Kabir Nagar",
+    "Shahjahanpur", "Shamli", "Shravasti",
+    "Siddharthnagar", "Sitapur", "Sonbhadra",
+    "Sultanpur", "Unnao", "Varanasi"
+  ],
+
+  "West Bengal": [
+    "Alipurduar", "Bankura", "Birbhum", "Cooch Behar",
+    "Dakshin Dinajpur", "Darjeeling", "Hooghly",
+    "Howrah", "Jalpaiguri", "Jhargram",
+    "Kalimpong", "Kolkata", "Malda",
+    "Murshidabad", "Nadia", "North 24 Parganas",
+    "Paschim Bardhaman", "Paschim Medinipur",
+    "Purba Bardhaman", "Purba Medinipur",
+    "Purulia", "South 24 Parganas",
+    "Uttar Dinajpur"
+  ]
+};
+
+----------------------------------------
+
+=== createDebitNoteJS ===
+/* --- CREATE DEBIT NOTE (LOGIC MATCHING TABLE) --- */
+const isItemMode = dnMode.value === "Item Return";
+let amount = 0;
+let lines = [];
+
+if (isItemMode) {
+    // We replicate the table formula to be 100% safe independent of UI
+    const rawLines = tblDebitLines.data; 
+    
+    lines = rawLines.map(row => {
+        const qty = Number(row.Qty || 0);
+        const price = Number(row.Price || 0); // Purchase Rate
+        const scheme = Number(row.Sch || 0);
+        const discPct = Number(row['Disc %'] || 0); // Discount Percent
+        const taxPct = Number(row['GST %'] || row.tax_percent || 0);
+        
+        // 1. Calculate Gross
+        const gross = qty * price;
+        
+        // 2. Calculate Discount Amount
+        // Formula: (Gross - Scheme) * (Disc% / 100)
+        // Note: Check if your table logic applies discount on (Gross - Scheme) or just Gross.
+        // Assuming standard: Discount is on logic after Scheme
+        const valForDisc = Math.max(0, gross - scheme);
+        const discAmt = valForDisc * (discPct / 100);
+
+        // 3. Calculate Taxable Amount (Matches 'Taxable $' Column)
+        // Formula: Gross - Scheme - Discount
+        const taxable = Math.max(0, gross - scheme - discAmt);
+
+        // 4. Calculate GST
+        const taxAmt = taxable * (taxPct / 100);
+
+        // 5. Net Total
+        const total = taxable + taxAmt;
+
+        return {
+            product_id: row._product_id,
+            qty: qty,
+            rate: price,
+            batch_number: row['Batch No'] || "",
+            return_type: row.Reason || "Damage",
+            
+            // Backend fields
+            amount: Number(total.toFixed(2)),       // Net Total
+            tax_amount: Number(taxAmt.toFixed(2))   // Tax Component
+        };
+    }).filter(l => l.qty > 0);
+    
+    // Grand Total
+    amount = _.sumBy(lines, 'amount');
+} else {
+    // Manual Amount
+    amount = Number(dnAmount.value);
+}
+
+if (!amount || amount <= 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Amount", notificationType: "error" });
+   return;
+}
+
+apiCreateDebitNote.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: varSelectedVendor.value.id,
+            amount: amount,
+            debit_note_date: moment(dnDate.value).format("YYYY-MM-DD"),
+            reason: dnReason.value,
+            linked_invoice_id: selLinkedBill.value || null,
+            lines: isItemMode ? lines : [] 
+        }
+    },
+    onSuccess: function(data) {
+        utils.showNotification({ title: "Debit Note Created", description: data.dn_number, notificationType: "success" });
+        try { txtDNNumber.setValue(data.dn_number); } catch(e) {}
+        modalDebitNote.close();
+        getVendorLedger.trigger();
+    }
+});
+----------------------------------------
+
+=== d215de06 ===
+api/purchase-orders/{{ poListTable.selectedRow.id }}
+----------------------------------------
+
+=== daa47826 ===
+const all = Products.data.data || Products.data || []; 
+// Group By Brand
+const grouped = _.groupBy(all, 'brand_name');
+// Return Array for ListView
+return Object.keys(grouped).map((brandName, index) => {
+    const products = grouped[brandName];
+    // Grab the brand_id from the first product
+    const brandId = products[0] ? products[0].brand_id : index; 
+    // 1. Taxable Stock Value (Current Value of Goods on Hand - Taxable)
+    const valStockTaxable = _.sumBy(products, p => Number(p.stock_value_cost || 0));
+    // 2. Total Bought Value (Historical Value of All Goods Purchased - Taxable)
+    const valTotalBought = _.sumBy(products, p => Number(p.stock_value_total_bought || 0));
+    return {
+        id: brandId,
+        brand_name: brandName,
+        product_count: products.length,
+        val_stock_taxable: valStockTaxable.toFixed(2),
+        val_total_bought: valTotalBought.toFixed(2),
+        products: products.sort((a,b) => a.product_name.localeCompare(b.product_name))
+    };
+}).sort((a,b) => a.brand_name.localeCompare(b.brand_name));
+----------------------------------------
+
+=== dateReceived ===
+/* --- VENDOR SELECTION (GRN) --- */
+const vID = vendorDropdownGRN.value;
+piLines.setValue([]); // Clear table
+if (!Products.data || !vID) { return; }
+// 1. Populate Table with ALL Vendor Products (Direct Purchase Mode)
+// Note: Adjust 'getProducts.data' if your data is nested (e.g. getProducts.data.data)
+const productList = Products.data.data || Products.data; 
+// UNIFIED KEYS (Matching Create PO + GRN Fields)
+const newLines = productList
+    .filter(p => Number(p.vendor_id) === Number(vID))
+    .map((p, index) => ({
+      "S.No": index + 1,
+      "EAN Code": p.ean_code || "",
+      "Item Name": p.product_name,
+      "MRP": Number(p.mrp),
+      "Price": Number(p.purchase_rate),
+      "Qty": 0,
+      "Sch": 0,
+      "Disc %": 0,
+      "GST %": Number(p.tax_percent || 5), // Default 5 if missing
+      "Gross $": 0,
+      "Disc. $": 0,
+      "Taxable $": 0,
+      "GST $": 0,
+      "Net $": 0,
+      "Batch No": "",       // [GRN ONLY]
+      "Expiry": null,       // [GRN ONLY]
+      "_product_id": p.id
+    }));
+piLines.setValue(newLines);
+// 2. Reset PO Dropdown logic will happen automatically via the Dropdown's "Data Source" filter.
+// (We don't need to manually push to varVendorPOs if we filter ChoosePo by vendor_id directly).
+----------------------------------------
+
+=== dateVendorInvoice ===
+/* --- VENDOR SELECTION (GRN) --- */
+const vID = vendorDropdownGRN.value;
+piLines.setValue([]); // Clear table
+if (!Products.data || !vID) { return; }
+// 1. Populate Table with ALL Vendor Products (Direct Purchase Mode)
+// Note: Adjust 'getProducts.data' if your data is nested (e.g. getProducts.data.data)
+const productList = Products.data.data || Products.data; 
+// UNIFIED KEYS (Matching Create PO + GRN Fields)
+const newLines = productList
+    .filter(p => Number(p.vendor_id) === Number(vID))
+    .map((p, index) => ({
+      "S.No": index + 1,
+      "EAN Code": p.ean_code || "",
+      "Item Name": p.product_name,
+      "MRP": Number(p.mrp),
+      "Price": Number(p.purchase_rate),
+      "Qty": 0,
+      "Sch": 0,
+      "Disc %": 0,
+      "GST %": Number(p.tax_percent || 5), // Default 5 if missing
+      "Gross $": 0,
+      "Disc. $": 0,
+      "Taxable $": 0,
+      "GST $": 0,
+      "Net $": 0,
+      "Batch No": "",       // [GRN ONLY]
+      "Expiry": null,       // [GRN ONLY]
+      "_product_id": p.id
+    }));
+piLines.setValue(newLines);
+// 2. Reset PO Dropdown logic will happen automatically via the Dropdown's "Data Source" filter.
+// (We don't need to manually push to varVendorPOs if we filter ChoosePo by vendor_id directly).
+----------------------------------------
+
+=== dnReason ===
+api/debit-notes/vendor/{{ varSelectedVendor.value.id }}
+----------------------------------------
+
+=== drawerCloseButton4 ===
+api/products/{{ varProductViewId.value }}/stats
+----------------------------------------
+
+=== drawerProduct ===
+api/products/{{ varProductViewId.value }}/stats
+----------------------------------------
+
+=== drawerTitle4 ===
+api/products/{{ varProductViewId.value }}/stats
+----------------------------------------
+
+=== e6943529 ===
+/* --- UNIFIED GRN SAVE LOGIC --- */
+// 1. Validate Lines
+const rawLines = piLines.value || [];
+const validLines = rawLines.filter(row => row.Qty && Number(row.Qty) > 0);
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+const vID = vendorDropdownGRN.value;
+if (!vID) {
+   utils.showNotification({ title: "Error", description: "Select a Vendor", notificationType: "error" });
+   return;
+}
+// 2. Prepare Payload
+const dbLines = validLines.map(row => ({
+    // Ensure you map your Column IDs correctly here!
+    product_id:         Number(row._product_id),
+    ordered_qty:        0, 
+    accepted_qty:       Number(row.Qty),
+    rate:               Number(row.Price),
+    discount_percent:   Number(row['Disc %'] || 0),
+    scheme_amount:      Number(row.Sch || 0),
+    tax_amount:         Number(row['GST $'] || 0),
+    amount:             Number(row['Net $'] || 0),
+    batch_number:       row["Batch No"] ? row["Batch No"].toString() : "",
+    expiry_date:        row.Expiry ? moment(row.Expiry).format("YYYY-MM-DD") : null,
+    mrp:                Number(row.MRP || 0)
+}));
+const totalNet = dbLines.reduce((acc, x) => acc + x.amount, 0); 
+const totalTax = dbLines.reduce((acc, x) => acc + x.tax_amount, 0);
+const finalPayload = {
+    vendor_id:          Number(vID),
+    purchase_order_id: Number(ChoosePo.value || 0),
+    invoice_number:     vendorInvoiceNo.value,
+    invoice_date:       dateVendorInvoice.value, // Ensure Moment/Date format matches
+    received_date:      dateReceived.value,
+    total_net:          totalNet,
+    tax_amount:         totalTax,
+    grand_total:        Math.round(totalNet + totalTax),
+    lines:              dbLines,
+    
+    // --- TRACEABILITY MAGIC ---
+    // If varCorrectionID has a value, we link this new GRN to the old one!
+    parent_invoice_id:  varCorrectionID.value || null 
+};
+// 3. Save & Send
+await varGRNPayload.setValue(finalPayload);
+// Trigger Query
+apiCreateGRN.trigger({
+    onSuccess: function(data) {
+        utils.showNotification({ title: "Success", description: "GRN Saved!", notificationType: "success" });
+        
+        // 4. CLEANUP (Critical)
+        piLines.setValue([]);
+        vendorDropdownGRN.clearValue();
+        vendorInvoiceNo.setValue("");
+        dateVendorInvoice.clearValue();
+        varGRNPayload.setValue({});
+        
+        // Reset Correction Mode
+        varCorrectionID.setValue(null);
+        varCorrectionData.setValue({});
+        
+        modalFrameGRN.close();
+    },
+    onFailure: function(err) {
+        console.error(err);
+        utils.showNotification({ title: "Failed", description: err.message, notificationType: "error" });
+    }
+});
+----------------------------------------
+
+=== ea54c85e ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== eb440ab0 ===
+/* --- UNIFIED VIEW SCRIPT (MATCHES CREATE KEYS) --- */
+const data = getPOById.data;
+
+if (!data || !data.header) {
+  utils.showNotification({ title: "Error", description: "No Data", notificationType: "error" });
+  return;
+}
+
+// 1. SET VIEW MODE (Safety)
+varPOMode.setValue('VIEW'); // <--- ADDED THIS ✅
+
+// 2. Map Header
+vendorDropdown.setValue(data.header.vendor_id);
+poNumber2.setValue(data.header.po_number);
+date5.setValue(data.header.po_date);
+date6.setValue(data.header.delivery_date);
+
+// 3. Map Lines (Targeting EXACT Keys from Create Script)
+const formattedLines = data.lines.map((row, index) => {
+    // Inputs
+    const qty = Number(row.ordered_qty);
+    const rate = Number(row.rate);
+    const discPct = Number(row.discount_percent || 0);
+    const scheme = Number(row.scheme_amount || 0);
+    
+    // Math
+    const gross = qty * rate;
+    const discAmt = (gross - scheme) * (discPct / 100);
+    const taxAmt = Number(row.tax_amount);
+    const net = Number(row.amount);
+    
+    return {
+        "S.No": index + 1,              
+        "EAN Code": row.ean_code,       
+        "Item Name": row.product_name,  
+        "MRP": Number(row.mrp),         
+        "Price": rate,
+        "Qty": qty,
+        "Sch": scheme,
+        "Disc %": discPct,
+        "GST %": 5,                     
+        "Gross $": gross,               
+        "Disc. $": discAmt,             
+        "Taxable $": net - taxAmt,      
+        "GST $": taxAmt,                
+        "Net $": net,                   
+        "_product_id": row.product_id
+    };
+});
+
+// 4. Reset & Set
+poLines.setValue([]); 
+poLines.setValue(formattedLines);
+
+// 5. Show Drawer
+drawerCreatePO.show();
+----------------------------------------
+
+=== editPOHandler ===
+/* --- MASTER EDIT HANDLER --- */
+
+// 1. Reset Memory (Fixes Stale Data)
+poLines.setValue([]);
+varPOMode.setValue('EDIT');
+
+// 2. Get Data
+const masterProducts = Products.data.data || [];
+const savedLines = getPOById.data.lines || [];
+
+// 3. MERGE LOGIC (With Strict "Create-Style" Keys)
+const mergedLines = masterProducts
+  .filter(p => Number(p.vendor_id) === Number(vendorDropdown.value))
+  .map((p, index) => {
+      const saved = savedLines.find(s => Number(s.product_id) === Number(p.id));
+      
+      const qty = saved ? Number(saved.ordered_qty) : 0;
+      const rate = saved ? Number(saved.rate) : Number(p.purchase_rate);
+      const disc = saved ? Number(saved.discount_percent) : 0;
+      const scheme = saved ? Number(saved.scheme_amount) : 0;
+      
+      // Calculate
+      const gross = qty * rate;
+      const discAmt = (gross - scheme) * (disc / 100);
+      const gstPct = 5; // Fixed 5% for now
+      const taxAmt = (gross - scheme - discAmt) * (gstPct / 100);
+      const net = (gross - scheme - discAmt) + taxAmt;
+
+      return {
+        "S.No": index + 1,
+        "EAN Code": p.ean_code,
+        "Item Name": p.product_name,
+        "MRP": Number(p.mrp),
+        "Price": rate,
+        "Qty": qty,
+        "Sch": scheme,
+        "Disc %": disc,
+        "GST %": gstPct,
+        "Gross $": gross,
+        "Disc. $": discAmt,
+        "Taxable $": net - taxAmt,
+        "GST $": taxAmt,
+        "Net $": net,
+        "_product_id": p.id
+    };
+});
+
+// 4. Update UI
+poLines.setValue(mergedLines);
+utils.showNotification({ title: "Mode: Edit", description: "Loaded merged data.", notificationType: "info" });
+----------------------------------------
+
+=== eec44d99 ===
+api/purchase-invoices
+----------------------------------------
+
+=== f0b24600 ===
+api/products/template-data
+----------------------------------------
+
+=== f2afda6c ===
+const all = Products.data.data || Products.data || []; 
+// Group By Brand
+const grouped = _.groupBy(all, 'brand_name');
+// Return Array for ListView
+return Object.keys(grouped).map((brandName, index) => {
+    const products = grouped[brandName];
+    // Grab the brand_id from the first product
+    const brandId = products[0] ? products[0].brand_id : index; 
+    // 1. Taxable Stock Value (Current Value of Goods on Hand - Taxable)
+    const valStockTaxable = _.sumBy(products, p => Number(p.stock_value_cost || 0));
+    // 2. Total Bought Value (Historical Value of All Goods Purchased - Taxable)
+    const valTotalBought = _.sumBy(products, p => Number(p.stock_value_total_bought || 0));
+    return {
+        id: brandId,
+        brand_name: brandName,
+        product_count: products.length,
+        val_stock_taxable: valStockTaxable.toFixed(2),
+        val_total_bought: valTotalBought.toFixed(2),
+        products: products.sort((a,b) => a.product_name.localeCompare(b.product_name))
+    };
+}).sort((a,b) => a.brand_name.localeCompare(b.brand_name));
+----------------------------------------
+
+=== f5898050 ===
+const vendor = varSelectedVendor.value;
+const totalAmount = payAmount.value;
+const isRefund = payType.value === 'REFUND';
+
+// Validate
+if (!totalAmount || totalAmount <= 0) {
+    utils.showNotification({ title: "Error", description: "Enter valid amount", notificationType: "error" });
+    return;
+}
+
+let allocations = [];
+// ONLY calculate allocations if it is a PAYMENT
+if (!isRefund) {
+    const selectedBills = tblPendingBills.selectedSourceRows || []; 
+    if (selectedBills.length > 0) {
+        // FIFO Logic
+        let remainingPayment = Number(totalAmount);
+        for (const bill of selectedBills) {
+            if (remainingPayment <= 0) break;
+            const billBalance = Number(bill['Balance $']);
+            const allocAmount = Math.min(billBalance, remainingPayment);
+            
+            if (allocAmount > 0) {
+                allocations.push({
+                    invoice_id: bill.id,
+                    amount: allocAmount
+                });
+                remainingPayment -= allocAmount;
+            }
+        }
+    }
+}
+
+// Trigger API
+apiMakePayment.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: vendor.id,
+            amount: totalAmount,
+            payment_date: moment(payDate.value).format("YYYY-MM-DD"),
+            mode: payMode.value,
+            // [NEW] Unified Reference logic
+            transaction_ref: payMode.value === 'Online' ? selBankRefVendor.selectedItem.bank_ref_id : (payMode.value === 'Cheque' ? payChqNo.value : payRef.value),
+            bank_statement_entry_id: payMode.value === 'Online' ? selBankRefVendor.selectedItem.id : null,
+            remarks: payRemarks.value,
+            transaction_type: payType.value,
+            allocations: isRefund ? [] : allocations,
+            bank_account_id: selPaymentBank.value,
+            // [NEW] Cheque Details
+            cheque_no: payChqNo.value,
+            cheque_date: payChqDate.value,
+            bank_name: payChqBank.value
+        }
+    },
+    onSuccess: function() {
+        modalMakePayment.close();
+        getVendorLedger.trigger();
+        getVendorPendingBills.trigger();
+        utils.showNotification({ title: "Success", description: "Transaction Recorded", notificationType: "success" });
+    }
+});
+
+----------------------------------------
+
+=== f692552e ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== fcb5ed65 ===
+const isItemMode = dnMode.value === "Item Return";
+let amount = 0;
+let lines = [];
+if (isItemMode) {
+    // Calculate from Table (Map to Backend Keys)
+    const rawLines = tblDebitLines.data; 
+    
+    lines = rawLines.map(row => ({
+        product_id: row._product_id, // Map from '_product_id'
+        qty: Number(row.Qty),
+        rate: Number(row.Price), // Map from 'Price'
+        batch_number: row['Batch No'] || "", // Map from 'Batch No'
+        return_type: row.Reason || "Damage",
+        amount: Number(row['Net $']) || (Number(row.Qty) * Number(row.Price))
+    })).filter(l => l.qty > 0);
+    amount = _.sumBy(lines, 'amount');
+} else {
+    // Manual Amount
+    amount = Number(dnAmount.value);
+}
+if (!amount || amount <= 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Amount", notificationType: "error" });
+   return;
+}
+apiCreateDebitNote.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: varSelectedVendor.value.id,
+            amount: amount,
+            debit_note_date: moment(dnDate.value).format("YYYY-MM-DD"),
+            reason: dnReason.value,
+            linked_invoice_id: selLinkedBill.value || null, // New field
+            lines: isItemMode ? lines : [] 
+        }
+    },
+    onSuccess: function(data) {
+         // data contains { dn_number: 'GD-CLT-DN-26-1' }
+        utils.showNotification({ title: "Debit Note Created", description: data.dn_number, notificationType: "success" });
+        
+        // Show the number in the box
+        try { txtDNNumber.setValue(data.dn_number); } catch(e) {}
+        modalDebitNote.close();
+        getVendorLedger.trigger();
+    }
+});
+----------------------------------------
+
+=== fileSmartUpload ===
+const fileData = fileBulkUpload.parsedValue[0];
+// Helper to find column even if casing doesn't match
+const get = (row, key) => {
+    const found = Object.keys(row).find(k => k.toLowerCase().replace(/[^a-z]/g, '') === key.toLowerCase().replace(/[^a-z]/g, ''));
+    return found ? row[found] : "";
+};
+const cleanRows = fileData.map(r => ({
+    "Product ID":     get(r, "Product ID") || get(r, "ID"),
+    "Product Name":   get(r, "Product Name"),
+    "MRP":            get(r, "MRP"),
+    "Purchase Rate":  get(r, "Purchase Rate"),
+    "Distributor":    get(r, "Distributor Rate"),
+    "Wholesale":      get(r, "Wholesale Rate"),
+    "Dealer":         get(r, "Dealer Rate"),
+    "Retail":         get(r, "Retail Rate"),
+    "Case Qty":       get(r, "Case Qty"),
+    "UOM":            get(r, "UOM"),
+    "Model No":       get(r, "Model Number"),
+    "Min Stock":      get(r, "Min Stock"),
+    "Length":         get(r, "Length(cm)"),
+    "Width":          get(r, "Width(cm)"),
+    "Height":         get(r, "Height(cm)"),
+    "Weight":         get(r, "Weight(kg)"),
+    "Description":    get(r, "Description")
+}));
+varBulkData.setValue(cleanRows);
+utils.showNotification({ title: "Loaded", description: `Review ${cleanRows.length} items below.` });
+----------------------------------------
+
+=== getBankAccounts ===
+api/bank-accounts
+----------------------------------------
+
+=== getBrands ===
+api/master/brands
+----------------------------------------
+
+=== getCategories ===
+api/master/categories
+----------------------------------------
+
+=== getDebitNoteLines ===
+api/debit-notes/{{debiteNotetbl.selectedRow.id}}/items
+----------------------------------------
+
+=== getGRNList ===
+api/purchase-invoices
+----------------------------------------
+
+=== getHSN ===
+api/master/hsn
+----------------------------------------
+
+=== getNextPO ===
+api/documents/next/PO
+----------------------------------------
+
+=== getPOById ===
+api/purchase-orders/{{ poListTable.selectedRow.id }}
+----------------------------------------
+
+=== getPOForGRN ===
+api/purchase-orders/{{ varPOViewId.value }}?
+----------------------------------------
+
+=== getPOs ===
+api/purchase-orders
+----------------------------------------
+
+=== getPurchaseInvoices ===
+api/purchase-invoices
+----------------------------------------
+
+=== getTemplateData ===
+api/products/template-data
+----------------------------------------
+
+=== getVendorDebitNotes ===
+api/debit-notes/vendor/{{ varSelectedVendor.value.id }}
+----------------------------------------
+
+=== getVendorLedger ===
+api/vendor-payments/ledger/{{ varSelectedVendor.value.id }}
+----------------------------------------
+
+=== getVendorPendingBills ===
+const allBills = getGRNList.data; // This comes from the Transformer above
+const vID = varSelectedVendor.value.id;
+// Simple JS Filter
+return allBills.filter(bill => 
+    bill['Vendor ID'] === vID && 
+    bill['Balance $'] > 0
+);
+----------------------------------------
+
+=== getvendoraddress ===
+api/master/vendor-addresses
+----------------------------------------
+
+=== inpNewProductEan ===
+api/master/brands
+----------------------------------------
+
+=== inpNewProductRetailRate ===
+api/master/brands
+----------------------------------------
+
+=== inpNewVendorBankName ===
+api/master/banks
+----------------------------------------
+
+=== isPrinting ===
+/* --- 3. CREATE SCRIPT (Unified Keys) --- */
+
+// 0. Scope Check (Safety)
+let vID = null;
+try { vID = selected_vendor_id; } catch (e) { return; } 
+
+// 1. Reset Table
+poLines.setValue([]);
+varPOMode.setValue('CREATE');
+
+if (!Products.data || !vID) { return; }
+
+// 2. Map Clean List
+const newLines = Products.data.data
+    .filter(p => Number(p.vendor_id) === Number(vID))
+    .map((p, index) => ({
+      "S.No": index + 1,
+      "EAN Code": p.ean_code,
+      "Item Name": p.product_name,
+      "MRP": Number(p.mrp),
+      "Price": Number(p.purchase_rate),
+      "Qty": 0,
+      "Sch": 0,
+      "Disc %": 0,
+      "GST %": 5,
+      "Gross $": 0,
+      "Disc. $": 0,
+      "Taxable $": 0,
+      "GST $": 0,
+      "Net $": 0,
+      "_product_id": p.id
+    }));
+
+poLines.setValue(newLines);
+----------------------------------------
+
+=== jsCommitSmartUpdates ===
+const rows = tblBulkReview.data; 
+// Safety Check
+if (!rows || rows.length === 0) {
+    utils.showNotification({ title: "Empty", description: "Nothing to save.", notificationType: "warning" });
+    return;
+}
+// Formatter
+const num = (v) => v ? Number(v).toFixed(2) : null;
+const payload = rows.map(r => ({
+    id:               r['Product ID'],
+    mrp:              num(r['MRP']),
+    purchase_rate:    num(r['Purchase Rate']),
+    distributor_rate: num(r['Distributor']),
+    wholesale_rate:   num(r['Wholesale']),
+    dealer_rate:      num(r['Dealer']),
+    retail_rate:      num(r['Retail']),
+    case_quantity:    Number(r['Case Qty'] || 1),
+    uom:              r['UOM'],
+    model_number:     r['Model No'],
+    min_stock_level:  Number(r['Min Stock'] || 0),
+    box_length_cm:    num(r['Length']),
+    box_width_cm:     num(r['Width']),
+    box_height_cm:    num(r['Height']),
+    weight_kg:        num(r['Weight']),
+    description:      r['Description']
+}));
+// Trigger API
+apiBulkUpdate.trigger({
+    additionalScope: { items: payload },
+    onSuccess: () => {
+         utils.showNotification({ title: "Success", description: "All products updated!", notificationType: "success" });
+         varBulkData.setValue([]); // Clear table
+         // Close modal if you want: modalName.close()
+    },
+    onFailure: (e) => utils.showNotification({ title: "Error", description: e.message, notificationType: "error" })
+});
+----------------------------------------
+
+=== jsCreatePo ===
+/* --- SAVE & PRINT SCRIPT --- */
+
+// 1. FILTER INPUTS
+const rawLines = poLines.value;
+const validLines = rawLines.filter(row => Number(row.Qty) > 0);
+
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+if (!vendorDropdown.value) {
+   utils.showNotification({ title: "Error", description: "Select a Vendor", notificationType: "error" });
+   return;
+}
+
+// 2. PREPARE PAYLOAD
+// Note: We use the local Component names directly
+const dbPayloadLines = validLines.map(row => ({
+    product_id:         row._product_id,
+    ordered_qty:        Number(row.Qty),
+    mrp:                Number(row.MRP),
+    price:              Number(row.Price),
+    scheme_amount:      Number(row.Sch || 0),
+    discount_percent:   Number(row['Disc %'] || 0),
+    tax_percent:        Number(row['GST %'] || 0)
+}));
+
+const dbPayload = {
+    vendor_id:      vendorDropdown.value,
+    remarks:        "", 
+    lines:          dbPayloadLines
+};
+
+// 3. SEND TO SERVER
+utils.showNotification({ title: "Saving...", description: "Please wait...", notificationType: "info" });
+const result = await submitPO.trigger({ additionalScope: { payload: dbPayload } });
+
+if (result?.success) {
+  
+  // 4. PREPARE PRINT DATA (For the Hidden Table)
+  const formattedPrintLines = validLines.map((row, i) => ({
+      "S.No": i+1,
+      "EAN Code": row['EAN Code'] || "",
+      "Item Name": row['Item Name'],
+      "MRP": Number(row.MRP).toFixed(2),
+      "Rate": Number(row.Price).toFixed(2),
+      "Qty": Number(row.Qty),
+      "Gross Amt": Number(row['Gross $'] || 0).toFixed(2),
+      "Sch": Number(row.Sch || 0),
+      "Disc %": Number(row['Disc %'] || 0),
+      "Disc Amt": Number(row['Disc $'] || 0).toFixed(2),
+      "Taxable": Number(row['Taxable $']).toFixed(2),
+      "GST %": Number(row['GST %'] || 0),
+      "GST Amt": Number(row['GST $']).toFixed(2),
+      "Net Amount": Number(row['Net $']).toFixed(2)
+  }));
+  
+  // Update Global Variable (Print State)
+  await printState.setValue({
+      poNumber: result.po_number,
+      date: new Date().toLocaleDateString(),
+      vendorName: vendorDropdown.selectedLabel, // Uses Label (Name) instead of ID
+      lines: formattedPrintLines
+  });
+  
+  // 5. PRINT (Magic Swap)
+  isPrinting.setValue(true);
+  utils.showNotification({ title: "Generating PDF...", description: "Please wait...", notificationType: "info" });
+  await new Promise(r => setTimeout(r, 2500)); // Wait for render
+
+  // 6. DOWNLOAD
+  utils.downloadPage(result.po_number, { 
+      componentsToInclude: ['poTablePrint'], // Make sure this Container/Table ID is correct!
+      scale: 0.6 
+  });
+  
+  // 7. CLEANUP
+  await new Promise(r => setTimeout(r, 1000));
+  isPrinting.setValue(false);
+  poLines.setValue([]);
+  vendorDropdown.setValue(null);
+  getNextPO.trigger();
+  
+  // 8. CLOSE DRAWER (New Step for UI)
+  drawerCreatePO.hide();
+}
+----------------------------------------
+
+=== jsGroupProducts ===
+const all = Products.data.data || Products.data || []; 
+// Group By Brand
+const grouped = _.groupBy(all, 'brand_name');
+// Return Array for ListView
+return Object.keys(grouped).map((brandName, index) => {
+    const products = grouped[brandName];
+    // Grab the brand_id from the first product
+    const brandId = products[0] ? products[0].brand_id : index; 
+    // 1. Taxable Stock Value (Current Value of Goods on Hand - Taxable)
+    const valStockTaxable = _.sumBy(products, p => Number(p.stock_value_cost || 0));
+    // 2. Total Bought Value (Historical Value of All Goods Purchased - Taxable)
+    const valTotalBought = _.sumBy(products, p => Number(p.stock_value_total_bought || 0));
+    return {
+        id: brandId,
+        brand_name: brandName,
+        product_count: products.length,
+        val_stock_taxable: valStockTaxable.toFixed(2),
+        val_total_bought: valTotalBought.toFixed(2),
+        products: products.sort((a,b) => a.product_name.localeCompare(b.product_name))
+    };
+}).sort((a,b) => a.brand_name.localeCompare(b.brand_name));
+----------------------------------------
+
+=== jsLoadCorrectionData ===
+const old = varCorrectionData.value;
+if (!old) {
+  utils.showNotification({title: "Error", description: "No correction data found.", notificationType: "error"});
+  return;
+}
+// 1. Pre-fill Inputs (Using Your Confirmed Names)
+// Vendor Dropdown
+if (typeof vendorDropdownGRN !== 'undefined') {
+   vendorDropdownGRN.setValue(old.vendor_id);
+}
+// Invoice Number
+vendorInvoiceNo.setValue(old.vendor_invoice_number);
+// Purchase Order (Restore Link)
+if (old.purchase_order_id) {
+   ChoosePo.setValue(old.purchase_order_id);
+}
+// Invoice Date
+dateVendorInvoice.setValue(old.vendor_invoice_date);
+// Receive Date
+dateReceived.setValue(old.received_date);
+// 2. Pre-fill Lines 
+// We use 'piLines' because that is what the Save script uses.
+if (old.lines || old.lines_json) {
+   piLines.setValue(old.lines || old.lines_json);
+}
+utils.showNotification({title: "Data Loaded", description: "Edit the mistake and Click Save."});
+----------------------------------------
+
+=== jsParseSmartUpload ===
+const fileData = fileBulkUpload.parsedValue[0];
+// Helper to find column even if casing doesn't match
+const get = (row, key) => {
+    const found = Object.keys(row).find(k => k.toLowerCase().replace(/[^a-z]/g, '') === key.toLowerCase().replace(/[^a-z]/g, ''));
+    return found ? row[found] : "";
+};
+const cleanRows = fileData.map(r => ({
+    "Product ID":     get(r, "Product ID") || get(r, "ID"),
+    "Product Name":   get(r, "Product Name"),
+    "MRP":            get(r, "MRP"),
+    "Purchase Rate":  get(r, "Purchase Rate"),
+    "Distributor":    get(r, "Distributor Rate"),
+    "Wholesale":      get(r, "Wholesale Rate"),
+    "Dealer":         get(r, "Dealer Rate"),
+    "Retail":         get(r, "Retail Rate"),
+    "Case Qty":       get(r, "Case Qty"),
+    "UOM":            get(r, "UOM"),
+    "Model No":       get(r, "Model Number"),
+    "Min Stock":      get(r, "Min Stock"),
+    "Length":         get(r, "Length(cm)"),
+    "Width":          get(r, "Width(cm)"),
+    "Height":         get(r, "Height(cm)"),
+    "Weight":         get(r, "Weight(kg)"),
+    "Description":    get(r, "Description")
+}));
+varBulkData.setValue(cleanRows);
+utils.showNotification({ title: "Loaded", description: `Review ${cleanRows.length} items below.` });
+----------------------------------------
+
+=== jsStatesData ===
+return {
+  "Andhra Pradesh": [
+    "Anantapur", "Chittoor", "East Godavari", "Guntur", "Kadapa",
+    "Krishna", "Kurnool", "Nellore", "Prakasam",
+    "Srikakulam", "Visakhapatnam", "Vizianagaram",
+    "West Godavari"
+  ],
+
+  "Arunachal Pradesh": [
+    "Anjaw", "Changlang", "Dibang Valley", "East Kameng",
+    "East Siang", "Kurung Kumey", "Lohit", "Lower Dibang Valley",
+    "Lower Subansiri", "Papum Pare", "Tawang",
+    "Tirap", "Upper Siang", "Upper Subansiri", "West Kameng", "West Siang"
+  ],
+
+  "Assam": [
+    "Baksa", "Barpeta", "Biswanath", "Bongaigaon", "Cachar",
+    "Charaideo", "Chirang", "Darrang", "Dhemaji", "Dhubri",
+    "Dibrugarh", "Goalpara", "Golaghat", "Hailakandi",
+    "Hojai", "Jorhat", "Kamrup", "Kamrup Metropolitan",
+    "Karbi Anglong", "Karimganj", "Kokrajhar", "Lakhimpur",
+    "Majuli", "Morigaon", "Nagaon", "Nalbari",
+    "Sivasagar", "Sonitpur", "South Salmara",
+    "Tinsukia", "Udalguri", "West Karbi Anglong"
+  ],
+
+  "Bihar": [
+    "Araria", "Arwal", "Aurangabad", "Banka", "Begusarai",
+    "Bhagalpur", "Bhojpur", "Buxar", "Darbhanga",
+    "East Champaran", "Gaya", "Gopalganj", "Jamui",
+    "Jehanabad", "Kaimur", "Katihar", "Khagaria",
+    "Kishanganj", "Lakhisarai", "Madhepura", "Madhubani",
+    "Munger", "Muzaffarpur", "Nalanda", "Nawada",
+    "Patna", "Purnia", "Rohtas", "Saharsa",
+    "Samastipur", "Saran", "Sheikhpura", "Sheohar",
+    "Sitamarhi", "Siwan", "Supaul", "Vaishali",
+    "West Champaran"
+  ],
+
+  "Chhattisgarh": [
+    "Balod", "Baloda Bazar", "Balrampur", "Bastar",
+    "Bemetara", "Bijapur", "Bilaspur", "Dantewada",
+    "Dhamtari", "Durg", "Gariaband", "Gaurela-Pendra-Marwahi",
+    "Janjgir-Champa", "Jashpur", "Kabirdham", "Kanker",
+    "Kondagaon", "Korba", "Koriya", "Mahasamund",
+    "Mungeli", "Narayanpur", "Raigarh", "Raipur",
+    "Rajnandgaon", "Sukma", "Surajpur", "Surguja"
+  ],
+
+  "Goa": ["North Goa", "South Goa"],
+
+  "Gujarat": [
+    "Ahmedabad", "Amreli", "Anand", "Aravalli", "Banaskantha",
+    "Bharuch", "Bhavnagar", "Botad", "Chhota Udaipur",
+    "Dahod", "Dang", "Devbhoomi Dwarka", "Gandhinagar",
+    "Gir Somnath", "Jamnagar", "Junagadh", "Kheda",
+    "Kutch", "Mahisagar", "Mehsana", "Morbi",
+    "Narmada", "Navsari", "Panchmahal", "Patan",
+    "Porbandar", "Rajkot", "Sabarkantha", "Surat",
+    "Surendranagar", "Tapi", "Vadodara", "Valsad"
+  ],
+
+  "Haryana": [
+    "Ambala", "Bhiwani", "Charkhi Dadri", "Faridabad",
+    "Fatehabad", "Gurugram", "Hisar", "Jhajjar",
+    "Jind", "Kaithal", "Karnal", "Kurukshetra",
+    "Mahendragarh", "Nuh", "Palwal", "Panchkula",
+    "Panipat", "Rewari", "Rohtak", "Sirsa",
+    "Sonipat", "Yamunanagar"
+  ],
+
+  "Himachal Pradesh": [
+    "Bilaspur", "Chamba", "Hamirpur", "Kangra",
+    "Kinnaur", "Kullu", "Lahaul and Spiti",
+    "Mandi", "Shimla", "Sirmaur", "Solan", "Una"
+  ],
+
+  "Jharkhand": [
+    "Bokaro", "Chatra", "Deoghar", "Dhanbad", "Dumka",
+    "East Singhbhum", "Garhwa", "Giridih", "Godda",
+    "Gumla", "Hazaribagh", "Jamtara", "Khunti",
+    "Koderma", "Latehar", "Lohardaga", "Pakur",
+    "Palamu", "Ramgarh", "Ranchi", "Sahebganj",
+    "Seraikela Kharsawan", "Simdega", "West Singhbhum"
+  ],
+
+  "Karnataka": [
+    "Bagalkot", "Ballari", "Belagavi", "Bengaluru Rural",
+    "Bengaluru Urban", "Bidar", "Chamarajanagar",
+    "Chikkaballapur", "Chikkamagaluru", "Chitradurga",
+    "Dakshina Kannada", "Davangere", "Dharwad",
+    "Gadag", "Hassan", "Haveri", "Kalaburagi",
+    "Kodagu", "Kolar", "Koppal", "Mandya",
+    "Mysuru", "Raichur", "Ramanagara", "Shivamogga",
+    "Tumakuru", "Udupi", "Uttara Kannada", "Vijayapura",
+    "Yadgir"
+  ],
+
+  "Kerala": [
+    "Alappuzha", "Ernakulam", "Idukki", "Kannur",
+    "Kasaragod", "Kollam", "Kottayam", "Kozhikode",
+    "Malappuram", "Palakkad", "Pathanamthitta",
+    "Thiruvananthapuram", "Thrissur", "Wayanad"
+  ],
+
+  "Madhya Pradesh": [
+    "Agar Malwa", "Alirajpur", "Anuppur", "Ashoknagar",
+    "Balaghat", "Barwani", "Betul", "Bhind",
+    "Bhopal", "Burhanpur", "Chhatarpur", "Chhindwara",
+    "Damoh", "Datia", "Dewas", "Dhar", "Dindori",
+    "Guna", "Gwalior", "Harda", "Hoshangabad",
+    "Indore", "Jabalpur", "Jhabua", "Katni",
+    "Khandwa", "Khargone", "Mandla", "Mandsaur",
+    "Morena", "Narsinghpur", "Neemuch", "Panna",
+    "Raisen", "Rajgarh", "Ratlam", "Rewa",
+    "Sagar", "Satna", "Sehore", "Seoni",
+    "Shahdol", "Shajapur", "Sheopur", "Shivpuri",
+    "Sidhi", "Singrauli", "Tikamgarh", "Ujjain",
+    "Umaria", "Vidisha"
+  ],
+
+  "Maharashtra": [
+    "Ahmednagar", "Akola", "Amravati", "Aurangabad",
+    "Beed", "Bhandara", "Buldhana", "Chandrapur",
+    "Dhule", "Gadchiroli", "Gondia", "Hingoli",
+    "Jalgaon", "Jalna", "Kolhapur", "Latur",
+    "Mumbai City", "Mumbai Suburban", "Nagpur",
+    "Nanded", "Nandurbar", "Nashik", "Osmanabad",
+    "Palghar", "Parbhani", "Pune", "Raigad",
+    "Ratnagiri", "Sangli", "Satara", "Sindhudurg",
+    "Solapur", "Thane", "Wardha", "Washim", "Yavatmal"
+  ],
+
+  "Tamil Nadu": [
+    "Ariyalur", "Chengalpattu", "Chennai", "Coimbatore",
+    "Cuddalore", "Dharmapuri", "Dindigul", "Erode",
+    "Kallakurichi", "Kanchipuram", "Kanyakumari",
+    "Karur", "Krishnagiri", "Madurai", "Nagapattinam",
+    "Namakkal", "Nilgiris", "Perambalur", "Pudukkottai",
+    "Ramanathapuram", "Ranipet", "Salem",
+    "Sivaganga", "Tenkasi", "Thanjavur", "Theni",
+    "Thoothukudi", "Tiruchirappalli", "Tirunelveli",
+    "Tirupathur", "Tiruppur", "Tiruvallur",
+    "Tiruvannamalai", "Tiruvarur", "Vellore",
+    "Viluppuram", "Virudhunagar"
+  ],
+
+  "Telangana": [
+    "Adilabad", "Bhadradri Kothagudem", "Hyderabad",
+    "Jagtial", "Jangaon", "Jayashankar Bhupalpally",
+    "Jogulamba Gadwal", "Kamareddy", "Karimnagar",
+    "Khammam", "Komaram Bheem", "Mahabubabad",
+    "Mahbubnagar", "Mancherial", "Medak",
+    "Medchal–Malkajgiri", "Mulugu", "Nagarkurnool",
+    "Nalgonda", "Narayanpet", "Nirmal",
+    "Nizamabad", "Peddapalli", "Rajanna Sircilla",
+    "Ranga Reddy", "Sangareddy", "Siddipet",
+    "Suryapet", "Vikarabad", "Wanaparthy",
+    "Warangal Rural", "Warangal Urban", "Yadadri Bhuvanagiri"
+  ],
+
+  "Uttar Pradesh": [
+    "Agra", "Aligarh", "Allahabad", "Ambedkar Nagar",
+    "Amethi", "Amroha", "Auraiya", "Azamgarh",
+    "Baghpat", "Bahraich", "Ballia", "Balrampur",
+    "Banda", "Barabanki", "Bareilly", "Basti",
+    "Bhadohi", "Bijnor", "Budaun", "Bulandshahr",
+    "Chandauli", "Chitrakoot", "Deoria", "Etah",
+    "Etawah", "Faizabad", "Farrukhabad", "Fatehpur",
+    "Firozabad", "Gautam Buddha Nagar", "Ghaziabad",
+    "Ghazipur", "Gonda", "Gorakhpur", "Hamirpur",
+    "Hapur", "Hardoi", "Hathras", "Jalaun",
+    "Jaunpur", "Jhansi", "Kannauj", "Kanpur Dehat",
+    "Kanpur Nagar", "Kasganj", "Kaushambi",
+    "Kushinagar", "Lakhimpur Kheri", "Lalitpur",
+    "Lucknow", "Maharajganj", "Mahoba", "Mainpuri",
+    "Mathura", "Mau", "Meerut", "Mirzapur",
+    "Moradabad", "Muzaffarnagar", "Pilibhit",
+    "Pratapgarh", "Raebareli", "Rampur",
+    "Saharanpur", "Sambhal", "Sant Kabir Nagar",
+    "Shahjahanpur", "Shamli", "Shravasti",
+    "Siddharthnagar", "Sitapur", "Sonbhadra",
+    "Sultanpur", "Unnao", "Varanasi"
+  ],
+
+  "West Bengal": [
+    "Alipurduar", "Bankura", "Birbhum", "Cooch Behar",
+    "Dakshin Dinajpur", "Darjeeling", "Hooghly",
+    "Howrah", "Jalpaiguri", "Jhargram",
+    "Kalimpong", "Kolkata", "Malda",
+    "Murshidabad", "Nadia", "North 24 Parganas",
+    "Paschim Bardhaman", "Paschim Medinipur",
+    "Purba Bardhaman", "Purba Medinipur",
+    "Purulia", "South 24 Parganas",
+    "Uttar Dinajpur"
+  ]
+};
+
+----------------------------------------
+
+=== keyValue5 ===
+api/debit-notes/{{debiteNotetbl.selectedRow.id}}/items
+----------------------------------------
+
+=== modalAddAddress ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== modalCloseButton2 ===
+api/vendor-payments/ledger/{{ varSelectedVendor.value.id }}
+----------------------------------------
+
+=== modalCloseButton7 ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== modalCloseButton8 ===
+api/purchase-invoices/{{ tblGrn.selectedRow.id }}/reverse
+----------------------------------------
+
+=== modalMakePayment ===
+api/vendor-payments/ledger/{{ varSelectedVendor.value.id }}
+----------------------------------------
+
+=== modalTitle2 ===
+api/vendor-payments/ledger/{{ varSelectedVendor.value.id }}
+----------------------------------------
+
+=== modalTitle6 ===
+api/vendors/{{ tblVendors.selectedRow.id }}
+----------------------------------------
+
+=== modalTitle7 ===
+api/purchase-invoices/{{ tblGrn.selectedRow.id }}/reverse
+----------------------------------------
+
+=== modalViewGRN ===
+api/purchase-invoices/{{ tblGrn.selectedRow.id }}/reverse
+----------------------------------------
+
+=== payAmount ===
+const vendor = varSelectedVendor.value;
+const totalAmount = payAmount.value;
+const isRefund = payType.value === 'REFUND';
+
+// Validate
+if (!totalAmount || totalAmount <= 0) {
+    utils.showNotification({ title: "Error", description: "Enter valid amount", notificationType: "error" });
+    return;
+}
+
+let allocations = [];
+// ONLY calculate allocations if it is a PAYMENT
+if (!isRefund) {
+    const selectedBills = tblPendingBills.selectedSourceRows || []; 
+    if (selectedBills.length > 0) {
+        // FIFO Logic
+        let remainingPayment = Number(totalAmount);
+        for (const bill of selectedBills) {
+            if (remainingPayment <= 0) break;
+            const billBalance = Number(bill['Balance $']);
+            const allocAmount = Math.min(billBalance, remainingPayment);
+            
+            if (allocAmount > 0) {
+                allocations.push({
+                    invoice_id: bill.id,
+                    amount: allocAmount
+                });
+                remainingPayment -= allocAmount;
+            }
+        }
+    }
+}
+
+// Trigger API
+apiMakePayment.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: vendor.id,
+            amount: totalAmount,
+            payment_date: moment(payDate.value).format("YYYY-MM-DD"),
+            mode: payMode.value,
+            // [NEW] Unified Reference logic
+            transaction_ref: payMode.value === 'Online' ? selBankRefVendor.selectedItem.bank_ref_id : (payMode.value === 'Cheque' ? payChqNo.value : payRef.value),
+            bank_statement_entry_id: payMode.value === 'Online' ? selBankRefVendor.selectedItem.id : null,
+            remarks: payRemarks.value,
+            transaction_type: payType.value,
+            allocations: isRefund ? [] : allocations,
+            bank_account_id: selPaymentBank.value,
+            // [NEW] Cheque Details
+            cheque_no: payChqNo.value,
+            cheque_date: payChqDate.value,
+            bank_name: payChqBank.value
+        }
+    },
+    onSuccess: function() {
+        modalMakePayment.close();
+        getVendorLedger.trigger();
+        getVendorPendingBills.trigger();
+        utils.showNotification({ title: "Success", description: "Transaction Recorded", notificationType: "success" });
+    }
+});
+
+----------------------------------------
+
+=== payRemarks ===
+const vendor = varSelectedVendor.value;
+const totalAmount = payAmount.value;
+const isRefund = payType.value === 'REFUND';
+
+// Validate
+if (!totalAmount || totalAmount <= 0) {
+    utils.showNotification({ title: "Error", description: "Enter valid amount", notificationType: "error" });
+    return;
+}
+
+let allocations = [];
+// ONLY calculate allocations if it is a PAYMENT
+if (!isRefund) {
+    const selectedBills = tblPendingBills.selectedSourceRows || []; 
+    if (selectedBills.length > 0) {
+        // FIFO Logic
+        let remainingPayment = Number(totalAmount);
+        for (const bill of selectedBills) {
+            if (remainingPayment <= 0) break;
+            const billBalance = Number(bill['Balance $']);
+            const allocAmount = Math.min(billBalance, remainingPayment);
+            
+            if (allocAmount > 0) {
+                allocations.push({
+                    invoice_id: bill.id,
+                    amount: allocAmount
+                });
+                remainingPayment -= allocAmount;
+            }
+        }
+    }
+}
+
+// Trigger API
+apiMakePayment.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: vendor.id,
+            amount: totalAmount,
+            payment_date: moment(payDate.value).format("YYYY-MM-DD"),
+            mode: payMode.value,
+            // [NEW] Unified Reference logic
+            transaction_ref: payMode.value === 'Online' ? selBankRefVendor.selectedItem.bank_ref_id : (payMode.value === 'Cheque' ? payChqNo.value : payRef.value),
+            bank_statement_entry_id: payMode.value === 'Online' ? selBankRefVendor.selectedItem.id : null,
+            remarks: payRemarks.value,
+            transaction_type: payType.value,
+            allocations: isRefund ? [] : allocations,
+            bank_account_id: selPaymentBank.value,
+            // [NEW] Cheque Details
+            cheque_no: payChqNo.value,
+            cheque_date: payChqDate.value,
+            bank_name: payChqBank.value
+        }
+    },
+    onSuccess: function() {
+        modalMakePayment.close();
+        getVendorLedger.trigger();
+        getVendorPendingBills.trigger();
+        utils.showNotification({ title: "Success", description: "Transaction Recorded", notificationType: "success" });
+    }
+});
+
+----------------------------------------
+
+=== piLines ===
+api/purchase-invoices?
+----------------------------------------
+
+=== poCounter ===
+console.log("=== DEBUG: Save by _product_id ===");
+console.log("1. Table changeset:", poTable.changesetArray);
+console.log("2. Full changeset details:", JSON.stringify(poTable.changesetArray, null, 2));
+
+// Get all changes from the table
+const changes = poTable.changesetArray || [];
+
+if (changes.length === 0) {
+  console.log("❌ No changes to save");
+  return { success: true, message: "No changes" };
+}
+
+// Check if poLines has data, if not initialize it from table
+if (!poLines.value || poLines.value.length === 0) {
+  console.log("⚠️ Initializing poLines from table data...");
+  poLines.setValue(poTable.data || []);
+  poTable.clearChangeset();
+  return { success: false, message: "poLines initialized" };
+}
+
+// The changeset contains _product_id 
+const change = changes[0];
+const targetProductId = change._product_id;
+
+console.log(`Looking for _product_id=${targetProductId}`);
+console.log(`Change keys:`, Object.keys(change));
+
+// Find which row in poLines has this _product_id
+const targetIndex = poLines.value.findIndex((row) =>
+row._product_id === targetProductId || row.product_id === targetProductId);
+
+
+console.log(`Found at index=${targetIndex}`);
+
+if (targetIndex === -1) {
+  console.error("Could not find product in poLines!");
+  console.log("First 3 poLines rows:", poLines.value.slice(0, 3).map((r) => ({ _product_id: r._product_id, product_id: r.product_id })));
+  return { success: false, error: "Product not found" };
+}
+
+// Update ONLY that row in poLines
+const updated = poLines.value.map((row, index) => {
+  if (index !== targetIndex) {
+    return row;
+  }
+
+  console.log(`✅ MATCH! Updating row at index ${index}`);
+  console.log("   Row before:", { Qty: row.Qty, Sch: row.Sch, "Disc %": row["Disc %"] });
+  console.log("   Change object:", change);
+
+  // Merge the edited fields - this preserves ALL changed fields
+  const mergedRow = { ...row, ...change };
+
+  console.log("   Merged row:", { Qty: mergedRow.Qty, Sch: mergedRow.Sch, "Disc %": mergedRow["Disc %"], "Disc": mergedRow["Disc"] });
+
+  // Recalculate - get values from mergedRow (which has the change applied)
+  const Qty = Number(mergedRow.Qty) || 0;
+  const Sch = Number(mergedRow.Sch) || 0;
+  const DiscPct = Number(mergedRow["Disc %"] || mergedRow.Disc) || 0; // Try both field names
+  const Price = Number(mergedRow.Price) || 0;
+
+  console.log("   Values for calculation:", { Qty, Sch, DiscPct, Price });
+
+  const Gross = Qty * Price;
+  const DiscAmt = (Gross - Sch) * (DiscPct / 100);
+  const Taxable = Gross - Sch - DiscAmt;
+  const GstPct = Number(mergedRow["GST %"]) || 0;
+  const GstAmt = Taxable * (GstPct / 100);
+  const Net = Taxable + GstAmt;
+
+  console.log("   Calculated:", { Qty, Sch, DiscPct, Gross, Taxable, Net });
+
+return {
+  ...mergedRow,
+  Qty,
+  Sch,
+  "Disc %": DiscPct,
+
+  "Gross $": _.round(Gross, 2),
+  "Disc. $": _.round(DiscAmt, 2),
+  "Taxable $": _.round(Taxable, 2),
+  "GST $": _.round(GstAmt, 2),
+  "Net $": _.round(Net, 2)
+};
+
+
+});
+
+// Save
+poLines.setValue(updated);
+poTable.clearChangeset();
+
+console.log(`✅ Updated row at index ${targetIndex}!`);
+
+return { success: true, updatedIndex: targetIndex };
+----------------------------------------
+
+=== poLines ===
+/* --- 3. CREATE SCRIPT (Unified Keys) --- */
+
+// 0. Scope Check (Safety)
+let vID = null;
+try { vID = selected_vendor_id; } catch (e) { return; } 
+
+// 1. Reset Table
+poLines.setValue([]);
+varPOMode.setValue('CREATE');
+
+if (!Products.data || !vID) { return; }
+
+// 2. Map Clean List
+const newLines = Products.data.data
+    .filter(p => Number(p.vendor_id) === Number(vID))
+    .map((p, index) => ({
+      "S.No": index + 1,
+      "EAN Code": p.ean_code,
+      "Item Name": p.product_name,
+      "MRP": Number(p.mrp),
+      "Price": Number(p.purchase_rate),
+      "Qty": 0,
+      "Sch": 0,
+      "Disc %": 0,
+      "GST %": 5,
+      "Gross $": 0,
+      "Disc. $": 0,
+      "Taxable $": 0,
+      "GST $": 0,
+      "Net $": 0,
+      "_product_id": p.id
+    }));
+
+poLines.setValue(newLines);
+----------------------------------------
+
+=== populateDebitTableJS ===
+const vID = varSelectedVendor.value.id;
+if (!vID) { return; }
+// CORRECTION: User's query is named 'Products'
+// Safe Array Access
+const rawData = Products.data; 
+// Handle response wrappers e.g. { data: [...] } or direct array
+const allProducts = Array.isArray(rawData) ? rawData : (rawData.data || []);
+// Filter for Vendor
+const vendorProducts = allProducts.filter(p => Number(p.vendor_id) === Number(vID));
+// Map to Table Format (Exact Match to GRN Logic)
+const tableData = vendorProducts.map((p, index) => ({
+  "S.No": index + 1,
+  "EAN Code": p.ean_code || "",
+  "Item Name": p.product_name,
+  "MRP": Number(p.mrp || 0),
+  "Price": Number(p.purchase_rate || 0),
+  "Qty": 0,
+  "Sch": 0,
+  "Disc %": 0,
+  "GST %": Number(p.tax_percent || 5),
+  "Gross $": 0,
+  "Disc. $": 0,
+  "Taxable $": 0,
+  "GST $": 0,
+  "Net $": 0, // This is the Amount
+  "Batch No": "", 
+  "Expiry": null,
+  "Reason": "Damage", // Default for DN
+  "_product_id": p.id
+}));
+// UPDATE THE VARIABLE (Robust Way)
+varDebitLinesData.setValue(tableData);
+----------------------------------------
+
+=== populateDrawerFromPO ===
+/* --- UNIFIED VIEW SCRIPT (MATCHES CREATE KEYS) --- */
+const data = getPOById.data;
+
+if (!data || !data.header) {
+  utils.showNotification({ title: "Error", description: "No Data", notificationType: "error" });
+  return;
+}
+
+// 1. SET VIEW MODE (Safety)
+varPOMode.setValue('VIEW'); // <--- ADDED THIS ✅
+
+// 2. Map Header
+vendorDropdown.setValue(data.header.vendor_id);
+poNumber2.setValue(data.header.po_number);
+date5.setValue(data.header.po_date);
+date6.setValue(data.header.delivery_date);
+
+// 3. Map Lines (Targeting EXACT Keys from Create Script)
+const formattedLines = data.lines.map((row, index) => {
+    // Inputs
+    const qty = Number(row.ordered_qty);
+    const rate = Number(row.rate);
+    const discPct = Number(row.discount_percent || 0);
+    const scheme = Number(row.scheme_amount || 0);
+    
+    // Math
+    const gross = qty * rate;
+    const discAmt = (gross - scheme) * (discPct / 100);
+    const taxAmt = Number(row.tax_amount);
+    const net = Number(row.amount);
+    
+    return {
+        "S.No": index + 1,              
+        "EAN Code": row.ean_code,       
+        "Item Name": row.product_name,  
+        "MRP": Number(row.mrp),         
+        "Price": rate,
+        "Qty": qty,
+        "Sch": scheme,
+        "Disc %": discPct,
+        "GST %": 5,                     
+        "Gross $": gross,               
+        "Disc. $": discAmt,             
+        "Taxable $": net - taxAmt,      
+        "GST $": taxAmt,                
+        "Net $": net,                   
+        "_product_id": row.product_id
+    };
+});
+
+// 4. Reset & Set
+poLines.setValue([]); 
+poLines.setValue(formattedLines);
+
+// 5. Show Drawer
+drawerCreatePO.show();
+----------------------------------------
+
+=== postImportCleanupJS ===
+utils.showNotification({ title: "Success", description: `Imported ${varImportData.value.length} items`, notificationType: "success" });
+varImportData.setValue([]); // Clear valid list
+// Now the Modal will automatically reveal the Error Table (if any errors exist)
+if (varImportErrors.value.length === 0) {
+   modalFrameImport. hide(); // Close if no errors left
+}
+----------------------------------------
+
+=== printState ===
+/* --- 3. CREATE SCRIPT (Unified Keys) --- */
+
+// 0. Scope Check (Safety)
+let vID = null;
+try { vID = selected_vendor_id; } catch (e) { return; } 
+
+// 1. Reset Table
+poLines.setValue([]);
+varPOMode.setValue('CREATE');
+
+if (!Products.data || !vID) { return; }
+
+// 2. Map Clean List
+const newLines = Products.data.data
+    .filter(p => Number(p.vendor_id) === Number(vID))
+    .map((p, index) => ({
+      "S.No": index + 1,
+      "EAN Code": p.ean_code,
+      "Item Name": p.product_name,
+      "MRP": Number(p.mrp),
+      "Price": Number(p.purchase_rate),
+      "Qty": 0,
+      "Sch": 0,
+      "Disc %": 0,
+      "GST %": 5,
+      "Gross $": 0,
+      "Disc. $": 0,
+      "Taxable $": 0,
+      "GST $": 0,
+      "Net $": 0,
+      "_product_id": p.id
+    }));
+
+poLines.setValue(newLines);
+----------------------------------------
+
+=== q_getUnconsumedDebits ===
+api/finance/reconciliation/bank/unconsumed-debits
+----------------------------------------
+
+=== saveDebitNoteJS ===
+const isItemMode = dnMode.value === "Item Return";
+let amount = 0;
+let lines = [];
+if (isItemMode) {
+    // Calculate from Table (Map to Backend Keys)
+    const rawLines = tblDebitLines.data; 
+    
+    lines = rawLines.map(row => ({
+        product_id: row._product_id, // Map from '_product_id'
+        qty: Number(row.Qty),
+        rate: Number(row.Price), // Map from 'Price'
+        batch_number: row['Batch No'] || "", // Map from 'Batch No'
+        return_type: row.Reason || "Damage",
+        amount: Number(row['Net $']) || (Number(row.Qty) * Number(row.Price))
+    })).filter(l => l.qty > 0);
+    amount = _.sumBy(lines, 'amount');
+} else {
+    // Manual Amount
+    amount = Number(dnAmount.value);
+}
+if (!amount || amount <= 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Amount", notificationType: "error" });
+   return;
+}
+apiCreateDebitNote.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: varSelectedVendor.value.id,
+            amount: amount,
+            debit_note_date: moment(dnDate.value).format("YYYY-MM-DD"),
+            reason: dnReason.value,
+            linked_invoice_id: selLinkedBill.value || null, // New field
+            lines: isItemMode ? lines : [] 
+        }
+    },
+    onSuccess: function(data) {
+         // data contains { dn_number: 'GD-CLT-DN-26-1' }
+        utils.showNotification({ title: "Debit Note Created", description: data.dn_number, notificationType: "success" });
+        
+        // Show the number in the box
+        try { txtDNNumber.setValue(data.dn_number); } catch(e) {}
+        modalDebitNote.close();
+        getVendorLedger.trigger();
+    }
+});
+----------------------------------------
+
+=== saveGRN ===
+api/purchase-invoices?
+----------------------------------------
+
+=== saveGRNJS ===
+/* --- UNIFIED GRN SAVE LOGIC --- */
+// 1. Validate Lines
+const rawLines = piLines.value || [];
+const validLines = rawLines.filter(row => row.Qty && Number(row.Qty) > 0);
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+const vID = vendorDropdownGRN.value;
+if (!vID) {
+   utils.showNotification({ title: "Error", description: "Select a Vendor", notificationType: "error" });
+   return;
+}
+// 2. Prepare Payload
+const dbLines = validLines.map(row => ({
+    // Ensure you map your Column IDs correctly here!
+    product_id:         Number(row._product_id),
+    ordered_qty:        0, 
+    accepted_qty:       Number(row.Qty),
+    rate:               Number(row.Price),
+    discount_percent:   Number(row['Disc %'] || 0),
+    scheme_amount:      Number(row.Sch || 0),
+    tax_amount:         Number(row['GST $'] || 0),
+    amount:             Number(row['Net $'] || 0),
+    batch_number:       row["Batch No"] ? row["Batch No"].toString() : "",
+    expiry_date:        row.Expiry ? moment(row.Expiry).format("YYYY-MM-DD") : null,
+    mrp:                Number(row.MRP || 0)
+}));
+const totalNet = dbLines.reduce((acc, x) => acc + x.amount, 0); 
+const totalTax = dbLines.reduce((acc, x) => acc + x.tax_amount, 0);
+const finalPayload = {
+    vendor_id:          Number(vID),
+    purchase_order_id: Number(ChoosePo.value || 0),
+    invoice_number:     vendorInvoiceNo.value,
+    invoice_date:       dateVendorInvoice.value, // Ensure Moment/Date format matches
+    received_date:      dateReceived.value,
+    total_net:          totalNet,
+    tax_amount:         totalTax,
+    grand_total:        Math.round(totalNet + totalTax),
+    lines:              dbLines,
+    
+    // --- TRACEABILITY MAGIC ---
+    // If varCorrectionID has a value, we link this new GRN to the old one!
+    parent_invoice_id:  varCorrectionID.value || null 
+};
+// 3. Save & Send
+await varGRNPayload.setValue(finalPayload);
+// Trigger Query
+apiCreateGRN.trigger({
+    onSuccess: function(data) {
+        utils.showNotification({ title: "Success", description: "GRN Saved!", notificationType: "success" });
+        
+        // 4. CLEANUP (Critical)
+        piLines.setValue([]);
+        vendorDropdownGRN.clearValue();
+        vendorInvoiceNo.setValue("");
+        dateVendorInvoice.clearValue();
+        varGRNPayload.setValue({});
+        
+        // Reset Correction Mode
+        varCorrectionID.setValue(null);
+        varCorrectionData.setValue({});
+        
+        modalFrameGRN.close();
+    },
+    onFailure: function(err) {
+        console.error(err);
+        utils.showNotification({ title: "Failed", description: err.message, notificationType: "error" });
+    }
+});
+----------------------------------------
+
+=== savePOLine ===
+console.log("=== DEBUG: Save by _product_id ===");
+console.log("1. Table changeset:", poTable.changesetArray);
+console.log("2. Full changeset details:", JSON.stringify(poTable.changesetArray, null, 2));
+
+// Get all changes from the table
+const changes = poTable.changesetArray || [];
+
+if (changes.length === 0) {
+  console.log("❌ No changes to save");
+  return { success: true, message: "No changes" };
+}
+
+// Check if poLines has data, if not initialize it from table
+if (!poLines.value || poLines.value.length === 0) {
+  console.log("⚠️ Initializing poLines from table data...");
+  poLines.setValue(poTable.data || []);
+  poTable.clearChangeset();
+  return { success: false, message: "poLines initialized" };
+}
+
+// The changeset contains _product_id 
+const change = changes[0];
+const targetProductId = change._product_id;
+
+console.log(`Looking for _product_id=${targetProductId}`);
+console.log(`Change keys:`, Object.keys(change));
+
+// Find which row in poLines has this _product_id
+const targetIndex = poLines.value.findIndex((row) =>
+row._product_id === targetProductId || row.product_id === targetProductId);
+
+
+console.log(`Found at index=${targetIndex}`);
+
+if (targetIndex === -1) {
+  console.error("Could not find product in poLines!");
+  console.log("First 3 poLines rows:", poLines.value.slice(0, 3).map((r) => ({ _product_id: r._product_id, product_id: r.product_id })));
+  return { success: false, error: "Product not found" };
+}
+
+// Update ONLY that row in poLines
+const updated = poLines.value.map((row, index) => {
+  if (index !== targetIndex) {
+    return row;
+  }
+
+  console.log(`✅ MATCH! Updating row at index ${index}`);
+  console.log("   Row before:", { Qty: row.Qty, Sch: row.Sch, "Disc %": row["Disc %"] });
+  console.log("   Change object:", change);
+
+  // Merge the edited fields - this preserves ALL changed fields
+  const mergedRow = { ...row, ...change };
+
+  console.log("   Merged row:", { Qty: mergedRow.Qty, Sch: mergedRow.Sch, "Disc %": mergedRow["Disc %"], "Disc": mergedRow["Disc"] });
+
+  // Recalculate - get values from mergedRow (which has the change applied)
+  const Qty = Number(mergedRow.Qty) || 0;
+  const Sch = Number(mergedRow.Sch) || 0;
+  const DiscPct = Number(mergedRow["Disc %"] || mergedRow.Disc) || 0; // Try both field names
+  const Price = Number(mergedRow.Price) || 0;
+
+  console.log("   Values for calculation:", { Qty, Sch, DiscPct, Price });
+
+  const Gross = Qty * Price;
+  const DiscAmt = (Gross - Sch) * (DiscPct / 100);
+  const Taxable = Gross - Sch - DiscAmt;
+  const GstPct = Number(mergedRow["GST %"]) || 0;
+  const GstAmt = Taxable * (GstPct / 100);
+  const Net = Taxable + GstAmt;
+
+  console.log("   Calculated:", { Qty, Sch, DiscPct, Gross, Taxable, Net });
+
+return {
+  ...mergedRow,
+  Qty,
+  Sch,
+  "Disc %": DiscPct,
+
+  "Gross $": _.round(Gross, 2),
+  "Disc. $": _.round(DiscAmt, 2),
+  "Taxable $": _.round(Taxable, 2),
+  "GST $": _.round(GstAmt, 2),
+  "Net $": _.round(Net, 2)
+};
+
+
+});
+
+// Save
+poLines.setValue(updated);
+poTable.clearChangeset();
+
+console.log(`✅ Updated row at index ${targetIndex}!`);
+
+return { success: true, updatedIndex: targetIndex };
+----------------------------------------
+
+=== savePaymentJS ===
+const vendor = varSelectedVendor.value;
+const totalAmount = payAmount.value;
+const isRefund = payType.value === 'REFUND';
+
+// Validate
+if (!totalAmount || totalAmount <= 0) {
+    utils.showNotification({ title: "Error", description: "Enter valid amount", notificationType: "error" });
+    return;
+}
+
+let allocations = [];
+// ONLY calculate allocations if it is a PAYMENT
+if (!isRefund) {
+    const selectedBills = tblPendingBills.selectedSourceRows || []; 
+    if (selectedBills.length > 0) {
+        // FIFO Logic
+        let remainingPayment = Number(totalAmount);
+        for (const bill of selectedBills) {
+            if (remainingPayment <= 0) break;
+            const billBalance = Number(bill['Balance $']);
+            const allocAmount = Math.min(billBalance, remainingPayment);
+            
+            if (allocAmount > 0) {
+                allocations.push({
+                    invoice_id: bill.id,
+                    amount: allocAmount
+                });
+                remainingPayment -= allocAmount;
+            }
+        }
+    }
+}
+
+// Trigger API
+apiMakePayment.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: vendor.id,
+            amount: totalAmount,
+            payment_date: moment(payDate.value).format("YYYY-MM-DD"),
+            mode: payMode.value,
+            // [NEW] Unified Reference logic
+            transaction_ref: payMode.value === 'Online' ? selBankRefVendor.selectedItem.bank_ref_id : (payMode.value === 'Cheque' ? payChqNo.value : payRef.value),
+            bank_statement_entry_id: payMode.value === 'Online' ? selBankRefVendor.selectedItem.id : null,
+            remarks: payRemarks.value,
+            transaction_type: payType.value,
+            allocations: isRefund ? [] : allocations,
+            bank_account_id: selPaymentBank.value,
+            // [NEW] Cheque Details
+            cheque_no: payChqNo.value,
+            cheque_date: payChqDate.value,
+            bank_name: payChqBank.value
+        }
+    },
+    onSuccess: function() {
+        modalMakePayment.close();
+        getVendorLedger.trigger();
+        getVendorPendingBills.trigger();
+        utils.showNotification({ title: "Success", description: "Transaction Recorded", notificationType: "success" });
+    }
+});
+
+----------------------------------------
+
+=== selBankRefVendor ===
+api/finance/reconciliation/bank/unconsumed-debits
+----------------------------------------
+
+=== selPaymentBank ===
+api/vendors
+----------------------------------------
+
+=== submitPO ===
+api/purchase-orders?
+----------------------------------------
+
+=== text15 ===
+utils.showNotification({ title: "Success", description: `Imported ${varImportData.value.length} items`, notificationType: "success" });
+varImportData.setValue([]); // Clear valid list
+// Now the Modal will automatically reveal the Error Table (if any errors exist)
+if (varImportErrors.value.length === 0) {
+   modalFrameImport. hide(); // Close if no errors left
+}
+----------------------------------------
+
+=== transformerPreparePO ===
+/* --- FINAL UPDATE LOGIC V3 --- */
+console.log("=== STARTING UPDATE ===");
+
+// 1. GET SOURCE (Handles View & Edit Modes)
+const sourceData = poTable.data || poLines.value || [];
+
+// 2. FILTER & MAP (Bulletproof Keys)
+const validLines = sourceData
+  .filter(r => Number(r['Qty'] || r['qty'] || r['ordered_qty'] || 0) > 0)
+  .map(r => ({
+      product_id:         r._product_id || r.product_id,
+      ordered_qty:        Number(r['Qty'] || r['qty'] || r['ordered_qty']),
+      mrp:                Number(r['MRP'] || r['mrp']),
+      price:              Number(r['Price'] || r['price'] || r['purchase_rate']),
+      scheme_amount:      Number(r['Sch'] || r['scheme_amount'] || 0),
+      discount_percent:   Number(r['Disc %'] || r['Disc'] || r['discount_percent'] || 0),
+      tax_percent:        Number(r['GST %'] || r['tax_percent'] || 5)
+  }));
+
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+
+const vID = Number(vendorDropdown.value) || Number(selected_vendor_id) || 0;
+if (vID === 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Vendor", notificationType: "error" });
+   return;
+}
+
+// 3. PREPARE PAYLOAD
+const dbPayload = {
+    vendor_id:      vID,
+    remarks:        "Updated via Retool Manager", 
+    lines:          validLines
+};
+
+// 4. SEND TO SERVER (Trigger the REST Query)
+utils.showNotification({ title: "Updating...", description: "Please wait...", notificationType: "info" });
+const result = await updatePOQuery.trigger({ additionalScope: { payload: dbPayload } });
+
+// 5. SUCCESS & CLEANUP
+if (result?.success !== false) {
+  utils.showNotification({ title: "Success", description: "PO Updated!", notificationType: "success" });
+  
+  // --- IMPORTANT: REPLACE WITH YOUR QUERY NAME ---
+  // If your dashboard query is named 'getPOs', write getPOs.trigger()
+  // If you don't know it, you can comment this line out for now.
+  try {
+     getPOList.trigger(); 
+  } catch(e) { console.warn("List refresh failed (Check Query Name)"); }
+  
+  drawerCreatePO.hide();
+  poLines.setValue([]);
+}
+----------------------------------------
+
+=== triggerUpdatePO ===
+/* --- FINAL UPDATE LOGIC V3 --- */
+console.log("=== STARTING UPDATE ===");
+
+// 1. GET SOURCE (Handles View & Edit Modes)
+const sourceData = poTable.data || poLines.value || [];
+
+// 2. FILTER & MAP (Bulletproof Keys)
+const validLines = sourceData
+  .filter(r => Number(r['Qty'] || r['qty'] || r['ordered_qty'] || 0) > 0)
+  .map(r => ({
+      product_id:         r._product_id || r.product_id,
+      ordered_qty:        Number(r['Qty'] || r['qty'] || r['ordered_qty']),
+      mrp:                Number(r['MRP'] || r['mrp']),
+      price:              Number(r['Price'] || r['price'] || r['purchase_rate']),
+      scheme_amount:      Number(r['Sch'] || r['scheme_amount'] || 0),
+      discount_percent:   Number(r['Disc %'] || r['Disc'] || r['discount_percent'] || 0),
+      tax_percent:        Number(r['GST %'] || r['tax_percent'] || 5)
+  }));
+
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+
+const vID = Number(vendorDropdown.value) || Number(selected_vendor_id) || 0;
+if (vID === 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Vendor", notificationType: "error" });
+   return;
+}
+
+// 3. PREPARE PAYLOAD
+const dbPayload = {
+    vendor_id:      vID,
+    remarks:        "Updated via Retool Manager", 
+    lines:          validLines
+};
+
+// 4. SEND TO SERVER (Trigger the REST Query)
+utils.showNotification({ title: "Updating...", description: "Please wait...", notificationType: "info" });
+const result = await updatePOQuery.trigger({ additionalScope: { payload: dbPayload } });
+
+// 5. SUCCESS & CLEANUP
+if (result?.success !== false) {
+  utils.showNotification({ title: "Success", description: "PO Updated!", notificationType: "success" });
+  
+  // --- IMPORTANT: REPLACE WITH YOUR QUERY NAME ---
+  // If your dashboard query is named 'getPOs', write getPOs.trigger()
+  // If you don't know it, you can comment this line out for now.
+  try {
+     getPOList.trigger(); 
+  } catch(e) { console.warn("List refresh failed (Check Query Name)"); }
+  
+  drawerCreatePO.hide();
+  poLines.setValue([]);
+}
+----------------------------------------
+
+=== txtNewPin ===
+return {
+  "Andhra Pradesh": [
+    "Anantapur", "Chittoor", "East Godavari", "Guntur", "Kadapa",
+    "Krishna", "Kurnool", "Nellore", "Prakasam",
+    "Srikakulam", "Visakhapatnam", "Vizianagaram",
+    "West Godavari"
+  ],
+
+  "Arunachal Pradesh": [
+    "Anjaw", "Changlang", "Dibang Valley", "East Kameng",
+    "East Siang", "Kurung Kumey", "Lohit", "Lower Dibang Valley",
+    "Lower Subansiri", "Papum Pare", "Tawang",
+    "Tirap", "Upper Siang", "Upper Subansiri", "West Kameng", "West Siang"
+  ],
+
+  "Assam": [
+    "Baksa", "Barpeta", "Biswanath", "Bongaigaon", "Cachar",
+    "Charaideo", "Chirang", "Darrang", "Dhemaji", "Dhubri",
+    "Dibrugarh", "Goalpara", "Golaghat", "Hailakandi",
+    "Hojai", "Jorhat", "Kamrup", "Kamrup Metropolitan",
+    "Karbi Anglong", "Karimganj", "Kokrajhar", "Lakhimpur",
+    "Majuli", "Morigaon", "Nagaon", "Nalbari",
+    "Sivasagar", "Sonitpur", "South Salmara",
+    "Tinsukia", "Udalguri", "West Karbi Anglong"
+  ],
+
+  "Bihar": [
+    "Araria", "Arwal", "Aurangabad", "Banka", "Begusarai",
+    "Bhagalpur", "Bhojpur", "Buxar", "Darbhanga",
+    "East Champaran", "Gaya", "Gopalganj", "Jamui",
+    "Jehanabad", "Kaimur", "Katihar", "Khagaria",
+    "Kishanganj", "Lakhisarai", "Madhepura", "Madhubani",
+    "Munger", "Muzaffarpur", "Nalanda", "Nawada",
+    "Patna", "Purnia", "Rohtas", "Saharsa",
+    "Samastipur", "Saran", "Sheikhpura", "Sheohar",
+    "Sitamarhi", "Siwan", "Supaul", "Vaishali",
+    "West Champaran"
+  ],
+
+  "Chhattisgarh": [
+    "Balod", "Baloda Bazar", "Balrampur", "Bastar",
+    "Bemetara", "Bijapur", "Bilaspur", "Dantewada",
+    "Dhamtari", "Durg", "Gariaband", "Gaurela-Pendra-Marwahi",
+    "Janjgir-Champa", "Jashpur", "Kabirdham", "Kanker",
+    "Kondagaon", "Korba", "Koriya", "Mahasamund",
+    "Mungeli", "Narayanpur", "Raigarh", "Raipur",
+    "Rajnandgaon", "Sukma", "Surajpur", "Surguja"
+  ],
+
+  "Goa": ["North Goa", "South Goa"],
+
+  "Gujarat": [
+    "Ahmedabad", "Amreli", "Anand", "Aravalli", "Banaskantha",
+    "Bharuch", "Bhavnagar", "Botad", "Chhota Udaipur",
+    "Dahod", "Dang", "Devbhoomi Dwarka", "Gandhinagar",
+    "Gir Somnath", "Jamnagar", "Junagadh", "Kheda",
+    "Kutch", "Mahisagar", "Mehsana", "Morbi",
+    "Narmada", "Navsari", "Panchmahal", "Patan",
+    "Porbandar", "Rajkot", "Sabarkantha", "Surat",
+    "Surendranagar", "Tapi", "Vadodara", "Valsad"
+  ],
+
+  "Haryana": [
+    "Ambala", "Bhiwani", "Charkhi Dadri", "Faridabad",
+    "Fatehabad", "Gurugram", "Hisar", "Jhajjar",
+    "Jind", "Kaithal", "Karnal", "Kurukshetra",
+    "Mahendragarh", "Nuh", "Palwal", "Panchkula",
+    "Panipat", "Rewari", "Rohtak", "Sirsa",
+    "Sonipat", "Yamunanagar"
+  ],
+
+  "Himachal Pradesh": [
+    "Bilaspur", "Chamba", "Hamirpur", "Kangra",
+    "Kinnaur", "Kullu", "Lahaul and Spiti",
+    "Mandi", "Shimla", "Sirmaur", "Solan", "Una"
+  ],
+
+  "Jharkhand": [
+    "Bokaro", "Chatra", "Deoghar", "Dhanbad", "Dumka",
+    "East Singhbhum", "Garhwa", "Giridih", "Godda",
+    "Gumla", "Hazaribagh", "Jamtara", "Khunti",
+    "Koderma", "Latehar", "Lohardaga", "Pakur",
+    "Palamu", "Ramgarh", "Ranchi", "Sahebganj",
+    "Seraikela Kharsawan", "Simdega", "West Singhbhum"
+  ],
+
+  "Karnataka": [
+    "Bagalkot", "Ballari", "Belagavi", "Bengaluru Rural",
+    "Bengaluru Urban", "Bidar", "Chamarajanagar",
+    "Chikkaballapur", "Chikkamagaluru", "Chitradurga",
+    "Dakshina Kannada", "Davangere", "Dharwad",
+    "Gadag", "Hassan", "Haveri", "Kalaburagi",
+    "Kodagu", "Kolar", "Koppal", "Mandya",
+    "Mysuru", "Raichur", "Ramanagara", "Shivamogga",
+    "Tumakuru", "Udupi", "Uttara Kannada", "Vijayapura",
+    "Yadgir"
+  ],
+
+  "Kerala": [
+    "Alappuzha", "Ernakulam", "Idukki", "Kannur",
+    "Kasaragod", "Kollam", "Kottayam", "Kozhikode",
+    "Malappuram", "Palakkad", "Pathanamthitta",
+    "Thiruvananthapuram", "Thrissur", "Wayanad"
+  ],
+
+  "Madhya Pradesh": [
+    "Agar Malwa", "Alirajpur", "Anuppur", "Ashoknagar",
+    "Balaghat", "Barwani", "Betul", "Bhind",
+    "Bhopal", "Burhanpur", "Chhatarpur", "Chhindwara",
+    "Damoh", "Datia", "Dewas", "Dhar", "Dindori",
+    "Guna", "Gwalior", "Harda", "Hoshangabad",
+    "Indore", "Jabalpur", "Jhabua", "Katni",
+    "Khandwa", "Khargone", "Mandla", "Mandsaur",
+    "Morena", "Narsinghpur", "Neemuch", "Panna",
+    "Raisen", "Rajgarh", "Ratlam", "Rewa",
+    "Sagar", "Satna", "Sehore", "Seoni",
+    "Shahdol", "Shajapur", "Sheopur", "Shivpuri",
+    "Sidhi", "Singrauli", "Tikamgarh", "Ujjain",
+    "Umaria", "Vidisha"
+  ],
+
+  "Maharashtra": [
+    "Ahmednagar", "Akola", "Amravati", "Aurangabad",
+    "Beed", "Bhandara", "Buldhana", "Chandrapur",
+    "Dhule", "Gadchiroli", "Gondia", "Hingoli",
+    "Jalgaon", "Jalna", "Kolhapur", "Latur",
+    "Mumbai City", "Mumbai Suburban", "Nagpur",
+    "Nanded", "Nandurbar", "Nashik", "Osmanabad",
+    "Palghar", "Parbhani", "Pune", "Raigad",
+    "Ratnagiri", "Sangli", "Satara", "Sindhudurg",
+    "Solapur", "Thane", "Wardha", "Washim", "Yavatmal"
+  ],
+
+  "Tamil Nadu": [
+    "Ariyalur", "Chengalpattu", "Chennai", "Coimbatore",
+    "Cuddalore", "Dharmapuri", "Dindigul", "Erode",
+    "Kallakurichi", "Kanchipuram", "Kanyakumari",
+    "Karur", "Krishnagiri", "Madurai", "Nagapattinam",
+    "Namakkal", "Nilgiris", "Perambalur", "Pudukkottai",
+    "Ramanathapuram", "Ranipet", "Salem",
+    "Sivaganga", "Tenkasi", "Thanjavur", "Theni",
+    "Thoothukudi", "Tiruchirappalli", "Tirunelveli",
+    "Tirupathur", "Tiruppur", "Tiruvallur",
+    "Tiruvannamalai", "Tiruvarur", "Vellore",
+    "Viluppuram", "Virudhunagar"
+  ],
+
+  "Telangana": [
+    "Adilabad", "Bhadradri Kothagudem", "Hyderabad",
+    "Jagtial", "Jangaon", "Jayashankar Bhupalpally",
+    "Jogulamba Gadwal", "Kamareddy", "Karimnagar",
+    "Khammam", "Komaram Bheem", "Mahabubabad",
+    "Mahbubnagar", "Mancherial", "Medak",
+    "Medchal–Malkajgiri", "Mulugu", "Nagarkurnool",
+    "Nalgonda", "Narayanpet", "Nirmal",
+    "Nizamabad", "Peddapalli", "Rajanna Sircilla",
+    "Ranga Reddy", "Sangareddy", "Siddipet",
+    "Suryapet", "Vikarabad", "Wanaparthy",
+    "Warangal Rural", "Warangal Urban", "Yadadri Bhuvanagiri"
+  ],
+
+  "Uttar Pradesh": [
+    "Agra", "Aligarh", "Allahabad", "Ambedkar Nagar",
+    "Amethi", "Amroha", "Auraiya", "Azamgarh",
+    "Baghpat", "Bahraich", "Ballia", "Balrampur",
+    "Banda", "Barabanki", "Bareilly", "Basti",
+    "Bhadohi", "Bijnor", "Budaun", "Bulandshahr",
+    "Chandauli", "Chitrakoot", "Deoria", "Etah",
+    "Etawah", "Faizabad", "Farrukhabad", "Fatehpur",
+    "Firozabad", "Gautam Buddha Nagar", "Ghaziabad",
+    "Ghazipur", "Gonda", "Gorakhpur", "Hamirpur",
+    "Hapur", "Hardoi", "Hathras", "Jalaun",
+    "Jaunpur", "Jhansi", "Kannauj", "Kanpur Dehat",
+    "Kanpur Nagar", "Kasganj", "Kaushambi",
+    "Kushinagar", "Lakhimpur Kheri", "Lalitpur",
+    "Lucknow", "Maharajganj", "Mahoba", "Mainpuri",
+    "Mathura", "Mau", "Meerut", "Mirzapur",
+    "Moradabad", "Muzaffarnagar", "Pilibhit",
+    "Pratapgarh", "Raebareli", "Rampur",
+    "Saharanpur", "Sambhal", "Sant Kabir Nagar",
+    "Shahjahanpur", "Shamli", "Shravasti",
+    "Siddharthnagar", "Sitapur", "Sonbhadra",
+    "Sultanpur", "Unnao", "Varanasi"
+  ],
+
+  "West Bengal": [
+    "Alipurduar", "Bankura", "Birbhum", "Cooch Behar",
+    "Dakshin Dinajpur", "Darjeeling", "Hooghly",
+    "Howrah", "Jalpaiguri", "Jhargram",
+    "Kalimpong", "Kolkata", "Malda",
+    "Murshidabad", "Nadia", "North 24 Parganas",
+    "Paschim Bardhaman", "Paschim Medinipur",
+    "Purba Bardhaman", "Purba Medinipur",
+    "Purulia", "South 24 Parganas",
+    "Uttar Dinajpur"
+  ]
+};
+
+----------------------------------------
+
+=== updatePOQuery ===
+api/purchase-orders/{{ varPOViewId.value }}
+----------------------------------------
+
+=== validateImportJS ===
+const fileData = fileProductImport.parsedValue[0];
+const ref = getTemplateData.data;
+// Safety Check: If reference data is missing, stop
+if (!fileData || !ref) {
+    utils.showNotification({ title: "Error", description: "Missing Reference Data. Did you create 'getTemplateData'?", notificationType: "error" });
+    return;
+}
+let cleanData = [];
+let errors = [];
+// Helper 1: Clean keys (remove bad chars/spaces)
+const cleanKey = (k) => String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+// Helper 2: Flexible Getter
+const getVal = (row, key) => {
+    const foundKey = Object.keys(row).find(k => cleanKey(k).includes(cleanKey(key)));
+    return foundKey ? row[foundKey] : undefined;
+};
+// Helper 3: Find ID by Name
+const findId = (list, name, key) => {
+    if (!list || !Array.isArray(list) || !name) return null;
+    const cleanName = String(name).toLowerCase().trim();
+    const item = list.find(x => String(x[key]).toLowerCase().trim() === cleanName);
+    return item ? item.id : null;
+};
+// Helper 4: Safe Float (2 Decimals)
+const safeFloat = (val) => {
+    const num = parseFloat(val);
+    return isNaN(num) ? 0 : Number(num.toFixed(2));
+};
+fileData.forEach((row, index) => {
+    const rowErr = [];
+    // 1. flexible Extraction
+    const brandName = getVal(row, "Brand Name") || getVal(row, "brand");
+    const catName   = getVal(row, "Category Name") || getVal(row, "category");
+    const vendName  = getVal(row, "Vendor Name") || getVal(row, "vendor");
+    const taxName   = getVal(row, "Tax Name") || getVal(row, "tax");
+    const hsnCode   = getVal(row, "HSN Code") || getVal(row, "hsn");
+    const pName   = getVal(row, "Product Name"); 
+    const rowEan  = getVal(row, "EAN") || getVal(row, "EAN Code"); 
+    const rowMrp  = getVal(row, "MRP");
+    const rowRate = getVal(row, "Purchase Rate");
+    // 2. Resolve IDs
+    const bId = findId(ref.brands, brandName, 'brand_name');
+    const cId = findId(ref.categories, catName, 'category_name');
+    const tId = findId(ref.taxes, taxName, 'tax_name');
+    const hId = findId(ref.hsn, hsnCode, 'hsn_code');
+    // 3. Vendor Logic
+    let finalVId = 4; // Default
+    const explicitVId = getVal(row, "Vendor ID"); 
+    if (explicitVId) {
+         finalVId = explicitVId;
+    } else if (vendName) {
+         const foundV = findId(ref.vendors, vendName, 'vendor_name');
+         if (!foundV) {
+             rowErr.push(`Vendor '${vendName}' not found`);
+         } else {
+             finalVId = foundV;
+         }
+    }
+    // 4. Validate
+    if (!bId) rowErr.push(`Brand '${brandName}' not found`);
+    if (!cId) rowErr.push(`Category '${catName}' not found`);
+    if (!tId) rowErr.push(`Tax '${taxName}' not found`);
+    if (hsnCode && !hId) rowErr.push(`HSN '${hsnCode}' not found`);
+    if (rowErr.length > 0) {
+        errors.push({ ...row, "Error": rowErr.join(", "), "Row": index + 2 });
+    } else {
+        cleanData.push({
+            product_name: pName,
+            brand_id: bId,
+            category_id: cId,
+            vendor_id: finalVId, 
+            hsn_id: hId || null,
+            tax_id: tId || null,
+            ean_code: rowEan || null,
+            mrp: safeFloat(rowMrp),
+            purchase_rate: safeFloat(rowRate),
+            distributor_rate: safeFloat(getVal(row, "Distributor Rate")),
+            wholesale_rate: safeFloat(getVal(row, "Wholesale Rate")),
+            dealer_rate: safeFloat(getVal(row, "Dealer Rate")),
+            retail_rate: safeFloat(getVal(row, "Retail Rate"))
+        });
+    }
+});
+varImportData.setValue(cleanData);
+varImportErrors.setValue(errors);
+// Notifications moved to Success Event
+if (errors.length > 0) {
+   utils.showNotification({ title: "Validation Failed", description: `Found ${errors.length} errors.`, notificationType: "warning" });
+} else {
+   utils.showNotification({ title: "Validation Success", description: `Ready to import ${cleanData.length} items.`, notificationType: "success" });
+}
+----------------------------------------
+
+=== varCorrectionData ===
+api/purchase-invoices/{{ tblGrn.selectedRow.id }}/reverse
+----------------------------------------
+
+=== varCorrectionID ===
+api/purchase-invoices/{{ tblGrn.selectedRow.id }}/reverse
+----------------------------------------
+
+=== varDebitAmount ===
+const vID = varSelectedVendor.value.id;
+if (!vID) { return; }
+// CORRECTION: User's query is named 'Products'
+// Safe Array Access
+const rawData = Products.data; 
+// Handle response wrappers e.g. { data: [...] } or direct array
+const allProducts = Array.isArray(rawData) ? rawData : (rawData.data || []);
+// Filter for Vendor
+const vendorProducts = allProducts.filter(p => Number(p.vendor_id) === Number(vID));
+// Map to Table Format (Exact Match to GRN Logic)
+const tableData = vendorProducts.map((p, index) => ({
+  "S.No": index + 1,
+  "EAN Code": p.ean_code || "",
+  "Item Name": p.product_name,
+  "MRP": Number(p.mrp || 0),
+  "Price": Number(p.purchase_rate || 0),
+  "Qty": 0,
+  "Sch": 0,
+  "Disc %": 0,
+  "GST %": Number(p.tax_percent || 5),
+  "Gross $": 0,
+  "Disc. $": 0,
+  "Taxable $": 0,
+  "GST $": 0,
+  "Net $": 0, // This is the Amount
+  "Batch No": "", 
+  "Expiry": null,
+  "Reason": "Damage", // Default for DN
+  "_product_id": p.id
+}));
+// UPDATE THE VARIABLE (Robust Way)
+varDebitLinesData.setValue(tableData);
+----------------------------------------
+
+=== varDebitLinesData ===
+const isItemMode = dnMode.value === "Item Return";
+let amount = 0;
+let lines = [];
+if (isItemMode) {
+    // Calculate from Table (Map to Backend Keys)
+    const rawLines = tblDebitLines.data; 
+    
+    lines = rawLines.map(row => ({
+        product_id: row._product_id, // Map from '_product_id'
+        qty: Number(row.Qty),
+        rate: Number(row.Price), // Map from 'Price'
+        batch_number: row['Batch No'] || "", // Map from 'Batch No'
+        return_type: row.Reason || "Damage",
+        amount: Number(row['Net $']) || (Number(row.Qty) * Number(row.Price))
+    })).filter(l => l.qty > 0);
+    amount = _.sumBy(lines, 'amount');
+} else {
+    // Manual Amount
+    amount = Number(dnAmount.value);
+}
+if (!amount || amount <= 0) {
+   utils.showNotification({ title: "Error", description: "Invalid Amount", notificationType: "error" });
+   return;
+}
+apiCreateDebitNote.trigger({
+    additionalScope: {
+        payload: {
+            vendor_id: varSelectedVendor.value.id,
+            amount: amount,
+            debit_note_date: moment(dnDate.value).format("YYYY-MM-DD"),
+            reason: dnReason.value,
+            linked_invoice_id: selLinkedBill.value || null, // New field
+            lines: isItemMode ? lines : [] 
+        }
+    },
+    onSuccess: function(data) {
+         // data contains { dn_number: 'GD-CLT-DN-26-1' }
+        utils.showNotification({ title: "Debit Note Created", description: data.dn_number, notificationType: "success" });
+        
+        // Show the number in the box
+        try { txtDNNumber.setValue(data.dn_number); } catch(e) {}
+        modalDebitNote.close();
+        getVendorLedger.trigger();
+    }
+});
+----------------------------------------
+
+=== varImportData ===
+const fileData = fileProductImport.parsedValue[0];
+const ref = getTemplateData.data;
+// Safety Check: If reference data is missing, stop
+if (!fileData || !ref) {
+    utils.showNotification({ title: "Error", description: "Missing Reference Data. Did you create 'getTemplateData'?", notificationType: "error" });
+    return;
+}
+let cleanData = [];
+let errors = [];
+// Helper 1: Clean keys (remove bad chars/spaces)
+const cleanKey = (k) => String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+// Helper 2: Flexible Getter
+const getVal = (row, key) => {
+    const foundKey = Object.keys(row).find(k => cleanKey(k).includes(cleanKey(key)));
+    return foundKey ? row[foundKey] : undefined;
+};
+// Helper 3: Find ID by Name
+const findId = (list, name, key) => {
+    if (!list || !Array.isArray(list) || !name) return null;
+    const cleanName = String(name).toLowerCase().trim();
+    const item = list.find(x => String(x[key]).toLowerCase().trim() === cleanName);
+    return item ? item.id : null;
+};
+// Helper 4: Safe Float (2 Decimals)
+const safeFloat = (val) => {
+    const num = parseFloat(val);
+    return isNaN(num) ? 0 : Number(num.toFixed(2));
+};
+fileData.forEach((row, index) => {
+    const rowErr = [];
+    // 1. flexible Extraction
+    const brandName = getVal(row, "Brand Name") || getVal(row, "brand");
+    const catName   = getVal(row, "Category Name") || getVal(row, "category");
+    const vendName  = getVal(row, "Vendor Name") || getVal(row, "vendor");
+    const taxName   = getVal(row, "Tax Name") || getVal(row, "tax");
+    const hsnCode   = getVal(row, "HSN Code") || getVal(row, "hsn");
+    const pName   = getVal(row, "Product Name"); 
+    const rowEan  = getVal(row, "EAN") || getVal(row, "EAN Code"); 
+    const rowMrp  = getVal(row, "MRP");
+    const rowRate = getVal(row, "Purchase Rate");
+    // 2. Resolve IDs
+    const bId = findId(ref.brands, brandName, 'brand_name');
+    const cId = findId(ref.categories, catName, 'category_name');
+    const tId = findId(ref.taxes, taxName, 'tax_name');
+    const hId = findId(ref.hsn, hsnCode, 'hsn_code');
+    // 3. Vendor Logic
+    let finalVId = 4; // Default
+    const explicitVId = getVal(row, "Vendor ID"); 
+    if (explicitVId) {
+         finalVId = explicitVId;
+    } else if (vendName) {
+         const foundV = findId(ref.vendors, vendName, 'vendor_name');
+         if (!foundV) {
+             rowErr.push(`Vendor '${vendName}' not found`);
+         } else {
+             finalVId = foundV;
+         }
+    }
+    // 4. Validate
+    if (!bId) rowErr.push(`Brand '${brandName}' not found`);
+    if (!cId) rowErr.push(`Category '${catName}' not found`);
+    if (!tId) rowErr.push(`Tax '${taxName}' not found`);
+    if (hsnCode && !hId) rowErr.push(`HSN '${hsnCode}' not found`);
+    if (rowErr.length > 0) {
+        errors.push({ ...row, "Error": rowErr.join(", "), "Row": index + 2 });
+    } else {
+        cleanData.push({
+            product_name: pName,
+            brand_id: bId,
+            category_id: cId,
+            vendor_id: finalVId, 
+            hsn_id: hId || null,
+            tax_id: tId || null,
+            ean_code: rowEan || null,
+            mrp: safeFloat(rowMrp),
+            purchase_rate: safeFloat(rowRate),
+            distributor_rate: safeFloat(getVal(row, "Distributor Rate")),
+            wholesale_rate: safeFloat(getVal(row, "Wholesale Rate")),
+            dealer_rate: safeFloat(getVal(row, "Dealer Rate")),
+            retail_rate: safeFloat(getVal(row, "Retail Rate"))
+        });
+    }
+});
+varImportData.setValue(cleanData);
+varImportErrors.setValue(errors);
+// Notifications moved to Success Event
+if (errors.length > 0) {
+   utils.showNotification({ title: "Validation Failed", description: `Found ${errors.length} errors.`, notificationType: "warning" });
+} else {
+   utils.showNotification({ title: "Validation Success", description: `Ready to import ${cleanData.length} items.`, notificationType: "success" });
+}
+----------------------------------------
+
+=== varImportErrors ===
+const fileData = fileProductImport.parsedValue[0];
+const ref = getTemplateData.data;
+// Safety Check: If reference data is missing, stop
+if (!fileData || !ref) {
+    utils.showNotification({ title: "Error", description: "Missing Reference Data. Did you create 'getTemplateData'?", notificationType: "error" });
+    return;
+}
+let cleanData = [];
+let errors = [];
+// Helper 1: Clean keys (remove bad chars/spaces)
+const cleanKey = (k) => String(k).toLowerCase().replace(/[^a-z0-9]/g, '');
+// Helper 2: Flexible Getter
+const getVal = (row, key) => {
+    const foundKey = Object.keys(row).find(k => cleanKey(k).includes(cleanKey(key)));
+    return foundKey ? row[foundKey] : undefined;
+};
+// Helper 3: Find ID by Name
+const findId = (list, name, key) => {
+    if (!list || !Array.isArray(list) || !name) return null;
+    const cleanName = String(name).toLowerCase().trim();
+    const item = list.find(x => String(x[key]).toLowerCase().trim() === cleanName);
+    return item ? item.id : null;
+};
+// Helper 4: Safe Float (2 Decimals)
+const safeFloat = (val) => {
+    const num = parseFloat(val);
+    return isNaN(num) ? 0 : Number(num.toFixed(2));
+};
+fileData.forEach((row, index) => {
+    const rowErr = [];
+    // 1. flexible Extraction
+    const brandName = getVal(row, "Brand Name") || getVal(row, "brand");
+    const catName   = getVal(row, "Category Name") || getVal(row, "category");
+    const vendName  = getVal(row, "Vendor Name") || getVal(row, "vendor");
+    const taxName   = getVal(row, "Tax Name") || getVal(row, "tax");
+    const hsnCode   = getVal(row, "HSN Code") || getVal(row, "hsn");
+    const pName   = getVal(row, "Product Name"); 
+    const rowEan  = getVal(row, "EAN") || getVal(row, "EAN Code"); 
+    const rowMrp  = getVal(row, "MRP");
+    const rowRate = getVal(row, "Purchase Rate");
+    // 2. Resolve IDs
+    const bId = findId(ref.brands, brandName, 'brand_name');
+    const cId = findId(ref.categories, catName, 'category_name');
+    const tId = findId(ref.taxes, taxName, 'tax_name');
+    const hId = findId(ref.hsn, hsnCode, 'hsn_code');
+    // 3. Vendor Logic
+    let finalVId = 4; // Default
+    const explicitVId = getVal(row, "Vendor ID"); 
+    if (explicitVId) {
+         finalVId = explicitVId;
+    } else if (vendName) {
+         const foundV = findId(ref.vendors, vendName, 'vendor_name');
+         if (!foundV) {
+             rowErr.push(`Vendor '${vendName}' not found`);
+         } else {
+             finalVId = foundV;
+         }
+    }
+    // 4. Validate
+    if (!bId) rowErr.push(`Brand '${brandName}' not found`);
+    if (!cId) rowErr.push(`Category '${catName}' not found`);
+    if (!tId) rowErr.push(`Tax '${taxName}' not found`);
+    if (hsnCode && !hId) rowErr.push(`HSN '${hsnCode}' not found`);
+    if (rowErr.length > 0) {
+        errors.push({ ...row, "Error": rowErr.join(", "), "Row": index + 2 });
+    } else {
+        cleanData.push({
+            product_name: pName,
+            brand_id: bId,
+            category_id: cId,
+            vendor_id: finalVId, 
+            hsn_id: hId || null,
+            tax_id: tId || null,
+            ean_code: rowEan || null,
+            mrp: safeFloat(rowMrp),
+            purchase_rate: safeFloat(rowRate),
+            distributor_rate: safeFloat(getVal(row, "Distributor Rate")),
+            wholesale_rate: safeFloat(getVal(row, "Wholesale Rate")),
+            dealer_rate: safeFloat(getVal(row, "Dealer Rate")),
+            retail_rate: safeFloat(getVal(row, "Retail Rate"))
+        });
+    }
+});
+varImportData.setValue(cleanData);
+varImportErrors.setValue(errors);
+// Notifications moved to Success Event
+if (errors.length > 0) {
+   utils.showNotification({ title: "Validation Failed", description: `Found ${errors.length} errors.`, notificationType: "warning" });
+} else {
+   utils.showNotification({ title: "Validation Success", description: `Ready to import ${cleanData.length} items.`, notificationType: "success" });
+}
+----------------------------------------
+
+=== varPOMode ===
+/* --- MASTER EDIT HANDLER --- */
+
+// 1. Reset Memory (Fixes Stale Data)
+poLines.setValue([]);
+varPOMode.setValue('EDIT');
+
+// 2. Get Data
+const masterProducts = Products.data.data || [];
+const savedLines = getPOById.data.lines || [];
+
+// 3. MERGE LOGIC (With Strict "Create-Style" Keys)
+const mergedLines = masterProducts
+  .filter(p => Number(p.vendor_id) === Number(vendorDropdown.value))
+  .map((p, index) => {
+      const saved = savedLines.find(s => Number(s.product_id) === Number(p.id));
+      
+      const qty = saved ? Number(saved.ordered_qty) : 0;
+      const rate = saved ? Number(saved.rate) : Number(p.purchase_rate);
+      const disc = saved ? Number(saved.discount_percent) : 0;
+      const scheme = saved ? Number(saved.scheme_amount) : 0;
+      
+      // Calculate
+      const gross = qty * rate;
+      const discAmt = (gross - scheme) * (disc / 100);
+      const gstPct = 5; // Fixed 5% for now
+      const taxAmt = (gross - scheme - discAmt) * (gstPct / 100);
+      const net = (gross - scheme - discAmt) + taxAmt;
+
+      return {
+        "S.No": index + 1,
+        "EAN Code": p.ean_code,
+        "Item Name": p.product_name,
+        "MRP": Number(p.mrp),
+        "Price": rate,
+        "Qty": qty,
+        "Sch": scheme,
+        "Disc %": disc,
+        "GST %": gstPct,
+        "Gross $": gross,
+        "Disc. $": discAmt,
+        "Taxable $": net - taxAmt,
+        "GST $": taxAmt,
+        "Net $": net,
+        "_product_id": p.id
+    };
+});
+
+// 4. Update UI
+poLines.setValue(mergedLines);
+utils.showNotification({ title: "Mode: Edit", description: "Loaded merged data.", notificationType: "info" });
+----------------------------------------
+
+=== varPOViewId ===
+/* --- MASTER EDIT HANDLER --- */
+
+// 1. Reset Memory (Fixes Stale Data)
+poLines.setValue([]);
+varPOMode.setValue('EDIT');
+
+// 2. Get Data
+const masterProducts = Products.data.data || [];
+const savedLines = getPOById.data.lines || [];
+
+// 3. MERGE LOGIC (With Strict "Create-Style" Keys)
+const mergedLines = masterProducts
+  .filter(p => Number(p.vendor_id) === Number(vendorDropdown.value))
+  .map((p, index) => {
+      const saved = savedLines.find(s => Number(s.product_id) === Number(p.id));
+      
+      const qty = saved ? Number(saved.ordered_qty) : 0;
+      const rate = saved ? Number(saved.rate) : Number(p.purchase_rate);
+      const disc = saved ? Number(saved.discount_percent) : 0;
+      const scheme = saved ? Number(saved.scheme_amount) : 0;
+      
+      // Calculate
+      const gross = qty * rate;
+      const discAmt = (gross - scheme) * (disc / 100);
+      const gstPct = 5; // Fixed 5% for now
+      const taxAmt = (gross - scheme - discAmt) * (gstPct / 100);
+      const net = (gross - scheme - discAmt) + taxAmt;
+
+      return {
+        "S.No": index + 1,
+        "EAN Code": p.ean_code,
+        "Item Name": p.product_name,
+        "MRP": Number(p.mrp),
+        "Price": rate,
+        "Qty": qty,
+        "Sch": scheme,
+        "Disc %": disc,
+        "GST %": gstPct,
+        "Gross $": gross,
+        "Disc. $": discAmt,
+        "Taxable $": net - taxAmt,
+        "GST $": taxAmt,
+        "Net $": net,
+        "_product_id": p.id
+    };
+});
+
+// 4. Update UI
+poLines.setValue(mergedLines);
+utils.showNotification({ title: "Mode: Edit", description: "Loaded merged data.", notificationType: "info" });
+----------------------------------------
+
+=== varPOViewLines ===
+/* --- MASTER EDIT HANDLER --- */
+
+// 1. Reset Memory (Fixes Stale Data)
+poLines.setValue([]);
+varPOMode.setValue('EDIT');
+
+// 2. Get Data
+const masterProducts = Products.data.data || [];
+const savedLines = getPOById.data.lines || [];
+
+// 3. MERGE LOGIC (With Strict "Create-Style" Keys)
+const mergedLines = masterProducts
+  .filter(p => Number(p.vendor_id) === Number(vendorDropdown.value))
+  .map((p, index) => {
+      const saved = savedLines.find(s => Number(s.product_id) === Number(p.id));
+      
+      const qty = saved ? Number(saved.ordered_qty) : 0;
+      const rate = saved ? Number(saved.rate) : Number(p.purchase_rate);
+      const disc = saved ? Number(saved.discount_percent) : 0;
+      const scheme = saved ? Number(saved.scheme_amount) : 0;
+      
+      // Calculate
+      const gross = qty * rate;
+      const discAmt = (gross - scheme) * (disc / 100);
+      const gstPct = 5; // Fixed 5% for now
+      const taxAmt = (gross - scheme - discAmt) * (gstPct / 100);
+      const net = (gross - scheme - discAmt) + taxAmt;
+
+      return {
+        "S.No": index + 1,
+        "EAN Code": p.ean_code,
+        "Item Name": p.product_name,
+        "MRP": Number(p.mrp),
+        "Price": rate,
+        "Qty": qty,
+        "Sch": scheme,
+        "Disc %": disc,
+        "GST %": gstPct,
+        "Gross $": gross,
+        "Disc. $": discAmt,
+        "Taxable $": net - taxAmt,
+        "GST $": taxAmt,
+        "Net $": net,
+        "_product_id": p.id
+    };
+});
+
+// 4. Update UI
+poLines.setValue(mergedLines);
+utils.showNotification({ title: "Mode: Edit", description: "Loaded merged data.", notificationType: "info" });
+----------------------------------------
+
+=== varProductViewId ===
+api/products/{{ varProductViewId.value }}/stats
+----------------------------------------
+
+=== varProductsCache ===
+const all = Products.data.data || Products.data || []; 
+// Group By Brand
+const grouped = _.groupBy(all, 'brand_name');
+// Return Array for ListView
+return Object.keys(grouped).map((brandName, index) => {
+    const products = grouped[brandName];
+    // Grab the brand_id from the first product
+    const brandId = products[0] ? products[0].brand_id : index; 
+    // 1. Taxable Stock Value (Current Value of Goods on Hand - Taxable)
+    const valStockTaxable = _.sumBy(products, p => Number(p.stock_value_cost || 0));
+    // 2. Total Bought Value (Historical Value of All Goods Purchased - Taxable)
+    const valTotalBought = _.sumBy(products, p => Number(p.stock_value_total_bought || 0));
+    return {
+        id: brandId,
+        brand_name: brandName,
+        product_count: products.length,
+        val_stock_taxable: valStockTaxable.toFixed(2),
+        val_total_bought: valTotalBought.toFixed(2),
+        products: products.sort((a,b) => a.product_name.localeCompare(b.product_name))
+    };
+}).sort((a,b) => a.brand_name.localeCompare(b.brand_name));
+----------------------------------------
+
+=== varSelectedBrand ===
+api/products/{{ varProductViewId.value }}/stats
+----------------------------------------
+
+=== varSmartUpdateData ===
+/* --- SAVE & PRINT SCRIPT --- */
+
+// 1. FILTER INPUTS
+const rawLines = poLines.value;
+const validLines = rawLines.filter(row => Number(row.Qty) > 0);
+
+if (validLines.length === 0) {
+  utils.showNotification({ title: "Error", description: "No items to save!", notificationType: "error" });
+  return;
+}
+if (!vendorDropdown.value) {
+   utils.showNotification({ title: "Error", description: "Select a Vendor", notificationType: "error" });
+   return;
+}
+
+// 2. PREPARE PAYLOAD
+// Note: We use the local Component names directly
+const dbPayloadLines = validLines.map(row => ({
+    product_id:         row._product_id,
+    ordered_qty:        Number(row.Qty),
+    mrp:                Number(row.MRP),
+    price:              Number(row.Price),
+    scheme_amount:      Number(row.Sch || 0),
+    discount_percent:   Number(row['Disc %'] || 0),
+    tax_percent:        Number(row['GST %'] || 0)
+}));
+
+const dbPayload = {
+    vendor_id:      vendorDropdown.value,
+    remarks:        "", 
+    lines:          dbPayloadLines
+};
+
+// 3. SEND TO SERVER
+utils.showNotification({ title: "Saving...", description: "Please wait...", notificationType: "info" });
+const result = await submitPO.trigger({ additionalScope: { payload: dbPayload } });
+
+if (result?.success) {
+  
+  // 4. PREPARE PRINT DATA (For the Hidden Table)
+  const formattedPrintLines = validLines.map((row, i) => ({
+      "S.No": i+1,
+      "EAN Code": row['EAN Code'] || "",
+      "Item Name": row['Item Name'],
+      "MRP": Number(row.MRP).toFixed(2),
+      "Rate": Number(row.Price).toFixed(2),
+      "Qty": Number(row.Qty),
+      "Gross Amt": Number(row['Gross $'] || 0).toFixed(2),
+      "Sch": Number(row.Sch || 0),
+      "Disc %": Number(row['Disc %'] || 0),
+      "Disc Amt": Number(row['Disc $'] || 0).toFixed(2),
+      "Taxable": Number(row['Taxable $']).toFixed(2),
+      "GST %": Number(row['GST %'] || 0),
+      "GST Amt": Number(row['GST $']).toFixed(2),
+      "Net Amount": Number(row['Net $']).toFixed(2)
+  }));
+  
+  // Update Global Variable (Print State)
+  await printState.setValue({
+      poNumber: result.po_number,
+      date: new Date().toLocaleDateString(),
+      vendorName: vendorDropdown.selectedLabel, // Uses Label (Name) instead of ID
+      lines: formattedPrintLines
+  });
+  
+  // 5. PRINT (Magic Swap)
+  isPrinting.setValue(true);
+  utils.showNotification({ title: "Generating PDF...", description: "Please wait...", notificationType: "info" });
+  await new Promise(r => setTimeout(r, 2500)); // Wait for render
+
+  // 6. DOWNLOAD
+  utils.downloadPage(result.po_number, { 
+      componentsToInclude: ['poTablePrint'], // Make sure this Container/Table ID is correct!
+      scale: 0.6 
+  });
+  
+  // 7. CLEANUP
+  await new Promise(r => setTimeout(r, 1000));
+  isPrinting.setValue(false);
+  poLines.setValue([]);
+  vendorDropdown.setValue(null);
+  getNextPO.trigger();
+  
+  // 8. CLOSE DRAWER (New Step for UI)
+  drawerCreatePO.hide();
+}
+----------------------------------------
+
+=== vendorInvoiceNo ===
+/* --- VENDOR SELECTION (GRN) --- */
+const vID = vendorDropdownGRN.value;
+piLines.setValue([]); // Clear table
+if (!Products.data || !vID) { return; }
+// 1. Populate Table with ALL Vendor Products (Direct Purchase Mode)
+// Note: Adjust 'getProducts.data' if your data is nested (e.g. getProducts.data.data)
+const productList = Products.data.data || Products.data; 
+// UNIFIED KEYS (Matching Create PO + GRN Fields)
+const newLines = productList
+    .filter(p => Number(p.vendor_id) === Number(vID))
+    .map((p, index) => ({
+      "S.No": index + 1,
+      "EAN Code": p.ean_code || "",
+      "Item Name": p.product_name,
+      "MRP": Number(p.mrp),
+      "Price": Number(p.purchase_rate),
+      "Qty": 0,
+      "Sch": 0,
+      "Disc %": 0,
+      "GST %": Number(p.tax_percent || 5), // Default 5 if missing
+      "Gross $": 0,
+      "Disc. $": 0,
+      "Taxable $": 0,
+      "GST $": 0,
+      "Net $": 0,
+      "Batch No": "",       // [GRN ONLY]
+      "Expiry": null,       // [GRN ONLY]
+      "_product_id": p.id
+    }));
+piLines.setValue(newLines);
+// 2. Reset PO Dropdown logic will happen automatically via the Dropdown's "Data Source" filter.
+// (We don't need to manually push to varVendorPOs if we filter ChoosePo by vendor_id directly).
+----------------------------------------
+
+=== vendorSelectJS ===
+/* --- VENDOR SELECTION (GRN) --- */
+const vID = vendorDropdownGRN.value;
+piLines.setValue([]); // Clear table
+if (!Products.data || !vID) { return; }
+// 1. Populate Table with ALL Vendor Products (Direct Purchase Mode)
+// Note: Adjust 'getProducts.data' if your data is nested (e.g. getProducts.data.data)
+const productList = Products.data.data || Products.data; 
+// UNIFIED KEYS (Matching Create PO + GRN Fields)
+const newLines = productList
+    .filter(p => Number(p.vendor_id) === Number(vID))
+    .map((p, index) => ({
+      "S.No": index + 1,
+      "EAN Code": p.ean_code || "",
+      "Item Name": p.product_name,
+      "MRP": Number(p.mrp),
+      "Price": Number(p.purchase_rate),
+      "Qty": 0,
+      "Sch": 0,
+      "Disc %": 0,
+      "GST %": Number(p.tax_percent || 5), // Default 5 if missing
+      "Gross $": 0,
+      "Disc. $": 0,
+      "Taxable $": 0,
+      "GST $": 0,
+      "Net $": 0,
+      "Batch No": "",       // [GRN ONLY]
+      "Expiry": null,       // [GRN ONLY]
+      "_product_id": p.id
+    }));
+piLines.setValue(newLines);
+// 2. Reset PO Dropdown logic will happen automatically via the Dropdown's "Data Source" filter.
+// (We don't need to manually push to varVendorPOs if we filter ChoosePo by vendor_id directly).
+----------------------------------------
+

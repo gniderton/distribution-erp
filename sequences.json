@@ -1,0 +1,437 @@
+[
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "EMPLOYEE",
+    "prefix": "EM-",
+    "current_number": "10"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "CHQ",
+    "prefix": "CHQ-",
+    "current_number": "0"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "CUSTOMER",
+    "prefix": "CS-",
+    "current_number": "16"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "PO",
+    "prefix": "GD-CLT-PO-26-",
+    "current_number": "20"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "OTHER_INCOME",
+    "prefix": "INC-",
+    "current_number": "7"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "EXPENSE",
+    "prefix": "GD-EXP-26",
+    "current_number": "6"
+  },
+  {
+    "document_type": "ASSET_SALE_INV",
+    "prefix": "ASI-",
+    "current_number": "0"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "2"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "Sales Order",
+    "prefix": "SO",
+    "current_number": "88"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  },
+  {
+    "document_type": "GRN",
+    "prefix": "GD-CLT-GRN-26-",
+    "current_number": "20"
+  },
+  {
+    "document_type": "LOAN",
+    "prefix": "LOAN-",
+    "current_number": "1"
+  }
+]

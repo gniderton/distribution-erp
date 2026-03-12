@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Appsmith Migration Guide — Inventory Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root{--bg:#08090d;--surface:#0f1117;--surface2:#161a23;--border:#1c2030;--accent:#4f8ef7;--accent2:#7c5cfc;--green:#22c55e;--orange:#f59e0b;--text:#e8ecf4;--muted:#5a6478;--code-bg:#0b0d12;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Instrument Sans',sans-serif;font-size:15px;line-height:1.7;}
+.hero{background:linear-gradient(135deg,#08090d 0%,#0d1320 60%,#08090d 100%);border-bottom:1px solid var(--border);padding:60px 48px 44px;position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;top:-100px;right:-60px;width:480px;height:480px;background:radial-gradient(circle,rgba(79,142,247,.1) 0%,transparent 65%);pointer-events:none;}
+.badge{display:inline-flex;align-items:center;gap:6px;background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.25);color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;margin-bottom:20px;letter-spacing:.05em;}
+.badge .dot{width:6px;height:6px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{font-family:'Syne',sans-serif;font-size:clamp(26px,4vw,46px);font-weight:800;line-height:1.15;margin-bottom:12px;background:linear-gradient(135deg,#e8ecf4 30%,#7c9fd4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.hero p{color:var(--muted);font-size:15px;max-width:580px;}
+.hero-meta{display:flex;gap:28px;margin-top:28px;flex-wrap:wrap;}
+.hero-stat .num{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;color:var(--accent);}
+.hero-stat .lbl{font-size:12px;color:var(--muted);}
+.layout{display:flex;min-height:calc(100vh - 240px);}
+.sidebar{width:230px;min-width:230px;background:var(--surface);border-right:1px solid var(--border);padding:20px 0;position:sticky;top:0;height:100vh;overflow-y:auto;}
+.sidebar-label{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;padding:0 18px;margin-bottom:6px;margin-top:18px;}
+.sidebar a{display:flex;align-items:center;gap:9px;padding:7px 18px;color:var(--muted);text-decoration:none;font-size:13px;transition:all .12s;border-left:2px solid transparent;}
+.sidebar a:hover{color:var(--text);background:var(--surface2);}
+.sidebar a.active{color:var(--accent);border-left-color:var(--accent);background:rgba(79,142,247,.06);}
+.sn{width:19px;height:19px;background:var(--surface2);border-radius:50%;font-family:'JetBrains Mono',monospace;font-size:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--muted);}
+.main{flex:1;padding:40px 48px;max-width:920px;}
+.section{margin-bottom:60px;}
+.sh{display:flex;align-items:flex-start;gap:16px;margin-bottom:28px;padding-bottom:18px;border-bottom:1px solid var(--border);}
+.sc{width:40px;height:40px;flex-shrink:0;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:16px;color:#fff;box-shadow:0 4px 16px rgba(79,142,247,.28);}
+.sh h2{font-family:'Syne',sans-serif;font-size:21px;font-weight:700;margin-bottom:4px;}
+.sh p{color:var(--muted);font-size:14px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin-bottom:14px;}
+.card h3{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:8px;}
+.card p{color:#8a93a8;font-size:14px;line-height:1.6;}
+.cards2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+@media(max-width:700px){.cards2{grid-template-columns:1fr;}}
+.cb{background:var(--code-bg);border:1px solid #1a1f2e;border-radius:10px;margin:14px 0;overflow:hidden;}
+.ch{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;background:#0d1017;border-bottom:1px solid #1a1f2e;}
+.ct{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:.04em;}
+.cpb{background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.18);color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 10px;border-radius:6px;cursor:pointer;transition:all .15s;}
+.cpb:hover{background:rgba(79,142,247,.18);}
+.cpb.copied{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.25);color:var(--green);}
+pre{padding:18px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.75;color:#b8c4d8;}
+.kw{color:#ff7b72;}.str{color:#a5d6ff;}.cm{color:#4a5568;font-style:italic;}.fn{color:#d2a8ff;}.var{color:#ffa657;}.prop{color:#79c0ff;}.num{color:#f0ad4e;}
+.tw{overflow-x:auto;margin:14px 0;border-radius:10px;border:1px solid var(--border);}
+table{width:100%;border-collapse:collapse;}
+th{background:var(--surface2);font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:11px 14px;text-align:left;}
+td{padding:11px 14px;border-top:1px solid var(--border);font-size:13.5px;color:#8a93a8;vertical-align:top;}
+td:first-child{color:var(--text);font-weight:500;}
+tr:hover td{background:rgba(255,255,255,.015);}
+.callout{display:flex;gap:11px;padding:13px 15px;border-radius:10px;margin:14px 0;font-size:14px;line-height:1.6;}
+.ci{background:rgba(79,142,247,.07);border:1px solid rgba(79,142,247,.18);}
+.cw{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18);}
+.cs{background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.18);}
+.cicon{font-size:15px;flex-shrink:0;margin-top:2px;}
+.ci .ctext{color:#93c5fd;}.cw .ctext{color:#fcd34d;}.cs .ctext{color:#86efac;}
+.sl{list-style:none;}
+.sl li{display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.03);font-size:14px;color:#8a93a8;}
+.sl li:last-child{border-bottom:none;}
+.ln{width:21px;height:21px;flex-shrink:0;border-radius:6px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:2px;}
+.qrow{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:13px 16px;margin-bottom:8px;display:flex;align-items:flex-start;gap:11px;}
+.qm{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 7px;border-radius:5px;flex-shrink:0;margin-top:2px;}
+.mget{background:rgba(34,197,94,.1);color:#4ade80;}
+.mpost{background:rgba(79,142,247,.1);color:#7eb3ff;}
+.qinfo h4{font-size:13.5px;font-weight:600;color:var(--text);margin-bottom:2px;}
+.qinfo p{font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+.wr{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;}
+.wl,.wri{flex:1;padding:11px 15px;}
+.wl{border-right:1px solid var(--border);}
+.wlbl{font-size:10px;color:var(--muted);margin-bottom:3px;font-family:'JetBrains Mono',monospace;}
+.wname{font-size:13.5px;font-weight:600;color:var(--text);}
+.warr{padding:11px 8px;color:var(--muted);display:flex;align-items:center;}
+code{font-family:'JetBrains Mono',monospace;font-size:12px;background:rgba(255,255,255,.06);padding:2px 6px;border-radius:4px;color:#79c0ff;}
+.stag{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;padding:2px 8px;border-radius:5px;display:inline-block;margin:2px;}
+.sg{background:rgba(34,197,94,.1);color:#4ade80;}.sb{background:rgba(79,142,247,.1);color:#7eb3ff;}
+footer{background:var(--surface);border-top:1px solid var(--border);padding:22px 48px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+footer p{font-size:13px;color:var(--muted);}
+.lks{display:flex;gap:16px;}
+.lks a{font-size:13px;color:var(--accent);text-decoration:none;}
+.lks a:hover{text-decoration:underline;}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:#1e2535;border-radius:3px;}
+@media(max-width:768px){.layout{flex-direction:column;}.sidebar{width:100%;height:auto;position:static;}.main{padding:24px 18px;}.hero{padding:36px 18px 28px;}footer{padding:18px;}}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="badge"><span class="dot"></span>Retool &#8594; Appsmith &middot; Extracted from Inventory_1.json</div>
+  <h1>Inventory Management<br>Migration Guide</h1>
+  <p>Every query, JS object, modal and state variable — extracted directly from your uploaded JSON export. All code is real and ready to paste into Appsmith.</p>
+  <div class="hero-meta">
+    <div class="hero-stat"><span class="num">28</span><span class="lbl">API Endpoints</span></div>
+    <div class="hero-stat"><span class="num">10</span><span class="lbl">JS Objects</span></div>
+    <div class="hero-stat"><span class="num">9</span><span class="lbl">Modals/Drawers</span></div>
+    <div class="hero-stat"><span class="num">15</span><span class="lbl">State Variables</span></div>
+  </div>
+</div>
+
+<div class="layout">
+<nav class="sidebar">
+  <div class="sidebar-label">Setup</div>
+  <a href="#s1" class="active"><span class="sn">1</span>Deploy Appsmith</a>
+  <a href="#s2"><span class="sn">2</span>Datasource</a>
+  <div class="sidebar-label">Migration</div>
+  <a href="#s3"><span class="sn">3</span>All Queries</a>
+  <a href="#s4"><span class="sn">4</span>JS Objects</a>
+  <a href="#s5"><span class="sn">5</span>State Variables</a>
+  <a href="#s6"><span class="sn">6</span>Pages &amp; Tabs</a>
+  <a href="#s7"><span class="sn">7</span>Drawers &rarr; Modals</a>
+  <a href="#s8"><span class="sn">8</span>All Modals</a>
+  <a href="#s9"><span class="sn">9</span>Syntax Cheatsheet</a>
+</nav>
+
+<main class="main">
+
+<!-- S1 -->
+<div class="section" id="s1">
+  <div class="sh"><div class="sc">1</div><div><h2>Deploy Appsmith</h2><p>Cloud or self-hosted Docker</p></div></div>
+  <div class="cards2">
+    <div class="card"><h3>&#9729;&#65039; Appsmith Cloud</h3><p>Go to <strong>appsmith.com</strong>, sign up, skip to Step 2. Instant, no setup.</p></div>
+    <div class="card"><h3>&#128051; Self-Hosted</h3><p>Best for production &amp; data privacy. Free with full features including Git sync.</p></div>
+  </div>
+  <div class="cb"><div class="ch"><span class="ct">bash &mdash; Docker setup</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>mkdir appsmith && cd appsmith
+curl -L https://bit.ly/32jBNin -o docker-compose.yml
+docker-compose up -d
+# Open http://localhost — first boot ~2 min</pre></div>
+</div>
+
+<!-- S2 -->
+<div class="section" id="s2">
+  <div class="sh"><div class="sc">2</div><div><h2>Connect Your API Datasource</h2><p>Your app used CloudSupabaseRender as REST base</p></div></div>
+  <ul class="sl">
+    <li><span class="ln">1</span>Left sidebar &rarr; <strong>Data</strong> (cylinder icon) &rarr; <strong>+ Add new datasource</strong></li>
+    <li><span class="ln">2</span>Choose <strong>Authenticated API</strong></li>
+    <li><span class="ln">3</span>Name it <code>CloudSupabaseRender</code></li>
+    <li><span class="ln">4</span>Set <strong>Base URL</strong> to your Render/Supabase API root</li>
+    <li><span class="ln">5</span>Add auth headers under <strong>Headers</strong> (Bearer token etc.)</li>
+    <li><span class="ln">6</span><strong>Test &rarr; Save</strong></li>
+  </ul>
+  <div class="cb"><div class="ch"><span class="ct">Datasource config</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>Name:     CloudSupabaseRender
+Base URL: https://your-app.onrender.com
+Headers:
+  Content-Type: application/json
+  Authorization: Bearer &lt;your_token&gt;</pre></div>
+</div>
+
+<!-- S3 -->
+<div class="section" id="s3">
+  <div class="sh"><div class="sc">3</div><div><h2>Recreate All Queries</h2><p>All 28 endpoints found in your Inventory_1.json</p></div></div>
+  <div class="callout ci"><span class="cicon">&#128204;</span><span class="ctext">Data &rarr; select CloudSupabaseRender &rarr; <strong>+ New Query</strong>. Name them exactly as shown.</span></div>
+
+  <p style="color:var(--muted);font-size:12px;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;">GET &mdash; Static</p>
+
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>Vendors</h4><p>api/vendors</p></div></div>
+  <div class="cb"><div class="ch"><span class="ct">Vendors &mdash; transformer</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>// URL: api/vendors
+// Transform Response (enable JS toggle):
+return data.data;</pre></div>
+
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>Products</h4><p>api/products</p></div></div>
+  <div class="cb"><div class="ch"><span class="ct">Products &mdash; transformer</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>// URL: api/products
+// Transform Response:
+return data.data;</pre></div>
+
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>Tax</h4><p>api/master/taxes</p></div></div>
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getBankAccounts</h4><p>api/bank-accounts</p></div></div>
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getNextPO</h4><p>api/documents/next/PO</p></div></div>
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getvendoraddress</h4><p>api/master/vendor-addresses</p></div></div>
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getPOs</h4><p>api/purchase-orders</p></div></div>
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getPurchaseInvoices / getGRNList</h4><p>api/purchase-invoices</p></div></div>
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getBrands</h4><p>api/master/brands</p></div></div>
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getCategories</h4><p>api/master/categories</p></div></div>
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getHSN</h4><p>api/master/hsn</p></div></div>
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getTemplateData</h4><p>api/products/template-data</p></div></div>
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>q_getUnconsumedDebits</h4><p>api/finance/reconciliation/bank/unconsumed-debits</p></div></div>
+
+  <div class="callout cs"><span class="cicon">&#9989;</span><span class="ctext">Set <strong>Run on page load: ON</strong> for: Vendors, Products, Tax, getBankAccounts, getPOs, getGRNList, getBrands, getCategories, getHSN.</span></div>
+
+  <p style="color:var(--muted);font-size:12px;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:20px 0 10px;">GET &mdash; Dynamic (mustache params)</p>
+
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getPOById</h4><p>api/purchase-orders/&#123;&#123; poListTable.selectedRow.id &#125;&#125;</p></div></div>
+  <div class="cb"><div class="ch"><span class="ct">getPOById</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>api/purchase-orders/{{ poListTable.selectedRow.id }}</pre></div>
+
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getVendorLedger</h4><p>api/vendor-payments/ledger/&#123;&#123; appsmith.store.selectedVendor.id &#125;&#125;</p></div></div>
+  <div class="cb"><div class="ch"><span class="ct">getVendorLedger</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>api/vendor-payments/ledger/{{ appsmith.store.selectedVendor.id }}</pre></div>
+
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getVendorDebitNotes</h4><p>api/debit-notes/vendor/&#123;&#123; appsmith.store.selectedVendor.id &#125;&#125;</p></div></div>
+  <div class="cb"><div class="ch"><span class="ct">getVendorDebitNotes</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>api/debit-notes/vendor/{{ appsmith.store.selectedVendor.id }}</pre></div>
+
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>apiGetAddresses</h4><p>api/vendors/&#123;&#123; tblVendors.selectedRow.id &#125;&#125;/addresses</p></div></div>
+  <div class="cb"><div class="ch"><span class="ct">apiGetAddresses</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>api/vendors/{{ tblVendors.selectedRow.id }}/addresses</pre></div>
+
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>apiGetBatches</h4><p>api/stock/adjust/batches/&#123;&#123; selAdjProduct.selectedOptionValue &#125;&#125;</p></div></div>
+  <div class="cb"><div class="ch"><span class="ct">apiGetBatches</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>api/stock/adjust/batches/{{ selAdjProduct.selectedOptionValue }}</pre></div>
+
+  <div class="qrow"><span class="qm mget">GET</span><div class="qinfo"><h4>getDebitNoteLines</h4><p>api/debit-notes/&#123;&#123; debiteNotetbl.selectedRow.id &#125;&#125;/items</p></div></div>
+  <div class="cb"><div class="ch"><span class="ct">getDebitNoteLines</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>api/debit-notes/{{ debiteNotetbl.selectedRow.id }}/items</pre></div>
+
+  <p style="color:var(--muted);font-size:12px;font-family:'Syne',sans-serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:20px 0 10px;">POST Queries</p>
+
+  <div class="qrow"><span class="qm mpost">POST</span><div class="qinfo"><h4>submitPO</h4><p>api/purchase-orders &mdash; body: &#123;&#123; appsmith.store.poPayload &#125;&#125;</p></div></div>
+  <div class="qrow"><span class="qm mpost">POST</span><div class="qinfo"><h4>saveGRN / apiCreateGRN</h4><p>api/purchase-invoices &mdash; body: &#123;&#123; appsmith.store.grnPayload &#125;&#125;</p></div></div>
+  <div class="qrow"><span class="qm mpost">POST</span><div class="qinfo"><h4>apiMakePayment</h4><p>api/vendor-payments &mdash; body: &#123;&#123; appsmith.store.paymentPayload &#125;&#125;</p></div></div>
+  <div class="qrow"><span class="qm mpost">POST</span><div class="qinfo"><h4>apiCreateDebitNote</h4><p>api/debit-notes &mdash; body: &#123;&#123; appsmith.store.debitNotePayload &#125;&#125;</p></div></div>
+  <div class="qrow"><span class="qm mpost">POST</span><div class="qinfo"><h4>apiCreateVendor</h4><p>api/vendors</p></div></div>
+  <div class="qrow"><span class="qm mpost">POST</span><div class="qinfo"><h4>apiCreateProduct</h4><p>api/products</p></div></div>
+  <div class="qrow"><span class="qm mpost">POST</span><div class="qinfo"><h4>apiBulkImport</h4><p>api/products/import</p></div></div>
+  <div class="qrow"><span class="qm mpost">POST</span><div class="qinfo"><h4>apiBulkUpdate</h4><p>api/products/bulk-update &mdash; body: &#123;&#123; appsmith.store.bulkUpdatePayload &#125;&#125;</p></div></div>
+  <div class="qrow"><span class="qm mpost">POST</span><div class="qinfo"><h4>apiCreateStockAdjustment</h4><p>api/stock/adjust</p></div></div>
+  <div class="qrow"><span class="qm mpost">POST</span><div class="qinfo"><h4>apiReverseGRN</h4><p>api/purchase-invoices/&#123;&#123; tblGrn.selectedRow.id &#125;&#125;/reverse</p></div></div>
+  <div class="cb"><div class="ch"><span class="ct">apiReverseGRN</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>// Method: POST
+api/purchase-invoices/{{ tblGrn.selectedRow.id }}/reverse</pre></div>
+
+  <div class="qrow"><span class="qm mpost">POST</span><div class="qinfo"><h4>apiAddAddress</h4><p>api/vendors/&#123;&#123; tblVendors.selectedRow.id &#125;&#125;/addresses</p></div></div>
+  <div class="qrow"><span class="qm mpost">POST</span><div class="qinfo"><h4>apiUpdateVendor</h4><p>api/vendors/&#123;&#123; tblVendors.selectedRow.id &#125;&#125;</p></div></div>
+</div>
+
+<!-- S4 -->
+<div class="section" id="s4">
+  <div class="sh"><div class="sc">4</div><div><h2>JS Objects</h2><p>All 10 JS logic blocks — extracted directly from your JSON</p></div></div>
+  <div class="callout ci"><span class="cicon">&#128204;</span><span class="ctext">Left sidebar &rarr; <strong>JS</strong> &rarr; <strong>+ New JS Object</strong>. Create one per group. Replace <code>.trigger()</code> with <code>.run()</code> and <code>.setValue()</code> with <code>storeValue()</code>.</span></div>
+
+  <div class="cb"><div class="ch"><span class="ct">JSObject1 &mdash; PopulateProductsTableByVendors</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>export default {
+  // Called when vendorDropdown changes on Create PO drawer
+  populateForVendor: async (selected_vendor_id) => {
+    let vID = null;
+    try { vID = selected_vendor_id; } catch (e) { return; }
+
+    storeValue('poLines', []);
+    storeValue('poMode', 'CREATE');
+
+    if (!Products.data || !vID) { return; }
+
+    const newLines = (Products.data.data || Products.data)
+      .filter(p => Number(p.vendor_id) === Number(vID))
+      .map((p, index) => ({
+        "S.No": index + 1,
+        "EAN Code": p.ean_code,
+        "Item Name": p.product_name,
+        "MRP": Number(p.mrp),
+        "Price": Number(p.purchase_rate),
+        "Qty": 0,
+        "Sch": 0,
+        "Disc %": 0,
+        "GST %": 5,
+        "Gross $": 0,
+        "Disc. $": 0,
+        "Taxable $": 0,
+        "GST $": 0,
+        "Net $": 0,
+        "_product_id": p.id
+      }));
+
+    storeValue('poLines', newLines);
+  }
+}</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">JSObject2 &mdash; savePOLine (table cell change + recalculate)</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>export default {
+  onCellChange: () => {
+    const changes = poTable.updatedRow ? [poTable.updatedRow] : [];
+    if (changes.length === 0) return;
+
+    const change = changes[0];
+    const targetProductId = change._product_id;
+    const currentLines = appsmith.store.poLines || [];
+
+    const targetIndex = currentLines.findIndex(row =>
+      row._product_id === targetProductId || row.product_id === targetProductId
+    );
+    if (targetIndex === -1) return;
+
+    const updated = currentLines.map((row, i) => {
+      if (i !== targetIndex) return row;
+      const merged = { ...row, ...change };
+      const Qty     = Number(merged.Qty) || 0;
+      const Price   = Number(merged.Price) || 0;
+      const Sch     = Number(merged.Sch) || 0;
+      const DiscPct = Number(merged["Disc %"]) || 0;
+      const GstPct  = Number(merged["GST %"]) || 5;
+      const Gross   = Qty * Price;
+      const DiscAmt = (Gross - Sch) * (DiscPct / 100);
+      const Taxable = Gross - Sch - DiscAmt;
+      const Tax     = Taxable * (GstPct / 100);
+      return { ...merged,
+        "Gross $": Gross, "Disc. $": DiscAmt,
+        "Taxable $": Taxable, "GST $": Tax, "Net $": Taxable + Tax
+      };
+    });
+    storeValue('poLines', updated);
+  }
+}</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">JSObject3 &mdash; populateDrawerFromPO (View PO)</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>export default {
+  viewPO: async () => {
+    await getPOById.run();
+    const data = getPOById.data;
+    if (!data || !data.header) {
+      showAlert('No Data Found', 'error'); return;
+    }
+    storeValue('poMode', 'VIEW');
+    storeValue('selectedVendorId', data.header.vendor_id);
+    storeValue('selectedPONumber', data.header.po_number);
+    storeValue('selectedPODate', data.header.po_date);
+    storeValue('selectedDeliveryDate', data.header.delivery_date);
+
+    const formattedLines = (data.lines || []).map((row, index) => {
+      const qty     = Number(row.ordered_qty);
+      const rate    = Number(row.rate);
+      const discPct = Number(row.discount_percent || 0);
+      const scheme  = Number(row.scheme_amount || 0);
+      const gross   = qty * rate;
+      const discAmt = (gross - scheme) * (discPct / 100);
+      const taxAmt  = Number(row.tax_amount);
+      const net     = Number(row.amount);
+      return {
+        "S.No": index + 1, "EAN Code": row.ean_code,
+        "Item Name": row.product_name, "MRP": Number(row.mrp),
+        "Price": rate, "Qty": qty, "Sch": scheme,
+        "Disc %": discPct, "GST %": 5,
+        "Gross $": gross, "Disc. $": discAmt,
+        "Taxable $": net - taxAmt, "GST $": taxAmt, "Net $": net,
+        "_product_id": row.product_id
+      };
+    });
+    storeValue('poLines', formattedLines);
+    showModal('drawerCreatePO');
+  }
+}</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">JSObject4 &mdash; editPOHandler (Edit PO — merge master products)</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>export default {
+  editPO: async () => {
+    storeValue('poLines', []);
+    storeValue('poMode', 'EDIT');
+    const masterProducts = Products.data.data || [];
+    const savedLines = getPOById.data.lines || [];
+    const vendorId = appsmith.store.selectedVendorId;
+
+    const mergedLines = masterProducts
+      .filter(p => Number(p.vendor_id) === Number(vendorId))
+      .map((p, index) => {
+        const saved   = savedLines.find(s => Number(s.product_id) === Number(p.id));
+        const qty     = saved ? Number(saved.ordered_qty) : 0;
+        const rate    = saved ? Number(saved.rate) : Number(p.purchase_rate);
+        const disc    = saved ? Number(saved.discount_percent) : 0;
+        const scheme  = saved ? Number(saved.scheme_amount) : 0;
+        const gross   = qty * rate;
+        const discAmt = (gross - scheme) * (disc / 100);
+        const gstPct  = 5;
+        const taxAmt  = (gross - scheme - discAmt) * (gstPct / 100);
+        const net     = (gross - scheme - discAmt) + taxAmt;
+        return {
+          "S.No": index+1, "EAN Code": p.ean_code, "Item Name": p.product_name,
+          "MRP": Number(p.mrp), "Price": rate, "Qty": qty, "Sch": scheme,
+          "Disc %": disc, "GST %": gstPct, "Gross $": gross,
+          "Disc. $": discAmt, "Taxable $": net - taxAmt,
+          "GST $": taxAmt, "Net $": net, "_product_id": p.id
+        };
+      });
+    storeValue('poLines', mergedLines);
+    showModal('drawerCreatePO');
+  }
+}</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">JSObject5 &mdash; vendorSelectJS (GRN vendor selection)</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>export default {
+  onVendorSelect: () => {
+    const vID = vendorDropdownGRN.selectedOptionValue;
+    storeValue('piLines', []);
+    if (!Products.data || !vID) { return; }
+
+    const productList = Products.data.data || Products.data;
+    const newLines = productList
+      .filter(p => Number(p.vendor_id) === Number(vID))
+      .map((p, index) => ({
+        "S.No": index + 1,
+        "EAN Code": p.ean_code || "",
+        "Item Name": p.product_name,
+        "MRP": Number(p.mrp),
+        "Price": Number(p.purchase_rate),
+        "Qty": 0, "Sch": 0, "Disc %": 0,
+        "GST %": Number(p.tax_percent || 5),
+        "Gross $": 0, "Disc. $": 0, "Taxable $": 0, "GST $": 0, "Net $": 0,
+        "Batch No": "", "Expiry": null,
+        "_product_id": p.id
+      }));
+    storeValue('piLines', newLines);
+  },
+
+  addMissingProducts: () => {
+    const currentRows = appsmith.store.piLines || [];
+    const allProducts = Products.data.data || Products.data;
+    const vID = vendorDropdownGRN.selectedOptionValue;
+    if (!allProducts || !vID) return;
+
+    const missingProds = allProducts.filter(p =>
+      Number(p.vendor_id) === Number(vID) &&
+      !currentRows.find(row => Number(row._product_id) === Number(p.id))
+    );
+    const newRows = missingProds.map((p, i) => ({
+      "S.No": currentRows.length + i + 1,
+      "EAN Code": p.ean_code || "",
+      "Item Name": p.product_name,
+      "MRP": Number(p.mrp), "Price": Number(p.purchase_rate),
+      "Qty": 0, "Sch": 0, "Disc %": 0,
+      "GST %": Number(p.tax_percent || 5),
+      "Gross $": 0, "Disc. $": 0, "Taxable $": 0, "GST $": 0, "Net $": 0,
+      "Batch No": "", "Expiry": null, "_product_id": p.id
+    }));
+    storeValue('piLines', [...currentRows, ...newRows]);
+    showAlert(`Added ${newRows.length} products`, 'success');
+  }
+}</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">JSObject6 &mdash; saveGRNJS</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>export default {
+  saveGRN: async () => {
+    const rawLines = appsmith.store.piLines || [];
+    const validLines = rawLines.filter(row => row.Qty && Number(row.Qty) > 0);
+    if (validLines.length === 0) {
+      showAlert('No items to save!', 'error'); return;
+    }
+    const vID = vendorDropdownGRN.selectedOptionValue;
+    if (!vID) { showAlert('Select a Vendor', 'error'); return; }
+
+    const dbLines = validLines.map(row => ({
+      product_id:       Number(row._product_id),
+      ordered_qty:      0,
+      accepted_qty:     Number(row.Qty),
+      rate:             Number(row.Price),
+      discount_percent: Number(row['Disc %'] || 0),
+      scheme_amount:    Number(row.Sch || 0),
+      tax_amount:       Number(row['GST $'] || 0),
+      amount:           Number(row['Net $'] || 0),
+      batch_number:     row["Batch No"] ? row["Batch No"].toString() : "",
+      expiry_date:      row.Expiry ? new Date(row.Expiry).toISOString().split('T')[0] : null,
+      mrp:              Number(row.MRP || 0)
+    }));
+
+    const finalPayload = {
+      vendor_id:         Number(vID),
+      purchase_order_id: Number(ChoosePo.selectedOptionValue || 0),
+      invoice_number:    vendorInvoiceNo.text,
+      invoice_date:      dateVendorInvoice.selectedDate,
+      received_date:     dateReceived.selectedDate,
+      total_amount:      dbLines.reduce((acc, x) => acc + x.amount, 0),
+      lines:             dbLines
+    };
+    storeValue('grnPayload', finalPayload);
+    await saveGRN.run();
+    closeModal('modalFrameGRN');
+    await getGRNList.run();
+  }
+}</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">JSObject7 &mdash; savePaymentJS (FIFO bill allocation)</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>export default {
+  makePayment: async () => {
+    const vendor = appsmith.store.selectedVendor;
+    const totalAmount = Number(payAmount.text);
+    const isRefund = payType.selectedOptionValue === 'REFUND';
+
+    if (!totalAmount || totalAmount <= 0) {
+      showAlert('Enter valid amount', 'error'); return;
+    }
+
+    let allocations = [];
+    if (!isRefund) {
+      const selectedBills = tblPendingBills.selectedRows || [];
+      let remaining = totalAmount;
+      for (const bill of selectedBills) {
+        if (remaining <= 0) break;
+        const alloc = Math.min(Number(bill['Balance $']), remaining);
+        if (alloc > 0) {
+          allocations.push({ invoice_id: bill.id, amount: alloc });
+          remaining -= alloc;
+        }
+      }
+    }
+
+    const payload = {
+      vendor_id:       vendor.id,
+      amount:          totalAmount,
+      payment_date:    payDate.selectedDate,
+      mode:            payMode.selectedOptionValue,
+      transaction_ref: payRef.text,
+      remarks:         payRemarks.text,
+      type:            payType.selectedOptionValue,
+      allocations
+    };
+    storeValue('paymentPayload', payload);
+    await apiMakePayment.run();
+    closeModal('modalMakePayment');
+    await getGRNList.run();
+  }
+}</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">JSObject8 &mdash; saveDebitNoteJS</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>export default {
+  saveDebitNote: async () => {
+    const isItemMode = dnMode.selectedOptionValue === "Item Return";
+    let amount = 0;
+    let lines = [];
+
+    if (isItemMode) {
+      const rawLines = tblDebitLines.tableData;
+      lines = rawLines.map(row => {
+        const qty     = Number(row.Qty || 0);
+        const price   = Number(row.Price || 0);
+        const scheme  = Number(row.Sch || 0);
+        const discPct = Number(row['Disc %'] || 0);
+        const taxPct  = Number(row['GST %'] || 0);
+        const gross   = qty * price;
+        const discAmt = Math.max(0, gross - scheme) * (discPct / 100);
+        const taxable = Math.max(0, gross - scheme - discAmt);
+        const taxAmt  = taxable * (taxPct / 100);
+        return {
+          product_id:  row._product_id, qty, rate: price,
+          batch_number: row['Batch No'] || '',
+          return_type: row.Reason || 'Damage',
+          amount: taxable + taxAmt
+        };
+      }).filter(l => l.qty > 0);
+      amount = lines.reduce((s, l) => s + l.amount, 0);
+    } else {
+      amount = Number(dnAmount.text);
+    }
+
+    if (!amount || amount <= 0) { showAlert('Invalid Amount', 'error'); return; }
+
+    const payload = {
+      vendor_id:         appsmith.store.selectedVendor.id,
+      amount,
+      debit_note_date:   dnDate.selectedDate,
+      reason:            dnReason.text,
+      linked_invoice_id: selLinkedBill.selectedOptionValue || null,
+      lines:             isItemMode ? lines : []
+    };
+    storeValue('debitNotePayload', payload);
+    await apiCreateDebitNote.run();
+    closeModal('modalDebitNote');
+    await getVendorDebitNotes.run();
+  }
+}</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">JSObject9 &mdash; jsGroupProducts (brand dashboard)</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>export default {
+  groupByBrand: () => {
+    const all = Products.data.data || Products.data || [];
+    const grouped = _.groupBy(all, 'brand_name');
+    return Object.keys(grouped).map((brandName, index) => {
+      const products = grouped[brandName];
+      return {
+        id: products[0]?.brand_id || index,
+        brand_name: brandName,
+        product_count: products.length,
+        val_stock_taxable: _.sumBy(products, p => Number(p.stock_value_cost || 0)).toFixed(2),
+        val_total_bought:  _.sumBy(products, p => Number(p.stock_value_total_bought || 0)).toFixed(2),
+        products: products.sort((a, b) => a.product_name.localeCompare(b.product_name))
+      };
+    }).sort((a, b) => a.brand_name.localeCompare(b.brand_name));
+  }
+}</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">JSObject10 &mdash; jsCommitSmartUpdates (bulk price update)</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>export default {
+  commitUpdates: async () => {
+    const rows = tblReviewUpdates.tableData;
+    if (!rows || rows.length === 0) { showAlert('Nothing to save', 'warning'); return; }
+    const num = v => v ? Number(v).toFixed(2) : null;
+    const payload = rows.map(r => ({
+      id:               r['Product ID'],
+      mrp:              num(r['MRP']),
+      purchase_rate:    num(r['Purchase Rate']),
+      distributor_rate: num(r['Distributor']),
+      wholesale_rate:   num(r['Wholesale']),
+      dealer_rate:      num(r['Dealer']),
+      retail_rate:      num(r['Retail']),
+      case_quantity:    Number(r['Case Qty'] || 1),
+      uom:              r['UOM'], model_number: r['Model No'],
+      min_stock_level:  Number(r['Min Stock'] || 0),
+      box_length_cm:    num(r['Length']),
+      box_width_cm:     num(r['Width']),
+      box_height_cm:    num(r['Height']),
+      weight_kg:        num(r['Weight']),
+      description:      r['Description']
+    }));
+    storeValue('bulkUpdatePayload', payload);
+    await apiBulkUpdate.run();
+    storeValue('bulkUpdateData', []);
+    showAlert('All products updated!', 'success');
+  }
+}</pre></div>
+</div>
+
+<!-- S5 -->
+<div class="section" id="s5">
+  <div class="sh"><div class="sc">5</div><div><h2>State Variables</h2><p>All Retool State tags converted to Appsmith storeValue</p></div></div>
+  <div class="tw"><table>
+    <tr><th>Retool State</th><th>Default</th><th>Appsmith storeValue</th></tr>
+    <tr><td><code>printState</code></td><td><code>{}</code></td><td><code>storeValue('printState', {})</code></td></tr>
+    <tr><td><code>isPrinting</code></td><td><code>false</code></td><td><code>storeValue('isPrinting', false)</code></td></tr>
+    <tr><td><code>poLines</code></td><td><code>[]</code></td><td><code>storeValue('poLines', [])</code></td></tr>
+    <tr><td><code>piLines</code></td><td><code>[]</code></td><td><code>storeValue('piLines', [])</code></td></tr>
+    <tr><td><code>poCounter</code></td><td><code>1</code></td><td><code>storeValue('poCounter', 1)</code></td></tr>
+    <tr><td><code>varPOMode</code></td><td><code>'CREATE'</code></td><td><code>storeValue('poMode', 'CREATE')</code></td></tr>
+    <tr><td><code>varPOViewId</code></td><td><code>null</code></td><td><code>storeValue('selectedPOId', null)</code></td></tr>
+    <tr><td><code>varPOViewLines</code></td><td><code>[]</code></td><td><code>storeValue('selectedPOLines', [])</code></td></tr>
+    <tr><td><code>varSelectedVendor</code></td><td><code>{}</code></td><td><code>storeValue('selectedVendor', {})</code></td></tr>
+    <tr><td><code>varSelectedBrand</code></td><td><code>{}</code></td><td><code>storeValue('selectedBrand', {})</code></td></tr>
+    <tr><td><code>varModalMode</code></td><td><code>'import'</code></td><td><code>storeValue('modalMode', 'import')</code></td></tr>
+    <tr><td><code>varGRNPayload</code></td><td><code>{}</code></td><td><code>storeValue('grnPayload', {})</code></td></tr>
+    <tr><td><code>varImportData</code></td><td><code>[]</code></td><td><code>storeValue('importData', [])</code></td></tr>
+    <tr><td><code>varImportErrors</code></td><td><code>[]</code></td><td><code>storeValue('importErrors', [])</code></td></tr>
+    <tr><td><code>varDebitLinesData</code></td><td><code>[]</code></td><td><code>storeValue('debitLinesData', [])</code></td></tr>
+    <tr><td><code>varCorrectionData</code></td><td><code>{}</code></td><td><code>storeValue('correctionData', {})</code></td></tr>
+    <tr><td><code>varSmartUpdateData</code></td><td><code>[]</code></td><td><code>storeValue('bulkUpdateData', [])</code></td></tr>
+    <tr><td><code>varPaymentAmount</code></td><td><code>0</code></td><td><code>storeValue('paymentAmount', 0)</code></td></tr>
+    <tr><td><code>varDebitAmount</code></td><td><code>0</code></td><td><code>storeValue('debitAmount', 0)</code></td></tr>
+  </table></div>
+  <div class="cb"><div class="ch"><span class="ct">Page onPageLoad &mdash; initialize all state</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>async () => {
+  storeValue('printState', {});
+  storeValue('isPrinting', false);
+  storeValue('poLines', []);
+  storeValue('piLines', []);
+  storeValue('poMode', 'CREATE');
+  storeValue('selectedVendor', {});
+  storeValue('selectedBrand', {});
+  storeValue('modalMode', 'import');
+  storeValue('importData', []);
+  storeValue('importErrors', []);
+  storeValue('debitLinesData', []);
+  storeValue('bulkUpdateData', []);
+}</pre></div>
+</div>
+
+<!-- S6 -->
+<div class="section" id="s6">
+  <div class="sh"><div class="sc">6</div><div><h2>Pages &amp; Tabs</h2><p>2 tabbed containers → Appsmith pages with Tabs widgets</p></div></div>
+  <div class="tw"><table>
+    <tr><th>Retool Container</th><th>Appsmith Page</th><th>Tab Labels (from your RSX)</th></tr>
+    <tr><td>tabbedContainer1</td><td>Inventory</td><td>Dashboard &middot; Procurement &middot; Tab 3</td></tr>
+    <tr><td>tabbedContainer2</td><td>Payables</td><td>Pending Bills &middot; Statement &middot; Debit Notes</td></tr>
+  </table></div>
+  <div class="cb"><div class="ch"><span class="ct">New PO button &mdash; onClick</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>async () => {
+  storeValue('poMode', 'CREATE');
+  storeValue('poLines', []);
+  await getNextPO.run();
+  showModal('drawerCreatePO');
+}</pre></div>
+  <div class="cb"><div class="ch"><span class="ct">poListTable &mdash; Table Data binding</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>{{ getPOs.data }}</pre></div>
+  <div class="cb"><div class="ch"><span class="ct">tblPendingBills &mdash; Table Data (filtered by selected vendor)</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>{{ getGRNList.data.filter(bill =>
+  bill['Vendor ID'] === appsmith.store.selectedVendor.id &&
+  bill['Balance $'] > 0
+) }}</pre></div>
+</div>
+
+<!-- S7 -->
+<div class="section" id="s7">
+  <div class="sh"><div class="sc">7</div><div><h2>Drawers &rarr; Modal Widgets</h2><p>Appsmith uses Modal widgets for drawer-style panels</p></div></div>
+  <div class="callout cw"><span class="cicon">&#128208;</span><span class="ctext">No native DrawerFrame. Use a <strong>Modal widget</strong> at 600&ndash;800px width to replicate drawers. Open: <code>showModal('name')</code> &mdash; Close: <code>closeModal('name')</code></span></div>
+
+  <div class="wr"><div class="wl"><div class="wlbl">Retool DrawerFrame</div><div class="wname">drawerCreatePO</div></div><div class="warr">&#8594;</div><div class="wri"><div class="wlbl">Appsmith Modal (wide)</div><div class="wname">drawerCreatePO</div></div></div>
+  <div class="cb"><div class="ch"><span class="ct">drawerCreatePO &mdash; widget bindings</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>// vendorDropdown (Select) — Options:
+{{ Vendors.data.map(v => ({ label: v.vendor_name, value: v.id })) }}
+
+// poNumber2 (Input) — Default Value:
+{{ getNextPO.data.next_number }}
+
+// poTable (Table) — Table Data:
+{{ appsmith.store.poLines }}
+
+// Submit button — onClick:
+async () => {
+  const rawLines = appsmith.store.poLines;
+  const validLines = rawLines.filter(r => Number(r.Qty) > 0);
+  if (validLines.length === 0) { showAlert('No items!', 'error'); return; }
+
+  const payload = {
+    vendor_id: vendorDropdown.selectedOptionValue,
+    remarks: "",
+    lines: validLines.map(r => ({
+      product_id:       r._product_id,
+      ordered_qty:      Number(r.Qty),
+      mrp:              Number(r.MRP),
+      price:            Number(r.Price),
+      scheme_amount:    Number(r.Sch || 0),
+      discount_percent: Number(r['Disc %'] || 0),
+      tax_percent:      Number(r['GST %'] || 0)
+    }))
+  };
+  storeValue('poPayload', payload);
+  await submitPO.run();
+  closeModal('drawerCreatePO');
+  await getPOs.run();
+}</pre></div>
+
+  <div class="wr"><div class="wl"><div class="wlbl">Retool DrawerFrame</div><div class="wname">drawerVendorProfile</div></div><div class="warr">&#8594;</div><div class="wri"><div class="wlbl">Appsmith Modal</div><div class="wname">drawerVendorProfile</div></div></div>
+  <div class="cb"><div class="ch"><span class="ct">drawerVendorProfile &mdash; open from vendor table row click</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>// Vendor table row onClick:
+async () => {
+  storeValue('selectedVendor', tblVendors.selectedRow);
+  await getVendorLedger.run();
+  showModal('drawerVendorProfile');
+}
+
+// Modal title Text widget:
+{{ appsmith.store.selectedVendor.vendor_name }}</pre></div>
+
+  <div class="wr"><div class="wl"><div class="wlbl">Retool DrawerFrame</div><div class="wname">drawerBrand (with tabs3)</div></div><div class="warr">&#8594;</div><div class="wri"><div class="wlbl">Appsmith Modal + Tabs</div><div class="wname">drawerBrand</div></div></div>
+  <div class="cb"><div class="ch"><span class="ct">drawerBrand &mdash; Tabs configuration inside Modal</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>// Modal title:
+{{ appsmith.store.selectedBrand.brand_name }} Overview
+
+// Add Tabs widget inside Modal with:
+Tab 1: "Home"
+Tab 2: "Brand Profile"
+
+// Open from brand list click:
+async () => {
+  storeValue('selectedBrand', listView1.currentItem);
+  showModal('drawerBrand');
+}</pre></div>
+
+  <div class="wr"><div class="wl"><div class="wlbl">Retool DrawerFrame</div><div class="wname">drawerProduct</div></div><div class="warr">&#8594;</div><div class="wri"><div class="wlbl">Appsmith Modal + Table</div><div class="wname">drawerProduct</div></div></div>
+</div>
+
+<!-- S8 -->
+<div class="section" id="s8">
+  <div class="sh"><div class="sc">8</div><div><h2>All Modals</h2><p>9 ModalFrame components from your RSX files</p></div></div>
+  <div class="tw"><table>
+    <tr><th>Modal ID</th><th>Title</th><th>Key Widgets</th></tr>
+    <tr><td><code>modalFrame1</code></td><td>Create New Vendor</td><td>inpNewVendorName, inpNewVendorPhone, inpNewVendorEmail, inpNewVendorGST, inpNewVendorPan, inpNewVendorAddress1, inpNewVendorBankAcc, inpNewVendorIFSC, inpNewVendorBankName &middot; btnSaveVendor</td></tr>
+    <tr><td><code>modalAddProduct</code></td><td>Add Product</td><td>inpNewProductName, inpNewProductEan, inpNewProductMRP, inpNewProductPurchaseRate, inpNewProductDistRate, inpNewProductRetailRate &middot; selNewProductVendor, selNewProductBrand, selNewProductCategory, selNewProductTax, selNewProductHSN &middot; btnSaveProduct</td></tr>
+    <tr><td><code>modalAddAddress</code></td><td>Add New Address</td><td>txtNewAddress, txtNewCity, txtNewPin &middot; selNewState, selNewDistrict &middot; chkNewDefault</td></tr>
+    <tr><td><code>modalDebitNote</code></td><td>Debit Note</td><td>dnDate, txtDNNumber, dnMode (Item Return/Amount), tblDebitLines, dnAmount, selLinkedBill &middot; Button: saveDebitNoteJS.saveDebitNote()</td></tr>
+    <tr><td><code>modalFrameGRN</code></td><td>GRN</td><td>vendorDropdownGRN, ChoosePo, vendorInvoiceNo, dateVendorInvoice, dateReceived &middot; GRNTable (piLines data) &middot; Button: saveGRNJS.saveGRN()</td></tr>
+    <tr><td><code>modalViewGRN</code></td><td>View GRN</td><td>dropdownButton1 (Edit/Reverse/Print) &middot; tags1 &middot; tblViewLines &middot; trnGRNSummary</td></tr>
+    <tr><td><code>modalMakePayment</code></td><td>Make Payment</td><td>payType (PAYMENT/REFUND), payDate, payMode, payRef, payAmount, payRemarks, payChqNo, payChqDate &middot; selBankRefVendor &middot; Button: savePaymentJS.makePayment()</td></tr>
+    <tr><td><code>modalStockAdjust</code></td><td>Stock Adjustment</td><td>selAdjProduct, selAdjBatch (loads from apiGetBatches), inpAdjQty, selAdjReason &middot; Button: apiCreateStockAdjustment.run()</td></tr>
+    <tr><td><code>modalUpload</code></td><td>Smart Bulk Update / Import</td><td>fileProductImport (visible: modalMode=import), fileSmartUpload (visible: modalMode=bulk) &middot; tblImportPreview, tblImportErrors &middot; btnConfirmImport, btnDownloadErrors</td></tr>
+  </table></div>
+
+  <div class="cb"><div class="ch"><span class="ct">modalMakePayment &mdash; payType Select options</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>[
+  { label: "PAYMENT", value: "PAYMENT" },
+  { label: "REFUND",  value: "REFUND"  }
+]</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">modalUpload &mdash; conditional visibility bindings</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>// fileProductImport — Visible:
+{{ appsmith.store.modalMode === 'import' }}
+
+// fileSmartUpload — Visible:
+{{ appsmith.store.modalMode === 'bulk' }}
+
+// Modal title Text widget:
+{{ appsmith.store.modalMode === 'bulk'
+  ? 'Smart Bulk Update Manager'
+  : 'New Product Import' }}
+
+// Open in import mode:
+storeValue('modalMode', 'import'); showModal('modalUpload');
+
+// Open in bulk mode:
+storeValue('modalMode', 'bulk'); showModal('modalUpload');</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">modalAddProduct &mdash; Select option bindings</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>// selNewProductVendor:
+{{ Vendors.data.map(v => ({ label: v.vendor_name, value: v.id })) }}
+
+// selNewProductBrand:
+{{ getBrands.data.map(b => ({ label: b.brand_name, value: b.id })) }}
+
+// selNewProductCategory:
+{{ getCategories.data.map(c => ({ label: c.category_name, value: c.id })) }}
+
+// selNewProductHSN:
+{{ getHSN.data.map(h => ({ label: h.hsn_code, value: h.id })) }}
+
+// selNewProductTax:
+{{ Tax.data.map(t => ({ label: t.tax_name, value: t.id })) }}</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">modalAddAddress &mdash; state/district dropdowns (jsStatesData)</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>// selNewState — Options (use jsStatesData JS Object):
+{{ Object.keys(JSObject_jsStatesData.getStates()).map(s => ({ label: s, value: s })) }}
+
+// selNewDistrict — Options (filtered by state):
+{{ (JSObject_jsStatesData.getStates()[selNewState.selectedOptionValue] || [])
+    .map(d => ({ label: d, value: d })) }}
+
+// NOTE: The full India states/districts JSON is in your RSX as jsStatesData.
+// Create a JS Object with getStates() returning that object.</pre></div>
+
+  <div class="cb"><div class="ch"><span class="ct">jsLoadCorrectionData &mdash; pre-fill GRN for correction</span><button class="cpb" onclick="cp(this)">copy</button></div>
+<pre>export default {
+  loadCorrectionData: () => {
+    const old = appsmith.store.correctionData;
+    if (!old) { showAlert('No correction data', 'error'); return; }
+
+    vendorDropdownGRN.setValue(old.vendor_id);
+    vendorInvoiceNo.setValue(old.vendor_invoice_number);
+    if (old.purchase_order_id) { ChoosePo.setValue(old.purchase_order_id); }
+    dateVendorInvoice.setValue(old.vendor_invoice_date);
+    dateReceived.setValue(old.received_date);
+
+    if (old.lines || old.lines_json) {
+      storeValue('piLines', old.lines || old.lines_json);
+    }
+    showAlert('Data Loaded — Edit and click Save', 'success');
+  }
+}</pre></div>
+</div>
+
+<!-- S9 -->
+<div class="section" id="s9">
+  <div class="sh"><div class="sc">9</div><div><h2>Syntax Cheatsheet</h2><p>Retool vs Appsmith — quick reference</p></div></div>
+  <div class="tw"><table>
+    <tr><th>Retool</th><th>Appsmith Equivalent</th></tr>
+    <tr><td><code>&#123;&#123; &#125;&#125;</code> bindings</td><td><code>&#123;&#123; &#125;&#125;</code> &mdash; identical &#9989;</td></tr>
+    <tr><td><code>state.setValue(x)</code></td><td><code>storeValue('key', x)</code></td></tr>
+    <tr><td><code>state.value</code></td><td><code>appsmith.store.key</code></td></tr>
+    <tr><td><code>query.trigger()</code></td><td><code>query.run()</code></td></tr>
+    <tr><td><code>query.trigger({ additionalScope: {x} })</code></td><td>Set <code>storeValue('x', x)</code> before <code>query.run()</code></td></tr>
+    <tr><td><code>modal.show()</code></td><td><code>showModal('modalName')</code></td></tr>
+    <tr><td><code>modal.hide()</code></td><td><code>closeModal('modalName')</code></td></tr>
+    <tr><td><code>utils.showNotification({...})</code></td><td><code>showAlert('msg', 'success'|'error'|'warning')</code></td></tr>
+    <tr><td>DrawerFrame</td><td>Modal widget (set width 600&ndash;800px)</td></tr>
+    <tr><td>JS Query (transformer)</td><td>JS Object function</td></tr>
+    <tr><td><code>table.changesetArray</code></td><td><code>table.updatedRow</code> / <code>table.triggeredRow</code></td></tr>
+    <tr><td><code>table.selectedSourceRows</code></td><td><code>table.selectedRows</code></td></tr>
+    <tr><td><code>input.value</code></td><td><code>input.text</code> (Input) / <code>select.selectedOptionValue</code> (Select)</td></tr>
+    <tr><td><code>date.value</code></td><td><code>datepicker.selectedDate</code></td></tr>
+    <tr><td>enableTransformer + <code>return data.data</code></td><td>Transform Response toggle in query editor</td></tr>
+    <tr><td><code>_</code> (lodash)</td><td>lodash available globally &#9989;</td></tr>
+    <tr><td><code>moment()</code></td><td>moment available globally &#9989;</td></tr>
+    <tr><td><code>fileButton.parsedValue[0]</code></td><td><code>FilePicker.files[0].parsedValue</code></td></tr>
+    <tr><td><code>varXyz.setValue([])</code></td><td><code>storeValue('xyz', [])</code></td></tr>
+  </table></div>
+</div>
+
+</main>
+</div>
+
+<footer>
+  <p>Inventory Management Migration &mdash; Generated from Inventory_1.json</p>
+  <div class="lks">
+    <a href="https://docs.appsmith.com" target="_blank">Appsmith Docs</a>
+    <a href="https://community.appsmith.com" target="_blank">Community</a>
+    <a href="https://github.com/appsmithorg/appsmith" target="_blank">GitHub</a>
+  </div>
+</footer>
+
+<script>
+function cp(btn){
+  const pre=btn.closest('.cb').querySelector('pre');
+  navigator.clipboard.writeText(pre.innerText).then(()=>{
+    btn.textContent='copied!';btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent='copy';btn.classList.remove('copied');},1800);
+  });
+}
+const secs=document.querySelectorAll('.section');
+secs.forEach(s=>{
+  new IntersectionObserver(entries=>{
+    if(entries[0].isIntersecting){
+      document.querySelectorAll('.sidebar a').forEach(l=>l.classList.remove('active'));
+      const a=document.querySelector(`.sidebar a[href="#${entries[0].target.id}"]`);
+      if(a)a.classList.add('active');
+    }
+  },{threshold:.3}).observe(s);
+});
+document.querySelectorAll('.sidebar a').forEach(a=>a.addEventListener('click',e=>{
+  e.preventDefault();
+  document.querySelector(a.getAttribute('href'))?.scrollIntoView({behavior:'smooth',block:'start'});
+}));
+</script>
+</body>
+</html>
