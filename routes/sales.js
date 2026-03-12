@@ -1462,6 +1462,57 @@ router.post('/bulk-invoice-generate', async (req, res) => {
     }
 });
 
+// PUT /api/sales/orders/:id - Update Sales Order Lines
+router.put('/orders/:id', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const orderId = req.params.id;
+        const { lines } = req.body;
+        
+        await client.query('BEGIN');
+        
+        // 1. Wipe existing lines for this order
+        await client.query('DELETE FROM sales_order_lines WHERE sales_order_id = $1', [orderId]);
+        
+        let headerAmount = 0;
+        let headerTax = 0;
+
+        // 2. Insert new edited lines
+        for (const line of lines) {
+            const qty = Number(line.ordered_qty || 0);
+            if (qty <= 0) continue; // Skip zero qty or deleted lines
+            
+            const rate = Number(line.rate || 0);
+            const tax_percent = Number(line.tax_percent || 0);
+            const gross = qty * rate;
+            const tax_amount = gross * (tax_percent / 100);
+            const amount = gross + tax_amount;
+            
+            await client.query(`
+                INSERT INTO sales_order_lines (
+                    sales_order_id, product_id, ordered_qty, rate, tax_percent, tax_amount, amount
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `, [orderId, line.product_id, qty, rate, tax_percent, tax_amount, amount]);
+            
+            headerAmount += amount;
+            headerTax += tax_amount;
+        }
+        
+        // 3. Update Order Header
+        await client.query('UPDATE sales_orders SET total_amount = $1, tax_amount = $2 WHERE id = $3', [headerAmount, headerTax, orderId]);
+        
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Sales order updated successfully' });
+        
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Order Update Error:", err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // POST /api/sales/invoices/:id/unlock-for-edit - Reverses an invoice to unlock its SO
 router.post('/invoices/:id/unlock-for-edit', async (req, res) => {
     const client = await pool.connect();
