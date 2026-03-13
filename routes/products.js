@@ -272,13 +272,22 @@ router.get('/:id/stats', async (req, res) => {
 // POST /api/products
 // POST /api/products
 router.post('/', async (req, res) => {
+    // 0. Flatten the body if it's coming from a Sectioned JSON Form
+    let flatBody = { ...req.body };
+    Object.keys(flatBody).forEach(key => {
+        if (typeof flatBody[key] === 'object' && flatBody[key] !== null && !Array.isArray(flatBody[key])) {
+            flatBody = { ...flatBody, ...flatBody[key] };
+            delete flatBody[key];
+        }
+    });
+
     let {
         vendor_id, product_name, brand_id, category_id,
         hsn_id, tax_id,
         mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate,
         case_quantity, uom, model_number, min_stock_level,
-        box_length_cm, box_width_cm, box_height_cm, weight_kg, description
-    } = req.body;
+        box_length_cm, box_width_cm, box_height_cm, weight_kg, description, ean_code
+    } = flatBody;
 
     if (!vendor_id || !product_name || !brand_id || !category_id || !mrp || !purchase_rate) {
         return res.status(400).json({ error: 'Missing required fields (Vendor, Name, Brand, Category, MRP, Purchase Rate)' });
@@ -343,7 +352,7 @@ router.post('/', async (req, res) => {
 
         const result = await pool.query(insertQuery, [
             vendor_id, brand_id, category_id, product_code, product_name,
-            hsn_id || null, tax_id || null, req.body.ean_code || null,
+            hsn_id || null, tax_id || null, ean_code || null,
             mrp, purchase_rate,
             distributor_rate || 0, wholesale_rate || 0, dealer_rate || 0, retail_rate || 0,
             case_quantity || 1, uom || 'Pcs', model_number || null, min_stock_level || 0,
@@ -768,13 +777,23 @@ router.post('/bulk-update', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        
+        // 0. Flatten the body if it's coming from a Sectioned JSON Form
+        let flatBody = { ...req.body };
+        Object.keys(flatBody).forEach(key => {
+            if (typeof flatBody[key] === 'object' && flatBody[key] !== null && !Array.isArray(flatBody[key])) {
+                flatBody = { ...flatBody, ...flatBody[key] };
+                delete flatBody[key];
+            }
+        });
+
         const {
             product_name, product_code, ean_code,
             mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate,
             is_active, case_quantity, uom, model_number, min_stock_level,
             box_length_cm, box_width_cm, box_height_cm, weight_kg, description,
             brand_id, category_id, tax_id, hsn_id // These come directly from Select widgets
-        } = req.body;
+        } = flatBody;
 
         const updateQuery = `
             UPDATE products 
