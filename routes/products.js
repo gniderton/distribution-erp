@@ -633,30 +633,21 @@ router.post('/bulk-update', async (req, res) => {
         const hsnRes = await client.query('SELECT id, hsn_code FROM hsn_codes');
         const vendRes = await client.query('SELECT id, vendor_name FROM vendors');
 
-        // 1. Build Optimization Map: Name -> Object AND ID -> Object
-        const brandMap = {}; const brandIdMap = {};
-        brandsRes.rows.forEach(r => {
-            brandMap[r.brand_name.toLowerCase().trim()] = r;
-            brandIdMap[r.id] = r;
-        });
+        // 1. Build Optimization Map: Name -> ID AND ID -> ID
+        const buildMap = (rows, nameField, idField) => {
+            const map = {};
+            rows.forEach(r => {
+                if (r[nameField]) map[String(r[nameField]).toLowerCase().trim()] = r[idField];
+                map[String(r[idField])] = r[idField];
+            });
+            return map;
+        };
 
-        const catMap = {}; const catIdMap = {};
-        catsRes.rows.forEach(r => {
-            catMap[r.category_name.toLowerCase().trim()] = r;
-            catIdMap[r.id] = r;
-        });
-
-        const taxMap = {};
-        taxRes.rows.forEach(r => taxMap[r.tax_name.toLowerCase().trim()] = r.id);
-
-        const hsnMap = {};
-        hsnRes.rows.forEach(r => {
-            hsnMap[Number(r.hsn_code)] = r.id;
-            hsnMap[String(r.hsn_code).trim()] = r.id;
-        });
-
-        const vendMap = {};
-        vendRes.rows.forEach(r => vendMap[r.vendor_name.toLowerCase().trim()] = r.id);
+        const brandMap = buildMap(brandsRes.rows, 'brand_name', 'id');
+        const catMap = buildMap(catsRes.rows, 'category_name', 'id');
+        const taxMap = buildMap(taxRes.rows, 'tax_name', 'id');
+        const hsnMap = buildMap(hsnRes.rows, 'hsn_code', 'id');
+        const vendMap = buildMap(vendRes.rows, 'vendor_name', 'id');
 
         const updates = [];
         const newItems = [];
@@ -673,17 +664,11 @@ router.post('/bulk-update', async (req, res) => {
         // --- HELPER FUNCTIONS ---
         const safeNum = (val) => (val === '' || val === null || val === undefined) ? null : val;
 
-        // Resolve ID from Value (Value can be ID or Name)
+        // Resolve ID from Value (Value can be ID or Name or Numeric String)
         const safeId = (val, map) => {
             if (!val) return null;
-            if (!isNaN(val)) return val; // Already an ID
             const key = String(val).toLowerCase().trim();
-            // Map contains Objects (Brand/Cat) or IDs (Tax/Vendor)?
-            // Brand/Cat maps are Obj. Tax/Vendor/HSN maps are ID.
-            // We need to check what 'map' is passed.
-            // Actually, we can just check if the result is an object or primitive.
-            const res = map[key];
-            return (res && typeof res === 'object') ? res.id : res;
+            return map[key] || null;
         };
 
         // --- PROCESS UPDATES ---
