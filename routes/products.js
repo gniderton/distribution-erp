@@ -764,4 +764,69 @@ router.post('/bulk-update', async (req, res) => {
     }
 });
 
+// PUT /api/products/:id - Single Product Update (For JSON Form)
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            product_name, product_code, ean_code,
+            mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate,
+            is_active, case_quantity, uom, model_number, min_stock_level,
+            box_length_cm, box_width_cm, box_height_cm, weight_kg, description,
+            brand_id, category_id, tax_id, hsn_id // These come directly from Select widgets
+        } = req.body;
+
+        const updateQuery = `
+            UPDATE products 
+            SET 
+                product_name = COALESCE($1, product_name),
+                product_code = COALESCE($2, product_code),
+                ean_code = COALESCE($3, ean_code),
+                mrp = COALESCE($4::numeric, mrp),
+                purchase_rate = COALESCE($5::numeric, purchase_rate),
+                distributor_rate = COALESCE($6::numeric, distributor_rate),
+                wholesale_rate = COALESCE($7::numeric, wholesale_rate),
+                dealer_rate = COALESCE($8::numeric, dealer_rate),
+                retail_rate = COALESCE($9::numeric, retail_rate),
+                is_active = COALESCE($10::boolean, is_active),
+                case_quantity = COALESCE($11::integer, case_quantity),
+                uom = COALESCE($12, uom),
+                model_number = COALESCE($13, model_number),
+                min_stock_level = COALESCE($14::integer, min_stock_level),
+                box_length_cm = COALESCE($15::numeric, box_length_cm),
+                box_width_cm = COALESCE($16::numeric, box_width_cm),
+                box_height_cm = COALESCE($17::numeric, box_height_cm),
+                weight_kg = COALESCE($18::numeric, weight_kg),
+                description = COALESCE($19, description),
+                brand_id = COALESCE($20::bigint, brand_id),
+                category_id = COALESCE($21::bigint, category_id),
+                tax_id = COALESCE($22::bigint, tax_id),
+                hsn_id = COALESCE($23::bigint, hsn_id)
+            WHERE id = $24
+            RETURNING *
+        `;
+
+        const values = [
+            product_name, product_code, ean_code,
+            mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate,
+            is_active, case_quantity, uom, model_number, min_stock_level,
+            box_length_cm, box_width_cm, box_height_cm, weight_kg, description,
+            brand_id, category_id, tax_id, hsn_id,
+            id
+        ];
+
+        const result = await pool.query(updateQuery, values);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        res.json({ success: true, product: result.rows[0] });
+
+    } catch (err) {
+        console.error("Product Update Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
