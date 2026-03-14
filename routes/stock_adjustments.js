@@ -91,7 +91,8 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     const client = await pool.connect();
     try {
-        const { items, notes } = req.body; // items: [{ product_id, qty, reason }]
+        const { items, notes, date } = req.body; // items: [{ product_id, qty, reason }]
+        const adjDate = date ? new Date(date) : new Date();
 
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ error: 'No items provided' });
@@ -115,9 +116,9 @@ router.post('/', async (req, res) => {
                 const batchCode = item.batch_code || `FOUND-${new Date().toISOString().split('T')[0]}`;
                 await client.query(`
                     INSERT INTO inventory_batches 
-                    (product_id, batch_code, quantity_initial, quantity_remaining, purchase_rate, is_active)
-                    VALUES ($1, $2, $3, $3, 0, true) 
-                `, [product_id, batchCode, moveQty]);
+                    (product_id, batch_code, quantity_initial, quantity_remaining, purchase_rate, is_active, created_at)
+                    VALUES ($1, $2, $3, $3, 0, true, $4) 
+                `, [product_id, batchCode, moveQty, adjDate]);
 
             } else {
                 // HANDLE STOCK DECREASE (Damage, Expiry, Lost)
@@ -186,9 +187,9 @@ router.post('/', async (req, res) => {
 
             // 3. AUDIT LOG
             await client.query(`
-                INSERT INTO stock_adjustments (product_id, qty, reason, notes)
-                VALUES ($1, $2, $3, $4)
-            `, [product_id, moveQty, reason, notes]);
+                INSERT INTO stock_adjustments (product_id, qty, reason, notes, created_at)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [product_id, moveQty, reason, notes, adjDate]);
         }
 
         // 4. ACCOUNTING INTEGRATION (For Losses)
@@ -203,7 +204,7 @@ router.post('/', async (req, res) => {
             ];
 
             await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
-                [new Date(), `Stock Adjustment Loss (${notes || 'Manual'})`, 'STOCK_ADJ', null, JSON.stringify(lossLines)]);
+                [adjDate, `Stock Adjustment Loss (${notes || 'Manual'})`, 'STOCK_ADJ', null, JSON.stringify(lossLines)]);
         }
 
         await client.query('COMMIT');
