@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
-const _ = require('lodash');
 
 // @route   GET /api/debit-notes
 // @desc    Get all Debit Notes (with optional vendor_id filter)
@@ -656,7 +655,7 @@ router.post('/:id/convert', async (req, res) => {
             }
 
             const totalDebits = amount;
-            let totalCredits = _.sumBy(ledgerLines, l => l.credit || 0);
+            let totalCredits = ledgerLines.reduce((acc, l) => acc + (Number(l.credit) || 0), 0);
             const diff = Number((totalDebits - totalCredits).toFixed(2));
             if (diff !== 0) {
                 ledgerLines.push({ code: 5003, debit: diff > 0 ? 0 : Math.abs(diff), credit: diff > 0 ? diff : 0 });
