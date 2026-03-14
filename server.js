@@ -181,7 +181,8 @@ async function initializeDatabase() {
             { id: '131', path: '131_loan_management_schema.sql' },
             { id: '132', path: '132_add_loan_sequence.sql' },
             { id: '133', path: '133_vendor_return_slips.sql' },
-            { id: '134', path: '134_return_slip_audit.sql' }
+            { id: '134', path: '134_return_slip_audit.sql' },
+            { id: '135', path: '135_sync_dn_rs_sequences.sql' }
         ];
 
         for (const m of migrations) {
