@@ -8,7 +8,7 @@ router.get('/', async (req, res) => {
     try {
         const { vendor_id } = req.query;
         let query = `
-            SELECT dn.*, v.vendor_name, pi.invoice_number as linked_invoice_number
+            SELECT dn.*, dn.note_type, v.vendor_name, pi.invoice_number as linked_invoice_number
             FROM debit_notes dn
             JOIN vendors v ON dn.vendor_id = v.id
             LEFT JOIN purchase_invoice_headers pi ON dn.linked_invoice_id = pi.id
@@ -60,7 +60,8 @@ router.post('/', async (req, res) => {
             amount: rawAmount, // Rename destructured var
             debit_note_date,
             reason,
-            linked_invoice_id
+            linked_invoice_id,
+            note_type = 'Debit Note' // Default to DN
         } = req.body;
 
         const amount = Math.round(Number(rawAmount)); // Enforce Rounding
@@ -83,18 +84,19 @@ router.post('/', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // 1. Generate Debit Note Number (Sequence Logic)
+        // 1. Generate Number (Sequence Logic)
+        const docType = note_type === 'Return Slip' ? 'RS' : 'DN';
         const seqRes = await client.query(`
             SELECT prefix, current_number 
             FROM document_sequences 
-            WHERE document_type = 'DN' AND is_active = true
+            WHERE document_type = $1 AND is_active = true
             FOR UPDATE
-        `);
+        `, [docType]);
 
         let dnNumber;
         if (seqRes.rows.length === 0) {
             // Fallback if seed missing
-            dnNumber = `DN-${Date.now().toString().slice(-6)}`;
+            dnNumber = `${docType}-${Date.now().toString().slice(-6)}`;
         } else {
             const seq = seqRes.rows[0];
             const nextNum = Number(seq.current_number) + 1;
@@ -104,15 +106,15 @@ router.post('/', async (req, res) => {
             await client.query(`
                UPDATE document_sequences 
                SET current_number = $1
-               WHERE document_type = 'DN'
-           `, [nextNum]);
+               WHERE document_type = $2
+           `, [nextNum, docType]);
         }
 
         // 2. Insert Record
         const insertRes = await client.query(`
             INSERT INTO debit_notes 
-            (vendor_id, debit_note_number, debit_note_date, amount, reason, linked_invoice_id, status)
-            VALUES ($1, $2, $3, $4, $5, $6, 'Approved')
+            (vendor_id, debit_note_number, debit_note_date, amount, reason, linked_invoice_id, status, note_type)
+            VALUES ($1, $2, $3, $4, $5, $6, 'Approved', $7)
             RETURNING id, debit_note_number
         `, [
             vendor_id,
@@ -120,7 +122,8 @@ router.post('/', async (req, res) => {
             debit_note_date || new Date(),
             amount,
             reason,
-            resolvedInvoiceId
+            resolvedInvoiceId,
+            note_type
         ]);
         const newId = insertRes.rows[0].id; // Capture ID
 
@@ -224,65 +227,67 @@ router.post('/', async (req, res) => {
             }
         }
 
-        // 4. SPILLOVER ALLOCATION LOGIC (Auto-Allocate)
-        let remainingToAllocate = Number(amount);
+        // 4. SPILLOVER ALLOCATION LOGIC (Only for financial Debit Notes)
+        if (note_type !== 'Return Slip') {
+            let remainingToAllocate = Number(amount);
 
-        // A. Priority Allocation (Linked Bill)
-        if (resolvedInvoiceId && remainingToAllocate > 0) {
-            // Get Balance of Linked Bill
-            const billRes = await client.query(`
-                SELECT 
-                    pi.id,
-                    (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) as balance
-                FROM purchase_invoice_headers pi
-                LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as paid FROM payment_allocations GROUP BY purchase_invoice_id) pa ON pi.id = pa.purchase_invoice_id
-                LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as applied FROM debit_note_allocations GROUP BY purchase_invoice_id) dn ON pi.id = dn.purchase_invoice_id
-                WHERE pi.id = $1
-            `, [resolvedInvoiceId]);
+            // A. Priority Allocation (Linked Bill)
+            if (resolvedInvoiceId && remainingToAllocate > 0) {
+                // Get Balance of Linked Bill
+                const billRes = await client.query(`
+                    SELECT 
+                        pi.id,
+                        (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) as balance
+                    FROM purchase_invoice_headers pi
+                    LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as paid FROM payment_allocations GROUP BY purchase_invoice_id) pa ON pi.id = pa.purchase_invoice_id
+                    LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as applied FROM debit_note_allocations GROUP BY purchase_invoice_id) dn ON pi.id = dn.purchase_invoice_id
+                    WHERE pi.id = $1
+                `, [resolvedInvoiceId]);
 
-            if (billRes.rows.length > 0) {
-                const bill = billRes.rows[0];
-                const billBal = Number(bill.balance);
-                if (billBal > 0) {
-                    const alloc = Math.min(billBal, remainingToAllocate);
-                    await client.query(`
-                        INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount)
-                        VALUES ($1, $2, $3)
-                    `, [newId, resolvedInvoiceId, alloc]);
-                    remainingToAllocate -= alloc;
+                if (billRes.rows.length > 0) {
+                    const bill = billRes.rows[0];
+                    const billBal = Number(bill.balance);
+                    if (billBal > 0) {
+                        const alloc = Math.min(billBal, remainingToAllocate);
+                        await client.query(`
+                            INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount)
+                            VALUES ($1, $2, $3)
+                        `, [newId, resolvedInvoiceId, alloc]);
+                        remainingToAllocate -= alloc;
+                    }
                 }
             }
-        }
 
-        // B. Spillover Allocation (FIFO on other bills)
-        if (remainingToAllocate > 0) {
-            // Fetch other pending bills for this vendor
-            const pendingRes = await client.query(`
-                SELECT 
-                    pi.id,
-                    (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) as balance
-                FROM purchase_invoice_headers pi
-                LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as paid FROM payment_allocations GROUP BY purchase_invoice_id) pa ON pi.id = pa.purchase_invoice_id
-                LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as applied FROM debit_note_allocations GROUP BY purchase_invoice_id) dn ON pi.id = dn.purchase_invoice_id
-                WHERE pi.vendor_id = $1 
-                AND pi.status != 'Cancelled'
-                AND (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) > 0
-                AND ($2::integer IS NULL OR pi.id != $2::integer) -- Exclude the one we just allocated to
-                ORDER BY pi.received_date ASC, pi.created_at ASC
-            `, [vendor_id, resolvedInvoiceId]);
+            // B. Spillover Allocation (FIFO on other bills)
+            if (remainingToAllocate > 0) {
+                // Fetch other pending bills for this vendor
+                const pendingRes = await client.query(`
+                    SELECT 
+                        pi.id,
+                        (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) as balance
+                    FROM purchase_invoice_headers pi
+                    LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as paid FROM payment_allocations GROUP BY purchase_invoice_id) pa ON pi.id = pa.purchase_invoice_id
+                    LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as applied FROM debit_note_allocations GROUP BY purchase_invoice_id) dn ON pi.id = dn.purchase_invoice_id
+                    WHERE pi.vendor_id = $1 
+                    AND pi.status != 'Cancelled'
+                    AND (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) > 0
+                    AND ($2::integer IS NULL OR pi.id != $2::integer) -- Exclude the one we just allocated to
+                    ORDER BY pi.received_date ASC, pi.created_at ASC
+                `, [vendor_id, resolvedInvoiceId]);
 
-            for (const bill of pendingRes.rows) {
-                if (remainingToAllocate <= 0.01) break;
+                for (const bill of pendingRes.rows) {
+                    if (remainingToAllocate <= 0.01) break;
 
-                const billBal = Number(bill.balance);
-                const alloc = Math.min(billBal, remainingToAllocate);
+                    const billBal = Number(bill.balance);
+                    const alloc = Math.min(billBal, remainingToAllocate);
 
-                if (alloc > 0) {
-                    await client.query(`
-                        INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount)
-                        VALUES ($1, $2, $3)
-                    `, [newId, bill.id, alloc]);
-                    remainingToAllocate -= alloc;
+                    if (alloc > 0) {
+                        await client.query(`
+                            INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount)
+                            VALUES ($1, $2, $3)
+                        `, [newId, bill.id, alloc]);
+                        remainingToAllocate -= alloc;
+                    }
                 }
             }
         }
@@ -406,15 +411,17 @@ router.post('/', async (req, res) => {
             }
         }
 
-        await client.query(`
-            SELECT create_journal_entry($1, $2, $3, $4, $5)
-        `, [
-            debit_note_date || new Date(),
-            desc,
-            'DN',
-            newId,
-            JSON.stringify(ledgerLines)
-        ]);
+        if (note_type !== 'Return Slip') {
+            await client.query(`
+                SELECT create_journal_entry($1, $2, $3, $4, $5)
+            `, [
+                debit_note_date || new Date(),
+                desc,
+                'DN',
+                newId,
+                JSON.stringify(ledgerLines)
+            ]);
+        }
 
         await client.query('COMMIT');
         res.json({ success: true, id: newId, message: 'Debit Note Created', debit_note_number: dnNumber });
