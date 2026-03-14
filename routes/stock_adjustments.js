@@ -31,11 +31,13 @@ router.get('/', async (req, res) => {
                 sa.*, 
                 p.product_name, p.product_code,
                 b.brand_name,
-                c.category_name
+                c.category_name,
+                e.full_name as created_by_name
             FROM stock_adjustments sa
             JOIN products p ON sa.product_id = p.id
             LEFT JOIN brands b ON p.brand_id = b.id
             LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN employees e ON sa.created_by = e.id
             WHERE 1=1
         `;
         const params = [];
@@ -91,7 +93,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     const client = await pool.connect();
     try {
-        const { items, notes, date } = req.body; // items: [{ product_id, qty, reason }]
+        const { items, notes, date, created_by } = req.body; // items: [{ product_id, qty, reason }]
         const adjDate = date ? new Date(date) : new Date();
 
         if (!items || !Array.isArray(items) || items.length === 0) {
@@ -187,9 +189,9 @@ router.post('/', async (req, res) => {
 
             // 3. AUDIT LOG
             await client.query(`
-                INSERT INTO stock_adjustments (product_id, qty, reason, notes, created_at)
-                VALUES ($1, $2, $3, $4, $5)
-            `, [product_id, moveQty, reason, notes, adjDate]);
+                INSERT INTO stock_adjustments (product_id, qty, reason, notes, created_at, created_by)
+                VALUES ($1, $2, $3, $4, $5, $6)
+            `, [product_id, moveQty, reason, notes, adjDate, created_by || null]);
         }
 
         // 4. ACCOUNTING INTEGRATION (For Losses)
