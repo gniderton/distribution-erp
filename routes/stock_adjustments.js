@@ -22,20 +22,65 @@ router.get('/batches/:product_id', async (req, res) => {
 });
 
 // @route   GET /api/stock/adjust
-// @desc    Get Adjustment History
+// @desc    Get Adjustment History with Filters
 router.get('/', async (req, res) => {
     try {
-        const result = await pool.query(`
-            SELECT sa.*, p.product_name 
+        const { start_date, end_date, reason, search, limit = 100, page = 1 } = req.query;
+        let query = `
+            SELECT 
+                sa.*, 
+                p.product_name, p.product_code,
+                b.brand_name,
+                c.category_name
             FROM stock_adjustments sa
             JOIN products p ON sa.product_id = p.id
-            ORDER BY sa.created_at DESC
-            LIMIT 100
-        `);
-        res.json(result.rows);
+            LEFT JOIN brands b ON p.brand_id = b.id
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE 1=1
+        `;
+        const params = [];
+
+        if (start_date) {
+            params.push(start_date);
+            query += ` AND sa.created_at >= $${params.length}`;
+        }
+        if (end_date) {
+            params.push(end_date);
+            query += ` AND sa.created_at <= $${params.length}::timestamptz + interval '1 day'`;
+        }
+        if (reason) {
+            params.push(reason);
+            query += ` AND sa.reason = $${params.length}`;
+        }
+        if (search) {
+            params.push(`%${search}%`);
+            query += ` AND (p.product_name ILIKE $${params.length} OR p.product_code ILIKE $${params.length} OR sa.notes ILIKE $${params.length})`;
+        }
+
+        // Count total for pagination
+        const countQuery = query.replace(/SELECT.*?FROM/, 'SELECT COUNT(*) FROM');
+        const totalResult = await pool.query(countQuery, params);
+        
+        // Sorting and Pagination
+        query += ` ORDER BY sa.created_at DESC`;
+        
+        const limitVal = parseInt(limit);
+        const offsetVal = (parseInt(page) - 1) * limitVal;
+        
+        params.push(limitVal, offsetVal);
+        query += ` LIMIT $${params.length - 1} OFFSET $${params.length}`;
+
+        const result = await pool.query(query, params);
+        
+        res.json({
+            data: result.rows,
+            total: parseInt(totalResult.rows[0].count),
+            page: parseInt(page),
+            limit: limitVal
+        });
     } catch (err) {
         console.error('List Adjustments Error:', err.message);
-        res.status(500).json({ error: 'Server Error' });
+        res.status(500).json({ error: 'Server Error', details: err.message });
     }
 });
 
