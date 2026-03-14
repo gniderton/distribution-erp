@@ -29,6 +29,7 @@ router.get('/', async (req, res) => {
         let query = `
             SELECT 
                 sa.*, 
+                sa.created_at as date,
                 p.product_name, p.product_code,
                 b.brand_name,
                 c.category_name,
@@ -216,6 +217,112 @@ router.post('/', async (req, res) => {
         await client.query('ROLLBACK');
         console.error('Stock Adjustment Error:', err.message);
         res.status(500).json({ error: 'Server Error during Adjustment', details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// @route   DELETE /api/stock/adjust/:id
+// @desc    Reverse/Delete a Stock Adjustment (Mistake Correction)
+router.delete('/:id', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+
+        // 1. Fetch the Adjustment Details
+        const adjRes = await client.query('SELECT * FROM stock_adjustments WHERE id = $1', [id]);
+        if (adjRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Adjustment not found' });
+        }
+
+        const adj = adjRes.rows[0];
+        const { product_id, qty, reason, batch_code } = adj;
+        const revQty = Number(qty);
+
+        await client.query('BEGIN');
+
+        console.log(`Reversing Adjustment ID ${id}: ${reason} of ${qty} for Product ${product_id}`);
+
+        // 2. REVERSAL LOGIC
+        if (reason === 'Found') {
+            // REVERSE FOUND: Remove the stock we "found"
+            // We look for a batch with 0 purchase rate created around that time
+            const deleteBatch = await client.query(`
+                DELETE FROM inventory_batches 
+                WHERE product_id = $1 AND quantity_initial = $2 AND purchase_rate = 0 
+                AND created_at BETWEEN $3::timestamptz - interval '1 minute' AND $3::timestamptz + interval '1 minute'
+                RETURNING id
+            `, [product_id, revQty, adj.created_at]);
+
+            if (deleteBatch.rows.length === 0) {
+                // Fallback: If exact match failed, just reduce from FIFO found batches
+                await client.query(`
+                    UPDATE inventory_batches 
+                    SET quantity_remaining = quantity_remaining - $1 
+                    WHERE id = (
+                        SELECT id FROM inventory_batches 
+                        WHERE product_id = $2 AND quantity_remaining >= $1 AND purchase_rate = 0
+                        LIMIT 1
+                    )
+                `, [revQty, product_id]);
+            }
+        } else if (['Damage', 'Expiry'].includes(reason)) {
+            // REVERSE DAMAGE/EXPIRY: Move back from Bad to Good
+            // 1. Reduce from Bad Status
+            const reduceBad = await client.query(`
+                UPDATE inventory_batches 
+                SET quantity_remaining = quantity_remaining - $1 
+                WHERE product_id = $2 AND status = $3 AND quantity_remaining >= $1
+                RETURNING id
+            `, [revQty, product_id, reason]);
+
+            if (reduceBad.rows.length === 0) {
+                throw new Error(`Cannot reverse: No remaining ${reason} stock found for this product.`);
+            }
+
+            // 2. Add back to Good status (FIFO - find most recent good batch or create one)
+            await client.query(`
+                UPDATE inventory_batches 
+                SET quantity_remaining = quantity_remaining + $1 
+                WHERE id = (
+                    SELECT id FROM inventory_batches 
+                    WHERE product_id = $2 AND status = 'Good'
+                    ORDER BY created_at DESC 
+                    LIMIT 1
+                )
+            `, [revQty, product_id]);
+
+            // 3. Update Product Counter (Legacy support)
+            await client.query(`
+                UPDATE products 
+                SET damaged_stock = GREATEST(0, damaged_stock - $1) 
+                WHERE id = $2
+            `, [revQty, product_id]);
+
+        } else if (reason === 'Lost') {
+            // REVERSE LOST: Add back to Good stock
+            await client.query(`
+                UPDATE inventory_batches 
+                SET quantity_remaining = quantity_remaining + $1 
+                WHERE id = (
+                    SELECT id FROM inventory_batches 
+                    WHERE product_id = $2 AND status = 'Good'
+                    ORDER BY created_at DESC 
+                    LIMIT 1
+                )
+            `, [revQty, product_id]);
+        }
+
+        // 3. DELETE THE AUDIT LOG
+        await client.query('DELETE FROM stock_adjustments WHERE id = $1', [id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Adjustment reversed and deleted successfully' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Reversal Error:', err.message);
+        res.status(500).json({ error: 'Failed to reverse adjustment', details: err.message });
     } finally {
         client.release();
     }
