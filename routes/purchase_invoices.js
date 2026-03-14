@@ -34,10 +34,12 @@ router.get('/', async (req, res) => {
                     v.contact_no as vendor_contact,
                     v.email as vendor_email,
                     v.gst as vendor_gst,
-                    v.address_line1 as vendor_address_1,
-                    v.address_line2 as vendor_address_2,
-                    v.district as vendor_district,
-                    v.state as vendor_state,
+                    COALESCE(va.address_line, v.address_line1) as vendor_address_1,
+                    COALESCE(va.area, v.address_line2) as vendor_address_2,
+                    COALESCE(va.district, v.district) as vendor_district,
+                    COALESCE(va.city, v.state) as vendor_city,
+                    va.state_code as vendor_state,
+                    va.pin_code as vendor_pin,
                     v.pan as vendor_pan,
                     ph.po_number,
                     (SELECT SUM(accepted_qty) FROM purchase_invoice_lines WHERE purchase_invoice_header_id = pi.id) as total_qty,
@@ -51,6 +53,7 @@ router.get('/', async (req, res) => {
                     END as balance
                 FROM purchase_invoice_headers pi
                 JOIN vendors v ON pi.vendor_id = v.id
+                LEFT JOIN vendor_addresses va ON v.id = va.vendor_id AND va.is_default = true
                 LEFT JOIN purchase_order_headers ph ON pi.purchase_order_id = ph.id
                 LEFT JOIN (
                     SELECT purchase_invoice_id, SUM(amount) as paid_amount 
