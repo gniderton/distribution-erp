@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const _ = require('lodash');
 
 // @route   GET /api/debit-notes
 // @desc    Get all Debit Notes (with optional vendor_id filter)
@@ -493,6 +494,193 @@ router.get('/:id/items', async (req, res) => {
     } catch (err) {
         console.error('List Debit Note Items Error:', err.message);
         res.status(500).json({ error: 'Server Error' });
+    }
+});
+
+// @route   POST /api/debit-notes/:id/convert
+// @desc    Convert a Return Slip to a financial Debit Note
+router.post('/:id/convert', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+
+        // 1. Fetch the Return Slip
+        const rsRes = await client.query(`
+            SELECT * FROM debit_notes 
+            WHERE id = $1 AND note_type = 'Return Slip'
+        `, [id]);
+
+        if (rsRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Valid Return Slip not found' });
+        }
+
+        const rs = rsRes.rows[0];
+        const oldRSNumber = rs.debit_note_number;
+
+        // Fetch lines for accounting
+        const linesRes = await client.query(`
+            SELECT * FROM debit_note_lines WHERE debit_note_id = $1
+        `, [id]);
+        const lines = linesRes.rows;
+
+        await client.query('BEGIN');
+
+        // 2. Generate new DN Number
+        const seqRes = await client.query(`
+            SELECT prefix, current_number 
+            FROM document_sequences 
+            WHERE document_type = 'DN' AND is_active = true
+            FOR UPDATE
+        `);
+
+        let dnNumber;
+        if (seqRes.rows.length === 0) {
+            dnNumber = `DN-${Date.now().toString().slice(-6)}`;
+        } else {
+            const seq = seqRes.rows[0];
+            const nextNum = Number(seq.current_number) + 1;
+            dnNumber = `${seq.prefix}${nextNum}`;
+            await client.query(`
+                UPDATE document_sequences SET current_number = $1 WHERE document_type = 'DN'
+            `, [nextNum]);
+        }
+
+        // 3. Update the record
+        await client.query(`
+            UPDATE debit_notes 
+            SET 
+                note_type = 'Debit Note', 
+                debit_note_number = $1,
+                converted_from_rs = $2,
+                status = 'Approved'
+            WHERE id = $3
+        `, [dnNumber, oldRSNumber, id]);
+
+        // 4. FINANCIAL LOGIC (Allocation)
+        const amount = Number(rs.amount);
+        let remainingToAllocate = amount;
+        const resolvedInvoiceId = rs.linked_invoice_id;
+        const vendor_id = rs.vendor_id;
+
+        if (resolvedInvoiceId && remainingToAllocate > 0) {
+            const billRes = await client.query(`
+                SELECT pi.id, (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) as balance
+                FROM purchase_invoice_headers pi
+                LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as paid FROM payment_allocations GROUP BY purchase_invoice_id) pa ON pi.id = pa.purchase_invoice_id
+                LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as applied FROM debit_note_allocations GROUP BY purchase_invoice_id) dn ON pi.id = dn.purchase_invoice_id
+                WHERE pi.id = $1
+            `, [resolvedInvoiceId]);
+
+            if (billRes.rows.length > 0) {
+                const bill = billRes.rows[0];
+                const billBal = Number(bill.balance);
+                if (billBal > 0) {
+                    const alloc = Math.min(billBal, remainingToAllocate);
+                    await client.query(`
+                        INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount)
+                        VALUES ($1, $2, $3)
+                    `, [id, resolvedInvoiceId, alloc]);
+                    remainingToAllocate -= alloc;
+                }
+            }
+        }
+
+        if (remainingToAllocate > 0) {
+            const pendingRes = await client.query(`
+                SELECT pi.id, (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) as balance
+                FROM purchase_invoice_headers pi
+                LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as paid FROM payment_allocations GROUP BY purchase_invoice_id) pa ON pi.id = pa.purchase_invoice_id
+                LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as applied FROM debit_note_allocations GROUP BY purchase_invoice_id) dn ON pi.id = dn.purchase_invoice_id
+                WHERE pi.vendor_id = $1 AND pi.status != 'Cancelled'
+                AND (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) > 0
+                AND ($2::integer IS NULL OR pi.id != $2::integer)
+                ORDER BY pi.received_date ASC, pi.created_at ASC
+            `, [vendor_id, resolvedInvoiceId]);
+
+            for (const bill of pendingRes.rows) {
+                if (remainingToAllocate <= 0.01) break;
+                const billBal = Number(bill.balance);
+                const alloc = Math.min(billBal, remainingToAllocate);
+                if (alloc > 0) {
+                    await client.query(`
+                        INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount)
+                        VALUES ($1, $2, $3)
+                    `, [id, bill.id, alloc]);
+                    remainingToAllocate -= alloc;
+                }
+            }
+        }
+
+        // 5. ACCOUNTING LOGIC (Ledger)
+        const acc_ap = 2001;
+        const acc_inventory = 1001;
+        const acc_discount = 4002;
+        const acc_gst = 1010;
+
+        let ledgerLines = [];
+        let desc = `Converted from RS: ${oldRSNumber} -> ${dnNumber}`;
+
+        if (lines.length === 0) {
+            ledgerLines = [
+                { code: acc_ap, debit: amount, credit: 0 },
+                { code: acc_discount, debit: 0, credit: amount }
+            ];
+        } else {
+            let totalTax = 0;
+            let totalTaxable = 0;
+            for (const line of lines) {
+                const lineAmt = Number(line.amount) || 0;
+                const lineTax = Number(line.tax_amount) || 0;
+                totalTax += lineTax;
+                totalTaxable += (lineAmt - lineTax);
+            }
+            totalTax = Number(totalTax.toFixed(2));
+            totalTaxable = Number(totalTaxable.toFixed(2));
+
+            ledgerLines = [
+                { code: acc_ap, debit: amount, credit: 0 },
+                { code: acc_inventory, debit: 0, credit: totalTaxable }
+            ];
+
+            if (totalTax > 0) {
+                const cgstVal = Number(rs.cgst_amount) || 0;
+                const sgstVal = Number(rs.sgst_amount) || 0;
+                const igstVal = Number(rs.igst_amount) || 0;
+
+                if (igstVal > 0) {
+                    ledgerLines.push({ code: acc_gst, debit: 0, credit: igstVal });
+                } else {
+                    ledgerLines.push({ code: 1011, debit: 0, credit: cgstVal });
+                    ledgerLines.push({ code: 1012, debit: 0, credit: sgstVal });
+                }
+            }
+
+            const totalDebits = amount;
+            let totalCredits = _.sumBy(ledgerLines, l => l.credit || 0);
+            const diff = Number((totalDebits - totalCredits).toFixed(2));
+            if (diff !== 0) {
+                ledgerLines.push({ code: 5003, debit: diff > 0 ? 0 : Math.abs(diff), credit: diff > 0 ? diff : 0 });
+            }
+        }
+
+        await client.query(`
+            SELECT create_journal_entry($1, $2, $3, $4, $5)
+        `, [
+            rs.debit_note_date,
+            desc,
+            'DN',
+            id,
+            JSON.stringify(ledgerLines)
+        ]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, debit_note_number: dnNumber });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Conversion Error:', err);
+        res.status(500).json({ error: 'Conversion failed: ' + err.message });
+    } finally {
+        client.release();
     }
 });
 
