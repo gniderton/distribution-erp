@@ -49,8 +49,10 @@ router.get('/', async (req, res) => {
             query += ` AND sa.created_at <= $${params.length}::timestamptz + interval '1 day'`;
         }
         if (reason) {
-            params.push(reason);
-            query += ` AND sa.reason = $${params.length}`;
+            // Support both single string and array (MultiSelect)
+            const reasonList = Array.isArray(reason) ? reason : reason.split(',');
+            params.push(reasonList);
+            query += ` AND sa.reason = ANY($${params.length})`;
         }
         if (search) {
             params.push(`%${search}%`);
