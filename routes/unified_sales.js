@@ -149,18 +149,34 @@ router.get('/unified', async (req, res) => {
     }
 });
 
-// GET /api/sales/bank-details - Get active bank account for invoices
+// GET /api/sales/bank-details - Get all active banks
 router.get('/bank-details', async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT bank_name, account_number, ifsc_code
+            SELECT id, bank_name, account_number, ifsc_code
             FROM bank_accounts 
             WHERE is_active = true AND account_number != 'CASH'
-            LIMIT 1
+            ORDER BY id ASC
         `);
-        res.json(result.rows[0] || {});
+        res.json(result.rows);
     } catch (err) {
         console.error('Bank Details API Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/sales/bank-details/:id - Get specific bank details
+router.get('/bank-details/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(`
+            SELECT bank_name, account_number, ifsc_code
+            FROM bank_accounts 
+            WHERE id = $1
+        `, [id]);
+        res.json(result.rows[0] || {});
+    } catch (err) {
+        console.error('Single Bank Detail API Error:', err);
         res.status(500).json({ error: err.message });
     }
 });
