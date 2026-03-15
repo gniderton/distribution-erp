@@ -269,7 +269,8 @@ router.get('/unified/:id', async (req, res) => {
                             'taxable_amount', il.taxable_amount,
                             'tax_percent', il.tax_percent,
                             'tax_amount', il.tax_amount,
-                            'amount', il.amount
+                            'amount', il.amount,
+                            'tier_applied', il.tier_applied
                         )
                     )
                     FROM (

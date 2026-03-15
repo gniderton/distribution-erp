@@ -563,14 +563,19 @@ router.post('/orders/:id/dispatch', async (req, res) => {
                 const taxValue = taxableValue * (taxPct / 100);
                 const netValue = taxableValue + taxValue;
 
+                const reasons = [];
+                if (freeMap[pid]) reasons.push(...freeMap[pid].reasons);
+                if (priceSlabs[pid]) reasons.push(priceSlabs[pid].reason);
+                const lineTier = reasons.length > 0 ? reasons.join(', ') : null;
+
                 await client.query(`
                     INSERT INTO sales_invoice_lines (
                         invoice_id, product_id, shipped_qty, rate, mrp,
-                        gross_amount, scheme_amount, taxable_amount, tax_percent, tax_amount, amount
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                        gross_amount, scheme_amount, taxable_amount, tax_percent, tax_amount, amount, tier_applied
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 `, [
                     invId, pid, group.qty, groupAvgRate.toFixed(2), mrpVal,
-                    group.gross, lineScheme, taxableValue, taxPct, taxValue, netValue
+                    group.gross, lineScheme, taxableValue, taxPct, taxValue, netValue, lineTier
                 ]);
 
                 invTotal += netValue;
@@ -1026,16 +1031,21 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                         const taxValue = taxableValue * (lineTaxPercent / 100);
                         const netValue = taxableValue + taxValue;
 
+                        const reasons = [];
+                        if (freeMap[pid]) reasons.push(...freeMap[pid].reasons);
+                        if (priceSlabs[pid]) reasons.push(priceSlabs[pid].reason);
+                        const lineTier = reasons.length > 0 ? reasons.join(', ') : null;
+
                         await client.query(`
                             INSERT INTO sales_invoice_lines (
                                 invoice_id, product_id, shipped_qty, rate, mrp, 
                                 gross_amount, scheme_amount, taxable_amount, 
-                                tax_percent, tax_amount, amount
-                            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                                tax_percent, tax_amount, amount, tier_applied
+                            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                         `, [
                             invId, pid, group.qty, group.rate, mrpVal,
                             lineGross, lineScheme, taxableValue,
-                            lineTaxPercent, taxValue, netValue
+                            lineTaxPercent, taxValue, netValue, lineTier
                         ]);
 
                         invTotal += netValue;
@@ -1350,16 +1360,21 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         const taxValue = taxableValue * (lineTaxPercent / 100);
                         const netValue = taxableValue + taxValue;
 
+                        const reasons = [];
+                        if (freeMap[pid]) reasons.push(...freeMap[pid].reasons);
+                        if (priceSlabs[pid]) reasons.push(priceSlabs[pid].reason);
+                        const lineTier = reasons.length > 0 ? reasons.join(', ') : null;
+
                         await client.query(`
                             INSERT INTO sales_invoice_lines (
                                 invoice_id, product_id, shipped_qty, rate, mrp, 
                                 gross_amount, scheme_amount, taxable_amount, 
-                                tax_percent, tax_amount, amount
-                            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                                tax_percent, tax_amount, amount, tier_applied
+                            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                         `, [
                             invId, pid, group.qty, group.rate, mrpVal,
                             lineGross, lineScheme, taxableValue,
-                            lineTaxPercent, taxValue, netValue
+                            lineTaxPercent, taxValue, netValue, lineTier
                         ]);
 
                         invTotal += netValue;
@@ -1713,13 +1728,18 @@ router.post('/invoices/regenerate', async (req, res) => {
                 const taxValue = taxableValue * (lineTaxPercent / 100);
                 const netValue = taxableValue + taxValue;
 
+                const reasons = [];
+                if (freeMap[pid]) reasons.push(...freeMap[pid].reasons);
+                if (priceSlabs[pid]) reasons.push(priceSlabs[pid].reason);
+                const lineTier = reasons.length > 0 ? reasons.join(', ') : null;
+
                 await client.query(`
                     INSERT INTO sales_invoice_lines (
                         invoice_id, product_id, shipped_qty, rate, mrp, 
                         gross_amount, scheme_amount, taxable_amount, 
-                        tax_percent, tax_amount, amount
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                `, [invId, pid, group.qty, group.rate, mrpVal, lineGross, lineScheme, taxableValue, lineTaxPercent, taxValue, netValue]);
+                                tax_percent, tax_amount, amount, tier_applied
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                `, [invId, pid, group.qty, group.rate, mrpVal, lineGross, lineScheme, taxableValue, lineTaxPercent, taxValue, netValue, lineTier]);
 
                 invTotal += netValue; invTax += taxValue; totalCOGS += group.cogs;
             }
