@@ -8,9 +8,22 @@ router.get('/', async (req, res) => {
     try {
         const { vendor_id } = req.query;
         let query = `
-            SELECT dn.*, dn.note_type, v.vendor_name, pi.invoice_number as linked_invoice_number
+            SELECT 
+                dn.*, 
+                dn.note_type, 
+                v.vendor_name, 
+                v.gst as vendor_gst,
+                v.contact_no as vendor_contact,
+                v.email as vendor_email,
+                va.address_line as vendor_address,
+                va.city as vendor_city,
+                va.district as vendor_district,
+                va.state_code as vendor_state,
+                va.pin_code as vendor_pin,
+                pi.invoice_number as linked_invoice_number
             FROM debit_notes dn
             JOIN vendors v ON dn.vendor_id = v.id
+            LEFT JOIN vendor_addresses va ON v.id = va.vendor_id AND va.is_default = true
             LEFT JOIN purchase_invoice_headers pi ON dn.linked_invoice_id = pi.id
         `;
         const params = [];
@@ -36,9 +49,21 @@ router.get('/vendor/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const result = await pool.query(`
-            SELECT dn.*, v.vendor_name, pi.invoice_number as linked_invoice_number
+            SELECT 
+                dn.*, 
+                v.vendor_name, 
+                v.gst as vendor_gst,
+                v.contact_no as vendor_contact,
+                v.email as vendor_email,
+                va.address_line as vendor_address,
+                va.city as vendor_city,
+                va.district as vendor_district,
+                va.state_code as vendor_state,
+                va.pin_code as vendor_pin,
+                pi.invoice_number as linked_invoice_number
             FROM debit_notes dn
             JOIN vendors v ON dn.vendor_id = v.id
+            LEFT JOIN vendor_addresses va ON v.id = va.vendor_id AND va.is_default = true
             LEFT JOIN purchase_invoice_headers pi ON dn.linked_invoice_id = pi.id
             WHERE dn.vendor_id = $1
             ORDER BY dn.debit_note_date DESC
@@ -470,6 +495,8 @@ router.get('/:id/items', async (req, res) => {
             SELECT 
                 ROW_NUMBER() OVER (ORDER BY dnl.id) as "S.No",
                 p.ean_code as "EAN Code",
+                p.product_code as "product_code",
+                p.hsn_code as "hsn_code",
                 p.product_name as "Item Name",
                 p.mrp as "MRP",
                 dnl.rate as "Price",
@@ -483,10 +510,12 @@ router.get('/:id/items', async (req, res) => {
                 ROUND((dnl.amount - (dnl.amount / (1 + (COALESCE(t.tax_percentage, 0)/100.0))))::numeric, 2) as "GST $",
                 dnl.amount as "Net $",
                 dnl.batch_number as "Batch No",
+                ib.expiry_date as "Expiry",
                 dnl.product_id as "_product_id"
             FROM debit_note_lines dnl
             JOIN products p ON dnl.product_id = p.id
             LEFT JOIN taxes t ON p.tax_id = t.id
+            LEFT JOIN inventory_batches ib ON dnl.batch_number = ib.batch_code AND dnl.product_id = ib.product_id
             WHERE dnl.debit_note_id = $1
         `, [id]);
         res.json(result.rows);
