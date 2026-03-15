@@ -149,6 +149,22 @@ router.get('/unified', async (req, res) => {
     }
 });
 
+// GET /api/sales/bank-details - Get active bank account for invoices
+router.get('/bank-details', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT bank_name, account_number, ifsc_code
+            FROM bank_accounts 
+            WHERE is_active = true AND account_number != 'CASH'
+            LIMIT 1
+        `);
+        res.json(result.rows[0] || {});
+    } catch (err) {
+        console.error('Bank Details API Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/sales/unified/:id - Single order/invoice detail
 router.get('/unified/:id', async (req, res) => {
     try {
@@ -164,8 +180,10 @@ router.get('/unified/:id', async (req, res) => {
                 r.route_name as route,
                 ca.address_line1 as customer_address,
                 ca.city as district,
+                ca.city as district,
                 ca.pincode as pin_code,
                 e.full_name as dse_name,
+                e.contact_primary as dse_phone,
                 
                 -- Invoice header
                 si.id as invoice_id,
