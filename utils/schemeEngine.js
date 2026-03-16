@@ -218,7 +218,7 @@ async function calculateFreeItems(items, customerId = null, client = null) {
         if (multiplier > 0) {
             // Add Free Item
             freeItems.push({
-                product_id: combo.reward_pid,
+                product_id: combo.reward_pid || Array.from(combo.components)[0],
                 qty: multiplier * combo.reward_qty,
                 reason: `${combo.name} (Basket Total ${basketTotal}, Req ${combo.basket_req})`
             });

@@ -943,7 +943,7 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                 ]);
 
                 // Pre-fetch product metadata for all involved PIDs to reduce query overhead
-                const pidsArray = Array.from(allPids).map(Number);
+                const pidsArray = Array.from(allPids).map(Number).filter(n => !isNaN(n) && n !== null && n !== 0);
                 const productsRes = await client.query(`
                     SELECT p.id, p.brand_id, p.tax_id, t.tax_percentage as tax_bracket 
                     FROM products p 
@@ -1232,7 +1232,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 ]);
 
                 // Pre-fetch product metadata for all involved PIDs to reduce query overhead
-                const pidsArray = Array.from(allPids).map(Number);
+                const pidsArray = Array.from(allPids).map(Number).filter(n => !isNaN(n) && n !== null && n !== 0);
                 const productsRes = await client.query(`
                     SELECT p.id, p.brand_id, p.tax_id, t.tax_percentage as tax_bracket 
                     FROM products p 
