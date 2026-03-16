@@ -270,7 +270,13 @@ router.put('/:id', async (req, res) => {
 
                 // Insert combo products if COMBO type
                 if (r.scheme_type === 'COMBO' && r.combo_products && r.combo_products.length > 0) {
-                    for (const productId of r.combo_products) {
+                    for (const comboProduct of r.combo_products) {
+                        let item = comboProduct;
+                        if (typeof item === 'string' && item.startsWith('{')) {
+                            try { item = JSON.parse(item); } catch (e) { }
+                        }
+                        const productId = (typeof item === 'object' && item !== null) ? item.product_id : item;
+                        
                         await client.query(`
                             INSERT INTO scheme_combo_products (scheme_rule_id, product_id)
                             VALUES ($1, $2)
