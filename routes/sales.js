@@ -1069,17 +1069,18 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                     throw new Error("Zero stock available for this order.");
                 }
 
-                const roundedTotal = Number(invTotal.toFixed(2));
+                const roundedTotal = Math.round(invTotal);
+                const roundOff = Number((roundedTotal - invTotal).toFixed(2));
                 const roundedTax = Number(invTax.toFixed(2));
-                const taxable = Number((roundedTotal - roundedTax).toFixed(2));
+                const taxable = Number((invTotal - roundedTax).toFixed(2));
                 const cgst = Number((roundedTax / 2).toFixed(2));
                 const sgst = Number((roundedTax - cgst).toFixed(2));
 
                 await client.query(`
                     UPDATE sales_invoices 
-                    SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4 
-                    WHERE id = $5
-                `, [roundedTotal, taxable, cgst, sgst, invId]);
+                    SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4, round_off = $5 
+                    WHERE id = $6
+                `, [roundedTotal, taxable, cgst, sgst, roundOff, invId]);
 
                 // --- ACCOUNTING INTEGRATION ---
                 const acc_revenue = 4001;
@@ -1314,6 +1315,14 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                         if (!mrpGroups[transitMrp]) {
                             mrpGroups[transitMrp] = { qty: 0, gross: 0, cogs: 0, slabDeduction: 0, rate: transitRate };
+                        }
+
+                        // Price Slab Deduction Calculation (Transit)
+                        if (priceSlabs[pid]) {
+                            const targetNet = Number(priceSlabs[pid].special_price);
+                            const targetExcl = targetNet / (1 + (taxPct / 100));
+                            const unitDeduction = Math.max(0, transitRate - targetExcl);
+                            mrpGroups[transitMrp].slabDeduction += (take * unitDeduction);
                         }
 
                         transitMap[pid].qty -= take;
