@@ -25,6 +25,7 @@ router.get('/', async (req, res) => {
                             'channel_tier', sr.channel_tier,
                             'is_recursive', sr.is_recursive,
                             'trigger_name', CASE 
+                                WHEN sr.scheme_type = 'COMBO' THEN 'Combo Group'
                                 WHEN sr.trigger_type = 'Product' THEN (SELECT product_name FROM products WHERE id = sr.trigger_id)
                                 WHEN sr.trigger_type = 'Brand' THEN (SELECT brand_name FROM brands WHERE id = sr.trigger_id)
                                 WHEN sr.trigger_type = 'Category' THEN (SELECT category_name FROM categories WHERE id = sr.trigger_id)
@@ -34,7 +35,8 @@ router.get('/', async (req, res) => {
                             'combo_products', (
                                 SELECT json_agg(json_build_object(
                                     'product_id', scp.product_id,
-                                    'product_name', p.product_name
+                                    'product_name', p.product_name,
+                                    'product_code', p.product_code
                                 ))
                                 FROM scheme_combo_products scp
                                 JOIN products p ON p.id = scp.product_id
@@ -129,7 +131,7 @@ router.get('/:id', async (req, res) => {
         for (const rule of rulesRes.rows) {
             if (rule.scheme_type === 'COMBO') {
                 const comboRes = await pool.query(`
-                    SELECT scp.product_id, p.product_name
+                    SELECT scp.product_id, p.product_name, p.product_code
                     FROM scheme_combo_products scp
                     JOIN products p ON scp.product_id = p.id
                     WHERE scp.scheme_rule_id = $1
