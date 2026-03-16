@@ -245,12 +245,13 @@ async function calculateFreeItems(items, customerId = null, client = null) {
     // Fetch rules for products that still have quantity (or all involved)
     // Price Slabs usually apply to the whole quantity of a product line.
     const slabRes = await db.query(`
-        SELECT sr.trigger_id as product_id, sr.min_qty, sr.special_price, s.scheme_name
+        SELECT sr.trigger_id as product_id, sr.min_qty, sr.special_price, s.scheme_name, sr.channel_tier
         FROM scheme_rules sr
         JOIN schemes s ON sr.scheme_id = s.id
         WHERE s.is_active = true 
           AND sr.scheme_type = 'PRICE_SLAB'
           AND sr.trigger_type = 'Product'
+          AND sr.special_price IS NOT NULL
           AND (s.end_date IS NULL OR s.end_date >= CURRENT_DATE)
           AND s.start_date <= CURRENT_DATE
           AND sr.trigger_id = ANY($1::int[])
@@ -259,6 +260,15 @@ async function calculateFreeItems(items, customerId = null, client = null) {
 
     slabRes.rows.forEach(r => {
         const pid = r.product_id;
+        const meta = productMeta[pid];
+        if (!meta) return;
+
+        const effectiveTier = (brandOverrides[meta.brand_id] || defaultTier || '').trim().toLowerCase();
+        const ruleTier = (r.channel_tier || '').trim().toLowerCase();
+        
+        // Tier Match: If rule has a tier, it must match effectiveTier. If null, applies to all.
+        if (ruleTier && ruleTier !== effectiveTier) return;
+
         // Check if original quantity meets the slab
         const originalQty = items.find(i => i.product_id == pid)?.qty || 0;
 

@@ -1404,16 +1404,13 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                 // 5. Update Totals & Order Status
                 if (invTotal === 0) {
-                    throw new Error("Zero stock available for this order. No invoice generated.");
+                    throw new Error("Zero total invoice amount. Please check if schemes (e.g., Price Slabs) are zeroing out the rates.");
                 }
 
                 const roundedTotal = Math.round(invTotal); // Enforce Integer Rounding
                 const roundOff = Number((roundedTotal - invTotal).toFixed(2));
                 const roundedTax = Number(invTax.toFixed(2));
-                const taxable = Number((roundedTotal - roundedTax - roundOff).toFixed(2)); // Back-calculate taxable base? No, keep original taxable.
-                // Better: Taxable = Actual Total - Tax. RoundOff is separate.
-                // Re-calculating taxable creates issues. Let's stick to: InvTotal (float) = Taxable + Tax.
-                // RoundedTotal = InvTotal + RoundOff.
+                const taxable = Number((invTotal - roundedTax).toFixed(2));
 
                 const cgst = Number((roundedTax / 2).toFixed(2));
                 const sgst = Number((roundedTax - cgst).toFixed(2));
