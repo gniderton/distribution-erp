@@ -11,14 +11,47 @@ router.get('/', async (req, res) => {
         let query = `
             SELECT 
                 s.*,
-                COUNT(sr.id) as rule_count,
+                (
+                    SELECT json_agg(
+                        json_build_object(
+                            'id', sr.id,
+                            'scheme_type', sr.scheme_type,
+                            'trigger_type', sr.trigger_type,
+                            'trigger_id', sr.trigger_id,
+                            'min_qty', sr.min_qty,
+                            'reward_qty', sr.reward_qty,
+                            'special_price', sr.special_price,
+                            'tier_level', sr.tier_level,
+                            'channel_tier', sr.channel_tier,
+                            'is_recursive', sr.is_recursive,
+                            'trigger_name', CASE 
+                                WHEN sr.trigger_type = 'Product' THEN (SELECT product_name FROM products WHERE id = sr.trigger_id)
+                                WHEN sr.trigger_type = 'Brand' THEN (SELECT brand_name FROM brands WHERE id = sr.trigger_id)
+                                WHEN sr.trigger_type = 'Category' THEN (SELECT category_name FROM categories WHERE id = sr.trigger_id)
+                                ELSE 'Global'
+                            END,
+                            'reward_product_name', (SELECT product_name FROM products WHERE id = sr.reward_product_id),
+                            'combo_products', (
+                                SELECT json_agg(json_build_object(
+                                    'product_id', scp.product_id,
+                                    'product_name', p.product_name
+                                ))
+                                FROM scheme_combo_products scp
+                                JOIN products p ON p.id = scp.product_id
+                                WHERE scp.scheme_rule_id = sr.id
+                            )
+                        )
+                    )
+                    FROM scheme_rules sr
+                    WHERE sr.scheme_id = s.id
+                ) as rules,
+                COALESCE((SELECT COUNT(*) FROM scheme_rules WHERE scheme_id = s.id), 0) as rule_count,
                 CASE 
                     WHEN s.end_date IS NOT NULL AND s.end_date < CURRENT_DATE THEN 'Expired'
                     WHEN s.is_active = true THEN 'Active'
                     ELSE 'Inactive'
                 END as computed_status
             FROM schemes s
-            LEFT JOIN scheme_rules sr ON s.id = sr.scheme_id
             WHERE 1=1
         `;
 
