@@ -313,11 +313,20 @@ router.delete('/:id', async (req, res) => {
 router.get('/:id/usage', async (req, res) => {
     try {
         const { id } = req.params;
+        const { startDate, endDate } = req.query;
         
         // 1. Get the scheme name for fallback search (legacy invoices)
         const nameRes = await pool.query('SELECT scheme_name FROM schemes WHERE id = $1', [id]);
         if (nameRes.rows.length === 0) return res.status(404).json({ error: 'Scheme not found' });
         const name = nameRes.rows[0].scheme_name;
+
+        let dateClause = "";
+        let params = [`%[ID:${id}]%`, `%${name}%`];
+
+        if (startDate && endDate) {
+            dateClause = " AND si.invoice_date BETWEEN $3 AND $4 ";
+            params.push(startDate, endDate);
+        }
 
         // 2. Search invoices where any line references this ID or name
         // We look for [ID:id] or exact Name match in tier_applied
@@ -334,10 +343,10 @@ router.get('/:id/usage', async (req, res) => {
             JOIN sales_invoice_lines sil ON sil.invoice_id = si.id
             JOIN customers c ON si.customer_id = c.id
             WHERE 
-                sil.tier_applied ILIKE $1 -- Pattern search for ID e.g. %[ID:57]%
-                OR sil.tier_applied ILIKE $2 -- Pattern search for Name e.g. %New Year Scheme%
+                (sil.tier_applied ILIKE $1 OR sil.tier_applied ILIKE $2)
+                ${dateClause}
             ORDER BY si.invoice_date DESC
-        `, [`%[ID:${id}]%`, `%${name}%`]);
+        `, params);
 
         res.json(result.rows);
     } catch (err) {
