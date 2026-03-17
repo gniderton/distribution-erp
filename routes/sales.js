@@ -99,7 +99,7 @@ router.get('/invoices/lines-bulk', async (req, res) => {
                 p.product_name, p.product_code, p.ean_code,
                 h.hsn_code,
                 si.invoice_number, si.invoice_date, si.grand_total,
-                c.customer_name, ca.address_line1 as customer_address, c.gst as gstin, c.phone as customer_phone, c.email as customer_email,
+                c.customer_name, ca.address_line1 as customer_address, c.gstin as gstin, c.customer_phone as customer_phone, c.email as customer_email,
                 so.order_date as order_date,
                 e.full_name as dse_name,
                 r.route_name as route
