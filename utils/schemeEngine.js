@@ -148,7 +148,7 @@ async function calculateFreeItems(items, customerId = null, client = null) {
                         freeItems.push({
                             product_id: rule.reward_product_id || pid,
                             qty: rewardQty,
-                            reason: `${rule.scheme_name} (Buy ${rule.min_qty} Get ${rule.reward_qty})`
+                            reason: `${rule.scheme_name} [ID:${rule.scheme_id}] (Buy ${rule.min_qty} Get ${rule.reward_qty})`
                         });
 
                         const consumed = rule.is_case_qty ? (multiplier * rule.min_qty * (meta.case_quantity || 1)) : (multiplier * rule.min_qty);
@@ -188,6 +188,7 @@ async function calculateFreeItems(items, customerId = null, client = null) {
         if (!combos[r.rule_id]) {
             combos[r.rule_id] = {
                 name: r.scheme_name,
+                scheme_id: r.scheme_id,
                 reward_pid: r.reward_product_id,
                 reward_qty: r.reward_qty,
                 basket_req: r.limit_qty,
@@ -220,7 +221,7 @@ async function calculateFreeItems(items, customerId = null, client = null) {
             freeItems.push({
                 product_id: combo.reward_pid || Array.from(combo.components)[0],
                 qty: multiplier * combo.reward_qty,
-                reason: `${combo.name} (Basket Total ${basketTotal}, Req ${combo.basket_req})`
+                reason: `${combo.name} [ID:${combo.scheme_id}] (Basket Total ${basketTotal}, Req ${combo.basket_req})`
             });
 
             // Consume Stock (Deduct from used pools)
@@ -245,7 +246,7 @@ async function calculateFreeItems(items, customerId = null, client = null) {
     // Fetch rules for products that still have quantity (or all involved)
     // Price Slabs usually apply to the whole quantity of a product line.
     const slabRes = await db.query(`
-        SELECT sr.trigger_id as product_id, sr.min_qty, sr.special_price, s.scheme_name, sr.channel_tier
+        SELECT sr.trigger_id as product_id, sr.min_qty, sr.special_price, s.scheme_name, sr.channel_tier, s.id as scheme_id
         FROM scheme_rules sr
         JOIN schemes s ON sr.scheme_id = s.id
         WHERE s.is_active = true 
@@ -275,7 +276,7 @@ async function calculateFreeItems(items, customerId = null, client = null) {
         if (!priceSlabs[pid] && originalQty >= r.min_qty) {
             priceSlabs[pid] = {
                 special_price: Number(r.special_price),
-                reason: `${r.scheme_name} (Slab >= ${r.min_qty})`
+                reason: `${r.scheme_name} [ID:${r.scheme_id}] (Slab >= ${r.min_qty})`
             };
         }
     });

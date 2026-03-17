@@ -1801,4 +1801,33 @@ router.post('/invoices/regenerate', async (req, res) => {
     }
 });
 
+// GET /api/sales/invoices/lines-bulk - Get lines for multiple invoices
+router.get('/invoices/lines-bulk', async (req, res) => {
+    try {
+        const { ids } = req.query; // Comma-separated IDs
+        if (!ids) return res.json([]);
+        
+        const idList = ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+        if (idList.length === 0) return res.json([]);
+
+        const result = await pool.query(`
+            SELECT 
+                sil.*, 
+                p.product_name, 
+                p.product_code,
+                si.invoice_number
+            FROM sales_invoice_lines sil
+            JOIN products p ON sil.product_id = p.id
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            WHERE sil.invoice_id = ANY($1::int[])
+            ORDER BY si.invoice_number ASC, sil.id ASC
+        `, [idList]);
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Bulk Lines Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
