@@ -96,12 +96,22 @@ router.get('/invoices/lines-bulk', async (req, res) => {
         const result = await pool.query(`
             SELECT 
                 sil.*, 
-                p.product_name, 
-                p.product_code,
-                si.invoice_number
+                p.product_name, p.product_code, p.ean_code,
+                h.hsn_code,
+                si.invoice_number, si.invoice_date, si.grand_total,
+                c.customer_name, ca.address_line1 as customer_address, c.gst as gstin, c.phone as customer_phone, c.email as customer_email,
+                so.order_date as order_date,
+                e.full_name as dse_name,
+                r.route_name as route
             FROM sales_invoice_lines sil
             JOIN products p ON sil.product_id = p.id
+            LEFT JOIN hsn_codes h ON p.hsn_id = h.id
             JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN customers c ON si.customer_id = c.id
+            LEFT JOIN customer_addresses ca ON ca.customer_id = c.id AND ca.is_default_billing = true
+            JOIN sales_orders so ON si.sales_order_id = so.id
+            LEFT JOIN employees e ON so.created_by = e.id
+            LEFT JOIN routes r ON c.route_id = r.id
             WHERE sil.invoice_id = ANY($1::int[])
             ORDER BY si.invoice_number ASC, sil.id ASC
         `, [idList]);
