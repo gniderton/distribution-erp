@@ -107,9 +107,9 @@ router.get('/invoices/lines-bulk', async (req, res) => {
             JOIN products p ON sil.product_id = p.id
             LEFT JOIN hsn_codes h ON p.hsn_id = h.id
             JOIN sales_invoices si ON sil.invoice_id = si.id
-            JOIN customers c ON si.customer_id = c.id
+            LEFT JOIN customers c ON si.customer_id = c.id
             LEFT JOIN customer_addresses ca ON ca.customer_id = c.id AND ca.is_default_billing = true
-            JOIN sales_orders so ON si.sales_order_id = so.id
+            LEFT JOIN sales_orders so ON si.sales_order_id = so.id
             LEFT JOIN employees e ON so.created_by = e.id
             LEFT JOIN routes r ON c.route_id = r.id
             WHERE sil.invoice_id = ANY($1::int[])
