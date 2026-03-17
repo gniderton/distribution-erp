@@ -324,6 +324,7 @@ router.get('/:id/usage', async (req, res) => {
         const result = await pool.query(`
             SELECT DISTINCT
                 si.id as invoice_id,
+                si.sales_order_id as id,
                 si.invoice_number,
                 si.invoice_date,
                 c.customer_name,
