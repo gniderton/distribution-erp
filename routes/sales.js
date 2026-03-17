@@ -84,6 +84,35 @@ router.get('/invoices', async (req, res) => {
     }
 });
 
+// GET /api/sales/invoices/lines-bulk - Get lines for multiple invoices
+router.get('/invoices/lines-bulk', async (req, res) => {
+    try {
+        const { ids } = req.query; // Comma-separated IDs
+        if (!ids) return res.json([]);
+        
+        const idList = ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+        if (idList.length === 0) return res.json([]);
+
+        const result = await pool.query(`
+            SELECT 
+                sil.*, 
+                p.product_name, 
+                p.product_code,
+                si.invoice_number
+            FROM sales_invoice_lines sil
+            JOIN products p ON sil.product_id = p.id
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            WHERE sil.invoice_id = ANY($1::int[])
+            ORDER BY si.invoice_number ASC, sil.id ASC
+        `, [idList]);
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Bulk Lines Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/sales/invoices/:id - Detailed Invoice for Printing
 router.get('/invoices/:id', async (req, res) => {
     try {
@@ -94,7 +123,7 @@ router.get('/invoices/:id', async (req, res) => {
             const headerRes = await client.query(`
                 SELECT 
                     si.*, 
-                    c.customer_name, c.address_line1 as customer_address, c.gst as customer_gst, c.phone as customer_phone,
+                    c.customer_name, ca.address_line1 as customer_address, c.gst as customer_gst, c.phone as customer_phone,
                     so.so_number, so.order_date as so_date, so.remarks as so_remarks,
                     e.full_name as dse_name,
                     r.route_name,
@@ -105,6 +134,7 @@ router.get('/invoices/:id', async (req, res) => {
                     ) FROM company_settings LIMIT 1) as company
                 FROM sales_invoices si
                 JOIN customers c ON si.customer_id = c.id
+                LEFT JOIN customer_addresses ca ON ca.customer_id = c.id AND ca.is_default_billing = true
                 JOIN sales_orders so ON si.sales_order_id = so.id
                 LEFT JOIN employees e ON so.created_by = e.id
                 LEFT JOIN routes r ON c.route_id = r.id
@@ -1801,33 +1831,5 @@ router.post('/invoices/regenerate', async (req, res) => {
     }
 });
 
-// GET /api/sales/invoices/lines-bulk - Get lines for multiple invoices
-router.get('/invoices/lines-bulk', async (req, res) => {
-    try {
-        const { ids } = req.query; // Comma-separated IDs
-        if (!ids) return res.json([]);
-        
-        const idList = ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
-        if (idList.length === 0) return res.json([]);
-
-        const result = await pool.query(`
-            SELECT 
-                sil.*, 
-                p.product_name, 
-                p.product_code,
-                si.invoice_number
-            FROM sales_invoice_lines sil
-            JOIN products p ON sil.product_id = p.id
-            JOIN sales_invoices si ON sil.invoice_id = si.id
-            WHERE sil.invoice_id = ANY($1::int[])
-            ORDER BY si.invoice_number ASC, sil.id ASC
-        `, [idList]);
-
-        res.json(result.rows);
-    } catch (err) {
-        console.error('Bulk Lines Error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
 
 module.exports = router;
