@@ -201,16 +201,33 @@ router.post('/', async (req, res) => {
 
         await client.query('BEGIN');
 
+        // 0. Auto-Generate Customer Code
+        const seqRes = await client.query(`
+            UPDATE document_sequences 
+            SET current_number = current_number + 1 
+            WHERE document_type = 'CUSTOMER' 
+            RETURNING prefix, current_number
+        `);
+
+        let customerCode;
+        if (seqRes.rows.length === 0) {
+            customerCode = 'CS-00001'; // Fallback
+        } else {
+            const { prefix, current_number } = seqRes.rows[0];
+            // Format: CS-00016
+            customerCode = `${prefix}${String(current_number).padStart(5, '0')}`;
+        }
+
         // 1. Insert Customer
         const insertRes = await client.query(`
             INSERT INTO customers (
-                customer_name, customer_phone, email, gstin, pan, 
+                customer_name, customer_code, customer_phone, email, gstin, pan, 
                 credit_limit, credit_days, channel_id,
                 route_id, dse_id, is_active, whatsapp_number, route_type_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11, $12)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13)
             RETURNING id
         `, [
-            customer_name, customer_phone, email, gstin, pan,
+            customer_name, customerCode, customer_phone, email, gstin, pan,
             credit_limit || 0, credit_days || 0, channel_id,
             route_id || null, dse_id || null, req.body.whatsapp_number, req.body.route_type_id || null
         ]);
