@@ -107,4 +107,7 @@ router.get('/vendor-addresses', getTable('vendor_addresses'));
 router.get('/routes', getTable('routes', 'route_name ASC'));
 router.post('/routes', createSimple('routes', 'route_name'));
 
+// 8. Route Types
+router.get('/route-types', getTable('route_types', 'frequency_name ASC'));
+
 module.exports = router;
