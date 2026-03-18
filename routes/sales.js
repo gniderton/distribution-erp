@@ -87,13 +87,32 @@ router.get('/invoices', async (req, res) => {
 // GET /api/sales/invoices/lines-bulk - Get lines for multiple invoices
 router.get('/invoices/lines-bulk', async (req, res) => {
     try {
-        const { ids } = req.query; // Comma-separated IDs
+        const { ids, schemeId, schemeName } = req.query; // Comma-separated IDs
         if (!ids) return res.json([]);
         
         const idList = ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
         if (idList.length === 0) return res.json([]);
 
-        const result = await pool.query(`
+        let filterClause = "";
+        let params = [idList];
+
+        if (schemeId || schemeName) {
+            const p1 = schemeId ? `%[ID:${schemeId}]%` : null;
+            const p2 = schemeName ? `%${schemeName}%` : null;
+            
+            if (p1 && p2) {
+                filterClause = " AND (sil.tier_applied ILIKE $2 OR sil.tier_applied ILIKE $3) ";
+                params.push(p1, p2);
+            } else if (p1) {
+                filterClause = " AND sil.tier_applied ILIKE $2 ";
+                params.push(p1);
+            } else if (p2) {
+                filterClause = " AND sil.tier_applied ILIKE $2 ";
+                params.push(p2);
+            }
+        }
+
+        const query = `
             SELECT 
                 sil.*, 
                 p.product_name, p.product_code, p.ean_code,
@@ -113,8 +132,11 @@ router.get('/invoices/lines-bulk', async (req, res) => {
             LEFT JOIN employees e ON so.created_by = e.id
             LEFT JOIN routes r ON c.route_id = r.id
             WHERE sil.invoice_id = ANY($1::int[])
+            ${filterClause}
             ORDER BY si.invoice_number ASC, sil.id ASC
-        `, [idList]);
+        `;
+
+        const result = await pool.query(query, params);
 
         res.json(result.rows);
     } catch (err) {
