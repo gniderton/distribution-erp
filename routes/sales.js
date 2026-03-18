@@ -129,7 +129,7 @@ router.get('/invoices/lines-bulk', async (req, res) => {
             LEFT JOIN customers c ON si.customer_id = c.id
             LEFT JOIN customer_addresses ca ON ca.customer_id = c.id AND ca.is_default_billing = true
             LEFT JOIN sales_orders so ON si.sales_order_id = so.id
-            LEFT JOIN employees e ON so.created_by = e.id
+            LEFT JOIN employees e ON so.dse_id = e.id
             LEFT JOIN routes r ON c.route_id = r.id
             WHERE sil.invoice_id = ANY($1::int[])
             ${filterClause}
