@@ -76,6 +76,32 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET /api/customers/detailed-list - Maximum details including names for DSE/Route/Address
+router.get('/detailed-list', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                c.*, 
+                r.route_name, 
+                e.full_name as dse_name, 
+                ch.channel_name,
+                ca.address_line1, ca.address_line2, ca.city, ca.state, ca.pincode,
+                ca.location_lat, ca.location_lng
+            FROM customers c
+            LEFT JOIN routes r ON c.route_id = r.id
+            LEFT JOIN employees e ON c.dse_id = e.id
+            LEFT JOIN channels ch ON c.channel_id = ch.id
+            LEFT JOIN customer_addresses ca ON ca.customer_id = c.id AND ca.is_default_billing = true
+            WHERE c.is_active = true
+            ORDER BY c.customer_name ASC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Detailed Customer List Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/customers/:id - Single Customer with Profile 360
 router.get('/:id', async (req, res) => {
     try {
