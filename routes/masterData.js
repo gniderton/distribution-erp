@@ -108,6 +108,14 @@ router.get('/routes', getTable('routes', 'route_name ASC'));
 router.post('/routes', createSimple('routes', 'route_name'));
 
 // 8. Route Types
-router.get('/route-types', getTable('route_types', 'frequency_name ASC'));
+router.get('/route-types', async (req, res) => {
+    try {
+        const result = await pool.query(`SELECT * FROM route_types ORDER BY frequency_name ASC`);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching route_types:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 module.exports = router;
