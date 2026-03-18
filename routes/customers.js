@@ -188,6 +188,41 @@ router.get('/:id/pending-bills', async (req, res) => {
     }
 });
 
+// GET /api/customers/:id/ledger - Get Customer Ledger
+router.get('/:id/ledger', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { startDate, endDate } = req.query;
+
+        let query = `
+            SELECT * FROM view_customer_ledger 
+            WHERE customer_id = $1
+        `;
+        const params = [id];
+        let pIdx = 2;
+
+        if (startDate) {
+            query += ` AND date >= $${pIdx}`;
+            params.push(startDate);
+            pIdx++;
+        }
+        
+        if (endDate) {
+            query += ` AND date <= $${pIdx}`;
+            params.push(endDate);
+            pIdx++;
+        }
+
+        query += ` ORDER BY date ASC, id ASC`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Ledger error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /api/customers - Create New Customer
 router.post('/', async (req, res) => {
     const client = await pool.connect();
