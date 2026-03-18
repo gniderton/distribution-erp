@@ -194,6 +194,19 @@ router.get('/:id/ledger', async (req, res) => {
         const { id } = req.params;
         const { startDate, endDate } = req.query;
 
+        // 1. Calculate Opening Balance (if startDate is provided)
+        let openingBalance = 0;
+        if (startDate) {
+            const obRes = await pool.query(`
+                SELECT 
+                    COALESCE(SUM(debit_amount), 0) - COALESCE(SUM(credit_amount), 0) as opening_balance
+                FROM view_customer_ledger
+                WHERE customer_id = $1 AND date < $2
+            `, [id, startDate]);
+            openingBalance = parseFloat(obRes.rows[0].opening_balance) || 0;
+        }
+
+        // 2. Fetch Ledger Entries in Date Range
         let query = `
             SELECT * FROM view_customer_ledger 
             WHERE customer_id = $1
@@ -216,7 +229,33 @@ router.get('/:id/ledger', async (req, res) => {
         query += ` ORDER BY date ASC, id ASC`;
 
         const result = await pool.query(query, params);
-        res.json(result.rows);
+
+        // 3. Compute Running Balance and Totals
+        let currentBalance = openingBalance;
+        let totalDebit = 0;
+        let totalCredit = 0;
+
+        const ledgerWithBalance = result.rows.map(row => {
+            const debit = parseFloat(row.debit_amount) || 0;
+            const credit = parseFloat(row.credit_amount) || 0;
+            totalDebit += debit;
+            totalCredit += credit;
+            currentBalance = currentBalance + debit - credit;
+            
+            return {
+                ...row,
+                running_balance: currentBalance
+            };
+        });
+
+        res.json({
+            opening_balance: openingBalance,
+            total_debit: totalDebit,
+            total_credit: totalCredit,
+            closing_balance: currentBalance,
+            ledger: ledgerWithBalance
+        });
+
     } catch (err) {
         console.error('Ledger error:', err);
         res.status(500).json({ error: err.message });
