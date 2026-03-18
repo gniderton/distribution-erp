@@ -34,9 +34,14 @@ router.get('/', async (req, res) => {
         let pIdx = 1;
 
         if (role) {
-            query += ` AND designation ILIKE $${pIdx}`;
-            params.push(role); // e.g. 'DSE'
-            pIdx++;
+            // Map common roles to IDs based on client feedback. DSE is 14.
+            if (role.toUpperCase() === 'DSE' || role === '14') {
+                query += ` AND designation = '14'`;
+            } else {
+                query += ` AND designation = $${pIdx}`;
+                params.push(role);
+                pIdx++;
+            }
         }
 
         query += ` ORDER BY full_name ASC LIMIT $${pIdx} OFFSET $${pIdx + 1}`;
