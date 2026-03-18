@@ -34,9 +34,9 @@ router.get('/', async (req, res) => {
         let pIdx = 1;
 
         if (role) {
-            // Map common roles to IDs based on client feedback. DSE is 14.
-            if (role.toUpperCase() === 'DSE' || role === '14') {
-                query += ` AND designation = '14'`;
+            // Map common roles to IDs based on client feedback. DSE is 11 (Sales Exec) or 14 (Field Sales).
+            if (role.toUpperCase() === 'DSE') {
+                query += ` AND designation IN (11, 14)`;
             } else {
                 query += ` AND designation = $${pIdx}`;
                 params.push(role);
