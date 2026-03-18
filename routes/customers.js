@@ -86,7 +86,18 @@ router.get('/detailed-list', async (req, res) => {
                 e.full_name as dse_name, 
                 ch.channel_name,
                 ca.address_line1, ca.address_line2, ca.city, ca.state, ca.pincode,
-                ca.location_lat, ca.location_lng
+                ca.location_lat, ca.location_lng,
+                -- [NEW] Brand-specific Pricing Overrides
+                (
+                    SELECT json_agg(json_build_object(
+                        'brand_id', cbp.brand_id, 
+                        'price_column', ch_ex.price_column,
+                        'channel_name', ch_ex.channel_name
+                    ))
+                    FROM customer_brand_pricing cbp
+                    JOIN channels ch_ex ON cbp.channel_id = ch_ex.id
+                    WHERE cbp.customer_id = c.id
+                ) as pricing_ex
             FROM customers c
             LEFT JOIN routes r ON c.route_id = r.id
             LEFT JOIN employees e ON c.dse_id = e.id
