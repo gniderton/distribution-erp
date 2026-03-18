@@ -183,7 +183,8 @@ async function initializeDatabase() {
             { id: '133', path: '133_vendor_return_slips.sql' },
             { id: '134', path: '134_return_slip_audit.sql' },
             { id: '135', path: '135_sync_dn_rs_sequences.sql' },
-            { id: '136', path: '136_fix_ledger_view_sorting.sql' }
+            { id: '136', path: '136_fix_ledger_view_sorting.sql' },
+            { id: '137', path: '137_emp_designation_to_id.sql' }
         ];
 
         for (const m of migrations) {
