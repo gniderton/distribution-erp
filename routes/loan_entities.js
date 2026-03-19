@@ -24,8 +24,20 @@ router.get('/active', async (req, res) => {
 
 // POST /api/loan-entities
 router.post('/', async (req, res) => {
-    const { entity_name, entity_type, role_type, contact_number, email, address, notes, is_active, reference_id } = req.body;
+    let { entity_name, entity_type, role_type, contact_number, email, address, notes, is_active, reference_id } = req.body;
     try {
+        // Auto-fetch missing details if it's an employee
+        if (entity_type === 'Employee' && reference_id) {
+            const empRes = await pool.query('SELECT name, contact_no, email, address FROM employees WHERE id = $1', [reference_id]);
+            if (empRes.rows.length > 0) {
+                const emp = empRes.rows[0];
+                if (!entity_name || !isNaN(entity_name)) entity_name = emp.name;
+                contact_number = contact_number || emp.contact_no;
+                email = email || emp.email;
+                address = address || emp.address;
+            }
+        }
+
         const result = await pool.query(`
             INSERT INTO loan_entities (
                 entity_name, entity_type, role_type, contact_number, email, address, notes, is_active, reference_id
@@ -42,9 +54,21 @@ router.post('/', async (req, res) => {
 // PUT /api/loan-entities/:id
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    const { entity_name, entity_type, role_type, contact_number, email, address, notes, is_active, reference_id } = req.body;
+    let { entity_name, entity_type, role_type, contact_number, email, address, notes, is_active, reference_id } = req.body;
     
     try {
+        // Auto-fetch missing details if it's an employee
+        if (entity_type === 'Employee' && reference_id) {
+            const empRes = await pool.query('SELECT name, contact_no, email, address FROM employees WHERE id = $1', [reference_id]);
+            if (empRes.rows.length > 0) {
+                const emp = empRes.rows[0];
+                if (!entity_name || !isNaN(entity_name)) entity_name = emp.name;
+                contact_number = contact_number || emp.contact_no;
+                email = email || emp.email;
+                address = address || emp.address;
+            }
+        }
+
         const result = await pool.query(`
             UPDATE loan_entities SET
                 entity_name = COALESCE($1, entity_name),
