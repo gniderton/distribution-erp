@@ -37,6 +37,7 @@ const port = process.env.PORT || 3000;
 // Middleware
 app.use(cors()); // Allow Retool to access this API
 app.use(express.json({ limit: '10mb' })); // Parse JSON bodies (increased for bank statements)
+app.use(express.text({ type: 'text/plain', limit: '10mb' })); // Fallback for raw text payloads (Appsmith RAW JSON)
 
 // Health Check
 app.get('/', (req, res) => {
