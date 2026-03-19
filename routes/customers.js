@@ -346,6 +346,62 @@ router.post('/', async (req, res) => {
     }
 });
 
+// PUT /api/customers/:id - Update Customer (Designed for Appsmith JSONForm layout)
+router.put('/:id', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const payload = req.body;
+        
+        const bInfo = payload.Basic_Info || {};
+        const taxInfo = payload.Tax_and_Accounting || {};
+        const logInfo = payload.Logistics_Assignment || {};
+        const defAddr = payload.Default_Address || {};
+
+        await client.query('BEGIN');
+
+        const updQuery = `
+            UPDATE customers SET
+                customer_name = $1, whatsapp_number = $2, email = $3, is_active = $4,
+                gstin = $5, pan = $6, credit_limit = $7, credit_days = $8, channel_id = $9,
+                route_id = $10, dse_id = $11, route_type_id = $12, route_sequence = $13
+            WHERE id = $14
+        `;
+        await client.query(updQuery, [
+            bInfo.customer_name, bInfo.whatsapp_number, bInfo.email, bInfo.is_active,
+            taxInfo.gstin, taxInfo.pan, taxInfo.credit_limit || 0, taxInfo.credit_days || 0, taxInfo.channel_id || null,
+            logInfo.route_id || null, logInfo.dse_id || null, logInfo.route_type_id || null, logInfo.route_sequence || 0,
+            id
+        ]);
+
+        // Delete existing billing address
+        await client.query(`DELETE FROM customer_addresses WHERE customer_id = $1 AND is_default_billing = true`, [id]);
+        
+        // Insert replaced billing address
+        if (defAddr.address_line1 || defAddr.city) {
+            await client.query(`
+                INSERT INTO customer_addresses (
+                    customer_id, address_line1, address_line2, city, state, pincode, 
+                    is_default_billing, is_default_shipping, location_lat, location_lng
+                ) VALUES ($1, $2, $3, $4, $5, $6, true, true, $7, $8)
+            `, [
+                id, defAddr.address_line1, defAddr.address_line2, defAddr.city, defAddr.state, defAddr.pincode,
+                defAddr.location_lat || null, defAddr.location_lng || null
+            ]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Customer Updated' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Update Customer Error:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // Routes Master
 router.get('/meta/routes', async (req, res) => {
     const result = await pool.query('SELECT * FROM routes WHERE is_active = true ORDER BY route_name');
