@@ -156,15 +156,16 @@ router.post('/:id/installment', async (req, res) => {
     try {
         const {
             transaction_date,
-            total_amount,
-            principal_portion,
-            interest_portion,
             payment_mode,
             bank_account_id,
             reference_no,
             remarks,
             bank_statement_entry_id
         } = req.body;
+
+        const total_amount = parseFloat(req.body.total_amount) || 0;
+        const principal_portion = parseFloat(req.body.principal_portion) || 0;
+        const interest_portion = parseFloat(req.body.interest_portion) || 0;
 
         await client.query('BEGIN');
 
