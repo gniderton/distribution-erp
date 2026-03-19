@@ -91,4 +91,73 @@ router.put('/:id', async (req, res) => {
     }
 });
 
+// GET /api/loan-entities/:id/ledger
+router.get('/:id/ledger', async (req, res) => {
+    try {
+        const entityId = req.params.id;
+
+        // 1. Get All Transactions for this Entity's loans
+        const result = await pool.query(`
+            SELECT 
+                lt.*,
+                l.loan_number,
+                l.loan_type,
+                l.party_name
+            FROM loan_transactions lt
+            JOIN loans l ON lt.loan_id = l.id
+            WHERE l.party_id = $1
+            ORDER BY lt.transaction_date ASC, lt.created_at ASC
+        `, [entityId]);
+
+        let running_balance = 0;
+        let total_debit = 0;
+        let total_credit = 0;
+
+        const ledger = result.rows.map(trans => {
+            let debit = 0;
+            let credit = 0;
+            const amount = parseFloat(trans.amount);
+
+            if (trans.loan_type === 'GIVEN') {
+                if (trans.transaction_type === 'DISBURSEMENT') debit = amount;
+                else credit = amount;
+                running_balance += (debit - credit);
+            } else {
+                if (trans.transaction_type === 'DISBURSEMENT') credit = amount;
+                else debit = amount;
+                running_balance += (credit - debit);
+            }
+
+            total_debit += debit;
+            total_credit += credit;
+
+            return {
+                id: trans.id,
+                loan_id: trans.loan_id,
+                loan_number: trans.loan_number,
+                date: trans.transaction_date,
+                type: trans.transaction_type,
+                reference_number: trans.reference_no,
+                description: trans.remarks || `${trans.transaction_type} of Loan ${trans.loan_number}`,
+                debit_amount: debit.toFixed(2),
+                credit_amount: credit.toFixed(2),
+                status: 'Cleared',
+                running_balance: parseFloat(running_balance.toFixed(2))
+            };
+        });
+
+        res.json({
+            opening_balance: 0,
+            total_debit: parseFloat(total_debit.toFixed(2)),
+            total_credit: parseFloat(total_credit.toFixed(2)),
+            closing_balance: parseFloat(running_balance.toFixed(2)),
+            ledger
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
