@@ -27,18 +27,29 @@ router.post('/', async (req, res) => {
 
         await client.query('BEGIN');
 
+        // 0. Generate Asset Purchase Number
+        const seqRes = await client.query(`
+            UPDATE document_sequences
+            SET current_number = current_number + 1
+            WHERE document_type = 'ASSET_PURCHASE'
+            RETURNING prefix || LPAD(current_number::text, 4, '0') as purchase_no
+        `);
+        const assetPurchaseNo = seqRes.rows[0]?.purchase_no || `ASP-TMP-${Date.now()}`;
+
         // 1. Insert into Assets Table
         const assetRes = await client.query(`
             INSERT INTO assets (
                 asset_name, category, purchase_date, purchase_cost, 
                 useful_life_years, salvage_value, asset_account_code, vendor_id,
-                is_gst_purchase, taxable_amount, tax_amount, gst_no, bill_no, created_by
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                is_gst_purchase, taxable_amount, tax_amount, gst_no, bill_no, created_by,
+                asset_purchase_no
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING id
         `, [
             asset_name, category, purchase_date, purchase_cost,
             useful_life_years, salvage_value, asset_account_code, vendor_id,
-            is_gst_purchase || false, taxable_amount || 0, tax_amount || 0, gst_no, bill_no, created_by
+            is_gst_purchase || false, taxable_amount || 0, tax_amount || 0, gst_no, bill_no, created_by,
+            assetPurchaseNo
         ]);
 
         const assetId = assetRes.rows[0].id;
@@ -75,7 +86,7 @@ router.post('/', async (req, res) => {
         `, [assetId, purchase_date, purchase_cost, journalId.rows[0].create_journal_entry, remarks]);
 
         await client.query('COMMIT');
-        res.status(201).json({ success: true, asset_id: assetId });
+        res.status(201).json({ success: true, asset_id: assetId, asset_purchase_no: assetPurchaseNo });
 
     } catch (err) {
         await client.query('ROLLBACK');
@@ -98,7 +109,7 @@ router.get('/', async (req, res) => {
                 (a.purchase_cost - COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'DEPRECIATION'), 0)) as net_book_value,
                 (a.purchase_cost - COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'PAYMENT'), 0)) as balance_payable
             FROM assets a
-            ORDER BY a.purchase_date DESC
+            ORDER BY a.purchase_date DESC, a.created_at DESC
         `);
         res.json(result.rows);
     } catch (err) {
