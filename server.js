@@ -88,6 +88,7 @@ app.use('/api/dse', require('./routes/dse')); // [NEW] DSE Ops (EOD, etc)
 app.use('/api/sales-orders', require('./routes/sales_orders')); // [NEW] Sales Admin
 app.use('/api/schemes', require('./routes/schemes')); // [NEW] Scheme Engine
 app.use('/api/migration', require('./routes/migration')); // Bulk Data Importer
+app.use('/api/loan-entities', require('./routes/loan_entities')); // Master Data for Loans
 app.use('/api/channels', require('./routes/channels')); // [NEW] Channel Maaping
 app.use('/api/categories', require('./routes/categories')); // Categories for dropdowns
 app.use('/api/sales-returns', require('./routes/sales_returns')); // [NEW] Credit Notes
