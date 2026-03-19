@@ -351,8 +351,17 @@ router.put('/:id', async (req, res) => {
     const client = await pool.connect();
     try {
         const { id } = req.params;
-        const payload = req.body;
         
+        let payload = req.body;
+        // Robust parsing: If Appsmith sends it as a string or wrapped in a "body" property
+        if (typeof payload === 'string') {
+            try { payload = JSON.parse(payload); } catch(e) {}
+        } else if (payload && payload.body && typeof payload.body === 'string') {
+            try { payload = JSON.parse(payload.body); } catch(e) {}
+        } else if (payload && Object.keys(payload).length === 1 && Object.keys(payload)[0].startsWith('{"')) {
+            try { payload = JSON.parse(Object.keys(payload)[0]); } catch(e) {}
+        }
+
         const bInfo = payload.Basic_Info || {};
         const taxInfo = payload.Tax_and_Accounting || {};
         const logInfo = payload.Logistics_Assignment || {};
