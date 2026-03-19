@@ -28,13 +28,13 @@ router.post('/', async (req, res) => {
     try {
         // Auto-fetch missing details if it's an employee
         if (entity_type === 'Employee' && reference_id) {
-            const empRes = await pool.query('SELECT name, contact_no, email, address FROM employees WHERE id = $1', [reference_id]);
+            const empRes = await pool.query('SELECT * FROM employees WHERE id = $1', [reference_id]);
             if (empRes.rows.length > 0) {
                 const emp = empRes.rows[0];
-                if (!entity_name || !isNaN(entity_name)) entity_name = emp.name;
-                contact_number = contact_number || emp.contact_no;
-                email = email || emp.email;
-                address = address || emp.address;
+                if (!entity_name || !isNaN(entity_name)) entity_name = emp.full_name || emp.name;
+                contact_number = contact_number || emp.contact_primary || emp.contact_no || '';
+                email = email || emp.email || '';
+                address = address || emp.current_address || emp.address || '';
             }
         }
 
@@ -59,13 +59,13 @@ router.put('/:id', async (req, res) => {
     try {
         // Auto-fetch missing details if it's an employee
         if (entity_type === 'Employee' && reference_id) {
-            const empRes = await pool.query('SELECT name, contact_no, email, address FROM employees WHERE id = $1', [reference_id]);
+            const empRes = await pool.query('SELECT * FROM employees WHERE id = $1', [reference_id]);
             if (empRes.rows.length > 0) {
                 const emp = empRes.rows[0];
-                if (!entity_name || !isNaN(entity_name)) entity_name = emp.name;
-                contact_number = contact_number || emp.contact_no;
-                email = email || emp.email;
-                address = address || emp.address;
+                if (!entity_name || !isNaN(entity_name)) entity_name = emp.full_name || emp.name;
+                contact_number = contact_number || emp.contact_primary || emp.contact_no || '';
+                email = email || emp.email || '';
+                address = address || emp.current_address || emp.address || '';
             }
         }
 
