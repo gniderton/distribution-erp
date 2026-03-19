@@ -78,4 +78,265 @@ router.post('/loans', async (req, res) => {
     }
 });
 
+// POST /api/migration/customers
+router.post('/customers', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const rows = req.body || [];
+        if (!Array.isArray(rows)) return res.status(400).json({ error: "Expected an array" });
+
+        await client.query('BEGIN');
+        let importedCount = 0;
+
+        for (const row of rows) {
+            const customer_code = await generateSequence(client, 'CUSTOMER');
+            const insertCust = await client.query(`
+                INSERT INTO customers (
+                    customer_name, customer_code, whatsapp_number, email,
+                    is_active, gstin, pan, credit_limit, credit_days,
+                    channel_id, route_id, dse_id, route_type_id
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                RETURNING id
+            `, [
+                row.customer_name, customer_code, row.whatsapp_number, row.email,
+                row.is_active === 'true' || row.is_active === true, row.gstin, row.pan,
+                parseFloat(row.credit_limit) || 0, parseInt(row.credit_days) || 0,
+                row.channel_id || null, row.route_id || null, row.dse_id || null, row.route_type_id || null
+            ]);
+            
+            const customer_id = insertCust.rows[0].id;
+
+            if (row.address_line1 || row.city) {
+                await client.query(`
+                    INSERT INTO customer_addresses (
+                        customer_id, address_line1, city, state, pincode, is_default_billing, is_default_shipping
+                    ) VALUES ($1, $2, $3, $4, $5, true, true)
+                `, [customer_id, row.address_line1, row.city, row.state, row.pincode]);
+            }
+            importedCount++;
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, count: importedCount, message: `Imported ${importedCount} customers.` });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
+// POST /api/migration/vendors
+router.post('/vendors', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const rows = req.body || [];
+        if (!Array.isArray(rows)) return res.status(400).json({ error: "Expected an array" });
+
+        await client.query('BEGIN');
+        let importedCount = 0;
+
+        for (const row of rows) {
+            const vendor_code = await generateSequence(client, 'VENDOR');
+            const insertVend = await client.query(`
+                INSERT INTO vendors (
+                    vendor_name, vendor_code, contact_person, contact_no, email,
+                    gst, pan, credit_limit_amount, credit_period_days
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                RETURNING id
+            `, [
+                row.company_name || 'Unknown', vendor_code, row.contact_person, row.phone_number, row.email_address,
+                row.gstin, row.pan, parseFloat(row.credit_limit_amount) || 0, parseInt(row.credit_period_days) || 0
+            ]);
+            
+            const vendor_id = insertVend.rows[0].id;
+
+            if (row.city || row.state) {
+                await client.query(`
+                    INSERT INTO vendor_addresses (
+                        vendor_id, address_line, city, state_code, pin_code, is_default
+                    ) VALUES ($1, 'Imported Address', $2, $3, $4, true)
+                `, [vendor_id, row.city, row.state, row.pin_code]);
+            }
+            importedCount++;
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, count: importedCount, message: `Imported ${importedCount} vendors.` });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
+// POST /api/migration/outstanding-invoices
+router.post('/outstanding-invoices', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const rows = req.body || [];
+        if (!Array.isArray(rows)) return res.status(400).json({ error: "Expected an array" });
+
+        await client.query('BEGIN');
+        let importedCount = 0;
+
+        for (const row of rows) {
+            // First we need DSE/Route from the customer
+            const custRes = await client.query('SELECT dse_id, route_id FROM customers WHERE id = $1', [row.customer_id]);
+            const dse_id = custRes.rows.length ? custRes.rows[0].dse_id : null;
+            const route_id = custRes.rows.length ? custRes.rows[0].route_id : null;
+
+            const invIdRes = await client.query(`
+                INSERT INTO sales_invoices (
+                    customer_id, dse_id, route_id, invoice_number, invoice_date, 
+                    grand_total, amount_paid, payment_status, status, remarks
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Pending', 'Pending', 'Historical Import')
+                RETURNING id
+            `, [
+                row.customer_id, dse_id, route_id, row.old_invoice_number || `OLD-${Date.now()}`,
+                row.invoice_date || new Date().toISOString(), parseFloat(row.grand_total) || 0, parseFloat(row.amount_paid) || 0
+            ]);
+
+            await client.query(`
+                INSERT INTO sales_invoice_lines (
+                    sales_invoice_id, product_name, quantity, unit_price, line_total
+                ) VALUES ($1, 'Historical Balance Import', 1, $2, $2)
+            `, [invIdRes.rows[0].id, parseFloat(row.grand_total) || 0]);
+
+            importedCount++;
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, count: importedCount, message: `Imported ${importedCount} invoices.` });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
+// POST /api/migration/outstanding-bills
+router.post('/outstanding-bills', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const rows = req.body || [];
+        if (!Array.isArray(rows)) return res.status(400).json({ error: "Expected an array" });
+
+        await client.query('BEGIN');
+        let importedCount = 0;
+
+        for (const row of rows) {
+            const billIdRes = await client.query(`
+                INSERT INTO purchase_invoice_headers (
+                    vendor_id, invoice_number, invoice_date, status, 
+                    total_amount, total_tax, grand_total
+                ) VALUES ($1, $2, $3, 'Active', $4, 0, $4)
+                RETURNING id
+            `, [
+                row.vendor_id, row.old_bill_number || `OLD-BILL-${Date.now()}`,
+                row.bill_date || new Date().toISOString(), parseFloat(row.grand_total) || 0
+            ]);
+
+            // Track amount paid by inserting a payment allocation directly if they had a partial payment
+            if (parseFloat(row.amount_paid) > 0) {
+                await client.query(`
+                    INSERT INTO payment_allocations (
+                        purchase_invoice_id, amount
+                    ) VALUES ($1, $2)
+                `, [billIdRes.rows[0].id, parseFloat(row.amount_paid)]);
+            }
+
+            importedCount++;
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, count: importedCount, message: `Imported ${importedCount} vendor bills.` });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
+// POST /api/migration/customer-advances
+router.post('/customer-advances', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const rows = req.body || [];
+        if (!Array.isArray(rows)) return res.status(400).json({ error: "Expected an array" });
+
+        await client.query('BEGIN');
+        let importedCount = 0;
+
+        for (const row of rows) {
+            await client.query(`
+                INSERT INTO customer_payments (
+                    customer_id, payment_date, amount, payment_mode, reference_number,
+                    status, notes, unallocated_amount, is_advance
+                ) VALUES ($1, $2, $3, $4, $5, 'Cleared', 'Historical Advance Import', $3, true)
+            `, [
+                row.customer_id, row.advance_date || new Date().toISOString(), parseFloat(row.amount) || 0,
+                row.payment_mode || 'Cash', row.reference_number || null
+            ]);
+            importedCount++;
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, count: importedCount, message: `Imported ${importedCount} advances.` });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
+// POST /api/migration/vendor-advances
+router.post('/vendor-advances', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const rows = req.body || [];
+        if (!Array.isArray(rows)) return res.status(400).json({ error: "Expected an array" });
+
+        await client.query('BEGIN');
+        let importedCount = 0;
+
+        for (const row of rows) {
+            await client.query(`
+                INSERT INTO vendor_payments (
+                    vendor_id, payment_date, amount, payment_mode, reference_number,
+                    notes, unused_amount, status
+                ) VALUES ($1, $2, $3, $4, $5, 'Historical Vendor Advance', $3, 'Cleared')
+            `, [
+                row.vendor_id, row.advance_date || new Date().toISOString(), parseFloat(row.amount) || 0,
+                row.payment_mode || 'Cash', row.reference_number || null
+            ]);
+            importedCount++;
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, count: importedCount, message: `Imported ${importedCount} vendor advances.` });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
+// POST /api/migration/opening-stock
+router.post('/opening-stock', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const rows = req.body || [];
+        if (!Array.isArray(rows)) return res.status(400).json({ error: "Expected an array" });
+
+        await client.query('BEGIN');
+        let importedCount = 0;
+
+        for (const row of rows) {
+            await client.query(`
+                INSERT INTO inventory_batches (
+                    product_id, batch_code, expiry_date, quantity, available_quantity, 
+                    mrp, storage_status_id, created_at
+                ) VALUES ($1, $2, $3, $4, $4, $5, (SELECT id FROM storage_status WHERE status_name = $6 LIMIT 1), NOW())
+            `, [
+                row.product_id, row.batch_code || 'OPENING-BATCH', row.expiry_date || null,
+                parseFloat(row.quantity) || 0, parseFloat(row.mrp) || 0, row.status_type || 'Good'
+            ]);
+            importedCount++;
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, count: importedCount, message: `Imported ${importedCount} inventory batches.` });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
 module.exports = router;
