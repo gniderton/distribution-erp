@@ -214,7 +214,14 @@ async function initializeDatabase() {
 
 // Start Server Immediately (Satisfies Render Health Checks)
 app.listen(port, () => {
-    console.log(`Server is booting up and listening on port ${port}...`);
+    console.log(`🚀 Server is listening on port ${port}...`);
+    console.log(`🛠️ Building environment: ${process.env.NODE_ENV || 'development'}`);
+    
     // Run initialization in background
-    initializeDatabase();
+    console.log('📦 Initializing Database in background...');
+    initializeDatabase().then(() => {
+        console.log('✅ Database Initialization Finished');
+    }).catch(err => {
+        console.error('❌ Database Initialization Failed during startup:', err);
+    });
 });
