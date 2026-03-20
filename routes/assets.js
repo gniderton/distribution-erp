@@ -15,15 +15,18 @@ router.post('/', async (req, res) => {
             useful_life_years,
             salvage_value,
             asset_account_code,
-            vendor_id,
+            vendor_id,           // Still accepting as vendor_id from UI
+            purchase_entity_id,  // Or purchase_entity_id
             remarks,
-            is_gst_purchase,     // Added
-            taxable_amount,      // Added
-            tax_amount,          // Added
-            gst_no,              // Added
-            bill_no,             // Added
-            created_by           // Added
+            is_gst_purchase,     
+            taxable_amount,      
+            tax_amount,          
+            gst_no,              
+            bill_no,             
+            created_by           
         } = req.body;
+
+        const effective_purchase_entity_id = purchase_entity_id || vendor_id;
 
         await client.query('BEGIN');
 
@@ -40,14 +43,16 @@ router.post('/', async (req, res) => {
         const assetRes = await client.query(`
             INSERT INTO assets (
                 asset_name, category, purchase_date, purchase_cost, 
-                useful_life_years, salvage_value, asset_account_code, vendor_id,
+                useful_life_years, salvage_value, asset_account_code, 
+                vendor_id, purchase_entity_id,
                 is_gst_purchase, taxable_amount, tax_amount, gst_no, bill_no, created_by,
                 asset_purchase_no
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             RETURNING id
         `, [
             asset_name, category, purchase_date, purchase_cost,
-            useful_life_years, salvage_value, asset_account_code, vendor_id,
+            useful_life_years, salvage_value, asset_account_code, 
+            effective_purchase_entity_id, effective_purchase_entity_id,
             is_gst_purchase || false, taxable_amount || 0, tax_amount || 0, gst_no, bill_no, created_by,
             assetPurchaseNo
         ]);
@@ -104,11 +109,17 @@ router.get('/', async (req, res) => {
         const result = await pool.query(`
             SELECT 
                 a.*,
+                pe.entity_name as purchase_vendor_name,
+                pe.gst_number as purchase_vendor_gst,
+                se.entity_name as sale_customer_name,
+                se.gst_number as sale_customer_gst,
                 COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'DEPRECIATION'), 0) as total_depreciation,
                 COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'PAYMENT'), 0) as total_paid,
                 (a.purchase_cost - COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'DEPRECIATION'), 0)) as net_book_value,
                 (a.purchase_cost - COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'PAYMENT'), 0)) as balance_payable
             FROM assets a
+            LEFT JOIN asset_entities pe ON a.purchase_entity_id = pe.id
+            LEFT JOIN asset_entities se ON a.sale_entity_id = se.id
             ORDER BY a.purchase_date DESC, a.created_at DESC
         `);
         res.json(result.rows);
@@ -445,13 +456,14 @@ router.post('/:id/sale', async (req, res) => {
             remarks,
             sale_buyer_name,
             sale_buyer_gst,
+            sale_entity_id,       // Added
             sale_is_gst,
             sale_taxable_amount,
             sale_tax_amount,
             sale_hsn_code,
-            sale_buyer_address,    // Added
-            sale_delivery_address,   // Added
-            created_by            // Added
+            sale_buyer_address,    
+            sale_delivery_address,   
+            created_by            
         } = req.body;
 
         if (!sale_date) return res.status(400).json({ error: 'Sale date is required' });
@@ -538,14 +550,15 @@ router.post('/:id/sale', async (req, res) => {
                 sale_hsn_code = $10,
                 sale_buyer_address = $11,
                 sale_delivery_address = $12,
-                sale_created_by = $13
+                sale_created_by = $13,
+                sale_entity_id = $14
             WHERE id = $2
         `, [
             'Sold', id,
             sale_buyer_name, sale_buyer_gst, sale_is_gst || false,
             sale_taxable_amount || 0, sale_tax_amount || 0, sale_invoice_no,
             proceeds, sale_hsn_code, sale_buyer_address, sale_delivery_address,
-            created_by
+            created_by, sale_entity_id
         ]);
 
         // 5. Record Transaction
