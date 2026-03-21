@@ -16,15 +16,15 @@ router.get('/income', async (req, res) => {
 
 // 2. Create Income Entity
 router.post('/income', async (req, res) => {
-    const { name, phone, email, gst_no, address } = req.body;
+    const { name, phone, email, gst_no, address, bank_name, account_no, ifsc_code } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
     
     try {
         const result = await pool.query(`
-            INSERT INTO income_entities (name, phone, email, gst_no, address)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO income_entities (name, phone, email, gst_no, address, bank_name, account_no, ifsc_code)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
-        `, [name, phone, email, gst_no, address]);
+        `, [name, phone, email, gst_no, address, bank_name, account_no, ifsc_code]);
         res.json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -45,15 +45,15 @@ router.get('/expense', async (req, res) => {
 
 // 4. Create Expense Entity
 router.post('/expense', async (req, res) => {
-    const { name, phone, email, gst_no, address } = req.body;
+    const { name, phone, email, gst_no, address, bank_name, account_no, ifsc_code } = req.body;
     if (!name) return res.status(400).json({ error: "Name is required" });
 
     try {
         const result = await pool.query(`
-            INSERT INTO expense_entities (name, phone, email, gst_no, address)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO expense_entities (name, phone, email, gst_no, address, bank_name, account_no, ifsc_code)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
-        `, [name, phone, email, gst_no, address]);
+        `, [name, phone, email, gst_no, address, bank_name, account_no, ifsc_code]);
         res.json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: err.message });
