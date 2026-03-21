@@ -304,9 +304,9 @@ router.post('/payment', async (req, res) => {
 
         // 3. Record Transaction in asset_transactions
         await client.query(`
-            INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, journal_entry_id, remarks)
-            VALUES ($1, 'PAYMENT', $2, $3, $4, $5)
-        `, [asset_id, payment_date, amount, journalId, remarks]);
+            INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, journal_entry_id, remarks, bank_statement_entry_id)
+            VALUES ($1, 'PAYMENT', $2, $3, $4, $5, $6)
+        `, [asset_id, payment_date, amount, journalId, remarks, bank_statement_entry_id]);
 
         // 4. Handle Online (Bank Statement Consumption)
         if (payment_mode === 'Online' && bank_statement_entry_id) {
@@ -414,9 +414,9 @@ router.post('/:id/sale-payment', async (req, res) => {
 
         // 4. Record Transaction
         await client.query(`
-            INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, journal_entry_id, remarks)
-            VALUES ($1, 'SALE_PAYMENT', $2, $3, $4, $5)
-        `, [id, payment_date, amount, journalId, `${remarks || ''}${online_reference_no ? ' (Ref: ' + online_reference_no + ')' : ''}`.trim()]);
+            INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, journal_entry_id, remarks, bank_statement_entry_id)
+            VALUES ($1, 'SALE_PAYMENT', $2, $3, $4, $5, $6)
+        `, [id, payment_date, amount, journalId, `${remarks || ''}${online_reference_no ? ' (Ref: ' + online_reference_no + ')' : ''}`.trim(), bank_statement_entry_id]);
 
         // 5. Handle Bank Statement (Reconciliation)
         if (payment_mode === 'Online' && bank_statement_entry_id) {
