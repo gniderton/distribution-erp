@@ -37,7 +37,7 @@ SELECT
         'N/A'
     ) as user_narration
 FROM bank_statement_entries bse
-JOIN bank_accounts ba ON bse.bank_account_id = ba.id
+LEFT JOIN bank_accounts ba ON bse.bank_account_id = ba.id
 LEFT JOIN customer_payments cp ON bse.id = cp.bank_statement_entry_id
 LEFT JOIN customers custom ON cp.customer_id = custom.id
 LEFT JOIN vendor_payments vp ON bse.id = vp.bank_statement_entry_id
