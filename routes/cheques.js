@@ -218,7 +218,7 @@ router.post('/bulk-clear', async (req, res) => {
 // 3. Mark Cheque as Bounced
 router.post('/:id/bounce', async (req, res) => {
     const { id } = req.params;
-    const { bounce_date, bounce_reason, bank_charges, customer_penalty, user_id } = req.body;
+    const { bounce_date, bounce_reason, bank_charges, customer_penalty, vendor_penalty, user_id } = req.body;
 
     const client = await pool.connect();
     try {
@@ -282,9 +282,9 @@ router.post('/:id/bounce', async (req, res) => {
             ]);
         }
 
-        // 5. Customer Penalty (Debit Note)
+        // 5. Customer Penalty (if Incoming)
         if (chq.type === 'INCOMING' && Number(customer_penalty) > 0 && chq.party_id) {
-            // 5a. Generate Penalty Invoice / Debit Note Number
+            // 5a. Generate Penalty Document Number
             const yy = new Date().getFullYear().toString().slice(-2);
             const seqRes = await client.query("UPDATE document_sequences SET current_number = current_number + 1 WHERE document_type = 'DEBIT_NOTE' RETURNING prefix, current_number");
 
@@ -293,7 +293,7 @@ router.post('/:id/bounce', async (req, res) => {
                 penaltyDocNo = `${seqRes.rows[0].prefix}${seqRes.rows[0].current_number.toString().padStart(5, '0')}`;
             }
 
-            // 5b. Create Record in sales_invoices (marking as Debit Note / Penalty)
+            // 5b. Create Sales Invoice (Debit Note)
             await client.query(`
                 INSERT INTO sales_invoices (
                     invoice_number, customer_id, invoice_date, grand_total, amount_paid, 
@@ -304,7 +304,7 @@ router.post('/:id/bounce', async (req, res) => {
                 `Cheque Bounce Penalty: ${chq.cheque_number} - ${bounce_reason}`, user_id
             ]);
 
-            // 5c. GL Entry for Penalty: Dr AR (1101), Cr Misc Income (4103)
+            // 5c. GL Entry: Dr AR (1101), Cr Misc Income (4103)
             const penaltyLines = [
                 { code: acc_ar, debit: Number(customer_penalty), credit: 0 },
                 { code: acc_misc_income, debit: 0, credit: Number(customer_penalty) }
@@ -314,6 +314,40 @@ router.post('/:id/bounce', async (req, res) => {
                 `Customer Penalty: ${chq.cheque_number}`,
                 id,
                 JSON.stringify(penaltyLines)
+            ]);
+        }
+
+        // 6. Vendor Penalty (if Outgoing)
+        const penaltyToVendor = vendor_penalty || customer_penalty; // Accept both names for safety
+        if (chq.type === 'OUTGOING' && Number(penaltyToVendor) > 0 && chq.party_id) {
+            // 6a. Generate Vendor Penalty Number
+            const seqRes = await client.query("UPDATE document_sequences SET current_number = current_number + 1 WHERE document_type = 'CREDIT_NOTE' RETURNING prefix, current_number");
+            
+            let vPenaltyNo = `VPEN-TMP-${Date.now()}`;
+            if (seqRes.rows.length > 0) {
+                vPenaltyNo = `${seqRes.rows[0].prefix}${seqRes.rows[0].current_number.toString().padStart(5, '0')}`;
+            }
+
+            // 6b. Record in vendor_penalties table
+            await client.query(`
+                INSERT INTO vendor_penalties (
+                    vendor_id, amount, penalty_date, penalty_number, cheque_id, remarks
+                ) VALUES ($1, $2, $3, $4, $5, $6)
+            `, [
+                chq.party_id, penaltyToVendor, bounce_date || new Date(), vPenaltyNo, id,
+                `Cheque Bounce Penalty: ${chq.cheque_number} - ${bounce_reason}`
+            ]);
+
+            // 6c. GL Entry: Dr Bank Charges (5005), Cr Accounts Payable (2001)
+            const vPenaltyLines = [
+                { code: acc_bank_charges, debit: Number(penaltyToVendor), credit: 0 },
+                { code: acc_ap, debit: 0, credit: Number(penaltyToVendor) }
+            ];
+            await client.query('SELECT create_journal_entry($1, $2, \'CHQ_BOUNCE_VPENALTY\', $3, $4)', [
+                bounce_date || new Date(),
+                `Vendor Bounce Penalty: ${chq.cheque_number}`,
+                id,
+                JSON.stringify(vPenaltyLines)
             ]);
         }
 
