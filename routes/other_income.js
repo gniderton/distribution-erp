@@ -113,9 +113,12 @@ router.post('/', async (req, res) => {
 
         // 3. Prepare Journal Lines
         const journalLines = [];
+        const isCheque = payment_mode === 'Cheque';
+        const effectiveBankAccountId = isCheque ? null : destination_account_id;
+
         if (is_gst_income && Number(tax_amount) > 0) {
-            // DR Bank/Cash (Asset) - Received Grand Total
-            journalLines.push({ code: drAccountCode, debit: Number(amount), credit: 0, bank_account_id: destination_account_id });
+            // DR Bank/Cash/Cheque (Asset) - Received Grand Total
+            journalLines.push({ code: drAccountCode, debit: Number(amount), credit: 0, bank_account_id: effectiveBankAccountId });
 
             // CR Income (Revenue) - Only Taxable Amount
             journalLines.push({ code: crAccountCode, debit: 0, credit: Number(taxable_amount) });
@@ -126,7 +129,7 @@ router.post('/', async (req, res) => {
             journalLines.push({ code: 2012, debit: 0, credit: halfTax }); // SGST Output
         } else {
             // Simple Income
-            journalLines.push({ code: drAccountCode, debit: Number(amount), credit: 0, bank_account_id: destination_account_id });
+            journalLines.push({ code: drAccountCode, debit: Number(amount), credit: 0, bank_account_id: effectiveBankAccountId });
             journalLines.push({ code: crAccountCode, debit: 0, credit: Number(amount) });
         }
 

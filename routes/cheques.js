@@ -16,6 +16,8 @@ router.get('/', async (req, res) => {
                 CASE 
                     WHEN party_type = 'CUSTOMER' THEN (SELECT customer_name FROM customers WHERE id = party_id)
                     WHEN party_type = 'VENDOR' THEN (SELECT vendor_name FROM vendors WHERE id = party_id)
+                    WHEN party_type = 'INCOME_ENTITY' THEN (SELECT name FROM income_entities WHERE id = party_id)
+                    WHEN party_type = 'EXPENSE_ENTITY' THEN (SELECT name FROM expense_entities WHERE id = party_id)
                     ELSE party_type
                 END as party_name
             FROM cheques ch
