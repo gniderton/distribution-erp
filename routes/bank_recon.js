@@ -202,4 +202,38 @@ router.get('/unconsumed-debits', async (req, res) => {
     }
 });
 
+// [NEW] Get Detailed Audit View (Reconciliation Details)
+router.get('/audit-view', async (req, res) => {
+    try {
+        const { status, startDate, endDate, search, bank_account_id } = req.query;
+        let query = `SELECT * FROM view_bank_statement_details WHERE 1=1`;
+        const params = [];
+
+        if (bank_account_id) {
+            params.push(bank_account_id);
+            query += ` AND bank_account_id = $${params.length}`;
+        }
+        if (status) {
+            params.push(status);
+            query += ` AND reconciliation_status = $${params.length}`;
+        }
+        if (startDate && endDate) {
+            params.push(startDate, endDate);
+            query += ` AND transaction_date BETWEEN $${params.length - 1} AND $${params.length}`;
+        }
+        if (search) {
+            params.push(`%${search}%`);
+            query += ` AND (bank_narration ILIKE $${params.length} OR erp_reference ILIKE $${params.length} OR party_name ILIKE $${params.length} OR user_narration ILIKE $${params.length})`;
+        }
+
+        query += ` ORDER BY transaction_date DESC LIMIT 1000`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
