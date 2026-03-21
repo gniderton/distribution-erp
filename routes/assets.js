@@ -265,6 +265,7 @@ router.post('/payment', async (req, res) => {
             cheque_no,
             cheque_date,
             bank_name,
+            bank_id,             // Added
             remarks
         } = req.body;
 
@@ -324,10 +325,10 @@ router.post('/payment', async (req, res) => {
         if (payment_mode === 'Cheque') {
             await client.query(`
                 INSERT INTO cheques (
-                    cheque_number, cheque_date, bank_name, amount, 
+                    cheque_number, cheque_date, bank_name, bank_id, amount, 
                     type, party_type, reference_type, reference_id, status
-                ) VALUES ($1, $2, $3, $4, 'OUTGOING', 'VENDOR', 'ASSET_PAYMENT', $5, 'PENDING')
-            `, [cheque_no, cheque_date || payment_date, bank_name || 'Own Bank', amount, asset_id]);
+                ) VALUES ($1, $2, $3, $4, $5, 'OUTGOING', 'VENDOR', 'ASSET_PAYMENT', $6, 'PENDING')
+            `, [cheque_no, cheque_date || payment_date, bank_name || 'Own Bank', bank_id, amount, asset_id]);
         }
 
         await client.query('COMMIT');
@@ -363,6 +364,7 @@ router.post('/:id/sale-payment', async (req, res) => {
             cheque_no,
             cheque_date,
             bank_name,
+            bank_id, // Added
             remarks,
             online_reference_no  // Added
         } = req.body;
@@ -426,10 +428,10 @@ router.post('/:id/sale-payment', async (req, res) => {
         if (payment_mode === 'Cheque') {
             await client.query(`
                 INSERT INTO cheques (
-                    cheque_number, cheque_date, bank_name, amount, 
+                    cheque_number, cheque_date, bank_name, bank_id, amount, 
                     type, party_type, reference_type, reference_id, status
-                ) VALUES ($1, $2, $3, $4, 'INCOMING', 'CUSTOMER', 'ASSET_SALE_PAYMENT', $5, 'PENDING')
-            `, [cheque_no, cheque_date || payment_date, bank_name, amount, id]);
+                ) VALUES ($1, $2, $3, $4, $5, 'INCOMING', 'CUSTOMER', 'ASSET_SALE_PAYMENT', $6, 'PENDING')
+            `, [cheque_no, cheque_date || payment_date, bank_name, bank_id, amount, id]);
         }
 
         await client.query('COMMIT');
@@ -594,6 +596,7 @@ router.post('/:id/sale-payment', async (req, res) => {
             cheque_no,
             cheque_date,
             bank_name,
+            bank_id,
             remarks,
             online_reference_no  // Added
         } = req.body;
@@ -657,10 +660,10 @@ router.post('/:id/sale-payment', async (req, res) => {
         if (payment_mode === 'Cheque') {
             await client.query(`
                 INSERT INTO cheques (
-                    cheque_number, cheque_date, bank_name, amount, 
+                    cheque_number, cheque_date, bank_name, bank_id, amount, 
                     type, party_type, reference_type, reference_id, status
-                ) VALUES ($1, $2, $3, $4, 'INCOMING', 'CUSTOMER', 'ASSET_SALE_PAYMENT', $5, 'PENDING')
-            `, [cheque_no, cheque_date || payment_date, bank_name, amount, id]);
+                ) VALUES ($1, $2, $3, $4, $5, 'INCOMING', 'CUSTOMER', 'ASSET_SALE_PAYMENT', $6, 'PENDING')
+            `, [cheque_no, cheque_date || payment_date, bank_name, bank_id, amount, id]);
         }
 
         await client.query('COMMIT');

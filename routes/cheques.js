@@ -8,12 +8,15 @@ router.get('/', async (req, res) => {
         const { status, type, party_type, start_date, end_date } = req.query;
         let query = `
             SELECT ch.*, 
+                mb.bank_name as master_bank_name,
+                COALESCE(mb.bank_name, ch.bank_name) as display_bank_name,
                 CASE 
                     WHEN party_type = 'CUSTOMER' THEN (SELECT customer_name FROM customers WHERE id = party_id)
                     WHEN party_type = 'VENDOR' THEN (SELECT vendor_name FROM vendors WHERE id = party_id)
                     ELSE party_type
                 END as party_name
             FROM cheques ch
+            LEFT JOIN master_banks mb ON ch.bank_id = mb.id
             WHERE 1=1
         `;
         const params = [];
