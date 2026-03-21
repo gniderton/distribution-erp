@@ -54,7 +54,11 @@ router.get('/', async (req, res) => {
 // 2. Mark Cheque as Cleared
 router.post('/:id/clear', async (req, res) => {
     const { id } = req.params;
-    const { clearance_date, bank_account_id, user_id, remarks } = req.body;
+    const { clearance_date, bank_account_id, bank_statement_entry_id, user_id, remarks } = req.body;
+
+    if (!bank_statement_entry_id) {
+        return res.status(400).json({ error: 'Bank Statement Entry ID is mandatory for clearing' });
+    }
 
     const client = await pool.connect();
     try {
@@ -67,16 +71,28 @@ router.post('/:id/clear', async (req, res) => {
 
         if (!bank_account_id) throw new Error('Bank Account is required for clearing');
 
-        // 2. Update status
+        // 2. Update status and link statement
         await client.query(`
             UPDATE cheques 
             SET status = 'CLEARED', 
                 clearance_date = $1, 
                 bank_account_id = $2, 
-                remarks = $3,
+                bank_statement_entry_id = $3,
+                remarks = $4,
                 updated_at = NOW()
-            WHERE id = $4
-        `, [clearance_date || new Date(), bank_account_id, remarks, id]);
+            WHERE id = $5
+        `, [clearance_date || new Date(), bank_account_id, bank_statement_entry_id, remarks, id]);
+
+        // 2b. Consume Bank Statement Entry
+        await client.query(`
+            UPDATE bank_statement_entries 
+            SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
+                status = CASE 
+                    WHEN (amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
+                    ELSE 'Partially Consumed'
+                END
+            WHERE id = $2
+        `, [chq.amount, bank_statement_entry_id]);
 
         // 3. Post Accounting Entry
         // Clearing Account -> Bank Account
@@ -116,12 +132,12 @@ router.post('/:id/clear', async (req, res) => {
     }
 });
 
-// 2b. Bulk Mark Cheques as Cleared
+// 2b. Bulk Mark Cheques as Cleared (with Individual Mappings)
 router.post('/bulk-clear', async (req, res) => {
-    const { cheque_ids, clearance_date, bank_account_id, user_id, remarks } = req.body;
+    const { mappings, clearance_date, bank_account_id, user_id, remarks } = req.body;
 
-    if (!cheque_ids || !Array.isArray(cheque_ids) || cheque_ids.length === 0) {
-        return res.status(400).json({ error: 'No cheque IDs provided' });
+    if (!mappings || !Array.isArray(mappings) || mappings.length === 0) {
+        return res.status(400).json({ error: 'No mappings provided. Expected [{cheque_id, bank_statement_entry_id}, ...]' });
     }
     if (!bank_account_id) {
         return res.status(400).json({ error: 'Bank Account is required for clearing' });
@@ -131,22 +147,37 @@ router.post('/bulk-clear', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        for (const id of cheque_ids) {
+        for (const mapping of mappings) {
+            const { cheque_id, bank_statement_entry_id } = mapping;
+            if (!cheque_id || !bank_statement_entry_id) continue;
+
             // 1. Get Cheque Info
-            const chqRes = await client.query('SELECT * FROM cheques WHERE id = $1 AND status = \'PENDING\'', [id]);
-            if (chqRes.rows.length === 0) continue; // Skip already processed or non-existent
+            const chqRes = await client.query('SELECT * FROM cheques WHERE id = $1 AND status = \'PENDING\'', [cheque_id]);
+            if (chqRes.rows.length === 0) continue;
             const chq = chqRes.rows[0];
 
-            // 2. Update status
+            // 2. Update status and link statement
             await client.query(`
                 UPDATE cheques 
                 SET status = 'CLEARED', 
                     clearance_date = $1, 
                     bank_account_id = $2, 
-                    remarks = $3,
+                    bank_statement_entry_id = $3,
+                    remarks = $4,
                     updated_at = NOW()
-                WHERE id = $4
-            `, [clearance_date || new Date(), bank_account_id, remarks, id]);
+                WHERE id = $5
+            `, [clearance_date || new Date(), bank_account_id, bank_statement_entry_id, remarks, cheque_id]);
+
+            // 2b. Consume Bank Statement Entry
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
+                    status = CASE 
+                        WHEN (amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [chq.amount, bank_statement_entry_id]);
 
             // 3. Post Accounting Entry
             const acc_bank = 1002;
@@ -169,13 +200,13 @@ router.post('/bulk-clear', async (req, res) => {
             await client.query('SELECT create_journal_entry($1, $2, \'CHQ_CLEAR\', $3, $4)', [
                 clearance_date || new Date(),
                 `Bulk Cheque Cleared: ${chq.cheque_number} (${chq.bank_name})`,
-                id,
+                cheque_id,
                 JSON.stringify(ledgerLines)
             ]);
         }
 
         await client.query('COMMIT');
-        res.json({ success: true, message: `Successfully cleared ${cheque_ids.length} cheques` });
+        res.json({ success: true, message: `Successfully cleared ${mappings.length} cheques with statement linkage` });
     } catch (err) {
         await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
