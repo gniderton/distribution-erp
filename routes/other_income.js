@@ -10,10 +10,12 @@ router.get('/', async (req, res) => {
             SELECT 
                 oi.*, 
                 coa.name as category_name,
-                ba.bank_name as destination_account_name
+                ba.bank_name as destination_account_name,
+                ie.name as entity_name
             FROM other_income oi
             JOIN chart_of_accounts coa ON oi.category_account_id = coa.id
             JOIN bank_accounts ba ON oi.destination_account_id = ba.id
+            LEFT JOIN income_entities ie ON oi.entity_id = ie.id
             WHERE oi.is_active = true
         `;
         const params = [];
@@ -69,6 +71,7 @@ router.post('/', async (req, res) => {
         cheque_no,
         cheque_date: chq_date,
         bank_name,
+        bank_id,
         bank_statement_entry_id,
         user_id
     } = req.body;
@@ -139,14 +142,14 @@ router.post('/', async (req, res) => {
             INSERT INTO other_income (
                 income_number, transaction_date, category_account_id, 
                 destination_account_id, amount, taxable_amount, tax_amount, 
-                is_gst_income, gst_no, received_from, reference_no, 
+                is_gst_income, gst_no, entity_id, reference_no, 
                 description, created_by, journal_entry_id, bank_statement_entry_id
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING id
         `, [
             incomeNumber, transaction_date || new Date(), category_account_id,
             destination_account_id, amount, taxable_amount || amount, tax_amount || 0,
-            is_gst_income || false, gst_no, received_from,
+            is_gst_income || false, gst_no, received_from, /* Reused received_from variable for ID */
             reference_no, description, user_id, journalEntryId, bank_statement_entry_id
         ]);
         const incomeId = insertRes.rows[0].id;
@@ -158,10 +161,18 @@ router.post('/', async (req, res) => {
         if (payment_mode === 'Cheque') {
             await client.query(`
                 INSERT INTO cheques (
-                    cheque_number, cheque_date, bank_name, amount, type,
+                    cheque_number, cheque_date, bank_id, bank_name, amount, type,
                     party_type, party_id, reference_type, reference_id, status
-                ) VALUES ($1, $2, $3, $4, 'INCOMING', 'OTHER_INCOME', NULL, 'OTHER_INCOME', $5, 'PENDING')
-            `, [cheque_no, chq_date || transaction_date || new Date(), bank_name || 'N/A', amount, incomeId]);
+                ) VALUES ($1, $2, $3, $4, $5, 'INCOMING', 'INCOME_ENTITY', $6, 'OTHER_INCOME', $7, 'PENDING')
+            `, [
+                cheque_no, 
+                chq_date || transaction_date || new Date(), 
+                (bank_id === 'undefined' || !bank_id) ? null : bank_id,
+                bank_name || 'N/A', 
+                amount, 
+                received_from, /* party_id */
+                incomeId
+            ]);
         }
 
         // 8. Handle Bank Statement Consumption (Online Mode)

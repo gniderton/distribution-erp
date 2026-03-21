@@ -7,9 +7,12 @@ router.get('/', async (req, res) => {
     try {
         const { status, type, party_type, start_date, end_date } = req.query;
         let query = `
-            SELECT ch.*, 
-                mb.bank_name as master_bank_name,
-                COALESCE(mb.bank_name, ch.bank_name) as display_bank_name,
+            SELECT 
+                ch.id, ch.cheque_number, ch.cheque_date, ch.amount, ch.type, 
+                ch.party_type, ch.party_id, ch.reference_type, ch.reference_id, 
+                ch.status, ch.remarks, ch.clearance_date, ch.bank_account_id, 
+                ch.bank_statement_entry_id, ch.created_at, ch.updated_at, ch.bank_id,
+                COALESCE(mb.bank_name, ch.bank_name) as bank_name,
                 CASE 
                     WHEN party_type = 'CUSTOMER' THEN (SELECT customer_name FROM customers WHERE id = party_id)
                     WHEN party_type = 'VENDOR' THEN (SELECT vendor_name FROM vendors WHERE id = party_id)
@@ -248,15 +251,43 @@ router.post('/:id/bounce', async (req, res) => {
 
         // 3. Reversal Entry
         let reversalLines = [];
+        let reversalAccountCode = null;
+
         if (chq.type === 'INCOMING') {
+            reversalAccountCode = acc_ar; // Default 1101
+
+            if (chq.reference_type === 'OTHER_INCOME' && chq.reference_id) {
+                const oiRes = await client.query(`
+                    SELECT coa.code 
+                    FROM other_income oi 
+                    JOIN chart_of_accounts coa ON oi.category_account_id = coa.id 
+                    WHERE oi.id = $1
+                `, [chq.reference_id]);
+                if (oiRes.rows.length > 0) reversalAccountCode = oiRes.rows[0].code;
+            } else if (chq.reference_type === 'ASSET_SALE_PAYMENT') {
+                reversalAccountCode = 1001; // Asset Receivable
+            }
+
             reversalLines = [
-                { code: acc_ar, debit: Number(chq.amount), credit: 0 },
+                { code: reversalAccountCode, debit: Number(chq.amount), credit: 0 },
                 { code: acc_cheque_in_hand, debit: 0, credit: Number(chq.amount) }
             ];
         } else {
+            reversalAccountCode = acc_ap; // Default 2001
+
+            if (chq.reference_type === 'EXPENSE' && chq.reference_id) {
+                const exRes = await client.query(`
+                    SELECT coa.code 
+                    FROM expenses ex 
+                    JOIN chart_of_accounts coa ON ex.category_account_id = coa.id 
+                    WHERE ex.id = $1
+                `, [chq.reference_id]);
+                if (exRes.rows.length > 0) reversalAccountCode = exRes.rows[0].code;
+            }
+
             reversalLines = [
                 { code: acc_cheque_issued, debit: Number(chq.amount), credit: 0 },
-                { code: acc_ap, debit: 0, credit: Number(chq.amount) }
+                { code: reversalAccountCode, debit: 0, credit: Number(chq.amount) }
             ];
         }
 
@@ -282,73 +313,115 @@ router.post('/:id/bounce', async (req, res) => {
             ]);
         }
 
-        // 5. Customer Penalty (if Incoming)
+        // 5. Income Penalty (Customer or Income Entity)
         if (chq.type === 'INCOMING' && Number(customer_penalty) > 0 && chq.party_id) {
-            // 5a. Generate Penalty Document Number
-            const yy = new Date().getFullYear().toString().slice(-2);
-            const seqRes = await client.query("UPDATE document_sequences SET current_number = current_number + 1 WHERE document_type = 'DEBIT_NOTE' RETURNING prefix, current_number");
+            if (chq.party_type === 'CUSTOMER') {
+                // 5a. Generate Penalty Document Number
+                const yy = new Date().getFullYear().toString().slice(-2);
+                const seqRes = await client.query("UPDATE document_sequences SET current_number = current_number + 1 WHERE document_type = 'DEBIT_NOTE' RETURNING prefix, current_number");
 
-            let penaltyDocNo = `PEN-${yy}-${Date.now().toString().slice(-4)}`;
-            if (seqRes.rows.length > 0) {
-                penaltyDocNo = `${seqRes.rows[0].prefix}${seqRes.rows[0].current_number.toString().padStart(5, '0')}`;
+                let penaltyDocNo = `PEN-${yy}-${Date.now().toString().slice(-4)}`;
+                if (seqRes.rows.length > 0) {
+                    penaltyDocNo = `${seqRes.rows[0].prefix}${seqRes.rows[0].current_number.toString().padStart(5, '0')}`;
+                }
+
+                // 5b. Create Sales Invoice (Debit Note)
+                await client.query(`
+                    INSERT INTO sales_invoices (
+                        invoice_number, customer_id, invoice_date, grand_total, amount_paid, 
+                        status, description, created_by
+                    ) VALUES ($1, $2, $3, $4, 0, 'Unpaid', $5, $6)
+                `, [
+                    penaltyDocNo, chq.party_id, bounce_date || new Date(), customer_penalty,
+                    `Cheque Bounce Penalty: ${chq.cheque_number} - ${bounce_reason}`, user_id
+                ]);
+
+                // 5c. GL Entry: Dr AR (1101), Cr Misc Income (4103)
+                const penaltyLines = [
+                    { code: acc_ar, debit: Number(customer_penalty), credit: 0 },
+                    { code: acc_misc_income, debit: 0, credit: Number(customer_penalty) }
+                ];
+                await client.query('SELECT create_journal_entry($1, $2, \'CHQ_BOUNCE_PENALTY\', $3, $4)', [
+                    bounce_date || new Date(),
+                    `Customer Penalty: ${chq.cheque_number}`,
+                    id,
+                    JSON.stringify(penaltyLines)
+                ]);
+            } else if (chq.party_type === 'INCOME_ENTITY') {
+                const seqRes = await client.query("UPDATE document_sequences SET current_number = current_number + 1 WHERE document_type = 'INCOME_PENALTY' RETURNING prefix, current_number");
+                const pNo = seqRes.rows[0] ? `${seqRes.rows[0].prefix}${seqRes.rows[0].current_number.toString().padStart(5, '0')}` : `IPEN-${Date.now()}`;
+
+                await client.query(`
+                    INSERT INTO income_penalties (entity_id, amount, penalty_date, penalty_number, cheque_id, remarks)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                `, [chq.party_id, customer_penalty, bounce_date || new Date(), pNo, id, `Cheque Bounce: ${chq.cheque_number}`]);
+
+                const penaltyLines = [
+                    { code: acc_ar, debit: Number(customer_penalty), credit: 0 },
+                    { code: acc_misc_income, debit: 0, credit: Number(customer_penalty) }
+                ];
+                await client.query('SELECT create_journal_entry($1, $2, \'CHQ_BOUNCE_PENALTY\', $3, $4)', [
+                    bounce_date || new Date(),
+                    `Income Penalty: ${chq.cheque_number}`,
+                    id,
+                    JSON.stringify(penaltyLines)
+                ]);
             }
-
-            // 5b. Create Sales Invoice (Debit Note)
-            await client.query(`
-                INSERT INTO sales_invoices (
-                    invoice_number, customer_id, invoice_date, grand_total, amount_paid, 
-                    status, description, created_by
-                ) VALUES ($1, $2, $3, $4, 0, 'Unpaid', $5, $6)
-            `, [
-                penaltyDocNo, chq.party_id, bounce_date || new Date(), customer_penalty,
-                `Cheque Bounce Penalty: ${chq.cheque_number} - ${bounce_reason}`, user_id
-            ]);
-
-            // 5c. GL Entry: Dr AR (1101), Cr Misc Income (4103)
-            const penaltyLines = [
-                { code: acc_ar, debit: Number(customer_penalty), credit: 0 },
-                { code: acc_misc_income, debit: 0, credit: Number(customer_penalty) }
-            ];
-            await client.query('SELECT create_journal_entry($1, $2, \'CHQ_BOUNCE_PENALTY\', $3, $4)', [
-                bounce_date || new Date(),
-                `Customer Penalty: ${chq.cheque_number}`,
-                id,
-                JSON.stringify(penaltyLines)
-            ]);
         }
 
-        // 6. Vendor Penalty (if Outgoing)
-        const penaltyToVendor = vendor_penalty || customer_penalty; // Accept both names for safety
+        // 6. Vendor/Expense Penalty (if Outgoing)
+        const penaltyToVendor = vendor_penalty || customer_penalty; 
         if (chq.type === 'OUTGOING' && Number(penaltyToVendor) > 0 && chq.party_id) {
-            // 6a. Generate Vendor Penalty Number
-            const seqRes = await client.query("UPDATE document_sequences SET current_number = current_number + 1 WHERE document_type = 'CREDIT_NOTE' RETURNING prefix, current_number");
-            
-            let vPenaltyNo = `VPEN-TMP-${Date.now()}`;
-            if (seqRes.rows.length > 0) {
-                vPenaltyNo = `${seqRes.rows[0].prefix}${seqRes.rows[0].current_number.toString().padStart(5, '0')}`;
+            if (chq.party_type === 'VENDOR') {
+                // 6a. Generate Vendor Penalty Number
+                const seqRes = await client.query("UPDATE document_sequences SET current_number = current_number + 1 WHERE document_type = 'CREDIT_NOTE' RETURNING prefix, current_number");
+                
+                let vPenaltyNo = `VPEN-TMP-${Date.now()}`;
+                if (seqRes.rows.length > 0) {
+                    vPenaltyNo = `${seqRes.rows[0].prefix}${seqRes.rows[0].current_number.toString().padStart(5, '0')}`;
+                }
+
+                // 6b. Record in vendor_penalties table
+                await client.query(`
+                    INSERT INTO vendor_penalties (
+                        vendor_id, amount, penalty_date, penalty_number, cheque_id, remarks
+                    ) VALUES ($1, $2, $3, $4, $5, $6)
+                `, [
+                    chq.party_id, penaltyToVendor, bounce_date || new Date(), vPenaltyNo, id,
+                    `Cheque Bounce Penalty: ${chq.cheque_number} - ${bounce_reason}`
+                ]);
+
+                // 6c. GL Entry: Dr Bank Charges (5005), Cr Accounts Payable (2001)
+                const vPenaltyLines = [
+                    { code: acc_bank_charges, debit: Number(penaltyToVendor), credit: 0 },
+                    { code: acc_ap, debit: 0, credit: Number(penaltyToVendor) }
+                ];
+                await client.query('SELECT create_journal_entry($1, $2, \'CHQ_BOUNCE_VPENALTY\', $3, $4)', [
+                    bounce_date || new Date(),
+                    `Vendor Bounce Penalty: ${chq.cheque_number}`,
+                    id,
+                    JSON.stringify(vPenaltyLines)
+                ]);
+            } else if (chq.party_type === 'EXPENSE_ENTITY') {
+                const seqRes = await client.query("UPDATE document_sequences SET current_number = current_number + 1 WHERE document_type = 'EXPENSE_PENALTY' RETURNING prefix, current_number");
+                const pNo = seqRes.rows[0] ? `${seqRes.rows[0].prefix}${seqRes.rows[0].current_number.toString().padStart(5, '0')}` : `EPEN-${Date.now()}`;
+
+                await client.query(`
+                    INSERT INTO expense_penalties (entity_id, amount, penalty_date, penalty_number, cheque_id, remarks)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                `, [chq.party_id, penaltyToVendor, bounce_date || new Date(), pNo, id, `Cheque Bounce: ${chq.cheque_number}`]);
+
+                const ePenaltyLines = [
+                    { code: acc_bank_charges, debit: Number(penaltyToVendor), credit: 0 },
+                    { code: acc_ap, debit: 0, credit: Number(penaltyToVendor) }
+                ];
+                await client.query('SELECT create_journal_entry($1, $2, \'CHQ_BOUNCE_EPENALTY\', $3, $4)', [
+                    bounce_date || new Date(),
+                    `Expense Bounce Penalty: ${chq.cheque_number}`,
+                    id,
+                    JSON.stringify(ePenaltyLines)
+                ]);
             }
-
-            // 6b. Record in vendor_penalties table
-            await client.query(`
-                INSERT INTO vendor_penalties (
-                    vendor_id, amount, penalty_date, penalty_number, cheque_id, remarks
-                ) VALUES ($1, $2, $3, $4, $5, $6)
-            `, [
-                chq.party_id, penaltyToVendor, bounce_date || new Date(), vPenaltyNo, id,
-                `Cheque Bounce Penalty: ${chq.cheque_number} - ${bounce_reason}`
-            ]);
-
-            // 6c. GL Entry: Dr Bank Charges (5005), Cr Accounts Payable (2001)
-            const vPenaltyLines = [
-                { code: acc_bank_charges, debit: Number(penaltyToVendor), credit: 0 },
-                { code: acc_ap, debit: 0, credit: Number(penaltyToVendor) }
-            ];
-            await client.query('SELECT create_journal_entry($1, $2, \'CHQ_BOUNCE_VPENALTY\', $3, $4)', [
-                bounce_date || new Date(),
-                `Vendor Bounce Penalty: ${chq.cheque_number}`,
-                id,
-                JSON.stringify(vPenaltyLines)
-            ]);
         }
 
         await client.query('COMMIT');

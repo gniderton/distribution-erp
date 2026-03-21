@@ -93,6 +93,7 @@ app.use('/api/asset-entities', require('./routes/asset_entities')); // [NEW] Mas
 app.use('/api/channels', require('./routes/channels')); // [NEW] Channel Maaping
 app.use('/api/categories', require('./routes/categories')); // Categories for dropdowns
 app.use('/api/sales-returns', require('./routes/sales_returns')); // [NEW] Credit Notes
+app.use('/api/entities', require('./routes/entities')); // [NEW] Master entities for Income/Expense
 
 // [NEW] Finance Module
 app.use('/api/finance/reconciliation', require('./routes/payment_reconciliation'));

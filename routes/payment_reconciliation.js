@@ -95,7 +95,7 @@ router.get('/:id/details', async (req, res) => {
             SELECT 
                 cp.id, cp.customer_id, c.customer_name,
                 cp.payment_date, cp.amount, cp.payment_mode,
-                cp.transaction_ref as cheque_number, cp.cheque_date, cp.bank_name,
+                cp.transaction_ref as cheque_number, cp.cheque_date, cp.bank_name, cp.bank_id,
                 cp.transaction_ref as transaction_reference,
                 cp.verification_status, cp.rejection_reason,
                 bse.status as bank_match_status,
@@ -636,7 +636,7 @@ router.patch('/:id/verify-cash', async (req, res) => {
 // B. Verify Cheque (Capture Details)
 router.patch('/:id/verify-cheque', async (req, res) => {
     const { id } = req.params;
-    const { cheque_number, cheque_date, bank_name, user_id, verification_notes } = req.body;
+    const { cheque_number, cheque_date, bank_name, bank_id, user_id, verification_notes } = req.body;
 
     const client = await pool.connect();
     try {
@@ -653,14 +653,16 @@ router.patch('/:id/verify-cheque', async (req, res) => {
                 transaction_ref = $1, -- Update/Confirm Cheque No
                 cheque_date = $2,
                 bank_name = $3,
-                verification_data = $4::jsonb,
-                verified_by = $5,
+                bank_id = $4,
+                verification_data = $5::jsonb,
+                verified_by = $6,
                 verified_at = NOW()
-            WHERE id = $6 AND payment_mode = 'Cheque'
+            WHERE id = $7 AND payment_mode = 'Cheque'
         `, [
             cheque_number,
             cheque_date,
             bank_name,
+            (bank_id === 'undefined' || !bank_id) ? null : bank_id,
             JSON.stringify({ notes: verification_notes }),
             user_id,
             id
@@ -673,10 +675,10 @@ router.patch('/:id/verify-cheque', async (req, res) => {
         // [NEW] Insert into cheques table
         await client.query(`
             INSERT INTO cheques (
-                cheque_number, cheque_date, bank_name, amount, 
+                cheque_number, cheque_date, bank_id, bank_name, amount, 
                 type, party_type, party_id, reference_type, reference_id, status
-            ) VALUES ($1, $2, $3, $4, 'INCOMING', 'CUSTOMER', $5, 'CUSTOMER_PAYMENT', $6, 'PENDING')
-        `, [cheque_number, cheque_date, bank_name, payment.amount, payment.customer_id, id]);
+            ) VALUES ($1, $2, $3, $4, $5, 'INCOMING', 'CUSTOMER', $6, 'CUSTOMER_PAYMENT', $7, 'PENDING')
+        `, [cheque_number, cheque_date, bank_id, bank_name, payment.amount, payment.customer_id, id]);
 
         const ledgerLines = [
             { code: acc_cheque_in_hand, debit: Number(payment.amount), credit: 0 },

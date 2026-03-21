@@ -104,15 +104,24 @@ router.post('/', async (req, res) => {
             ];
 
             if (mode === 'Cheque') {
-                // Ensure specific cheque fields are in body or use transaction_ref
-                await client.query(`
-                    INSERT INTO cheques (
-                        cheque_number, cheque_date, bank_name, amount, 
-                        type, party_type, party_id, reference_type, reference_id, status
-                    ) VALUES ($1, $2, $3, $4, 'OUTGOING', 'VENDOR', $5, 'VENDOR_PAYMENT', $6, 'PENDING')
-                `, [transaction_ref, req.body.cheque_date || payment_date, req.body.bank_name || 'Own Bank', amount, vendor_id, paymentId]);
-            }
-        } else {
+            const bId = (req.body.bank_id === 'undefined' || !req.body.bank_id) ? null : req.body.bank_id;
+            // Ensure specific cheque fields are in body or use transaction_ref
+            await client.query(`
+                INSERT INTO cheques (
+                    cheque_number, cheque_date, bank_id, bank_name, amount, 
+                    type, party_type, party_id, reference_type, reference_id, status
+                ) VALUES ($1, $2, $3, $4, $5, 'OUTGOING', 'VENDOR', $6, 'VENDOR_PAYMENT', $7, 'PENDING')
+            `, [
+                transaction_ref, 
+                req.body.cheque_date || payment_date, 
+                bId,
+                req.body.bank_name || 'Own Bank', 
+                amount, 
+                vendor_id, 
+                paymentId
+            ]);
+        }
+    } else {
             description = `Refund In: ${paymentNumber}`;
             // Dr Bank (Asset increases), Cr Accounts Payable
             ledgerLines = [

@@ -358,15 +358,16 @@ router.post('/', async (req, res) => {
                 transaction_ref, collected_by, payment_date, 
                 verification_status, offline_id,
                 location_lat, location_lng,
-                cheque_date, bank_name
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Pending', $8, $9, $10, $11, $12)
+                cheque_date, bank_name, bank_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Pending', $8, $9, $10, $11, $12, $13)
             RETURNING id
         `, [
             payNumber, customer_id, totalPaid, payment_mode,
             transaction_ref, collected_by, payment_date || new Date(),
             offline_id,
             location_lat, location_lng,
-            req.body.cheque_date, req.body.bank_name
+            req.body.cheque_date, req.body.bank_name,
+            (req.body.bank_id === 'undefined' || !req.body.bank_id) ? null : req.body.bank_id
         ]);
         const paymentId = payRes.rows[0].id;
 

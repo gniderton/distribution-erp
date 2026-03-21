@@ -11,10 +11,12 @@ router.get('/', async (req, res) => {
                 ex.*, 
                 coa.name as category_name,
                 ba.bank_name as payment_source_name,
-                ex.expense_number
+                ex.expense_number,
+                ee.name as entity_name
             FROM expenses ex
             JOIN chart_of_accounts coa ON ex.category_account_id = coa.id
             JOIN bank_accounts ba ON ex.payment_source_id = ba.id
+            LEFT JOIN expense_entities ee ON ex.entity_id = ee.id
             WHERE ex.is_active = true
         `;
         const params = [];
@@ -82,6 +84,7 @@ router.post('/', async (req, res) => {
         payment_mode,
         cheque_no,
         cheque_date: chq_date,
+        bank_id,
         bank_name: chq_bank_name,
         bank_statement_entry_id,
         user_id
@@ -162,7 +165,7 @@ router.post('/', async (req, res) => {
             INSERT INTO expenses (
                 expense_date, category_account_id, payment_source_id, 
                 taxable_amount, tax_amount, grand_total, is_gst_expense,
-                vendor_name, bill_no, gst_no, description, reference_no,
+                entity_id, bill_no, gst_no, description, reference_no,
                 created_by, journal_entry_id, expense_number, bank_statement_entry_id
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             RETURNING id
@@ -184,10 +187,18 @@ router.post('/', async (req, res) => {
         if (payment_mode === 'Cheque') {
             await client.query(`
                 INSERT INTO cheques (
-                    cheque_number, cheque_date, bank_name, amount, 
+                    cheque_number, cheque_date, bank_id, bank_name, amount, 
                     type, party_type, party_id, reference_type, reference_id, status
-                ) VALUES ($1, $2, $3, $4, 'OUTGOING', 'EXPENSE', NULL, 'EXPENSE', $5, 'PENDING')
-            `, [cheque_no || reference_no, chq_date || expense_date || new Date(), chq_bank_name || 'Own Bank', grand_total, expenseId]);
+                ) VALUES ($1, $2, $3, $4, $5, 'OUTGOING', 'EXPENSE_ENTITY', $6, 'EXPENSE', $7, 'PENDING')
+            `, [
+                cheque_no || reference_no, 
+                chq_date || expense_date || new Date(), 
+                (bank_id === 'undefined' || !bank_id) ? null : bank_id,
+                chq_bank_name || 'Own Bank', 
+                grand_total, 
+                vendor_name, /* Entity ID */
+                expenseId
+            ]);
         }
 
         // 8. Handle Bank Statement Consumption (Online Mode)

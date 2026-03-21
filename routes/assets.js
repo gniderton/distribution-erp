@@ -328,7 +328,14 @@ router.post('/payment', async (req, res) => {
                     cheque_number, cheque_date, bank_name, bank_id, amount, 
                     type, party_type, reference_type, reference_id, status
                 ) VALUES ($1, $2, $3, $4, $5, 'OUTGOING', 'VENDOR', 'ASSET_PAYMENT', $6, 'PENDING')
-            `, [cheque_no, cheque_date || payment_date, bank_name || 'Own Bank', bank_id, amount, asset_id]);
+            `, [
+                cheque_no, 
+                cheque_date || payment_date, 
+                bank_name || 'Own Bank', 
+                (bank_id === 'undefined' || !bank_id) ? null : bank_id,
+                amount, 
+                asset_id
+            ]);
         }
 
         await client.query('COMMIT');
