@@ -260,6 +260,39 @@ router.post('/bulk-attendance', async (req, res) => {
     }
 });
 
+// @route   GET /api/employees/attendance/report - Company-wide report
+router.get('/attendance/report', async (req, res) => {
+    try {
+        const { start_date, end_date } = req.query;
+
+        if (!start_date || !end_date) {
+            return res.status(400).json({ error: "start_date and end_date are required" });
+        }
+
+        const query = `
+            SELECT 
+                e.id as employee_id,
+                e.full_name,
+                e.employee_code,
+                d.title as designation_name,
+                COUNT(ea.id) FILTER (WHERE ea.status = 'Absent') as total_absent,
+                COUNT(ea.id) FILTER (WHERE ea.status = 'Half-Day') as total_half_day
+            FROM employees e
+            LEFT JOIN designations d ON e.designation_id = d.id
+            LEFT JOIN employee_attendance ea ON e.id = ea.employee_id 
+                AND ea.attendance_date BETWEEN $1 AND $2
+            WHERE e.employment_status = 'Active'
+            GROUP BY e.id, e.full_name, e.employee_code, d.title
+            ORDER BY e.full_name ASC
+        `;
+
+        const result = await pool.query(query, [start_date, end_date]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // @route   GET /api/employees/:id/attendance
 router.get('/:id/attendance', async (req, res) => {
     try {
