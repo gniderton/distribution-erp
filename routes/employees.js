@@ -419,6 +419,32 @@ router.post('/bulk-salary-advance', async (req, res) => {
                 UPDATE employee_advances SET journal_entry_id = $1 WHERE id = $2
             `, [journalEntryId, advanceId]);
 
+            // 4. Update Bank Statement Entry (Reconciliation)
+            if (payment_mode === 'Online' && bank_statement_entry_id) {
+                await client.query(`
+                    UPDATE bank_statement_entries 
+                    SET consumed_amount = consumed_amount + $1,
+                        status = CASE 
+                            WHEN (consumed_amount + $1) >= amount THEN 'Exhausted' 
+                            ELSE 'Partially Consumed' 
+                        END
+                    WHERE id = $2
+                `, [amount, bank_statement_entry_id]);
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, count: advances.length });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // @route   GET /api/employees/salary-preview
 router.get('/salary-preview', async (req, res) => {
     try {
@@ -499,26 +525,29 @@ router.get('/salary-preview', async (req, res) => {
 router.post('/bulk-salary-payment', async (req, res) => {
     const client = await pool.connect();
     try {
-        const { payments, month, year, from_account_id, payment_mode, user_id } = req.body;
+        const { payments, month, year, from_account_id, payment_mode, bank_statement_entry_id, user_id } = req.body;
 
         await client.query('BEGIN');
 
+        let totalBatchNet = 0;
+
         for (const p of payments) {
             const { employee_id, base_salary, absent_days, half_days, leave_deduction, advance_deduction, loan_deduction, net_salary } = p;
+            totalBatchNet += Number(net_salary);
 
             // 1. Insert Salary Record
             const salRes = await client.query(`
                 INSERT INTO employee_salaries (
                     employee_id, month, year, base_salary, absent_days, half_days,
                     leave_deduction, advance_deduction, loan_deduction, net_salary,
-                    payment_mode, from_account_id, created_by
+                    payment_mode, from_account_id, bank_statement_entry_id, created_by
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                 RETURNING id
             `, [
                 employee_id, month, year, base_salary, absent_days, half_days,
                 leave_deduction, advance_deduction, loan_deduction, net_salary,
-                payment_mode, from_account_id, user_id
+                payment_mode, from_account_id, bank_statement_entry_id || null, user_id
             ]);
 
             const salaryId = salRes.rows[0].id;
@@ -539,7 +568,7 @@ router.post('/bulk-salary-payment', async (req, res) => {
                 `, [employee_id]);
 
                 for (const loan of loanRes.rows) {
-                    const emi = p.loan_deduction; // Simplification: apply total EMI to first active loan found
+                    const emi = p.loan_deduction;
                     await client.query(`
                         INSERT INTO loan_transactions (loan_id, transaction_date, amount, principal_portion, transaction_type, payment_mode, remarks)
                         VALUES ($1, CURRENT_DATE, $2, $2, 'INSTALLMENT', $3, $4)
@@ -551,34 +580,25 @@ router.post('/bulk-salary-payment', async (req, res) => {
                 }
             }
 
-            // 4. Create Journal Entry
-            // 5010: Salary Expense (Dr)
+            // 4. Create Journal Entry (Professional "Gross-Debit" Pattern)
+            // 5010: Salary Expense (Dr) - GROSS
+            // 5011: Salary Deduction (Cr) - ADJ
             // 1020: Salary Advance (Cr)
-            // 1105: Loans Receivable (Cr) - Assuming loan recovery reduces principal asset
+            // 1105: Loans Receivable (Cr)
             // 1002/1003: Bank/Cash (Cr)
             const creditAccountCode = payment_mode === 'Online' ? 1002 : 1003;
             const journalLines = [
-                { code: 5010, debit: base_salary, credit: 0 }
+                { code: 5010, debit: base_salary, credit: 0 } // Gross contractual
             ];
 
+            if (Number(leave_deduction) > 0) journalLines.push({ code: 5011, debit: 0, credit: leave_deduction });
             if (Number(advance_deduction) > 0) journalLines.push({ code: 1020, debit: 0, credit: advance_deduction });
             if (Number(loan_deduction) > 0) journalLines.push({ code: 1105, debit: 0, credit: loan_deduction });
             
-            // The remaining amount is paid out
             const payoutAmount = Number(net_salary);
             if (payoutAmount > 0) {
                 journalLines.push({ code: creditAccountCode, debit: 0, credit: payoutAmount });
             }
-
-            // If there's a leave deduction, the total credit (Advances + Loan + Payout) 
-            // will be less than Base Salary. The difference is the "Savings" or simply 
-            // we only expense the Net + Advances + Loan.
-            // Actually, usually you expense the GROSS and the deductions are offsets.
-            // But if leave deduction is "Unpaid Leave", then Salary Expense is ONLY for the days worked.
-            
-            // Let's adjust: Expense = Base - LeaveDeduction
-            const actualExpense = Number(base_salary) - Number(leave_deduction);
-            journalLines[0].debit = actualExpense;
 
             const journalRes = await client.query(`
                 SELECT create_journal_entry($1, $2, $3, $4, $5) as entry_id
@@ -594,6 +614,19 @@ router.post('/bulk-salary-payment', async (req, res) => {
             await client.query(`UPDATE employee_salaries SET journal_entry_id = $1 WHERE id = $2`, [journalEntryId, salaryId]);
         }
 
+        // 5. Update Bank Statement (Bulk Consumption)
+        if (payment_mode === 'Online' && bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = consumed_amount + $1,
+                    status = CASE 
+                        WHEN (consumed_amount + $1) >= amount THEN 'Exhausted' 
+                        ELSE 'Partially Consumed' 
+                    END
+                WHERE id = $2
+            `, [totalBatchNet, bank_statement_entry_id]);
+        }
+
         await client.query('COMMIT');
         res.json({ success: true, count: payments.length });
 
@@ -606,14 +639,59 @@ router.post('/bulk-salary-payment', async (req, res) => {
     }
 });
 
-        await client.query('COMMIT');
-        res.json({ success: true, count: advances.length });
+// @route   GET /api/employees/salaries
+router.get('/salaries', async (req, res) => {
+    try {
+        const { employee_id, month, year } = req.query;
+        let query = `
+            SELECT es.*, e.full_name, e.employee_code 
+            FROM employee_salaries es
+            JOIN employees e ON es.employee_id = e.id
+            WHERE 1=1
+        `;
+        const params = [];
+
+        if (employee_id) {
+            params.push(employee_id);
+            query += ` AND es.employee_id = $${params.length}`;
+        }
+        if (month) {
+            params.push(month);
+            query += ` AND es.month = $${params.length}`;
+        }
+        if (year) {
+            params.push(year);
+            query += ` AND es.year = $${params.length}`;
+        }
+
+        query += ` ORDER BY es.year DESC, es.month DESC, es.created_at DESC`;
+
+        const { rows } = await pool.query(query, params);
+        res.json(rows);
     } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('Bulk Advance Error:', err);
+        console.error(err);
         res.status(500).json({ error: err.message });
-    } finally {
-        client.release();
+    }
+});
+
+// @route   GET /api/employees/salaries/:id
+router.get('/salaries/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const query = `
+            SELECT es.*, e.full_name, e.employee_code, ba.bank_name as source_account
+            FROM employee_salaries es
+            JOIN employees e ON es.employee_id = e.id
+            LEFT JOIN bank_accounts ba ON es.from_account_id = ba.id
+            WHERE es.id = $1
+        `;
+        const { rows } = await pool.query(query, [id]);
+        if (rows.length === 0) return res.status(404).json({ error: "Salary record not found" });
+
+        res.json(rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
     }
 });
 
