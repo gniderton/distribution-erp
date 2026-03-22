@@ -94,4 +94,29 @@ router.put('/:id', async (req, res) => {
     }
 });
 
+// 4. Get Asset Entity Ledger
+router.get('/:id/ledger', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { start_date, end_date } = req.query;
+        let query = 'SELECT * FROM view_asset_entity_ledger WHERE entity_id = $1';
+        const params = [id];
+
+        if (start_date) {
+            params.push(start_date);
+            query += ` AND date >= $${params.length}`;
+        }
+        if (end_date) {
+            params.push(end_date);
+            query += ` AND date <= $${params.length}`;
+        }
+        query += ' ORDER BY date ASC, sort_id ASC';
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
