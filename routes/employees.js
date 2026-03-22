@@ -293,6 +293,37 @@ router.get('/attendance/report', async (req, res) => {
     }
 });
 
+// @route   GET /api/employees/attendance/details - Detailed lines for all employees
+router.get('/attendance/details', async (req, res) => {
+    try {
+        const { start_date, end_date } = req.query;
+
+        if (!start_date || !end_date) {
+            return res.status(400).json({ error: "start_date and end_date are required" });
+        }
+
+        const query = `
+            SELECT 
+                ea.id,
+                ea.employee_id,
+                e.full_name,
+                e.employee_code,
+                ea.attendance_date,
+                ea.status,
+                ea.remarks
+            FROM employee_attendance ea
+            JOIN employees e ON ea.employee_id = e.id
+            WHERE ea.attendance_date BETWEEN $1 AND $2
+            ORDER BY ea.attendance_date DESC, e.full_name ASC
+        `;
+
+        const result = await pool.query(query, [start_date, end_date]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // @route   GET /api/employees/:id/attendance
 router.get('/:id/attendance', async (req, res) => {
     try {
