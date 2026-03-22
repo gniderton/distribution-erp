@@ -225,4 +225,39 @@ router.post('/bulk-salary-update', async (req, res) => {
     }
 });
 
+// @route   POST /api/employees/bulk-attendance
+router.post('/bulk-attendance', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { employee_ids, status, attendance_date, remarks } = req.body;
+
+        if (!Array.isArray(employee_ids) || employee_ids.length === 0) {
+            return res.status(400).json({ error: "employee_ids array is required" });
+        }
+
+        if (!status || !['Absent', 'Half-Day'].includes(status)) {
+            return res.status(400).json({ error: "Valid status (Absent/Half-Day) is required" });
+        }
+
+        await client.query('BEGIN');
+
+        for (const empId of employee_ids) {
+            await client.query(`
+                INSERT INTO employee_attendance (employee_id, attendance_date, status, remarks)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (employee_id, attendance_date) 
+                DO UPDATE SET status = EXCLUDED.status, remarks = EXCLUDED.remarks, created_at = NOW()
+            `, [empId, attendance_date || new Date(), status, remarks || null]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, count: employee_ids.length });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
