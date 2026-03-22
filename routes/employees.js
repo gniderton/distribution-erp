@@ -260,4 +260,42 @@ router.post('/bulk-attendance', async (req, res) => {
     }
 });
 
+// @route   GET /api/employees/:id/attendance
+router.get('/:id/attendance', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { start_date, end_date } = req.query;
+
+        let query = 'SELECT * FROM employee_attendance WHERE employee_id = $1';
+        const params = [id];
+        let pIdx = 2;
+
+        if (start_date && end_date) {
+            query += ` AND attendance_date BETWEEN $${pIdx} AND $${pIdx + 1}`;
+            params.push(start_date, end_date);
+            pIdx += 2;
+        }
+
+        query += ' ORDER BY attendance_date DESC';
+
+        const history = await pool.query(query, params);
+
+        // Calculate Totals
+        const summaryRes = await pool.query(`
+            SELECT 
+                COUNT(*) FILTER (WHERE status = 'Absent') as total_absent,
+                COUNT(*) FILTER (WHERE status = 'Half-Day') as total_half_day
+            FROM employee_attendance 
+            WHERE employee_id = $1 ${start_date && end_date ? 'AND attendance_date BETWEEN $2 AND $3' : ''}
+        `, params);
+
+        res.json({
+            history: history.rows,
+            summary: summaryRes.rows[0]
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
