@@ -419,19 +419,192 @@ router.post('/bulk-salary-advance', async (req, res) => {
                 UPDATE employee_advances SET journal_entry_id = $1 WHERE id = $2
             `, [journalEntryId, advanceId]);
 
-            // 4. Update Bank Statement Entry (Reconciliation)
-            if (payment_mode === 'Online' && bank_statement_entry_id) {
+// @route   GET /api/employees/salary-preview
+router.get('/salary-preview', async (req, res) => {
+    try {
+        const { month, year } = req.query;
+        if (!month || !year) return res.status(400).json({ error: "month and year required" });
+
+        const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+        const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+        const query = `
+            WITH AttendanceStats AS (
+                SELECT 
+                    employee_id,
+                    COUNT(*) FILTER (WHERE status = 'Absent') as absent_days,
+                    COUNT(*) FILTER (WHERE status = 'Half-Day') as half_days
+                FROM employee_attendance
+                WHERE attendance_date BETWEEN $1 AND $2
+                GROUP BY employee_id
+            ),
+            AdvanceStats AS (
+                SELECT 
+                    employee_id,
+                    SUM(amount) as total_advances
+                FROM employee_advances
+                WHERE is_settled = FALSE
+                GROUP BY employee_id
+            ),
+            LoanStats AS (
+                SELECT 
+                    party_id as employee_id,
+                    SUM(emi_amount) as total_emi
+                FROM loans
+                WHERE party_type = 'EMPLOYEE' AND status = 'Active'
+                GROUP BY party_id
+            )
+            SELECT 
+                e.id, e.full_name, e.employee_code, e.salary as base_salary,
+                COALESCE(att.absent_days, 0) as absent_days,
+                COALESCE(att.half_days, 0) as half_days,
+                COALESCE(adv.total_advances, 0) as advance_deduction,
+                COALESCE(ls.total_emi, 0) as loan_deduction
+            FROM employees e
+            LEFT JOIN AttendanceStats att ON e.id = att.employee_id
+            LEFT JOIN AdvanceStats adv ON e.id = adv.employee_id
+            LEFT JOIN LoanStats ls ON e.id = ls.employee_id
+            WHERE e.status = 'Active'
+        `;
+
+        const { rows } = await pool.query(query, [startDate, endDate]);
+
+        const detailedPreview = rows.map(r => {
+            const salary = Number(r.base_salary);
+            const perDay = salary / 30;
+            const perHalfDay = salary / 60;
+
+            const deductibleAbsent = Math.max(0, r.absent_days - 1);
+            const deductibleHalf = Math.max(0, r.half_days - 1);
+
+            const leaveDeduction = (perDay * deductibleAbsent) + (perHalfDay * deductibleHalf);
+            const totalDeductions = leaveDeduction + Number(r.advance_deduction) + Number(r.loan_deduction);
+            const netSalary = Math.max(0, salary - totalDeductions);
+
+            return {
+                ...r,
+                leave_deduction: leaveDeduction.toFixed(2),
+                net_salary: netSalary.toFixed(2)
+            };
+        });
+
+        res.json(detailedPreview);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   POST /api/employees/bulk-salary-payment
+router.post('/bulk-salary-payment', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { payments, month, year, from_account_id, payment_mode, user_id } = req.body;
+
+        await client.query('BEGIN');
+
+        for (const p of payments) {
+            const { employee_id, base_salary, absent_days, half_days, leave_deduction, advance_deduction, loan_deduction, net_salary } = p;
+
+            // 1. Insert Salary Record
+            const salRes = await client.query(`
+                INSERT INTO employee_salaries (
+                    employee_id, month, year, base_salary, absent_days, half_days,
+                    leave_deduction, advance_deduction, loan_deduction, net_salary,
+                    payment_mode, from_account_id, created_by
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                RETURNING id
+            `, [
+                employee_id, month, year, base_salary, absent_days, half_days,
+                leave_deduction, advance_deduction, loan_deduction, net_salary,
+                payment_mode, from_account_id, user_id
+            ]);
+
+            const salaryId = salRes.rows[0].id;
+
+            // 2. Settle Advances
+            if (Number(advance_deduction) > 0) {
                 await client.query(`
-                    UPDATE bank_statement_entries 
-                    SET consumed_amount = consumed_amount + $1,
-                        status = CASE 
-                            WHEN (consumed_amount + $1) >= amount THEN 'Exhausted' 
-                            ELSE 'Partially Consumed' 
-                        END
-                    WHERE id = $2
-                `, [amount, bank_statement_entry_id]);
+                    UPDATE employee_advances 
+                    SET is_settled = TRUE, salary_payment_id = $1 
+                    WHERE employee_id = $2 AND is_settled = FALSE
+                `, [salaryId, employee_id]);
             }
+
+            // 3. Record Loan Installment
+            if (Number(loan_deduction) > 0) {
+                const loanRes = await client.query(`
+                    SELECT id FROM loans WHERE party_type = 'EMPLOYEE' AND party_id = $1 AND status = 'Active'
+                `, [employee_id]);
+
+                for (const loan of loanRes.rows) {
+                    const emi = p.loan_deduction; // Simplification: apply total EMI to first active loan found
+                    await client.query(`
+                        INSERT INTO loan_transactions (loan_id, transaction_date, amount, principal_portion, transaction_type, payment_mode, remarks)
+                        VALUES ($1, CURRENT_DATE, $2, $2, 'INSTALLMENT', $3, $4)
+                    `, [loan.id, emi, payment_mode, `Salary Deduction - ${month}/${year}`]);
+
+                    await client.query(`
+                        UPDATE loans SET balance_principal = balance_principal - $1 WHERE id = $2
+                    `, [emi, loan.id]);
+                }
+            }
+
+            // 4. Create Journal Entry
+            // 5010: Salary Expense (Dr)
+            // 1020: Salary Advance (Cr)
+            // 1105: Loans Receivable (Cr) - Assuming loan recovery reduces principal asset
+            // 1002/1003: Bank/Cash (Cr)
+            const creditAccountCode = payment_mode === 'Online' ? 1002 : 1003;
+            const journalLines = [
+                { code: 5010, debit: base_salary, credit: 0 }
+            ];
+
+            if (Number(advance_deduction) > 0) journalLines.push({ code: 1020, debit: 0, credit: advance_deduction });
+            if (Number(loan_deduction) > 0) journalLines.push({ code: 1105, debit: 0, credit: loan_deduction });
+            
+            // The remaining amount is paid out
+            const payoutAmount = Number(net_salary);
+            if (payoutAmount > 0) {
+                journalLines.push({ code: creditAccountCode, debit: 0, credit: payoutAmount });
+            }
+
+            // If there's a leave deduction, the total credit (Advances + Loan + Payout) 
+            // will be less than Base Salary. The difference is the "Savings" or simply 
+            // we only expense the Net + Advances + Loan.
+            // Actually, usually you expense the GROSS and the deductions are offsets.
+            // But if leave deduction is "Unpaid Leave", then Salary Expense is ONLY for the days worked.
+            
+            // Let's adjust: Expense = Base - LeaveDeduction
+            const actualExpense = Number(base_salary) - Number(leave_deduction);
+            journalLines[0].debit = actualExpense;
+
+            const journalRes = await client.query(`
+                SELECT create_journal_entry($1, $2, $3, $4, $5) as entry_id
+            `, [
+                new Date(),
+                `Monthly Salary - Emp ID: ${employee_id} (${month}/${year})`,
+                'SALARY_PAYMENT',
+                salaryId,
+                JSON.stringify(journalLines)
+            ]);
+
+            const journalEntryId = journalRes.rows[0].entry_id;
+            await client.query(`UPDATE employee_salaries SET journal_entry_id = $1 WHERE id = $2`, [journalEntryId, salaryId]);
         }
+
+        await client.query('COMMIT');
+        res.json({ success: true, count: payments.length });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
 
         await client.query('COMMIT');
         res.json({ success: true, count: advances.length });
