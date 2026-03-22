@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 
+// @route   GET /api/employees/designations - List Master Designations
+router.get('/designations', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, code, title, department FROM designations ORDER BY title ASC');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // @route   GET /api/employees/profile - Filter by Email (for Retool)
 router.get('/profile', async (req, res) => {
     try {
