@@ -418,6 +418,19 @@ router.post('/bulk-salary-advance', async (req, res) => {
             await client.query(`
                 UPDATE employee_advances SET journal_entry_id = $1 WHERE id = $2
             `, [journalEntryId, advanceId]);
+
+            // 4. Update Bank Statement Entry (Reconciliation)
+            if (payment_mode === 'Online' && bank_statement_entry_id) {
+                await client.query(`
+                    UPDATE bank_statement_entries 
+                    SET consumed_amount = consumed_amount + $1,
+                        status = CASE 
+                            WHEN (consumed_amount + $1) >= amount THEN 'Exhausted' 
+                            ELSE 'Partially Consumed' 
+                        END
+                    WHERE id = $2
+                `, [amount, bank_statement_entry_id]);
+            }
         }
 
         await client.query('COMMIT');
