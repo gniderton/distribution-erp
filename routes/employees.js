@@ -127,11 +127,11 @@ router.post('/', async (req, res) => {
             await client.query(`
                 INSERT INTO employee_salary_history (
                     employee_id, effective_date, previous_salary, new_salary, 
-                    increment_amount, reason, created_by
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    reason, created_by
+                ) VALUES ($1, $2, $3, $4, $5, $6)
             `, [
                 employeeId, joining_date || new Date(), 0, salary,
-                salary, 'Joining Salary', user_id
+                'Joining Salary', user_id
             ]);
         }
 
@@ -158,14 +158,12 @@ router.post('/:id/salary-update', async (req, res) => {
             [id]
         );
         const previousSalary = currentSalaryRes.rows.length > 0 ? Number(currentSalaryRes.rows[0].new_salary) : 0;
-        const incrementAmount = Number(new_salary) - previousSalary;
-
         await pool.query(`
             INSERT INTO employee_salary_history (
                 employee_id, effective_date, previous_salary, new_salary, 
-                increment_amount, reason, created_by
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        `, [id, effective_date || new Date(), previousSalary, new_salary, incrementAmount, reason, user_id]);
+                reason, created_by
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+        `, [id, effective_date || new Date(), previousSalary, new_salary, reason, user_id]);
 
         res.json({ success: true });
     } catch (err) {
