@@ -184,4 +184,45 @@ router.get('/:id/salary-history', async (req, res) => {
     }
 });
 
+// @route   POST /api/employees/bulk-salary-update
+router.post('/bulk-salary-update', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { updates, effective_date, reason, user_id } = req.body;
+        // updates = [{ employee_id, new_salary }, ...]
+
+        if (!Array.isArray(updates) || updates.length === 0) {
+            return res.status(400).json({ error: "Updates array is required" });
+        }
+
+        await client.query('BEGIN');
+
+        for (const update of updates) {
+            const { employee_id, new_salary } = update;
+
+            // Get Current Salary
+            const currentSalaryRes = await client.query(
+                "SELECT new_salary FROM employee_salary_history WHERE employee_id = $1 ORDER BY effective_date DESC, created_at DESC LIMIT 1",
+                [employee_id]
+            );
+            const previousSalary = currentSalaryRes.rows.length > 0 ? Number(currentSalaryRes.rows[0].new_salary) : 0;
+
+            await client.query(`
+                INSERT INTO employee_salary_history (
+                    employee_id, effective_date, previous_salary, new_salary, 
+                    reason, created_by
+                ) VALUES ($1, $2, $3, $4, $5, $6)
+            `, [employee_id, effective_date || new Date(), previousSalary, new_salary, reason, user_id]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, count: updates.length });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
