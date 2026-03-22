@@ -362,4 +362,73 @@ router.get('/:id/attendance', async (req, res) => {
     }
 });
 
+// @route   POST /api/employees/bulk-salary-advance
+router.post('/bulk-salary-advance', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { advances, advance_date, remarks, user_id } = req.body;
+
+        if (!Array.isArray(advances) || advances.length === 0) {
+            return res.status(400).json({ error: "advances array is required" });
+        }
+
+        await client.query('BEGIN');
+
+        for (const adv of advances) {
+            const { employee_id, amount, payment_mode, from_account_id, bank_statement_entry_id } = adv;
+
+            // 1. Insert Advance Record
+            const advRes = await client.query(`
+                INSERT INTO employee_advances (
+                    employee_id, advance_date, amount, payment_mode, 
+                    from_account_id, bank_statement_entry_id, remarks, created_by
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                RETURNING id
+            `, [
+                employee_id, advance_date || new Date(), amount, payment_mode,
+                from_account_id, bank_statement_entry_id || null, remarks || 'Salary Advance', user_id
+            ]);
+
+            const advanceId = advRes.rows[0].id;
+
+            // 2. Create Journal Entry
+            // Account 1020: Employee Salary Advances (Asset)
+            // Account 1002: Bank (Asset) or 1003: Cash (Asset)
+            const creditAccountCode = payment_mode === 'Online' ? 1002 : 1003;
+            
+            const lines = [
+                { code: 1020, debit: amount, credit: 0 },
+                { code: creditAccountCode, debit: 0, credit: amount }
+            ];
+
+            const journalRes = await client.query(`
+                SELECT create_journal_entry($1, $2, $3, $4, $5) as entry_id
+            `, [
+                advance_date || new Date(),
+                `Salary Advance - Emp ID: ${employee_id}`,
+                'SALARY_ADVANCE',
+                advanceId,
+                JSON.stringify(lines)
+            ]);
+
+            const journalEntryId = journalRes.rows[0].entry_id;
+
+            // 3. Link Journal Entry to Advance
+            await client.query(`
+                UPDATE employee_advances SET journal_entry_id = $1 WHERE id = $2
+            `, [journalEntryId, advanceId]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, count: advances.length });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Bulk Advance Error:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
