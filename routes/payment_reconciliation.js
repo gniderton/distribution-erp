@@ -435,7 +435,33 @@ router.post('/bulk-update', async (req, res) => {
         }
 
         await client.query('COMMIT');
-        res.json({ success: true, count: items.length, version: "1.2", items_received: items.length, updated_records: items.map(i => i.id) });
+
+        // [AUTO-FINALIZATION CHECK]
+        // After committing the items, check if the involved reports are now fully processed.
+        const reportIds = [...new Set(items.map(i => i.report_id).filter(id => id))];
+        
+        for (const rId of reportIds) {
+            const checkRes = await pool.query(`
+                SELECT 
+                    (SELECT COUNT(*) FROM customer_payments WHERE report_id = $1 AND verification_status = 'Pending') as pending_payments,
+                    (SELECT COUNT(*) FROM dse_expenses WHERE report_id = $1 AND status = 'Pending') as pending_expenses
+            `, [rId]);
+
+            const { pending_payments, pending_expenses } = checkRes.rows[0];
+
+            if (parseInt(pending_payments) === 0 && parseInt(pending_expenses) === 0) {
+                console.log(`[Auto-Settle] Report ${rId} is fully processed. Finalizing.`);
+                await pool.query(`
+                    UPDATE daily_sales_reports 
+                    SET settlement_status = 'Settled', 
+                        finance_remark = COALESCE(finance_remark, 'Auto-settled via bulk update'),
+                        updated_at = NOW() 
+                    WHERE id = $1 AND settlement_status = 'Pending'
+                `, [rId]);
+            }
+        }
+
+        res.json({ success: true, count: items.length, version: "1.3", items_received: items.length, updated_records: items.map(i => i.id) });
     } catch (err) {
         await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
