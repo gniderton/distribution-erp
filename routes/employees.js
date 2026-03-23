@@ -464,11 +464,14 @@ router.get('/salary-preview', async (req, res) => {
             ),
             LoanStats AS (
                 SELECT 
-                    party_id as employee_id,
-                    SUM(emi_amount) as total_emi
-                FROM loans
-                WHERE party_type = 'EMPLOYEE' AND status = 'Active'
-                GROUP BY party_id
+                    le.reference_id as employee_id,
+                    SUM(l.emi_amount) as total_emi
+                FROM loans l
+                JOIN loan_entities le ON l.party_id = le.id
+                WHERE l.party_type = 'EMPLOYEE' 
+                  AND l.status = 'Active'
+                  AND le.entity_type = 'Employee'
+                GROUP BY le.reference_id
             ),
             CurrentSalary AS (
                 SELECT DISTINCT ON (employee_id) employee_id, new_salary 
@@ -574,8 +577,14 @@ router.post('/bulk-salary-payment', async (req, res) => {
             // 3. Record Loan Installment (use finalMode)
             if (Number(loan_deduction) > 0) {
                 const loanRes = await client.query(`
-                    SELECT id FROM loans WHERE party_type = 'EMPLOYEE' AND party_id = $1 AND status = 'Active'
-                `, [employee_id]);
+                    SELECT l.id 
+                    FROM loans l
+                    JOIN loan_entities le ON l.party_id = le.id
+                    WHERE l.party_type = 'EMPLOYEE' 
+                      AND le.reference_id = $1 
+                      AND l.status = 'Active'
+                      AND le.entity_type = 'Employee'
+                `, [finalEmpId]);
 
                 for (const loan of loanRes.rows) {
                     const emi = p.loan_deduction;
