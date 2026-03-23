@@ -34,6 +34,20 @@ router.get('/profile', async (req, res) => {
     }
 });
 
+// @route   POST /api/employees/bonus - Record Manual Bonus
+router.post('/bonus', async (req, res) => {
+    try {
+        const { employee_id, amount, bonus_date, bonus_type, remarks } = req.body;
+        await pool.query(`
+            INSERT INTO employee_bonuses (employee_id, amount, bonus_date, bonus_type, remarks)
+            VALUES ($1, $2, $3, $4, $5)
+        `, [employee_id, amount, bonus_date || new Date(), bonus_type || 'MANUAL', remarks]);
+        res.json({ success: true, message: 'Bonus recorded and queued for next salary batch' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // @route   GET /api/employees - List Employees
 router.get('/', async (req, res) => {
     try {
@@ -462,6 +476,14 @@ router.get('/salary-preview', async (req, res) => {
                 WHERE is_settled = FALSE
                 GROUP BY employee_id
             ),
+            BonusStats AS (
+                SELECT 
+                    employee_id,
+                    SUM(amount) as total_bonuses
+                FROM employee_bonuses
+                WHERE is_settled = FALSE
+                GROUP BY employee_id
+            ),
             LoanStats AS (
                 SELECT 
                     le.reference_id as employee_id,
@@ -486,6 +508,7 @@ router.get('/salary-preview', async (req, res) => {
                 COALESCE(att.absent_days, 0) as absent_days,
                 COALESCE(att.half_days, 0) as half_days,
                 COALESCE(adv.total_advances, 0) as advance_deduction,
+                COALESCE(bs.total_bonuses, 0) as bonus_addition,
                 (COALESCE(ls.total_emi, 0)) as loan_deduction,
             (COALESCE(ls.total_principal, 0)) as loan_principal,
             (COALESCE(ls.total_interest, 0)) as loan_interest
@@ -493,13 +516,14 @@ router.get('/salary-preview', async (req, res) => {
             LEFT JOIN CurrentSalary cs ON e.id = cs.employee_id
             LEFT JOIN AttendanceStats att ON e.id = att.employee_id
             LEFT JOIN AdvanceStats adv ON e.id = adv.employee_id
+            LEFT JOIN BonusStats bs ON e.id = bs.employee_id
             LEFT JOIN LoanStats ls ON e.id = ls.employee_id
             WHERE e.employment_status = 'Active'
         `;
 
         const { rows } = await pool.query(query, [startDate, endDate]);
 
-        const detailedPreview = rows.map(r => {
+        const detailedPreview = await Promise.all(rows.map(async r => {
             const salary = Number(r.base_salary);
             const perDay = salary / 30;
             const perHalfDay = salary / 60;
@@ -507,16 +531,62 @@ router.get('/salary-preview', async (req, res) => {
             const deductibleAbsent = Math.max(0, r.absent_days - 1);
             const deductibleHalf = Math.max(0, r.half_days - 1);
 
+            let leaveEncashment = 0;
+            const isMarch = Number(month) === 3;
+
+            if (isMarch) {
+                // Calculate Leave Encashment for the whole fiscal year (April to March)
+                // We'll search for all months from April (month=4, year=prev) to March (month=3, year=current)
+                const startFiscal = new Date(year, 3, 1); // April 1st of SAME year? No, if it's March 2026, we check from April 2025.
+                const fiscalYearStart = Number(month) >= 4 ? Number(year) : Number(year) - 1;
+                const dateFrom = `${fiscalYearStart}-04-01`;
+                const dateTo = `${year}-03-31`;
+
+                const attHistory = await pool.query(`
+                    SELECT 
+                        EXTRACT(MONTH FROM attendance_date) as month,
+                        COUNT(*) FILTER (WHERE status = 'Absent') as absent_days,
+                        COUNT(*) FILTER (WHERE status = 'Half-Day') as half_days
+                    FROM employee_attendance
+                    WHERE employee_id = $1 AND attendance_date BETWEEN $2 AND $3
+                    GROUP BY 1
+                `, [r.id, dateFrom, dateTo]);
+
+                // Total eligible per month: 1 Full, 0.5 Half
+                // We'll sum up (1 - min(1, absent)) and (0.5 - min(1, half)*0.5) for every month they were active
+                // (Assuming they were active for 12 months for now, or we can check salary history months)
+                let unusedFull = 0;
+                let unusedHalf = 0;
+
+                // Simple loop for 12 months
+                for (let m = 1; m <= 12; m++) {
+                    // Check if they had salary in that month (to see if they were active)
+                    // (Simplified: just check if attendance exists or if they were hired by then)
+                    const mStats = attHistory.rows.find(h => Number(h.month) === (m > 9 ? m - 9 : m + 3)); // Map fiscal? No, month is 1-12.
+                    // Let's just use 1-12 directly.
+                    const h = attHistory.rows.find(h => Number(h.month) === m);
+                    const abs = h ? Number(h.absent_days) : 0;
+                    const hlf = h ? Number(h.half_days) : 0;
+
+                    unusedFull += Math.max(0, 1 - Math.min(1, abs));
+                    unusedHalf += Math.max(0, 0.5 - (Math.min(1, hlf) * 0.5));
+                }
+                leaveEncashment = (unusedFull * perDay) + (unusedHalf * perDay); // 1 unused half day is 0.5 full day, so 0.5 * perDay
+            }
+
             const leaveDeduction = (perDay * deductibleAbsent) + (perHalfDay * deductibleHalf);
             const totalDeductions = leaveDeduction + Number(r.advance_deduction) + Number(r.loan_deduction);
-            const netSalary = Math.max(0, salary - totalDeductions);
+            const totalAdditions = Number(r.bonus_addition) + leaveEncashment;
+            const netSalary = Math.max(0, salary - totalDeductions + totalAdditions);
 
             return {
                 ...r,
                 leave_deduction: leaveDeduction.toFixed(2),
+                bonus_addition: Number(r.bonus_addition).toFixed(2),
+                leave_encashment: leaveEncashment.toFixed(2),
                 net_salary: netSalary.toFixed(2)
             };
-        });
+        }));
 
         res.json(detailedPreview);
     } catch (err) {
@@ -632,6 +702,25 @@ router.post('/bulk-salary-payment', async (req, res) => {
 
                 if (Number(leave_deduction) > 0) journalLines.push({ code: 5015, debit: 0, credit: Number(leave_deduction) });
                 if (Number(advance_deduction) > 0) journalLines.push({ code: 1020, debit: 0, credit: Number(advance_deduction) });
+                
+                // Manual Bonus & Encashment logic
+                const bonusRes = await client.query(`
+                    SELECT amount, id FROM employee_bonuses 
+                    WHERE employee_id = $1 AND is_settled = FALSE
+                `, [employee_id]);
+                
+                let totalBonusAmt = 0;
+                for (const b of bonusRes.rows) {
+                    totalBonusAmt += Number(b.amount);
+                    journalLines.push({ code: 5016, debit: Number(b.amount), credit: 0 }); // Dr Bonus Expense
+                }
+
+                // Leave Encashment (provided from frontend as part of row)
+                if (Number(req.body.payments.find(p => (p.employee_id === employee_id || p.id === employee_id))?.leave_encashment) > 0) {
+                   const encAmt = Number(req.body.payments.find(p => (p.employee_id === employee_id || p.id === employee_id)).leave_encashment);
+                   journalLines.push({ code: 5017, debit: encAmt, credit: 0 }); // Dr Encashment Expense
+                }
+
                 // Loan lines (1105 and 4101) were pushed dynamically in Step 3
                 
                 const payoutAmount = Number(net_salary);
@@ -651,6 +740,13 @@ router.post('/bulk-salary-payment', async (req, res) => {
 
                 const journalEntryId = journalRes.rows[0].entry_id;
                 await client.query(`UPDATE employee_salaries SET journal_entry_id = $1 WHERE id = $2`, [journalEntryId, salaryId]);
+
+                // Settle manual bonuses
+                await client.query(`
+                    UPDATE employee_bonuses 
+                    SET is_settled = TRUE, salary_payment_id = $1 
+                    WHERE employee_id = $2 AND is_settled = FALSE
+                `, [salaryId, employee_id]);
             }
 
             // 5. Update Bank Statement (per-line Consumption)
