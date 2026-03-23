@@ -469,18 +469,25 @@ router.get('/salary-preview', async (req, res) => {
                 FROM loans
                 WHERE party_type = 'EMPLOYEE' AND status = 'Active'
                 GROUP BY party_id
+            ),
+            CurrentSalary AS (
+                SELECT DISTINCT ON (employee_id) employee_id, new_salary 
+                FROM employee_salary_history 
+                ORDER BY employee_id, effective_date DESC, created_at DESC
             )
             SELECT 
-                e.id, e.full_name, e.employee_code, e.salary as base_salary,
+                e.id, e.full_name, e.employee_code, 
+                COALESCE(cs.new_salary, 0) as base_salary,
                 COALESCE(att.absent_days, 0) as absent_days,
                 COALESCE(att.half_days, 0) as half_days,
                 COALESCE(adv.total_advances, 0) as advance_deduction,
                 COALESCE(ls.total_emi, 0) as loan_deduction
             FROM employees e
+            LEFT JOIN CurrentSalary cs ON e.id = cs.employee_id
             LEFT JOIN AttendanceStats att ON e.id = att.employee_id
             LEFT JOIN AdvanceStats adv ON e.id = adv.employee_id
             LEFT JOIN LoanStats ls ON e.id = ls.employee_id
-            WHERE e.status = 'Active'
+            WHERE e.employment_status = 'Active'
         `;
 
         const { rows } = await pool.query(query, [startDate, endDate]);
