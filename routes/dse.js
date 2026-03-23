@@ -203,7 +203,7 @@ router.post('/eod-sync', async (req, res) => {
                 if (pay.allocations && pay.allocations.length > 0) {
                     for (const alloc of pay.allocations) {
                         await client.query(`
-                        INSERT INTO payment_allocations (
+                        INSERT INTO customer_payment_allocations (
                             payment_id, invoice_id, amount, status, expected_invoice_balance
                         ) VALUES ($1, $2, $3, 'PENDING', $4)
                     `, [
@@ -215,7 +215,7 @@ router.post('/eod-sync', async (req, res) => {
                     }
                 } else if (pay.invoice_id) {
                     await client.query(`
-                    INSERT INTO payment_allocations (
+                    INSERT INTO customer_payment_allocations (
                         payment_id, invoice_id, amount, status, expected_invoice_balance
                     ) VALUES ($1, $2, $3, 'PENDING', NULL)
                 `, [
