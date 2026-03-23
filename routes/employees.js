@@ -34,17 +34,27 @@ router.get('/profile', async (req, res) => {
     }
 });
 
-// @route   POST /api/employees/bonus - Record Manual Bonus
-router.post('/bonus', async (req, res) => {
+// @route   POST /api/employees/bulk-bonus - Record Multiple Bonuses
+router.post('/bulk-bonus', async (req, res) => {
+    const { bonuses } = req.body;
+    if (!bonuses || !Array.isArray(bonuses)) return res.status(400).json({ error: 'Bonuses array required' });
+    
+    const client = await pool.connect();
     try {
-        const { employee_id, amount, bonus_date, bonus_type, remarks } = req.body;
-        await pool.query(`
-            INSERT INTO employee_bonuses (employee_id, amount, bonus_date, bonus_type, remarks)
-            VALUES ($1, $2, $3, $4, $5)
-        `, [employee_id, amount, bonus_date || new Date(), bonus_type || 'MANUAL', remarks]);
-        res.json({ success: true, message: 'Bonus recorded and queued for next salary batch' });
+        await client.query('BEGIN');
+        for (const b of bonuses) {
+            await client.query(`
+                INSERT INTO employee_bonuses (employee_id, amount, bonus_date, bonus_type, remarks)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [b.employee_id, b.amount, b.bonus_date || new Date(), b.bonus_type || 'MANUAL', b.remarks]);
+        }
+        await client.query('COMMIT');
+        res.json({ success: true, message: `Successfully queued ${bonuses.length} bonuses` });
     } catch (err) {
+        await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
 
