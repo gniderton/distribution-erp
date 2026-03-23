@@ -5,7 +5,7 @@ const { pool } = require('../config/db');
 // 1. List Pending DSE Reports (Dashboard)
 router.get('/list', async (req, res) => {
     try {
-        const { date } = req.query;
+        const { date, status = 'Pending' } = req.query;
         let query = `
             SELECT 
                 dsr.id as report_id,
@@ -16,12 +16,12 @@ router.get('/list', async (req, res) => {
                 (SELECT COUNT(*) FROM customer_payments cp WHERE cp.report_id = dsr.id AND cp.verification_status = 'Pending') as pending_count
             FROM daily_sales_reports dsr
             JOIN employees e ON dsr.dse_id = e.id
-            WHERE dsr.settlement_status = 'Pending'
+            WHERE dsr.settlement_status = $1
         `;
 
-        const params = [];
+        const params = [status];
         if (date) {
-            query += ` AND dsr.report_date = $1`;
+            query += ` AND dsr.report_date = $2`;
             params.push(date);
         }
 
