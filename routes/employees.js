@@ -552,6 +552,11 @@ router.post('/bulk-salary-payment', async (req, res) => {
             const finalAccount = p_account || from_account_id;
             const finalBankEntry = p_bank_entry || bank_statement_entry_id;
 
+            // Initialize Journal Lines early (needed for both deductions and final entry)
+            const journalLines = [
+                { code: 5010, debit: base_salary, credit: 0 } 
+            ];
+
             // 1. Insert Salary Record
             const salRes = await client.query(`
                 INSERT INTO employee_salaries (
@@ -621,9 +626,6 @@ router.post('/bulk-salary-payment', async (req, res) => {
 
             // 4. Create Journal Entry (use finalMode and finalAccount)
             const creditAccountCode = finalMode === 'Online' ? 1002 : 1003;
-            const journalLines = [
-                { code: 5010, debit: base_salary, credit: 0 } 
-            ];
 
             if (Number(leave_deduction) > 0) journalLines.push({ code: 5011, debit: 0, credit: leave_deduction });
             if (Number(advance_deduction) > 0) journalLines.push({ code: 1020, debit: 0, credit: advance_deduction });
