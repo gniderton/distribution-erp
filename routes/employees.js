@@ -529,8 +529,18 @@ router.post('/bulk-salary-payment', async (req, res) => {
         let totalBatchNet = 0;
 
         for (const p of payments) {
-            const { employee_id, base_salary, absent_days, half_days, leave_deduction, advance_deduction, loan_deduction, net_salary } = p;
+            const { 
+                employee_id, base_salary, absent_days, half_days, 
+                leave_deduction, advance_deduction, loan_deduction, net_salary,
+                payment_mode: p_mode, from_account_id: p_account, bank_statement_entry_id: p_bank_entry
+            } = p;
+            
             totalBatchNet += Number(net_salary);
+
+            // Use line-level details if provided, otherwise fallback to batch-level
+            const finalMode = p_mode || payment_mode;
+            const finalAccount = p_account || from_account_id;
+            const finalBankEntry = p_bank_entry || bank_statement_entry_id;
 
             // 1. Insert Salary Record
             const salRes = await client.query(`
@@ -544,12 +554,12 @@ router.post('/bulk-salary-payment', async (req, res) => {
             `, [
                 employee_id, month, year, base_salary, absent_days, half_days,
                 leave_deduction, advance_deduction, loan_deduction, net_salary,
-                payment_mode, from_account_id, bank_statement_entry_id || null, user_id
+                finalMode, finalAccount, finalBankEntry || null, user_id
             ]);
 
             const salaryId = salRes.rows[0].id;
 
-            // 2. Settle Advances
+            // 2. Settle Advances (same logic)
             if (Number(advance_deduction) > 0) {
                 await client.query(`
                     UPDATE employee_advances 
@@ -558,7 +568,7 @@ router.post('/bulk-salary-payment', async (req, res) => {
                 `, [salaryId, employee_id]);
             }
 
-            // 3. Record Loan Installment
+            // 3. Record Loan Installment (use finalMode)
             if (Number(loan_deduction) > 0) {
                 const loanRes = await client.query(`
                     SELECT id FROM loans WHERE party_type = 'EMPLOYEE' AND party_id = $1 AND status = 'Active'
@@ -569,7 +579,7 @@ router.post('/bulk-salary-payment', async (req, res) => {
                     await client.query(`
                         INSERT INTO loan_transactions (loan_id, transaction_date, amount, principal_portion, transaction_type, payment_mode, remarks)
                         VALUES ($1, CURRENT_DATE, $2, $2, 'INSTALLMENT', $3, $4)
-                    `, [loan.id, emi, payment_mode, `Salary Deduction - ${month}/${year}`]);
+                    `, [loan.id, emi, finalMode, `Salary Deduction - ${month}/${year}`]);
 
                     await client.query(`
                         UPDATE loans SET balance_principal = balance_principal - $1 WHERE id = $2
@@ -577,15 +587,10 @@ router.post('/bulk-salary-payment', async (req, res) => {
                 }
             }
 
-            // 4. Create Journal Entry (Professional "Gross-Debit" Pattern)
-            // 5010: Salary Expense (Dr) - GROSS
-            // 5011: Salary Deduction (Cr) - ADJ
-            // 1020: Salary Advance (Cr)
-            // 1105: Loans Receivable (Cr)
-            // 1002/1003: Bank/Cash (Cr)
-            const creditAccountCode = payment_mode === 'Online' ? 1002 : 1003;
+            // 4. Create Journal Entry (use finalMode and finalAccount)
+            const creditAccountCode = finalMode === 'Online' ? 1002 : 1003;
             const journalLines = [
-                { code: 5010, debit: base_salary, credit: 0 } // Gross contractual
+                { code: 5010, debit: base_salary, credit: 0 } 
             ];
 
             if (Number(leave_deduction) > 0) journalLines.push({ code: 5011, debit: 0, credit: leave_deduction });
@@ -609,19 +614,19 @@ router.post('/bulk-salary-payment', async (req, res) => {
 
             const journalEntryId = journalRes.rows[0].entry_id;
             await client.query(`UPDATE employee_salaries SET journal_entry_id = $1 WHERE id = $2`, [journalEntryId, salaryId]);
-        }
 
-        // 5. Update Bank Statement (Bulk Consumption)
-        if (payment_mode === 'Online' && bank_statement_entry_id) {
-            await client.query(`
-                UPDATE bank_statement_entries 
-                SET consumed_amount = consumed_amount + $1,
-                    status = CASE 
-                        WHEN (consumed_amount + $1) >= amount THEN 'Exhausted' 
-                        ELSE 'Partially Consumed' 
-                    END
-                WHERE id = $2
-            `, [totalBatchNet, bank_statement_entry_id]);
+            // 5. Update Bank Statement (per-line Consumption)
+            if (finalMode === 'Online' && finalBankEntry) {
+                await client.query(`
+                    UPDATE bank_statement_entries 
+                    SET consumed_amount = consumed_amount + $1,
+                        status = CASE 
+                            WHEN (consumed_amount + $1) >= amount THEN 'Exhausted' 
+                            ELSE 'Partially Consumed' 
+                        END
+                    WHERE id = $2
+                `, [net_salary, finalBankEntry]);
+            }
         }
 
         await client.query('COMMIT');
