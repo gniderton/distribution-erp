@@ -530,11 +530,14 @@ router.post('/bulk-salary-payment', async (req, res) => {
 
         for (const p of payments) {
             const { 
-                employee_id, base_salary, absent_days, half_days, 
+                employee_id, id, base_salary, absent_days, half_days, 
                 leave_deduction, advance_deduction, loan_deduction, net_salary,
                 payment_mode: p_mode, from_account_id: p_account, bank_statement_entry_id: p_bank_entry
             } = p;
             
+            const finalEmpId = employee_id || id;
+            if (!finalEmpId) continue; // Skip if no ID found
+
             totalBatchNet += Number(net_salary);
 
             // Use line-level details if provided, otherwise fallback to batch-level
@@ -552,7 +555,7 @@ router.post('/bulk-salary-payment', async (req, res) => {
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                 RETURNING id
             `, [
-                employee_id, month, year, base_salary, absent_days, half_days,
+                finalEmpId, month, year, base_salary, absent_days, half_days,
                 leave_deduction, advance_deduction, loan_deduction, net_salary,
                 finalMode, finalAccount, finalBankEntry || null, user_id
             ]);
