@@ -465,7 +465,9 @@ router.get('/salary-preview', async (req, res) => {
             LoanStats AS (
                 SELECT 
                     le.reference_id as employee_id,
-                    SUM(l.emi_amount) as total_emi
+                    SUM(l.emi_amount) as total_emi,
+                    SUM(ROUND(l.balance_principal * (l.interest_rate_pa / 100.0) / 12.0, 2)) as total_interest,
+                    SUM(l.emi_amount - ROUND(l.balance_principal * (l.interest_rate_pa / 100.0) / 12.0, 2)) as total_principal
                 FROM loans l
                 JOIN loan_entities le ON l.party_id = le.id
                 WHERE l.party_type = 'EMPLOYEE' 
@@ -484,7 +486,9 @@ router.get('/salary-preview', async (req, res) => {
                 COALESCE(att.absent_days, 0) as absent_days,
                 COALESCE(att.half_days, 0) as half_days,
                 COALESCE(adv.total_advances, 0) as advance_deduction,
-                COALESCE(ls.total_emi, 0) as loan_deduction
+                (COALESCE(ls.total_emi, 0)) as loan_deduction,
+            (COALESCE(ls.total_principal, 0)) as loan_principal,
+            (COALESCE(ls.total_interest, 0)) as loan_interest
             FROM employees e
             LEFT JOIN CurrentSalary cs ON e.id = cs.employee_id
             LEFT JOIN AttendanceStats att ON e.id = att.employee_id
@@ -574,10 +578,10 @@ router.post('/bulk-salary-payment', async (req, res) => {
                 `, [salaryId, employee_id]);
             }
 
-            // 3. Record Loan Installment (use finalMode)
+            // 3. Record Loan Installment (Split Principal vs Interest)
             if (Number(loan_deduction) > 0) {
                 const loanRes = await client.query(`
-                    SELECT l.id 
+                    SELECT l.id, l.balance_principal, l.interest_rate_pa, l.emi_amount
                     FROM loans l
                     JOIN loan_entities le ON l.party_id = le.id
                     WHERE l.party_type = 'EMPLOYEE' 
@@ -587,16 +591,32 @@ router.post('/bulk-salary-payment', async (req, res) => {
                 `, [finalEmpId]);
 
                 for (const loan of loanRes.rows) {
-                    const emi = p.loan_deduction;
-                    await client.query(`
-                        INSERT INTO loan_transactions (loan_id, transaction_date, amount, principal_portion, transaction_type, payment_mode, remarks)
-                        VALUES ($1, CURRENT_DATE, $2, $2, 'INSTALLMENT', $3, $4)
-                    `, [loan.id, emi, finalMode, `Salary Deduction - ${month}/${year}`]);
+                    const emi = Number(loan.emi_amount);
+                    const interestPortion = Math.round((Number(loan.balance_principal) * (Number(loan.interest_rate_pa) / 100) / 12) * 100) / 100;
+                    const principalPortion = emi - interestPortion;
 
                     await client.query(`
-                        UPDATE loans SET balance_principal = balance_principal - $1 WHERE id = $2
-                    `, [emi, loan.id]);
+                        INSERT INTO loan_transactions (
+                            loan_id, transaction_date, amount, 
+                            principal_portion, interest_portion, 
+                            transaction_type, payment_mode, remarks
+                        )
+                        VALUES ($1, CURRENT_DATE, $2, $3, $4, 'INSTALLMENT', $5, $6)
+                    `, [loan.id, emi, principalPortion, interestPortion, finalMode, `Salary Deduction - ${month}/${year}`]);
+
+                    await client.query(`
+                        UPDATE loans 
+                        SET balance_principal = balance_principal - $1 
+                        WHERE id = $2
+                    `, [principalPortion, loan.id]);
+
+                    // Add to journal lines
+                    if (principalPortion > 0) journalLines.push({ code: 1105, debit: 0, credit: principalPortion });
+                    if (interestPortion > 0) journalLines.push({ code: 4101, debit: 0, credit: interestPortion });
                 }
+            } else {
+                // No loan deduction, but check if we need to remove placeholders or handle nothing?
+                // The journalLines logic below will handle it if we don't push anything.
             }
 
             // 4. Create Journal Entry (use finalMode and finalAccount)
@@ -607,7 +627,7 @@ router.post('/bulk-salary-payment', async (req, res) => {
 
             if (Number(leave_deduction) > 0) journalLines.push({ code: 5011, debit: 0, credit: leave_deduction });
             if (Number(advance_deduction) > 0) journalLines.push({ code: 1020, debit: 0, credit: advance_deduction });
-            if (Number(loan_deduction) > 0) journalLines.push({ code: 1105, debit: 0, credit: loan_deduction });
+            // Loan lines (1105 and 4101) are pushed dynamically in Step 3 now
             
             const payoutAmount = Number(net_salary);
             if (payoutAmount > 0) {
