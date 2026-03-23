@@ -553,8 +553,9 @@ router.post('/bulk-salary-payment', async (req, res) => {
             const finalBankEntry = p_bank_entry || bank_statement_entry_id;
 
             // Initialize Journal Lines early (needed for both deductions and final entry)
+            // 5014: Salary Expense
             const journalLines = [
-                { code: 5010, debit: base_salary, credit: 0 } 
+                { code: 5014, debit: Number(base_salary), credit: 0 } 
             ];
 
             // 1. Insert Salary Record
@@ -625,29 +626,32 @@ router.post('/bulk-salary-payment', async (req, res) => {
             }
 
             // 4. Create Journal Entry (use finalMode and finalAccount)
-            const creditAccountCode = finalMode === 'Online' ? 1002 : 1003;
+            // Skip journal entry if base salary is 0 (prevents empty transactions)
+            if (Number(base_salary) > 0) {
+                const creditAccountCode = finalMode === 'Online' ? 1002 : 1003;
 
-            if (Number(leave_deduction) > 0) journalLines.push({ code: 5011, debit: 0, credit: leave_deduction });
-            if (Number(advance_deduction) > 0) journalLines.push({ code: 1020, debit: 0, credit: advance_deduction });
-            // Loan lines (1105 and 4101) are pushed dynamically in Step 3 now
-            
-            const payoutAmount = Number(net_salary);
-            if (payoutAmount > 0) {
-                journalLines.push({ code: creditAccountCode, debit: 0, credit: payoutAmount });
+                if (Number(leave_deduction) > 0) journalLines.push({ code: 5015, debit: 0, credit: Number(leave_deduction) });
+                if (Number(advance_deduction) > 0) journalLines.push({ code: 1020, debit: 0, credit: Number(advance_deduction) });
+                // Loan lines (1105 and 4101) were pushed dynamically in Step 3
+                
+                const payoutAmount = Number(net_salary);
+                if (payoutAmount > 0) {
+                    journalLines.push({ code: creditAccountCode, debit: 0, credit: payoutAmount });
+                }
+
+                const journalRes = await client.query(`
+                    SELECT create_journal_entry($1, $2, $3, $4, $5) as entry_id
+                `, [
+                    new Date(),
+                    `Monthly Salary - Emp ID: ${finalEmpId} (${month}/${year})`,
+                    'SALARY_PAYMENT',
+                    salaryId,
+                    JSON.stringify(journalLines)
+                ]);
+
+                const journalEntryId = journalRes.rows[0].entry_id;
+                await client.query(`UPDATE employee_salaries SET journal_entry_id = $1 WHERE id = $2`, [journalEntryId, salaryId]);
             }
-
-            const journalRes = await client.query(`
-                SELECT create_journal_entry($1, $2, $3, $4, $5) as entry_id
-            `, [
-                new Date(),
-                `Monthly Salary - Emp ID: ${employee_id} (${month}/${year})`,
-                'SALARY_PAYMENT',
-                salaryId,
-                JSON.stringify(journalLines)
-            ]);
-
-            const journalEntryId = journalRes.rows[0].entry_id;
-            await client.query(`UPDATE employee_salaries SET journal_entry_id = $1 WHERE id = $2`, [journalEntryId, salaryId]);
 
             // 5. Update Bank Statement (per-line Consumption)
             if (finalMode === 'Online' && finalBankEntry) {
