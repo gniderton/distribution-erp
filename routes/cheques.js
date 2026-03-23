@@ -248,7 +248,7 @@ router.post('/:id/bounce', async (req, res) => {
         const acc_bank = 1002;
         const acc_cheque_in_hand = 1004;
         const acc_cheque_issued = 2004;
-        const acc_bank_charges = 5005;
+        const acc_bank_charges = 5202;
         const acc_misc_income = 4103;
 
         // 3. Reversal Entry
