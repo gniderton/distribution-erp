@@ -327,9 +327,43 @@ router.post('/bulk-update', async (req, res) => {
                             ) VALUES ($1, $2, $3, $4, 'INCOMING', 'CUSTOMER', $5, 'CUSTOMER_PAYMENT', $6, 'PENDING')
                         `, [pay.transaction_ref, pay.cheque_date, pay.bank_name, pay.amount, pay.customer_id, pay.id]);
 
-                    } else if (pay.bank_name) {
-                        const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE $1 LIMIT 1", [`%${pay.bank_name}%`]);
-                        bankAccountId = bRes.rows[0]?.id;
+                    } else if (['NEFT', 'UPI', 'Online', 'Bank Transfer'].includes(pay.payment_mode)) {
+                        const bankEntryId = item.bank_stmt_id || item.transaction_ref; // Use explicit ID or fallback to ref
+                        if (bankEntryId && !isNaN(bankEntryId)) {
+                            // 1. Fetch & Validate Bank Entry
+                            const bEntryRes = await client.query('SELECT * FROM bank_statement_entries WHERE id = $1', [bankEntryId]);
+                            if (bEntryRes.rows.length > 0) {
+                                const bEntry = bEntryRes.rows[0];
+                                const available = Number(bEntry.amount) - Number(bEntry.consumed_amount);
+                                
+                                if (available + 1 >= Number(pay.amount)) {
+                                    // 2. Consume Balance
+                                    const newConsumed = Number(bEntry.consumed_amount) + Number(pay.amount);
+                                    const newStatus = (newConsumed >= Number(bEntry.amount) - 1) ? 'Exhausted' : 'Partially Consumed';
+                                    
+                                    await client.query(`
+                                        UPDATE bank_statement_entries 
+                                        SET consumed_amount = $1, status = $2 
+                                        WHERE id = $3
+                                    `, [newConsumed, newStatus, bankEntryId]);
+
+                                    // 3. Link Payment
+                                    await client.query(`
+                                        UPDATE customer_payments 
+                                        SET bank_statement_entry_id = $1 
+                                        WHERE id = $2
+                                    `, [bankEntryId, pay.id]);
+
+                                    bankAccountId = bEntry.bank_account_id;
+                                }
+                            }
+                        }
+
+                        // Fallback: If no bankEntryId but bank_name exists
+                        if (!bankAccountId && pay.bank_name) {
+                            const bRes = await client.query("SELECT id FROM bank_accounts WHERE bank_name ILIKE $1 LIMIT 1", [`%${pay.bank_name}%`]);
+                            bankAccountId = bRes.rows[0]?.id;
+                        }
                     }
 
                     const ledgerLines = [
