@@ -458,8 +458,7 @@ router.post('/bulk-update', async (req, res) => {
                     SET settlement_status = 'Settled', 
                         finance_remark = COALESCE(finance_remark, 'Auto-settled via bulk update'),
                         settled_at = NOW(),
-                        settled_by = $2,
-                        updated_at = NOW() 
+                        settled_by = $2
                     WHERE id = $1 AND settlement_status ILIKE 'Pending'
                 `, [rId, user_id]);
             }
