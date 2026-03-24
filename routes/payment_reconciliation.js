@@ -160,7 +160,7 @@ router.post('/payments/:id/verify', async (req, res) => {
 
 // [NEW] 3. Bulk Verify/Reject (Payments & Expenses)
 router.post('/bulk-update', async (req, res) => {
-    let { items, action, reason, user_id } = req.body;
+    let { items, action, reason, user_id, report_id } = req.body;
 
     // Safety: Ensure items is an array
     if (!items) items = [];
