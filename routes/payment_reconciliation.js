@@ -13,7 +13,8 @@ router.get('/list', async (req, res) => {
                 e.full_name as dse_name,
                 dsr.settlement_status,
                 (COALESCE(dsr.total_collection_cash, 0) + COALESCE(dsr.total_collection_cheque, 0) + COALESCE(dsr.total_collection_online, 0)) as total_payment_collection,
-                (SELECT COUNT(*) FROM customer_payments cp WHERE cp.report_id = dsr.id AND cp.verification_status = 'Pending') as pending_count
+                (SELECT COUNT(*) FROM customer_payments cp WHERE cp.report_id = dsr.id AND cp.verification_status = 'Pending') as pending_payment_count,
+                (SELECT COUNT(*) FROM dse_expenses de WHERE de.report_id = dsr.id AND de.status = 'Pending') as pending_expense_count
             FROM daily_sales_reports dsr
             JOIN employees e ON dsr.dse_id = e.id
             WHERE dsr.settlement_status = $1
@@ -177,10 +178,11 @@ router.post('/bulk-update', async (req, res) => {
         await client.query('BEGIN');
 
         for (let item of items) {
-            if (item.type === 'payment') {
-                const itemAction = item.action || item.status || action; // Fallback: item.action -> item.status -> global action
-                const itemReason = item.reason || reason;
+            // [UNIFY FALLBACKS]
+            const itemAction = item.action || item.status || action;
+            const itemReason = item.reason || reason;
 
+            if (item.type === 'payment') {
                 const resPay = await client.query(`
                     UPDATE customer_payments 
                     SET verification_status = $1, rejection_reason = $2, verified_by = $3, verified_at = NOW()
@@ -381,9 +383,6 @@ router.post('/bulk-update', async (req, res) => {
                 }
 
             } else if (item.type === 'expense') {
-                const itemAction = item.action || action;
-                const itemReason = item.reason || reason;
-
                 const resExp = await client.query(`
                     UPDATE dse_expenses 
                     SET status = $1, rejection_reason = $2, verified_by = $3, verified_at = NOW()
@@ -437,14 +436,17 @@ router.post('/bulk-update', async (req, res) => {
         await client.query('COMMIT');
 
         // [AUTO-FINALIZATION CHECK]
-        // After committing the items, check if the involved reports are now fully processed.
-        const reportIds = [...new Set(items.map(i => i.report_id).filter(id => id))];
+        // Collect all involved report IDs (from items or body fallback)
+        const reportIds = [...new Set([
+            ...items.map(i => i.report_id).filter(id => id),
+            report_id
+        ])];
         
         for (const rId of reportIds) {
             const checkRes = await pool.query(`
                 SELECT 
-                    (SELECT COUNT(*) FROM customer_payments WHERE report_id = $1 AND verification_status = 'Pending') as pending_payments,
-                    (SELECT COUNT(*) FROM dse_expenses WHERE report_id = $1 AND status = 'Pending') as pending_expenses
+                    (SELECT COUNT(*) FROM customer_payments WHERE report_id = $1 AND verification_status ILIKE 'Pending') as pending_payments,
+                    (SELECT COUNT(*) FROM dse_expenses WHERE report_id = $1 AND status ILIKE 'Pending') as pending_expenses
             `, [rId]);
 
             const { pending_payments, pending_expenses } = checkRes.rows[0];
@@ -455,9 +457,11 @@ router.post('/bulk-update', async (req, res) => {
                     UPDATE daily_sales_reports 
                     SET settlement_status = 'Settled', 
                         finance_remark = COALESCE(finance_remark, 'Auto-settled via bulk update'),
+                        settled_at = NOW(),
+                        settled_by = $2,
                         updated_at = NOW() 
-                    WHERE id = $1 AND settlement_status = 'Pending'
-                `, [rId]);
+                    WHERE id = $1 AND settlement_status ILIKE 'Pending'
+                `, [rId, user_id]);
             }
         }
 
