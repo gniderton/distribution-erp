@@ -121,6 +121,32 @@ router.get('/detailed-list', async (req, res) => {
     }
 });
 
+// GET /api/customers/pending - List customers awaiting verification
+router.get('/pending', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                c.id, c.customer_name, c.customer_code, c.customer_phone, c.gstin,
+                ca.latitude, ca.longitude,
+                c.created_at
+            FROM customers c
+            LEFT JOIN LATERAL (
+                SELECT location_lat as latitude, location_lng as longitude
+                FROM customer_addresses
+                WHERE customer_id = c.id
+                ORDER BY is_default_billing DESC, id ASC
+                LIMIT 1
+            ) ca ON true
+            WHERE c.verification_status = 'Pending'
+            ORDER BY c.created_at DESC
+        `);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Pending List Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/customers/:id - Single Customer with Profile 360
 router.get('/:id', async (req, res) => {
     try {
