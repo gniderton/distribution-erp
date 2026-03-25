@@ -7,8 +7,12 @@ router.post('/', async (req, res) => {
     try {
         // RESILIENT PARSING: Handle if body is sent as a string (common in some Appsmith/Retool setups)
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-        const { customer_id, dse_id, name, phone, gstin, latitude, longitude } = body;
+        let { customer_id, dse_id, name, phone, gstin, latitude, longitude } = body;
         
+        // STRICTOR SANITIZATION: Retool often sends the string "null" for empty fields
+        if (customer_id === 'null' || customer_id === '') customer_id = null;
+        if (dse_id === 'null' || dse_id === '') dse_id = null;
+
         console.log('Verification Request Received:', body);
 
         const query = `
@@ -19,8 +23,8 @@ router.post('/', async (req, res) => {
             RETURNING id
         `;
         const result = await pool.query(query, [
-            customer_id || null, 
-            dse_id || null, 
+            customer_id, 
+            dse_id, 
             name || null, 
             phone || null, 
             gstin || null, 
