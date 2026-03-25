@@ -9,20 +9,12 @@ const dns = require('dns');
 // usually requires explicit IPv4 resolution in this specific environment.
 const originalLookup = dns.lookup;
 dns.lookup = (hostname, options, callback) => {
-    // If options is a callback, shift arguments
     if (typeof options === 'function') {
         callback = options;
-        options = {};
-    } else if (!options) {
-        options = {};
+        options = { family: 4 };
+    } else {
+        options = { ...options, family: 4 };
     }
-
-    // Force IPv4 for Supabase Pooler domains to prevent ETIMEOUT/ENETUNREACH
-    // caused by Render trying to reach IPv6 addresses that don't accept the connection.
-    if (hostname && (hostname.includes('supabase.com') || hostname.includes('pooler'))) {
-        options = { ...options, family: 4, hints: dns.ADDRCONFIG | dns.V4MAPPED };
-    }
-
     return originalLookup(hostname, options, callback);
 };
 
