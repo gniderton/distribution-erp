@@ -14,10 +14,11 @@ router.get('/', async (req, res) => {
                 e.full_name as dse_name,
                 ch.channel_name,
                 ch.price_column as default_price_col,
-                c.whatsapp_number, -- [NEW]
-                rt.frequency_name as route_frequency, -- [NEW]
-                (SELECT COUNT(*) FROM customer_addresses ca WHERE ca.customer_id = c.id) as address_count,
-                 -- [NEW] Pricing Exceptions (Brand -> Channel -> Price Column)
+                c.whatsapp_number,
+                rt.frequency_name as route_frequency,
+                ca.address_line1, ca.city, ca.latitude, ca.longitude,
+                (SELECT COUNT(*) FROM customer_addresses ca_inner WHERE ca_inner.customer_id = c.id) as address_count,
+                 -- Pricing Exceptions
                 (
                     SELECT json_agg(json_build_object(
                         'brand_id', cbp.brand_id, 
@@ -33,6 +34,13 @@ router.get('/', async (req, res) => {
             LEFT JOIN route_types rt ON c.route_type_id = rt.id
             LEFT JOIN employees e ON c.dse_id = e.id
             LEFT JOIN channels ch ON c.channel_id = ch.id
+            LEFT JOIN LATERAL (
+                SELECT address_line1, city, location_lat as latitude, location_lng as longitude
+                FROM customer_addresses
+                WHERE customer_id = c.id
+                ORDER BY is_default_billing DESC, id ASC
+                LIMIT 1
+            ) ca ON true
             WHERE c.is_active = true
         `;
 
