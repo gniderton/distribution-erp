@@ -147,4 +147,25 @@ router.post('/:id/approve', async (req, res) => {
     }
 });
 
+// 4. POST /api/verify-requests/:id/reject - Admin declines the request
+router.post('/:id/reject', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reviewed_by, rejection_reason } = req.body;
+
+        await pool.query(`
+            UPDATE customer_verification_requests SET 
+                status = 'Rejected', 
+                reviewed_at = NOW(), 
+                reviewed_by = $1, 
+                rejection_reason = $2 
+            WHERE id = $3
+        `, [reviewed_by, rejection_reason, id]);
+
+        res.json({ success: true, message: 'Request rejected' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
