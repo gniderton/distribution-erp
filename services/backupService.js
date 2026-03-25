@@ -19,7 +19,8 @@ async function performBackup() {
 
         console.log(`[Universal Backup] Starting export to ${filename}...`);
 
-        // 1. Get all public tables
+        // Use connection from environment
+        const conn = process.env.DATABASE_URL;
         const tableRes = await pool.query(`
             SELECT tablename 
             FROM pg_tables 
