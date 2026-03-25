@@ -586,13 +586,21 @@ router.post('/verify-requests/:id/approve', async (req, res) => {
                 WHERE id = $9
             `, [r.proposed_customer_name, r.proposed_phone, r.proposed_gstin, route_id, channel_id, route_type_id, credit_limit, credit_days, finalCustomerId]);
 
-            // Update/Insert Address
-            await client.query(`
-                INSERT INTO customer_addresses (customer_id, address_line1, city, location_lat, location_lng, is_default_billing, is_default_shipping)
-                VALUES ($1, $2, $3, $4, $5, true, true)
-                ON CONFLICT (id) DO UPDATE SET -- Note: simplifies logic but usually you'd need a specific ID
-                location_lat = EXCLUDED.location_lat, location_lng = EXCLUDED.location_lng
-            `, [finalCustomerId, 'Pending Office Details', 'Pending City', r.latitude, r.longitude]);
+            // Update EXISTING default address with new GPS
+            const addrUpdate = await client.query(`
+                UPDATE customer_addresses 
+                SET location_lat = $1, location_lng = $2
+                WHERE customer_id = $3 AND is_default_billing = true
+                RETURNING id
+            `, [r.latitude, r.longitude, finalCustomerId]);
+
+            // If no default address existed, insert one
+            if (addrUpdate.rows.length === 0) {
+                await client.query(`
+                    INSERT INTO customer_addresses (customer_id, address_line1, city, location_lat, location_lng, is_default_billing, is_default_shipping)
+                    VALUES ($1, 'Captured in Field', 'Captured in Field', $2, $3, true, true)
+                `, [finalCustomerId, r.latitude, r.longitude]);
+            }
 
         } else {
             // CASE B: CREATE NEW CUSTOMER
