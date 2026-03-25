@@ -160,7 +160,22 @@ router.post('/payments/:id/verify', async (req, res) => {
 
 // [NEW] 3. Bulk Verify/Reject (Payments & Expenses)
 router.post('/bulk-update', async (req, res) => {
-    let { items, action, reason, user_id, report_id } = req.body;
+    let { items, action, reason, user_id, report_id, payments, expenses, denominations } = req.body;
+
+    // [MOD V1.6] Adapt to Full-JSON Payload
+    // If user sends the full report object, map it to the 'items' list
+    if (payments || expenses) {
+        items = [
+            ...(payments || []).map(p => ({ 
+                ...p, 
+                type: 'payment', 
+                status: p.verification_status, 
+                reason: p.rejection_reason,
+                bank_stmt_id: p.bank_stmt_id // 🚀 FIXED: Include the Bank Statement ID!
+            })),
+            ...(expenses || []).map(e => ({ ...e, type: 'expense' }))
+        ];
+    }
 
     // Safety: Ensure items is an array
     if (!items) items = [];
@@ -181,6 +196,8 @@ router.post('/bulk-update', async (req, res) => {
             // [UNIFY FALLBACKS]
             const itemAction = item.action || item.status || action;
             const itemReason = item.reason || reason;
+            
+            console.log(`[Bulk Update Item] ID: ${item.id}, Type: ${item.type}, Action: ${itemAction}, BankID: ${item.bank_stmt_id}`);
 
             if (item.type === 'payment') {
                 const resPay = await client.query(`
@@ -327,17 +344,20 @@ router.post('/bulk-update', async (req, res) => {
                             ) VALUES ($1, $2, $3, $4, 'INCOMING', 'CUSTOMER', $5, 'CUSTOMER_PAYMENT', $6, 'PENDING')
                         `, [pay.transaction_ref, pay.cheque_date, pay.bank_name, pay.amount, pay.customer_id, pay.id]);
 
-                    } else if (['NEFT', 'UPI', 'Online', 'Bank Transfer'].includes(pay.payment_mode)) {
-                        const bankEntryId = item.bank_stmt_id || item.transaction_ref; // Use explicit ID or fallback to ref
+                    } else if (['neft', 'upi', 'online', 'bank transfer', 'imps', 'rtgs'].includes(pay.payment_mode?.toLowerCase())) {
+                        const bankEntryId = item.bank_stmt_id || item.transaction_ref; 
+                        console.log(`[Bank Match] Payment ${pay.id} (${pay.payment_mode}), ID: ${bankEntryId}, Amount: ${pay.amount}`);
+
                         if (bankEntryId && !isNaN(bankEntryId)) {
-                            // 1. Fetch & Validate Bank Entry
                             const bEntryRes = await client.query('SELECT * FROM bank_statement_entries WHERE id = $1', [bankEntryId]);
+                            console.log(`[Bank Match] Entry Found:`, bEntryRes.rows.length > 0);
+
                             if (bEntryRes.rows.length > 0) {
                                 const bEntry = bEntryRes.rows[0];
                                 const available = Number(bEntry.amount) - Number(bEntry.consumed_amount);
+                                console.log(`[Bank Match] Available: ${available}, Required: ${pay.amount}`);
                                 
                                 if (available + 1 >= Number(pay.amount)) {
-                                    // 2. Consume Balance
                                     const newConsumed = Number(bEntry.consumed_amount) + Number(pay.amount);
                                     const newStatus = (newConsumed >= Number(bEntry.amount) - 1) ? 'Exhausted' : 'Partially Consumed';
                                     
@@ -468,6 +488,30 @@ router.post('/bulk-update', async (req, res) => {
         }
 
         await client.query('COMMIT');
+
+        // [NEW] Update Cash Denominations if provided
+        let denoms = req.body.denominations;
+        if (Array.isArray(denoms)) denoms = denoms[0];
+
+        if (denoms && report_id) {
+            const total = (Number(denoms.note_500 || 0) * 500) + 
+                          (Number(denoms.note_200 || 0) * 200) + 
+                          (Number(denoms.note_100 || 0) * 100) + 
+                          (Number(denoms.note_50 || 0) * 50) + 
+                          (Number(denoms.note_20 || 0) * 20) + 
+                          (Number(denoms.note_10 || 0) * 10) + 
+                          Number(denoms.coins || 0);
+
+            await pool.query(`
+                UPDATE cash_denominations 
+                SET note_500 = $1, note_200 = $2, note_100 = $3, note_50 = $4, note_20 = $5, note_10 = $6, coins = $7, total_amount = $8
+                WHERE report_id = $9
+            `, [
+                denoms.note_500 || 0, denoms.note_200 || 0, denoms.note_100 || 0,
+                denoms.note_50 || 0, denoms.note_20 || 0, denoms.note_10 || 0,
+                denoms.coins || 0, total, report_id
+            ]);
+        }
 
         // [AUTO-FINALIZATION CHECK]
         // Collect all involved report IDs (from items or body fallback)
