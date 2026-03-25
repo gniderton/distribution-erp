@@ -5,8 +5,12 @@ const { pool } = require('../config/db');
 // 1. POST /api/verify-requests - DSE submits update or new customer
 router.post('/', async (req, res) => {
     try {
-        const { customer_id, dse_id, name, phone, gstin, latitude, longitude } = req.body;
+        // RESILIENT PARSING: Handle if body is sent as a string (common in some Appsmith/Retool setups)
+        const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        const { customer_id, dse_id, name, phone, gstin, latitude, longitude } = body;
         
+        console.log('Verification Request Received:', body);
+
         const query = `
             INSERT INTO customer_verification_requests (
                 customer_id, dse_id, proposed_customer_name, 
@@ -14,7 +18,15 @@ router.post('/', async (req, res) => {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
         `;
-        const result = await pool.query(query, [customer_id || null, dse_id, name, phone, gstin, latitude, longitude]);
+        const result = await pool.query(query, [
+            customer_id || null, 
+            dse_id || null, 
+            name || null, 
+            phone || null, 
+            gstin || null, 
+            latitude || 0, 
+            longitude || 0
+        ]);
         res.status(201).json({ success: true, id: result.rows[0].id, message: 'Request submitted for Admin approval' });
     } catch (err) {
         console.error('Verify Request Error:', err);
