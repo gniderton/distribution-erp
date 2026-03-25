@@ -107,6 +107,7 @@ app.use('/api/finance/cheques', require('./routes/cheques')); // [NEW] Cheque Ma
 app.use('/api/finance/transfers', require('./routes/transfers')); // [NEW] Internal Transfers
 app.use('/api/finance/loans', require('./routes/loans')); // [NEW] Loan Management
 app.use('/api', require('./routes/accounting')); // [NEW] Alias for shorter paths like /api/journal-entries
+app.use('/api/backups', require('./routes/backups')); // [NEW] Automated & Manual Backups
 
 // [TEMP] Migration Endpoint to fix Combo Schema
 app.get('/api/fix-combo-db', async (req, res) => {
@@ -223,6 +224,11 @@ app.listen(port, () => {
     console.log('📦 Initializing Database in background...');
     initializeDatabase().then(() => {
         console.log('✅ Database Initialization Finished');
+        
+        // 🛡️ START BACKUP SCHEDULER (2:00 AM Daily)
+        const { scheduleNightlyBackup } = require('./services/backupService');
+        scheduleNightlyBackup();
+        
     }).catch(err => {
         console.error('❌ Database Initialization Failed during startup:', err);
     });
