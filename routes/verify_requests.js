@@ -60,7 +60,11 @@ router.post('/:id/approve', async (req, res) => {
     const client = await pool.connect();
     try {
         const { id } = req.params;
-        const { reviewed_by, route_id, channel_id, route_type_id, credit_limit, credit_days } = req.body;
+        const { 
+            reviewed_by, 
+            customer_id, // [NEW] Optional ID if already created via external JSON form
+            route_id, channel_id, route_type_id, credit_limit, credit_days 
+        } = req.body;
 
         await client.query('BEGIN');
 
@@ -69,9 +73,15 @@ router.post('/:id/approve', async (req, res) => {
         if (reqRes.rows.length === 0) throw new Error('Request not found');
         const r = reqRes.rows[0];
 
-        let finalCustomerId = r.customer_id;
+        // LOGIC: If a customer_id is provided, we just link and approve. 
+        // If NOT, we run the full auto-creation/update logic.
+        let finalCustomerId = customer_id || r.customer_id;
 
-        if (finalCustomerId) {
+        if (customer_id && !r.customer_id) {
+            // This was a NEW customer request that was processed externally 
+            // We just need to mark the request as approved and linked to the new ID.
+            await client.query(`UPDATE customer_verification_requests SET customer_id = $1 WHERE id = $2`, [customer_id, id]);
+        } else if (finalCustomerId) {
             // CASE A: UPDATE EXISTING CUSTOMER
             await client.query(`
                 UPDATE customers SET
