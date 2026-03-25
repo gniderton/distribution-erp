@@ -81,6 +81,8 @@ router.post('/:id/approve', async (req, res) => {
             // This was a NEW customer request that was processed externally 
             // We just need to mark the request as approved and linked to the new ID.
             await client.query(`UPDATE customer_verification_requests SET customer_id = $1 WHERE id = $2`, [customer_id, id]);
+            // Also update the customer record to be verified
+            await client.query(`UPDATE customers SET is_verified = true, verification_status = 'Verified' WHERE id = $1`, [customer_id]);
         } else if (finalCustomerId) {
             // CASE A: UPDATE EXISTING CUSTOMER
             await client.query(`
@@ -93,7 +95,8 @@ router.post('/:id/approve', async (req, res) => {
                     route_type_id = COALESCE($6, route_type_id),
                     credit_limit = COALESCE($7, credit_limit),
                     credit_days = COALESCE($8, credit_days),
-                    is_verified = true
+                    is_verified = true,
+                    verification_status = 'Verified'
                 WHERE id = $9
             `, [r.proposed_customer_name, r.proposed_phone, r.proposed_gstin, route_id, channel_id, route_type_id, credit_limit, credit_days, finalCustomerId]);
 
@@ -120,8 +123,9 @@ router.post('/:id/approve', async (req, res) => {
             const insertRes = await client.query(`
                 INSERT INTO customers (
                     customer_name, customer_code, customer_phone, gstin,
-                    route_id, dse_id, channel_id, route_type_id, credit_limit, credit_days, is_verified, is_active
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, true)
+                    route_id, dse_id, channel_id, route_type_id, credit_limit, credit_days, 
+                    is_verified, verification_status, is_active
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, 'Verified', true)
                 RETURNING id
             `, [r.proposed_customer_name, customerCode, r.proposed_phone, r.proposed_gstin, route_id, r.dse_id, channel_id, route_type_id, credit_limit, credit_days]);
             
