@@ -305,8 +305,9 @@ router.post('/', async (req, res) => {
             INSERT INTO customers (
                 customer_name, customer_code, customer_phone, email, gstin, pan, 
                 credit_limit, credit_days, channel_id,
-                route_id, dse_id, is_active, whatsapp_number, route_type_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13)
+                route_id, dse_id, is_active, whatsapp_number, route_type_id,
+                verification_status -- [NEW]
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13, 'Pending')
             RETURNING id
         `, [
             customer_name, customerCode, customer_phone, email, gstin, pan,
@@ -441,6 +442,49 @@ router.post('/meta/routes', async (req, res) => {
         );
         res.json(resDb.rows[0]);
     } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /api/customers/:id/verify-request - DSE submits updates for verification
+router.put('/:id/verify-request', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { customer_phone, gstin, latitude, longitude } = req.body;
+
+        const query = `
+            UPDATE customers SET
+                customer_phone = COALESCE($1, customer_phone),
+                gstin = COALESCE($2, gstin),
+                latitude = COALESCE($3, latitude),
+                longitude = COALESCE($4, longitude),
+                verification_status = 'Pending'
+            WHERE id = $5
+        `;
+        await pool.query(query, [customer_phone, gstin, latitude, longitude, id]);
+        
+        res.json({ success: true, message: 'Verification request submitted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/customers/:id/verify - Admin approves verification
+router.post('/:id/verify', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { verified_by } = req.body;
+
+        await pool.query(`
+            UPDATE customers SET
+                verification_status = 'Verified',
+                last_verified_at = NOW(),
+                verified_by = $1
+            WHERE id = $2
+        `, [verified_by, id]);
+
+        res.json({ success: true, message: 'Customer verified successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 module.exports = router;
