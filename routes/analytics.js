@@ -159,7 +159,8 @@ router.get('/customers/:id/dashboard', async (req, res) => {
                 current_balance: parseFloat(c.current_balance || 0),
                 credit_limit: parseFloat(c.credit_limit || 0),
                 avg_credit_days: Math.round(parseFloat(creditRes.rows[0].avg_days || 0)),
-                limit_utilization: c.credit_limit > 0 ? (parseFloat(c.current_balance || 0) / parseFloat(c.credit_limit) * 100).toFixed(1) : 0
+                limit_utilization: c.credit_limit > 0 ? (parseFloat(c.current_balance || 0) / parseFloat(c.credit_limit) * 100).toFixed(1) : 0,
+                receivables_vs_sales_ratio: s.total_sales > 0 ? (parseFloat(c.current_balance || 0) / parseFloat(s.total_sales) * 100).toFixed(1) : 0
             },
             recent_activity: recentRes.rows
         });
