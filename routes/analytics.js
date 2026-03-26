@@ -84,4 +84,76 @@ router.get('/dse/performance', async (req, res) => {
     }
 });
 
+// --- CUSTOMER DASHBOARD ANALYTICS ---
+router.get('/customers/:id/dashboard', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // 1. Sales & Rank
+        const salesStats = await pool.query(`
+            WITH SalesStats AS (
+                SELECT customer_id, SUM(grand_total) as total_sales
+                FROM sales_invoices
+                WHERE status != 'Cancelled'
+                GROUP BY customer_id
+            ),
+            RankedStats AS (
+                SELECT customer_id, total_sales,
+                RANK() OVER (ORDER BY total_sales DESC) as sales_rank,
+                COUNT(*) OVER () as total_customers
+                FROM SalesStats
+            )
+            SELECT total_sales, sales_rank, total_customers 
+            FROM RankedStats WHERE customer_id = $1
+        `, [id]);
+
+        const s = salesStats.rows[0] || { total_sales: 0, sales_rank: 0, total_customers: 0 };
+
+        // 2. Customer Info & Balance
+        const custRes = await pool.query(`
+            SELECT customer_name, current_balance, credit_limit, credit_days 
+            FROM customers WHERE id = $1
+        `, [id]);
+        
+        const c = custRes.rows[0];
+
+        // 3. Avg Credit Days (Time to close the bill)
+        // Note: For cheques, we use clearance_date if available
+        const creditRes = await pool.query(`
+            SELECT COALESCE(AVG(EXTRACT(DAY FROM (COALESCE(chq.clearance_date, p.payment_date) - sih.invoice_date))), 0) as avg_days
+            FROM customer_payment_allocations cpa
+            JOIN sales_invoices sih ON cpa.invoice_id = sih.id
+            JOIN customer_payments p ON cpa.payment_id = p.id
+            LEFT JOIN cheques chq ON chq.reference_id = p.id AND chq.reference_type = 'CUSTOMER_PAYMENT'
+            WHERE sih.customer_id = $1 AND sih.status = 'Paid'
+        `, [id]);
+
+        // 4. Last Activity (Recent 5 Transactions)
+        const recentRes = await pool.query(`
+            SELECT type, reference_number, date, debit_amount, credit_amount, status
+            FROM view_customer_ledger
+            WHERE customer_id = $1
+            ORDER BY date DESC, id DESC
+            LIMIT 5
+        `, [id]);
+
+        res.json({
+            metrics: {
+                total_sales: parseFloat(s.total_sales),
+                sales_rank: parseInt(s.sales_rank),
+                total_customers_count: parseInt(s.total_customers),
+                current_balance: parseFloat(c.current_balance || 0),
+                credit_limit: parseFloat(c.credit_limit || 0),
+                avg_credit_days: Math.round(parseFloat(creditRes.rows[0].avg_days || 0)),
+                limit_utilization: c.credit_limit > 0 ? (parseFloat(c.current_balance || 0) / parseFloat(c.credit_limit) * 100).toFixed(1) : 0
+            },
+            recent_activity: recentRes.rows
+        });
+
+    } catch (err) {
+        console.error('Customer dashboard error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
