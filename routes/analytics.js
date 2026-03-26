@@ -109,10 +109,23 @@ router.get('/customers/:id/dashboard', async (req, res) => {
 
         const s = salesStats.rows[0] || { total_sales: 0, sales_rank: 0, total_customers: 0 };
 
-        // 2. Customer Info & Balance
+        // 2. Customer Info & Balance (Calculated)
         const custRes = await pool.query(`
-            SELECT customer_name, current_balance, credit_limit, credit_days 
-            FROM customers WHERE id = $1
+            SELECT 
+                c.customer_name, 
+                c.credit_limit, 
+                c.credit_days,
+                (
+                    SELECT COALESCE(SUM(grand_total), 0) 
+                    FROM sales_invoices 
+                    WHERE customer_id = c.id AND status != 'Cancelled'
+                ) - (
+                    SELECT COALESCE(SUM(amount), 0) 
+                    FROM customer_payments 
+                    WHERE customer_id = c.id AND status = 'Verified'
+                ) as current_balance
+            FROM customers c 
+            WHERE c.id = $1
         `, [id]);
         
         const c = custRes.rows[0];
