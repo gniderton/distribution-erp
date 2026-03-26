@@ -132,8 +132,9 @@ router.get('/customers/:id/dashboard', async (req, res) => {
 
         // 3. Avg Credit Days (Time to close the bill)
         // Note: For cheques, we use clearance_date if available
+        // Subtracting two dates in PG returns integer days directly.
         const creditRes = await pool.query(`
-            SELECT COALESCE(AVG(EXTRACT(DAY FROM (COALESCE(chq.clearance_date, p.payment_date) - sih.invoice_date))), 0) as avg_days
+            SELECT COALESCE(AVG(COALESCE(chq.clearance_date, p.payment_date) - sih.invoice_date), 0) as avg_days
             FROM customer_payment_allocations cpa
             JOIN sales_invoices sih ON cpa.invoice_id = sih.id
             JOIN customer_payments p ON cpa.payment_id = p.id
