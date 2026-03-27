@@ -163,10 +163,17 @@ router.get('/customers/:id/dashboard', async (req, res) => {
     }
 });
 
-// --- EMPLOYEE (DSE) DASHBOARD ANALYTICS ---
 router.get('/employees/:id/dashboard', async (req, res) => {
     try {
         const { id } = req.params;
+
+        // Validation: Ensure ID is a number
+        if (isNaN(id) || isNaN(parseInt(id))) {
+            return res.status(400).json({ 
+                error: "Invalid Employee ID", 
+                message: `Received '${id}' but expected a numeric employee ID. Please check your Appsmith variable mapping.` 
+            });
+        }
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
