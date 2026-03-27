@@ -295,7 +295,7 @@ router.get('/employees/:id/dashboard', async (req, res) => {
 
         // 8. Zero-Billing Customers (Last 30 Days)
         const zeroBilling = await pool.query(`
-            SELECT customer_name, contact_primary, 
+            SELECT customer_name, customer_phone, 
                    (SELECT MAX(invoice_date) FROM sales_invoices WHERE customer_id = c.id) as last_invoice_date
             FROM customers c
             WHERE dse_id = $1 
