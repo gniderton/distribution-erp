@@ -143,6 +143,26 @@ router.get('/customers/:id/dashboard', async (req, res) => {
             LIMIT 10
         `, [id]);
 
+        // 5. Brand-wise Sales (FY: April 1 - March 31)
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        let fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
+        const fyStart = `${fyStartYear}-04-01`;
+
+        const brandSalesRes = await pool.query(`
+            SELECT 
+                b.brand_name,
+                COALESCE(SUM(sil.rate * sil.shipped_qty), 0) as taxable_sales
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN products p ON sil.product_id = p.id
+            JOIN brands b ON p.brand_id = b.id
+            WHERE si.customer_id = $1 AND si.invoice_date >= $2 AND si.status != 'Cancelled'
+            GROUP BY b.id, b.brand_name
+            ORDER BY taxable_sales DESC
+        `, [id, fyStart]);
+
         res.json({
             metrics: {
                 total_sales: parseFloat(s.gross_sales),
@@ -154,7 +174,8 @@ router.get('/customers/:id/dashboard', async (req, res) => {
                 limit_utilization: c.credit_limit > 0 ? (parseFloat(s.balance || 0) / parseFloat(c.credit_limit) * 100).toFixed(1) : 0,
                 receivables_vs_sales_ratio: s.gross_sales > 0 ? parseFloat((parseFloat(s.balance || 0) / parseFloat(s.gross_sales)).toFixed(4)) : 0
             },
-            recent_activity: recentRes.rows
+            recent_activity: recentRes.rows,
+            brand_sales_fy: brandSalesRes.rows
         });
 
     } catch (err) {
