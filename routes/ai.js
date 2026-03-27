@@ -25,15 +25,21 @@ router.post('/analyze-cheque', async (req, res) => {
             You are a specialized OCR for Indian/Standard bank cheques. 
             Extract the following data from this image:
             1. Cheque Number: The first 6 digits found in the MICR line at the bottom center (e.g., "123456").
-            2. Amount: The numeric currency amount (e.g., 5000.00).
-            3. Date: Extraction the date in DD/MM/YYYY format.
-            4. Bank Name: Look for the bank title printed at the top.
+            2. Amount (Number): The numeric currency amount (e.g., 5000.00).
+            3. Amount (Words): The text representation of the amount (e.g., "Five Thousand Only").
+            4. Date: DD/MM/YYYY.
+            5. Payee Name: The name written after 'Pay'.
+            6. Company Name/Drawer: The name of the account holder at the bottom right who is signing the cheque.
+            7. Bank Name: The title of the bank printed at the top.
 
             Output ONLY a JSON object in this format: 
             { 
               "cheque_no": string, 
-              "amount": number, 
+              "amount_number": number, 
+              "amount_words": string,
               "date": string, 
+              "payee_name": string,
+              "company_name": string,
               "bank_name": string, 
               "confidence": number 
             }
