@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const { calculateDailyPoints } = require('../services/performanceService');
 
 // 1. List Pending DSE Reports (Dashboard)
 router.get('/list', async (req, res) => {
@@ -531,6 +532,11 @@ router.post('/bulk-update', async (req, res) => {
 
             if (parseInt(pending_payments) === 0 && parseInt(pending_expenses) === 0) {
                 console.log(`[Auto-Settle] Report ${rId} is fully processed. Finalizing.`);
+                
+                // Fetch DSE and Date for performance calculation before settling
+                const rptRes = await pool.query('SELECT dse_id, report_date FROM daily_sales_reports WHERE id = $1', [rId]);
+                const { dse_id, report_date } = rptRes.rows[0];
+
                 await pool.query(`
                     UPDATE daily_sales_reports 
                     SET settlement_status = 'Settled', 
@@ -539,6 +545,9 @@ router.post('/bulk-update', async (req, res) => {
                         settled_by = $2
                     WHERE id = $1 AND settlement_status ILIKE 'Pending'
                 `, [rId, user_id]);
+
+                // 🚀 TRIGGER PERFORMANCE CALCULATION (30% Rule)
+                await calculateDailyPoints(dse_id, report_date, rId);
             }
         }
 
@@ -660,6 +669,13 @@ router.post('/:id/finalize', async (req, res) => {
                 updated_at = NOW() 
             WHERE id = $2
         `, [finance_remark, id]);
+
+        // Fetch DSE and Date for performance calculation
+        const rptInfo = await client.query('SELECT dse_id, report_date FROM daily_sales_reports WHERE id = $1', [id]);
+        const { dse_id, report_date } = rptInfo.rows[0];
+
+        // 🚀 TRIGGER PERFORMANCE CALCULATION (30% Rule)
+        await calculateDailyPoints(dse_id, report_date, id, client);
 
         await client.query('COMMIT');
         res.json({ success: true, message: "Settlement Finalized" });

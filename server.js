@@ -87,6 +87,7 @@ app.use('/api/categories', require('./routes/categories')); // Categories for dr
 app.use('/api/sales-returns', require('./routes/sales_returns')); // [NEW] Credit Notes
 app.use('/api/entities', require('./routes/entities')); // [NEW] Master entities for Income/Expense
 app.use('/api/verify-requests', require('./routes/verify_requests')); // [NEW] Customer Staging & Onboarding
+app.use('/api/targets', require('./routes/targets')); // [NEW] Employee Targets & Performance
 
 // [NEW] Finance Module
 app.use('/api/finance/reconciliation', require('./routes/payment_reconciliation'));
@@ -183,7 +184,8 @@ async function initializeDatabase() {
             { id: '134', path: '134_return_slip_audit.sql' },
             { id: '135', path: '135_sync_dn_rs_sequences.sql' },
             { id: '136', path: '136_fix_ledger_view_sorting.sql' },
-            { id: '137', path: '137_emp_designation_to_id.sql' }
+            { id: '137', path: '137_emp_designation_to_id.sql' },
+            { id: '185', path: '185_employee_targets_schema.sql' }
         ];
 
         for (const m of migrations) {

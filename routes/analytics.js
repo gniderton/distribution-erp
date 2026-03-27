@@ -163,4 +163,178 @@ router.get('/customers/:id/dashboard', async (req, res) => {
     }
 });
 
+// --- EMPLOYEE (DSE) DASHBOARD ANALYTICS ---
+router.get('/employees/:id/dashboard', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+
+        // 1. Calculate Periods
+        const monthStart = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
+        
+        let fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
+        const fyStart = `${fyStartYear}-04-01`;
+
+        // 2. Fetch Assigned Customer IDs
+        const custRes = await pool.query('SELECT id FROM customers WHERE dse_id = $1', [id]);
+        const customerIds = custRes.rows.map(r => r.id);
+
+        if (customerIds.length === 0) {
+            return res.json({
+                message: "No customers assigned to this employee",
+                metrics: { month: {}, fy: {} },
+                top_customers: [],
+                brand_sales: [],
+                ageing: {},
+                zero_billing: []
+            });
+        }
+
+        const getPeriodMetrics = async (startDate) => {
+            // A. Core Totals (Taxable)
+            const stats = await pool.query(`
+                SELECT 
+                    COALESCE(SUM(total_taxable), 0) as gross_sales,
+                    (SELECT COALESCE(SUM(total_taxable), 0) FROM sales_returns WHERE customer_id = ANY($1) AND return_date >= $2 AND status = 'Applied') as returns,
+                    (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE collected_by = $3 AND payment_date >= $2 AND status = 'Verified') as collection
+                FROM sales_invoices 
+                WHERE customer_id = ANY($1) AND invoice_date >= $2 AND status != 'Cancelled'
+            `, [customerIds, startDate, id]);
+
+            // B. Avg Credit Days
+            const creditRes = await pool.query(`
+                SELECT COALESCE(AVG(p.payment_date - sih.invoice_date), 0) as avg_days
+                FROM customer_payment_allocations cpa
+                JOIN sales_invoices sih ON cpa.invoice_id = sih.id
+                JOIN customer_payments p ON cpa.payment_id = p.id
+                WHERE sih.customer_id = ANY($1) 
+                  AND sih.invoice_date >= $2
+                  AND cpa.status = 'ACTIVE'
+            `, [customerIds, startDate]);
+
+            const s = stats.rows[0];
+            return {
+                gross_sales_taxable: parseFloat(s.gross_sales),
+                returns_taxable: parseFloat(s.returns),
+                net_sales_taxable: parseFloat(s.gross_sales) - parseFloat(s.returns),
+                collection: parseFloat(s.collection),
+                avg_credit_days: Math.round(parseFloat(creditRes.rows[0].avg_days))
+            };
+        };
+
+        // Execution
+        const monthMetrics = await getPeriodMetrics(monthStart);
+        const fyMetrics = await getPeriodMetrics(fyStart);
+
+        // 4. Top 10 Customers (Month)
+        const topCustomers = await pool.query(`
+            SELECT 
+                c.customer_name,
+                COALESCE(SUM(si.total_taxable), 0) as taxable_sales
+            FROM customers c
+            JOIN sales_invoices si ON c.id = si.customer_id
+            WHERE c.dse_id = $1 AND si.invoice_date >= $2 AND si.status != 'Cancelled'
+            GROUP BY c.id, c.customer_name
+            ORDER BY taxable_sales DESC
+            LIMIT 10
+        `, [id, monthStart]);
+
+        // 5. Brand-wise Sales (Month)
+        const brandSales = await pool.query(`
+            SELECT 
+                b.name as brand_name,
+                COALESCE(SUM(sil.rate * sil.shipped_qty), 0) as taxable_sales
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN products p ON sil.product_id = p.id
+            JOIN brands b ON p.brand_id = b.id
+            WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.status != 'Cancelled'
+            GROUP BY b.id, b.name
+            ORDER BY taxable_sales DESC
+        `, [customerIds, monthStart]);
+
+        // 6. Category-wise Sales (Month)
+        const catSales = await pool.query(`
+            SELECT 
+                cat.name as category_name,
+                COALESCE(SUM(sil.rate * sil.shipped_qty), 0) as taxable_sales
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN products p ON sil.product_id = p.id
+            JOIN categories cat ON p.category_id = cat.id
+            WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.status != 'Cancelled'
+            GROUP BY cat.id, cat.name
+            ORDER BY taxable_sales DESC
+        `, [customerIds, monthStart]);
+
+        // 7. Collection Ageing (Real-time)
+        const ageingRes = await pool.query(`
+            SELECT 
+                CASE 
+                    WHEN (CURRENT_DATE - invoice_date) <= 30 THEN '0-30 Days'
+                    WHEN (CURRENT_DATE - invoice_date) <= 60 THEN '31-60 Days'
+                    ELSE '61+ Days'
+                END as bucket,
+                COALESCE(SUM(grand_total - paid_amount), 0) as outstanding
+            FROM sales_invoices
+            WHERE customer_id = ANY($1) AND status != 'Paid' AND status != 'Cancelled'
+            GROUP BY 1
+        `, [customerIds]);
+
+        const ageingMap = { '0-30 Days': 0, '31-60 Days': 0, '61+ Days': 0 };
+        ageingRes.rows.forEach(r => ageingMap[r.bucket] = parseFloat(r.outstanding));
+
+        // 8. Zero-Billing Customers (Last 30 Days)
+        const zeroBilling = await pool.query(`
+            SELECT customer_name, contact_primary, 
+                   (SELECT MAX(invoice_date) FROM sales_invoices WHERE customer_id = c.id) as last_invoice_date
+            FROM customers c
+            WHERE dse_id = $1 
+              AND NOT EXISTS (
+                SELECT 1 FROM sales_invoices 
+                WHERE customer_id = c.id AND invoice_date >= CURRENT_DATE - INTERVAL '30 days'
+            )
+            ORDER BY last_invoice_date ASC NULLS FIRST
+        `, [id]);
+
+        // 9. Target & Performance Points (Month)
+        const targetRes = await pool.query(`
+            SELECT 
+                t.*,
+                p.name as plan_name,
+                p.config as plan_config,
+                COALESCE((SELECT SUM(points) FROM performance_points_history WHERE employee_id = $1 AND EXTRACT(MONTH FROM date) = $2 AND EXTRACT(YEAR FROM date) = $3), 0) as total_points,
+                COALESCE((SELECT COUNT(*) FROM employee_daily_achievement WHERE employee_id = $1 AND EXTRACT(MONTH FROM date) = $2 AND EXTRACT(YEAR FROM date) = $3 AND is_successful = TRUE), 0) as success_days
+            FROM employee_targets t
+            JOIN incentive_plans p ON t.plan_id = p.id
+            WHERE t.employee_id = $1 AND t.month = $2 AND t.year = $3
+        `, [id, currentMonth, currentYear]);
+
+        res.json({
+            metrics: {
+                month: monthMetrics,
+                fy: fyMetrics
+            },
+            top_customers: topCustomers.rows,
+            brand_sales: brandSales.rows,
+            category_sales: catSales.rows,
+            ageing: ageingMap,
+            zero_billing: zeroBilling.rows,
+            performance: targetRes.rows[0] || { 
+                total_points: 0, 
+                success_days: 0, 
+                sales_target_taxable: 0,
+                plan_name: 'No Plan Assigned',
+                plan_config: {}
+            }
+        });
+
+    } catch (err) {
+        console.error('Employee dashboard error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
