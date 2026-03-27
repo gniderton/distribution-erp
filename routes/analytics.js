@@ -251,28 +251,28 @@ router.get('/employees/:id/dashboard', async (req, res) => {
         // 5. Brand-wise Sales (Month)
         const brandSales = await pool.query(`
             SELECT 
-                b.name as brand_name,
+                b.brand_name,
                 COALESCE(SUM(sil.rate * sil.shipped_qty), 0) as taxable_sales
             FROM sales_invoice_lines sil
             JOIN sales_invoices si ON sil.invoice_id = si.id
             JOIN products p ON sil.product_id = p.id
             JOIN brands b ON p.brand_id = b.id
             WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.status != 'Cancelled'
-            GROUP BY b.id, b.name
+            GROUP BY b.id, b.brand_name
             ORDER BY taxable_sales DESC
         `, [customerIds, monthStart]);
 
         // 6. Category-wise Sales (Month)
         const catSales = await pool.query(`
             SELECT 
-                cat.name as category_name,
+                cat.category_name,
                 COALESCE(SUM(sil.rate * sil.shipped_qty), 0) as taxable_sales
             FROM sales_invoice_lines sil
             JOIN sales_invoices si ON sil.invoice_id = si.id
             JOIN products p ON sil.product_id = p.id
             JOIN categories cat ON p.category_id = cat.id
             WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.status != 'Cancelled'
-            GROUP BY cat.id, cat.name
+            GROUP BY cat.id, cat.category_name
             ORDER BY taxable_sales DESC
         `, [customerIds, monthStart]);
 
