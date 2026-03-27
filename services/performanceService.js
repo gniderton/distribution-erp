@@ -133,6 +133,37 @@ async function checkMonthlyBonus(dseId, month, year, config, db) {
             `, [dseId, `${year}-${month}-01`, bonusRule.points || 1000, `Completed ${successCount} successful days`]);
         }
     }
+
+    // 3. Check for Sales Target Bonus
+    const salesRule = config.sales_target_bonus;
+    if (salesRule) {
+        // A. Get Actual Monthly Taxable Sales
+        const salesRes = await db.query(`
+            SELECT COALESCE(SUM(total_taxable), 0) as actual_sales,
+                   (SELECT sales_target_taxable FROM employee_targets WHERE employee_id = $1 AND month = $2 AND year = $3) as target
+            FROM sales_invoices
+            WHERE customer_id IN (SELECT id FROM customers WHERE dse_id = $1)
+              AND EXTRACT(MONTH FROM invoice_date) = $2
+              AND EXTRACT(YEAR FROM invoice_date) = $3
+              AND status != 'Cancelled'
+        `, [dseId, month, year]);
+
+        const { actual_sales, target } = salesRes.rows[0];
+
+        if (parseFloat(target) > 0 && parseFloat(actual_sales) >= parseFloat(target)) {
+            const checkSalesRes = await db.query(`
+                SELECT 1 FROM performance_points_history 
+                WHERE employee_id = $1 AND type = 'MONTH_SALES_TARGET' AND EXTRACT(MONTH FROM date) = $2 AND EXTRACT(YEAR FROM date) = $3
+            `, [dseId, month, year]);
+
+            if (checkSalesRes.rows.length === 0) {
+                await db.query(`
+                    INSERT INTO performance_points_history (employee_id, date, points, type, reason)
+                    VALUES ($1, $2, $3, 'MONTH_SALES_TARGET', $4)
+                `, [dseId, `${year}-${month}-01`, salesRule.points || 2000, `Hit Monthly Sales Target: ₹${actual_sales} / ₹${target}`]);
+            }
+        }
+    }
 }
 
 module.exports = { calculateDailyPoints, checkMonthlyBonus };

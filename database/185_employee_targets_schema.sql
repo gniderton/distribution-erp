@@ -84,12 +84,14 @@ CREATE TABLE IF NOT EXISTS performance_points_history (
 INSERT INTO incentive_plans (name, description, config)
 VALUES (
     'Standard DSE Plan', 
-    'Standard rules: 30% Daily Collection = 20 pts. 90% Days hit = 1000 pts bonus.',
+    'Rules: 30% Daily Collection = 20 pts. 90% Days hit = 1000 pts. Target hit = 2000 pts.',
     '{
         "daily_collection": { "threshold_pct": 30.0, "points": 20 },
-        "monthly_bonus": { "days_required_pct": 90.0, "points": 1000 }
+        "monthly_bonus": { "days_required": 21, "points": 1000 },
+        "sales_target_bonus": { "points": 2000 }
     }'::jsonb
-) ON CONFLICT (name) DO NOTHING;
+) ON CONFLICT (name) DO UPDATE SET 
+    config = EXCLUDED.config;
 
 -- Indexing
 CREATE INDEX IF NOT EXISTS idx_targets_emp ON employee_targets(employee_id);
