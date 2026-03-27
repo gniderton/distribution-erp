@@ -89,43 +89,35 @@ router.get('/customers/:id/dashboard', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // 1. Sales & Rank
-        const salesStats = await pool.query(`
-            WITH SalesStats AS (
-                SELECT customer_id, SUM(grand_total) as total_sales
-                FROM sales_invoices
-                WHERE status != 'Cancelled'
+        // 1. Sales, Rank & General Metrics (Aggregated from the same view as the activity)
+        const summaryRes = await pool.query(`
+            WITH CustomerTotals AS (
+                SELECT 
+                    customer_id, 
+                    SUM(debit_amount) as gross_sales,
+                    SUM(debit_amount - credit_amount) as balance
+                FROM view_customer_ledger
                 GROUP BY customer_id
             ),
             RankedStats AS (
-                SELECT customer_id, total_sales,
-                RANK() OVER (ORDER BY total_sales DESC) as sales_rank,
-                COUNT(*) OVER () as total_customers
-                FROM SalesStats
+                SELECT 
+                    customer_id, 
+                    gross_sales, 
+                    balance,
+                    RANK() OVER (ORDER BY gross_sales DESC) as sales_rank,
+                    COUNT(*) OVER () as total_customers
+                FROM CustomerTotals
             )
-            SELECT total_sales, sales_rank, total_customers 
+            SELECT gross_sales, balance, sales_rank, total_customers 
             FROM RankedStats WHERE customer_id = $1
         `, [id]);
 
-        const s = salesStats.rows[0] || { total_sales: 0, sales_rank: 0, total_customers: 0 };
+        const s = summaryRes.rows[0] || { gross_sales: 0, balance: 0, sales_rank: 0, total_customers: 0 };
 
-        // 2. Customer Info & Balance (Calculated)
+        // 2. Customer Limits Info
         const custRes = await pool.query(`
-            SELECT 
-                c.customer_name, 
-                c.credit_limit, 
-                c.credit_days,
-                (
-                    SELECT COALESCE(SUM(grand_total), 0) 
-                    FROM sales_invoices 
-                    WHERE customer_id = c.id AND status != 'Cancelled'
-                ) - (
-                    SELECT COALESCE(SUM(amount), 0) 
-                    FROM customer_payments 
-                    WHERE customer_id = c.id AND status = 'Verified'
-                ) as current_balance
-            FROM customers c 
-            WHERE c.id = $1
+            SELECT customer_name, credit_limit, credit_days 
+            FROM customers WHERE id = $1
         `, [id]);
         
         const c = custRes.rows[0];
@@ -153,14 +145,14 @@ router.get('/customers/:id/dashboard', async (req, res) => {
 
         res.json({
             metrics: {
-                total_sales: parseFloat(s.total_sales),
+                total_sales: parseFloat(s.gross_sales),
                 sales_rank: parseInt(s.sales_rank),
                 total_customers_count: parseInt(s.total_customers),
-                current_balance: parseFloat(c.current_balance || 0),
+                current_balance: parseFloat(s.balance || 0),
                 credit_limit: parseFloat(c.credit_limit || 0),
                 avg_credit_days: Math.round(parseFloat(creditRes.rows[0].avg_days || 0)),
-                limit_utilization: c.credit_limit > 0 ? (parseFloat(c.current_balance || 0) / parseFloat(c.credit_limit) * 100).toFixed(1) : 0,
-                receivables_vs_sales_ratio: s.total_sales > 0 ? parseFloat((parseFloat(c.current_balance || 0) / parseFloat(s.total_sales)).toFixed(4)) : 0
+                limit_utilization: c.credit_limit > 0 ? (parseFloat(s.balance || 0) / parseFloat(c.credit_limit) * 100).toFixed(1) : 0,
+                receivables_vs_sales_ratio: s.gross_sales > 0 ? parseFloat((parseFloat(s.balance || 0) / parseFloat(s.gross_sales)).toFixed(4)) : 0
             },
             recent_activity: recentRes.rows
         });
