@@ -300,7 +300,7 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             FROM customers c
             JOIN routes r ON c.route_id = r.id
             WHERE c.dse_id = $1 
-              AND TRIM(TO_CHAR(CURRENT_DATE, 'Day')) = r.service_day
+              AND TRIM(TO_CHAR(CURRENT_DATE, 'Day')) ILIKE r.service_day
               AND NOT EXISTS (
                 SELECT 1 FROM sales_invoices 
                 WHERE customer_id = c.id AND invoice_date >= CURRENT_DATE - INTERVAL '30 days'
