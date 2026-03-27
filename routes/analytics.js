@@ -293,12 +293,14 @@ router.get('/employees/:id/dashboard', async (req, res) => {
         const ageingMap = { '0-30 Days': 0, '31-60 Days': 0, '61+ Days': 0 };
         ageingRes.rows.forEach(r => ageingMap[r.bucket] = parseFloat(r.outstanding));
 
-        // 8. Zero-Billing Customers (Last 30 Days)
+        // 8. Zero-Billing Customers (On Today's Route + Last 30 Days)
         const zeroBilling = await pool.query(`
-            SELECT customer_name, customer_phone, 
+            SELECT c.customer_name, c.customer_phone, c.latitude, c.longitude,
                    (SELECT MAX(invoice_date) FROM sales_invoices WHERE customer_id = c.id) as last_invoice_date
             FROM customers c
-            WHERE dse_id = $1 
+            JOIN routes r ON c.route_id = r.id
+            WHERE c.dse_id = $1 
+              AND TRIM(TO_CHAR(CURRENT_DATE, 'Day')) = r.service_day
               AND NOT EXISTS (
                 SELECT 1 FROM sales_invoices 
                 WHERE customer_id = c.id AND invoice_date >= CURRENT_DATE - INTERVAL '30 days'
