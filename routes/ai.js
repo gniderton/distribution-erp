@@ -7,16 +7,21 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 router.post('/analyze-cheque', async (req, res) => {
     try {
-        const { imageUrl } = req.body;
+        const { imageUrl, imageBase64 } = req.body;
+        let base64Data = "";
+        let mimeType = "image/jpeg";
 
-        if (!imageUrl) {
-            return res.status(400).json({ error: "No image URL provided" });
+        if (imageUrl) {
+            // Fetch from URL (e.g., Supabase Storage)
+            const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+            base64Data = Buffer.from(response.data).toString('base64');
+            mimeType = response.headers['content-type'] || 'image/jpeg';
+        } else if (imageBase64) {
+            // Use direct Base64 (No storage needed)
+            base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+        } else {
+            return res.status(400).json({ error: "No image source (URL or Base64) provided" });
         }
-
-        // 1. Fetch the image and convert to Base64
-        const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-        const base64Image = Buffer.from(response.data).toString('base64');
-        const mimeType = response.headers['content-type'] || 'image/jpeg';
 
         // 2. Initialize Gemini 1.5 Flash (Optimized for Speed/Cost/Accuracy)
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
