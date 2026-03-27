@@ -134,13 +134,13 @@ router.get('/customers/:id/dashboard', async (req, res) => {
             WHERE sih.customer_id = $1 AND sih.status = 'Paid'
         `, [id]);
 
-        // 4. Last Activity (Recent 5 Transactions)
+        // 4. Last Activity (Recent 10 Transactions)
         const recentRes = await pool.query(`
             SELECT type, reference_number, date, debit_amount, credit_amount, status
             FROM view_customer_ledger
             WHERE customer_id = $1
             ORDER BY date DESC, id DESC
-            LIMIT 5
+            LIMIT 10
         `, [id]);
 
         res.json({
