@@ -88,6 +88,7 @@ app.use('/api/sales-returns', require('./routes/sales_returns')); // [NEW] Credi
 app.use('/api/entities', require('./routes/entities')); // [NEW] Master entities for Income/Expense
 app.use('/api/verify-requests', require('./routes/verify_requests')); // [NEW] Customer Staging & Onboarding
 app.use('/api/targets', require('./routes/targets')); // [NEW] Employee Targets & Performance
+app.use('/api/ai', require('./routes/ai')); // [NEW] Gemini Vision AI OCR
 
 // [NEW] Finance Module
 app.use('/api/finance/reconciliation', require('./routes/payment_reconciliation'));
