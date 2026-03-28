@@ -302,7 +302,7 @@ router.get('/trips/:id/manifest', async (req, res) => {
         const result = await pool.query(`
             SELECT 
                 ti.id as trip_invoice_id,
-                si.id as invoice_id, si.invoice_number, si.grand_total, si.balance_amount,
+                si.id as invoice_id, si.invoice_number, si.invoice_date, si.grand_total, si.balance_amount,
                 c.id as customer_id, c.customer_name, 
                 -- Customer Addresses Join for Address Line 1
                 (SELECT address_line1 FROM customer_addresses WHERE customer_id = c.id LIMIT 1) as address,
