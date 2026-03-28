@@ -49,7 +49,8 @@ router.post('/eod-sync', async (req, res) => {
             orders = [],
             payments = [],
             expenses = [],
-            denominations = {} // Obj { note_500: 10, total: 5000 }
+            denominations = {}, // Obj { note_500: 10, total: 5000 }
+            sync_source = 'Standard' // 🚀 NEW: Default to Standard, but allow 'MANUAL_IMPORT'
         } = req.body;
 
         // --- 0. Create Master Sync Log ---
@@ -57,7 +58,8 @@ router.post('/eod-sync', async (req, res) => {
             orders_count: orders?.length || 0,
             payments_count: payments?.length || 0,
             expenses_count: expenses?.length || 0,
-            has_denominations: !!denominations
+            has_denominations: !!denominations,
+            sync_source: sync_source // Record why this sync happened
         };
         const syncRes = await client.query(
             "INSERT INTO sync_logs (synced_by, payload_summary, sync_type) VALUES ($1, $2, 'Sales') RETURNING id",
