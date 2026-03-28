@@ -10,18 +10,13 @@ router.post('/login', async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT 
-                e.id, e.full_name, e.contact_primary, e.designation, e.login_pin,
+                e.id, e.full_name, e.contact_primary, d.title as designation, e.login_pin,
                 dt.id as team_id, dt.name as team_name, dt.vehicle_id
-            FROM employees e, delivery_teams dt
-            WHERE e.id = dt.driver_id AND dt.is_active = true
-            AND e.contact_primary = $1 AND e.employment_status = 'Active'
-            UNION
-            SELECT 
-                e.id, e.full_name, e.contact_primary, e.designation, e.login_pin,
-                NULL as team_id, NULL as team_name, NULL as vehicle_id
             FROM employees e
+            LEFT JOIN designations d ON e.designation_id = d.id
+            LEFT JOIN delivery_teams dt ON e.id = dt.driver_id AND dt.is_active = true
             WHERE e.contact_primary = $1 AND e.employment_status = 'Active'
-            AND NOT EXISTS (SELECT 1 FROM delivery_teams dt WHERE dt.driver_id = e.id AND dt.is_active = true)
+            LIMIT 1
         `, [phone]);
 
         if (result.rows.length === 0) {
@@ -330,8 +325,17 @@ router.get('/trips/:id/manifest', async (req, res) => {
 
 // 7. Sync Delivery Data (End of Day / Live)
 router.post('/sync', async (req, res) => {
-    const { trip_id, updates, payments, returns, expenses, denominations } = req.body;
     const client = await pool.connect();
+    const { 
+        trip_id, 
+        updates, 
+        payments, 
+        returns, 
+        expenses, 
+        denominations,
+        sync_source = 'MOBILE' // 🚀 NEW: Default to MOBILE, allows 'MANUAL_IMPORT'
+    } = req.body;
+
     try {
         await client.query('BEGIN');
 
@@ -341,7 +345,8 @@ router.post('/sync', async (req, res) => {
             payments_count: payments?.length || 0,
             returns_count: returns?.length || 0,
             expenses_count: expenses?.length || 0,
-            has_denominations: !!denominations
+            has_denominations: !!denominations,
+            sync_source: sync_source
         };
 
         const syncRes = await client.query(
@@ -349,19 +354,17 @@ router.post('/sync', async (req, res) => {
             [trip_id, JSON.stringify(summary)]
         );
         const syncId = syncRes.rows[0].id;
-        console.log(`Master Sync ID Created: ${syncId} for Trip ${trip_id}`);
+        console.log(`Master Sync ID Created: ${syncId} for Trip ${trip_id} (Source: ${sync_source})`);
 
-        // --- 1.1 Create/Find Daily Sales Report for Driver for Audit Consolidation ---
-        // This ensures the "Audit Hub" sees delivery collections too.
+        // --- 1.1 Create Unique Daily Sales Report per Sync event ---
         const tripRes = await client.query('SELECT driver_id FROM delivery_trips WHERE id = $1', [trip_id]);
         const driverId = tripRes.rows[0]?.driver_id;
         let reportId = null;
 
         if (driverId) {
             const dsrRes = await client.query(`
-                INSERT INTO daily_sales_reports (dse_id, report_date, sync_id)
-                VALUES ($1, CURRENT_DATE, $2)
-                ON CONFLICT (dse_id, report_date) DO UPDATE SET sync_id = EXCLUDED.sync_id
+                INSERT INTO daily_sales_reports (dse_id, report_date, sync_id, settlement_status)
+                VALUES ($1, CURRENT_DATE, $2, 'Pending')
                 RETURNING id
             `, [driverId, syncId]);
             reportId = dsrRes.rows[0].id;
@@ -400,6 +403,15 @@ router.post('/sync', async (req, res) => {
         // 4. Process Payments
         if (payments && Array.isArray(payments)) {
             for (const p of payments) {
+                // Idempotency Check (Duplicate sync prevention)
+                if (p.offline_id) {
+                    const existing = await client.query('SELECT id FROM customer_payments WHERE offline_id = $1', [p.offline_id]);
+                    if (existing.rows.length > 0) {
+                        console.log(`Payment ${p.offline_id} already exists. Skipping.`);
+                        continue;
+                    }
+                }
+
                 const yy = new Date().getFullYear().toString().slice(-2);
                 const seqRes = await client.query("SELECT COUNT(*) FROM customer_payments WHERE payment_number LIKE $1", [`PAY-${yy}-%`]);
                 const nextSeq = parseInt(seqRes.rows[0].count) + 1;
@@ -408,10 +420,10 @@ router.post('/sync', async (req, res) => {
                 const payRes = await client.query(`
                     INSERT INTO customer_payments (
                         payment_number, customer_id, amount, payment_mode, transaction_ref, 
-                        collected_by, payment_date, verification_status, status, sync_id, report_id
-                    ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, 'Pending', 'Pending', $7, $8)
+                        collected_by, payment_date, verification_status, status, sync_id, report_id, offline_id
+                    ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, 'Pending', 'Pending', $7, $8, $9)
                     RETURNING id
-                `, [payNumber, p.customer_id, p.amount, p.mode, p.transaction_ref || p.bank_name, p.collected_by || driverId, syncId, reportId]);
+                `, [payNumber, p.customer_id, p.amount, p.mode, p.transaction_ref || p.bank_name, p.collected_by || driverId, syncId, reportId, p.offline_id || null]);
 
                 const paymentId = payRes.rows[0].id;
 
@@ -425,6 +437,15 @@ router.post('/sync', async (req, res) => {
         // 5. Process Returns (Dual Flow: Instant vs Expiry)
         if (returns && Array.isArray(returns)) {
             for (const r of returns) {
+                // Idempotency Check
+                if (r.offline_id) {
+                    const existing = await client.query('SELECT id FROM trip_returns WHERE offline_id = $1', [r.offline_id]);
+                    if (existing.rows.length > 0) {
+                        console.log(`Return ${r.offline_id} already exists. Skipping.`);
+                        continue;
+                    }
+                }
+
                 const invId = (r.invoice_id && !isNaN(r.invoice_id)) ? r.invoice_id : null;
                 const batchId = (r.batch_id && !isNaN(r.batch_id)) ? r.batch_id : null;
                 const customerId = r.customer_id || null;
@@ -432,8 +453,8 @@ router.post('/sync', async (req, res) => {
                 await client.query(`
                     INSERT INTO trip_returns (
                         trip_id, invoice_id, product_id, customer_id, return_type, qty, reason, 
-                        verification_status, batch_id, condition, sync_id
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Pending', $8, $9, $10)
+                        verification_status, batch_id, condition, sync_id, report_id, offline_id
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Pending', $8, $9, $10, $11, $12)
                 `, [
                     trip_id,
                     invId,
@@ -444,7 +465,9 @@ router.post('/sync', async (req, res) => {
                     r.reason || 'Customer Rejected',
                     batchId,
                     r.condition || null,
-                    syncId
+                    syncId,
+                    reportId,
+                    r.offline_id || null
                 ]);
             }
         }
