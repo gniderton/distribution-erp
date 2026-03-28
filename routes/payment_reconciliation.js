@@ -13,11 +13,14 @@ router.get('/list', async (req, res) => {
                 dsr.report_date,
                 e.full_name as dse_name,
                 dsr.settlement_status,
+                sl.created_at as sync_time,
+                dsr.sync_id,
                 (COALESCE(dsr.total_collection_cash, 0) + COALESCE(dsr.total_collection_cheque, 0) + COALESCE(dsr.total_collection_online, 0)) as total_payment_collection,
                 (SELECT COUNT(*) FROM customer_payments cp WHERE cp.report_id = dsr.id AND cp.verification_status = 'Pending') as pending_payment_count,
                 (SELECT COUNT(*) FROM dse_expenses de WHERE de.report_id = dsr.id AND de.status = 'Pending') as pending_expense_count
             FROM daily_sales_reports dsr
             JOIN employees e ON dsr.dse_id = e.id
+            LEFT JOIN sync_logs sl ON dsr.sync_id = sl.id
             WHERE dsr.settlement_status = $1
         `;
 
@@ -27,7 +30,7 @@ router.get('/list', async (req, res) => {
             params.push(date);
         }
 
-        query += ` ORDER BY dsr.report_date DESC, e.full_name ASC`;
+        query += ` ORDER BY dsr.report_date DESC, sl.created_at DESC`;
 
         const result = await pool.query(query, params);
         res.json(result.rows);

@@ -69,9 +69,8 @@ router.post('/eod-sync', async (req, res) => {
         // We create it first to get the reportId for child records.
         // We set sync_id so the report record itself is traceable.
         const dsrRes = await client.query(`
-            INSERT INTO daily_sales_reports (dse_id, report_date, sync_id)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (dse_id, report_date) DO UPDATE SET sync_id = EXCLUDED.sync_id
+            INSERT INTO daily_sales_reports (dse_id, report_date, sync_id, settlement_status)
+            VALUES ($1, $2, $3, 'Pending')
             RETURNING id
         `, [dse_id, date, syncId]);
         const reportId = dsrRes.rows[0].id;
