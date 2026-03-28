@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
                 ch.price_column as default_price_col,
                 c.whatsapp_number,
                 rt.frequency_name as route_frequency,
-                ca.address_line1, ca.city, ca.latitude, ca.longitude,
+                ca.address_line1, ca.city, ca.location_lat, ca.location_lng,
                 (SELECT COUNT(*) FROM customer_addresses ca_inner WHERE ca_inner.customer_id = c.id) as address_count,
                  -- Pricing Exceptions
                 (
@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
             LEFT JOIN employees e ON c.dse_id = e.id
             LEFT JOIN channels ch ON c.channel_id = ch.id
             LEFT JOIN LATERAL (
-                SELECT address_line1, city, location_lat as latitude, location_lng as longitude
+                SELECT address_line1, city, location_lat, location_lng
                 FROM customer_addresses
                 WHERE customer_id = c.id
                 ORDER BY is_default_billing DESC, id ASC
@@ -127,11 +127,11 @@ router.get('/pending', async (req, res) => {
         const result = await pool.query(`
             SELECT 
                 c.id, c.customer_name, c.customer_code, c.customer_phone, c.gstin,
-                ca.latitude, ca.longitude,
+                ca.location_lat, ca.location_lng,
                 c.created_at
             FROM customers c
             LEFT JOIN LATERAL (
-                SELECT location_lat as latitude, location_lng as longitude
+                SELECT location_lat, location_lng
                 FROM customer_addresses
                 WHERE customer_id = c.id
                 ORDER BY is_default_billing DESC, id ASC

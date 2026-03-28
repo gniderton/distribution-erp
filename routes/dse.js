@@ -370,30 +370,6 @@ router.post('/reports/:id/finalize', async (req, res) => {
             throw new Error(`Cannot finalize: ${pendingExp.rows[0].cnt} expenses are still Pending review.`);
         }
 
-        // 4. GATE C: Expense Limit Check (Manager Auth Required for > 250)
-        // If total verified expense > 250, check if DSR is marked "Authorized"
-        const expTotalRes = await client.query(`
-            SELECT SUM(amount) as total FROM dse_expenses 
-            WHERE dse_id = $1 AND expense_date = $2 AND status = 'Verified'
-        `, [report.dse_id, report.report_date]);
-
-        const totalExp = Number(expTotalRes.rows[0].total) || 0;
-
-        // Note: report.expense_auth_status can be 'Not Required', 'Pending', 'Authorized'
-        if (totalExp > 250 && report.expense_auth_status !== 'Authorized') {
-            // Exception: If expense_auth_status is 'Not Required' but limit exceeded, we might need logic.
-            // Currently assuming if limit exceeded, frontend/backend sets it to Pending. 
-            // Start strict:
-            if (report.expense_auth_status !== 'Authorized') {
-                // But wait, the individual expenses are 'Verified'. 
-                // If specific expense items are Verified by Finance, maybe that's enough?
-                // Let's stick to the Plan: "Manager Authorization" is a separate flag on the DSR.
-                // throw new Error(`High operational expense (${totalExp}). Manager authorization required on Report.`);
-                // Temporarily commenting out strictly enforcing the DSR-level flag if individual items are verified.
-                // User can uncomment if they want the double-lock.
-            }
-        }
-
         // 5. Finalize
         await client.query(`
             UPDATE daily_sales_reports 
