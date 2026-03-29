@@ -132,6 +132,86 @@ router.post('/trips', async (req, res) => {
     }
 });
 
+// 3a. Start Trip (Driver Action)
+router.put('/trips/:id/start', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(`
+            UPDATE delivery_trips 
+            SET status = 'In Transit', start_time = NOW() 
+            WHERE id = $1 AND status = 'Scheduled'
+            RETURNING id, trip_number
+        `, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(400).json({ error: "Trip not found or already started/completed" });
+        }
+
+        res.json({ success: true, message: "Trip started", trip: result.rows[0] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 3b. Edit Trip (Manager Action - Only if Scheduled)
+router.put('/trips/:id', async (req, res) => {
+    const { id } = req.params;
+    const { team_id, driver_id, vehicle_number, invoice_ids } = req.body;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Check if editable
+        const statusRes = await client.query('SELECT status FROM delivery_trips WHERE id = $1', [id]);
+        if (statusRes.rows.length === 0) throw new Error("Trip not found");
+        if (statusRes.rows[0].status !== 'Scheduled') {
+            throw new Error(`Trip is ${statusRes.rows[0].status} and cannot be edited`);
+        }
+
+        // 2. Update Header
+        await client.query(`
+            UPDATE delivery_trips 
+            SET team_id = $1, driver_id = $2, vehicle_number = $3, updated_at = NOW()
+            WHERE id = $4
+        `, [team_id, driver_id, vehicle_number, id]);
+
+        // 3. Sync Invoices (If provided)
+        if (invoice_ids && Array.isArray(invoice_ids)) {
+            // Get Current Invoices
+            const currentInvoicesRes = await client.query('SELECT invoice_id FROM trip_invoices WHERE trip_id = $1', [id]);
+            const currentInvoices = currentInvoicesRes.rows.map(r => String(r.invoice_id));
+            const newInvoices = invoice_ids.map(id => String(id));
+
+            // Identify Removed
+            const removed = currentInvoices.filter(id => !newInvoices.includes(id));
+            // Identify Added
+            const added = newInvoices.filter(id => !currentInvoices.includes(id));
+
+            // Process Removed
+            for (const invId of removed) {
+                await client.query('DELETE FROM trip_invoices WHERE trip_id = $1 AND invoice_id = $2', [id, invId]);
+                await client.query("UPDATE sales_invoices SET delivery_status = 'Pending' WHERE id = $1", [invId]);
+            }
+
+            // Process Added
+            for (const invId of added) {
+                await client.query("INSERT INTO trip_invoices (trip_id, invoice_id, delivery_status) VALUES ($1, $2, 'Pending')", [id, invId]);
+                await client.query("UPDATE sales_invoices SET delivery_status = 'In Transit' WHERE id = $1", [invId]);
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Trip updated successfully" });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+
 // 4. Get Active Trips (List)
 router.get('/trips', async (req, res) => {
     try {
