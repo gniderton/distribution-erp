@@ -225,6 +225,7 @@ router.get('/trips', async (req, res) => {
             SELECT 
                 dt.id, dt.trip_number, dt.status, dt.created_at,
                 dt.start_time, dt.end_time,
+                dt.team_id, dt.driver_id,
                 t.name as team_name, e.full_name as driver_name, dt.vehicle_number,
                 COUNT(ti.id) as invoice_count
             FROM delivery_trips dt
@@ -241,7 +242,7 @@ router.get('/trips', async (req, res) => {
             params.push(driverId);
         }
 
-        query += ` GROUP BY dt.id, dt.trip_number, dt.status, dt.created_at, dt.start_time, dt.end_time, t.name, e.full_name, dt.vehicle_number
+        query += ` GROUP BY dt.id, dt.trip_number, dt.status, dt.created_at, dt.start_time, dt.end_time, dt.team_id, dt.driver_id, t.name, e.full_name, dt.vehicle_number
                    ORDER BY dt.created_at DESC`;
 
         const result = await pool.query(query, params);
