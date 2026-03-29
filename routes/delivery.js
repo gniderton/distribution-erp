@@ -211,6 +211,42 @@ router.put('/trips/:id', async (req, res) => {
     }
 });
 
+// 3c. Delete/Abort Trip (Only if Scheduled)
+router.delete('/trips/:id', async (req, res) => {
+    const { id } = req.params;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Verify it hasn't started
+        const statusRes = await client.query('SELECT status FROM delivery_trips WHERE id = $1', [id]);
+        if (statusRes.rows.length === 0) throw new Error("Trip not found");
+        if (statusRes.rows[0].status !== 'Scheduled') {
+            throw new Error(`Cannot delete a trip that is ${statusRes.rows[0].status}`);
+        }
+
+        // 2. Revert all invoices on this trip to 'Pending'
+        await client.query(`
+            UPDATE sales_invoices 
+            SET delivery_status = 'Pending' 
+            WHERE id IN (SELECT invoice_id FROM trip_invoices WHERE trip_id = $1)
+        `, [id]);
+
+        // 3. Clear junctions and delete master
+        await client.query('DELETE FROM trip_invoices WHERE trip_id = $1', [id]);
+        await client.query('DELETE FROM delivery_trips WHERE id = $1', [id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Trip deleted and invoices released" });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(400).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+
 
 // 4. Get Active Trips (List)
 router.get('/trips', async (req, res) => {
