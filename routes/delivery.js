@@ -430,7 +430,7 @@ router.post('/sync', async (req, res) => {
                 const paymentId = payRes.rows[0].id;
 
                 await client.query(`
-                    INSERT INTO payment_allocations (payment_id, invoice_id, amount, status)
+                    INSERT INTO customer_payment_allocations (payment_id, invoice_id, amount, status)
                     VALUES ($1, $2, $3, 'PENDING')
                 `, [paymentId, p.invoice_id, p.amount]);
             }
