@@ -274,10 +274,10 @@ router.get('/:id/batches', async (req, res) => {
     try {
         const { id } = req.params;
         const result = await pool.query(`
-            SELECT id, batch_code, mrp, expiry_date, quantity_remaining, purchase_rate
+            SELECT id, batch_code, mrp, expiry_date, quantity_remaining, purchase_rate, status
             FROM inventory_batches
-            WHERE product_id = $1 AND quantity_remaining > 0 AND status = 'Good'
-            ORDER BY expiry_date ASC
+            WHERE product_id = $1
+            ORDER BY created_at DESC
         `, [id]);
         res.json(result.rows);
     } catch (err) {
