@@ -708,128 +708,181 @@ router.post('/verify/settle', async (req, res) => {
             WHERE id = (SELECT trip_id::BIGINT FROM sync_logs WHERE id = $1)
         `, [sync_id]);
 
-        // --- 3. FINAL CREDIT NOTE GENERATION (For all Approved returns in this sync) ---
+        // --- 3. CONSOLIDATED CREDIT NOTE GENERATION (Grouped by Customer) ---
         const approvedReturns = await client.query(`
             SELECT * FROM trip_returns 
             WHERE sync_id = $1 AND verification_status = 'Approved' AND sales_return_id IS NULL
         `, [sync_id]);
 
+        const groupedByCustomer = {};
         for (const ret of approvedReturns.rows) {
-            // [REFINED 67.1 Logic]
+            if (!groupedByCustomer[ret.customer_id]) groupedByCustomer[ret.customer_id] = [];
+            groupedByCustomer[ret.customer_id].push(ret);
+        }
 
-            // 1. Determine Pricing
-            const custInfo = await client.query(`SELECT price_column FROM channels c JOIN customers cust ON cust.channel_id = c.id WHERE cust.id = $1`, [ret.customer_id]);
-            const defaultPriceCol = custInfo.rows[0]?.price_column || 'retail_rate';
-            const brandOverride = await client.query(`SELECT ch.price_column FROM customer_brand_pricing cbp JOIN channels ch ON cbp.channel_id = ch.id JOIN products p ON p.brand_id = cbp.brand_id WHERE cbp.customer_id = $1 AND p.id = $2`, [ret.customer_id, ret.product_id]);
-            const priceCol = brandOverride.rows[0]?.price_column || defaultPriceCol;
+        for (const customerId in groupedByCustomer) {
+            const items = groupedByCustomer[customerId];
+            
+            // 3.1 Initialize Consolidated Totals
+            let totalTaxable = 0;
+            let totalTax = 0;
+            let totalGrand = 0;
+            const lineItems = [];
 
-            let rateInfo = await client.query(`SELECT b.${priceCol} as rate, t.tax_percentage FROM inventory_batches b JOIN products p ON b.product_id = p.id LEFT JOIN taxes t ON p.tax_id = t.id WHERE b.id = $1`, [ret.batch_id]);
-            if (!rateInfo.rows.length) {
-                rateInfo = await client.query(`SELECT p.${priceCol} as rate, t.tax_percentage FROM products p LEFT JOIN taxes t ON p.tax_id = t.id WHERE p.id = $1`, [ret.product_id]);
-            }
-            const baseRate = Number(rateInfo.rows[0]?.rate || 0);
-            const taxPct = Number(rateInfo.rows[0]?.tax_percentage || 0);
-
-            // 2. Net Valuation
-            let netValuation = baseRate;
-            if (ret.invoice_id) {
-                const lineRes = await client.query(`SELECT taxable_amount, shipped_qty FROM sales_invoice_lines WHERE invoice_id = $1 AND product_id = $2 LIMIT 1`, [ret.invoice_id, ret.product_id]);
-                if (lineRes.rows.length > 0) netValuation = Number(lineRes.rows[0].taxable_amount) / (Number(lineRes.rows[0].shipped_qty) || 1);
-            }
-
-            const qtyNum = Number(ret.qty);
-            const unitScheme = Math.max(0, baseRate - netValuation);
-            const grossAmount = qtyNum * baseRate;
-            const schemeAmount = qtyNum * unitScheme;
-            const taxableAmount = grossAmount - schemeAmount;
-            const taxAmount = taxableAmount * (taxPct / 100);
-            const rawGrandTotal = taxableAmount + taxAmount;
-            const grandTotal = Math.round(rawGrandTotal); // Round to Zero decimal places
-
-            // 3. Create SR Header (Sequential via document_sequences)
+            // 3.2 Fetch Sequence Number (One per Customer)
             const seqUpdate = await client.query(`
                 UPDATE document_sequences 
                 SET current_number = current_number + 1 
                 WHERE document_type = 'SR' 
                 RETURNING prefix, current_number
             `);
-            if (seqUpdate.rows.length === 0) throw new Error("SR sequence not found in document_sequences");
             const srNumber = `${seqUpdate.rows[0].prefix}${String(seqUpdate.rows[0].current_number).padStart(4, '0')}`;
 
+            // 3.3 Preliminary Valuation for each item
+            for (const ret of items) {
+                const custInfo = await client.query(`SELECT price_column FROM channels c JOIN customers cust ON cust.channel_id = c.id WHERE cust.id = $1`, [ret.customer_id]);
+                const defaultPriceCol = custInfo.rows[0]?.price_column || 'retail_rate';
+                const brandOverride = await client.query(`SELECT ch.price_column FROM customer_brand_pricing cbp JOIN channels ch ON cbp.channel_id = ch.id JOIN products p ON p.brand_id = cbp.brand_id WHERE cbp.customer_id = $1 AND p.id = $2`, [ret.customer_id, ret.product_id]);
+                const priceCol = brandOverride.rows[0]?.price_column || defaultPriceCol;
+
+                let rateInfo = await client.query(`SELECT b.${priceCol} as rate, t.tax_percentage FROM inventory_batches b JOIN products p ON b.product_id = p.id LEFT JOIN taxes t ON p.tax_id = t.id WHERE b.id = $1`, [ret.batch_id]);
+                if (!rateInfo.rows.length) {
+                    rateInfo = await client.query(`SELECT p.${priceCol} as rate, t.tax_percentage FROM products p LEFT JOIN taxes t ON p.tax_id = t.id WHERE p.id = $1`, [ret.product_id]);
+                }
+                const baseRate = Number(rateInfo.rows[0]?.rate || 0);
+                const taxPct = Number(rateInfo.rows[0]?.tax_percentage || 0);
+
+                let netValuation = baseRate;
+                if (ret.invoice_id) {
+                    const lineRes = await client.query(`SELECT taxable_amount, shipped_qty FROM sales_invoice_lines WHERE invoice_id = $1 AND product_id = $2 LIMIT 1`, [ret.invoice_id, ret.product_id]);
+                    if (lineRes.rows.length > 0) netValuation = Number(lineRes.rows[0].taxable_amount) / (Number(lineRes.rows[0].shipped_qty) || 1);
+                }
+
+                const qtyNum = Number(ret.qty);
+                const unitScheme = Math.max(0, baseRate - netValuation);
+                const grossAmount = qtyNum * baseRate;
+                const schemeAmount = qtyNum * unitScheme;
+                const taxableAmount = grossAmount - schemeAmount;
+                const taxAmount = taxableAmount * (taxPct / 100);
+                const itemTotal = taxableAmount + taxAmount;
+
+                lineItems.push({
+                    ret,
+                    baseRate,
+                    grossAmount,
+                    schemeAmount,
+                    taxableAmount,
+                    taxPct,
+                    taxAmount,
+                    itemTotal
+                });
+
+                totalTaxable += taxableAmount;
+                totalTax += taxAmount;
+                totalGrand += itemTotal;
+            }
+
+            const roundedGrandTotal = Math.round(totalGrand);
+            const sourceInvoiceId = items[0]?.invoice_id || null;
+
+            // 3.4 Create Consolidate Header
             const srRes = await client.query(`
                 INSERT INTO sales_returns (return_number, customer_id, invoice_id, return_date, type, grand_total, total_taxable, total_tax, status, created_by)
                 VALUES ($1, $2, $3, CURRENT_DATE, 'Sales Return', $4, $5, $6, 'Applied', $7) RETURNING id
-            `, [srNumber, ret.customer_id, ret.invoice_id, grandTotal, taxableAmount, taxAmount, verified_by]);
+            `, [srNumber, customerId, sourceInvoiceId, roundedGrandTotal, totalTaxable, totalTax, verified_by]);
             const srId = srRes.rows[0].id;
 
-            // 4. Create SR Line
-            await client.query(`
-                INSERT INTO sales_return_lines (return_id, product_id, batch_id, qty, rate, gross_amount, scheme_amount, taxable_amount, tax_percent, tax_amount, amount, reason)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            `, [srId, ret.product_id, ret.batch_id, ret.qty, baseRate, grossAmount, schemeAmount, taxableAmount, taxPct, taxAmount, grandTotal, ret.reason]);
+            // 3.5 Create Lines and Process Stock
+            for (const line of lineItems) {
+                const { ret } = line;
+                await client.query(`
+                    INSERT INTO sales_return_lines (return_id, product_id, batch_id, qty, rate, gross_amount, scheme_amount, taxable_amount, tax_percent, tax_amount, amount, reason)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                `, [srId, ret.product_id, ret.batch_id, ret.qty, line.baseRate, line.grossAmount, line.schemeAmount, line.taxableAmount, line.taxPct, line.taxAmount, Math.round(line.itemTotal), ret.reason]);
 
-            // 5. Update Trip Return with Link
-            await client.query(`UPDATE trip_returns SET sales_return_id = $1 WHERE id = $2`, [srId, ret.id]);
+                await client.query(`UPDATE trip_returns SET sales_return_id = $1 WHERE id = $2`, [srId, ret.id]);
 
-            // 5.1 Post Journal Entry
+                // Stock Routing for each item
+                if (ret.batch_id) {
+                    let targetStatus = 'Good';
+                    if (ret.return_type === 'Expiry/Damage Return') {
+                        if (ret.reason?.match(/damage/i)) targetStatus = 'Damage';
+                        else if (ret.reason?.match(/expir/i)) targetStatus = 'Expiry';
+                    }
+                    const orig = (await client.query("SELECT * FROM inventory_batches WHERE id = $1", [ret.batch_id])).rows[0];
+                    let finalBatchId = ret.batch_id;
+                    if (orig && orig.status !== targetStatus) {
+                        const existing = await client.query("SELECT id FROM inventory_batches WHERE product_id = $1 AND batch_code = $2 AND status = $3", [orig.product_id, orig.batch_code, targetStatus]);
+                        if (existing.rows.length) finalBatchId = existing.rows[0].id;
+                        else {
+                            const clone = await client.query(`INSERT INTO inventory_batches (product_id, grn_id, batch_code, mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate, quantity_initial, quantity_remaining, expiry_date, is_active, status)
+                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, 0, $10, true, $11) RETURNING id`,
+                                [orig.product_id, orig.grn_id, orig.batch_code, orig.mrp, orig.purchase_rate, orig.distributor_rate, orig.wholesale_rate, orig.dealer_rate, orig.retail_rate, orig.expiry_date, targetStatus]);
+                            finalBatchId = clone.rows[0].id;
+                        }
+                    }
+                    await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining + $1 WHERE id = $2`, [ret.qty, finalBatchId]);
+                    await client.query(`INSERT INTO stock_traceability(batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes) VALUES($1, $2, $3, 'IN', $4, 'Sales Return', $5)`,
+                        [finalBatchId, ret.product_id, ret.qty, srId, `Return consolidated to ${targetStatus} basket`]);
+                }
+            }
+
+            // 3.6 Post Consolidated Journal Entry
             const acc_ar = 1101;
             const acc_sr = 4003;
             const ledgerLines = [
-                { code: acc_sr, debit: Number(grandTotal), credit: 0 },
-                { code: acc_ar, debit: 0, credit: Number(grandTotal) }
+                { code: acc_sr, debit: Number(roundedGrandTotal), credit: 0 },
+                { code: acc_ar, debit: 0, credit: Number(roundedGrandTotal) }
             ];
             await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
-                [new Date(), `Sales Return: ${srNumber}`, 'SALES_RETURN', srId, JSON.stringify(ledgerLines)]);
+                [new Date(), `Grouped Sales Return: ${srNumber}`, 'SALES_RETURN', srId, JSON.stringify(ledgerLines)]);
 
-            // 6. FIFO Credit Application
-            let remainingCredit = grandTotal;
-            if (ret.invoice_id) {
-                const invUpdate = await client.query(`
-                    UPDATE sales_invoices 
-                    SET amount_paid = COALESCE(amount_paid, 0) + LEAST($1, grand_total - COALESCE(amount_paid, 0)),
-                        status = CASE WHEN (COALESCE(amount_paid, 0) + LEAST($1, grand_total - COALESCE(amount_paid, 0))) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END
-                    WHERE id = $2 RETURNING (grand_total - COALESCE(amount_paid, 0)) as new_balance
-                `, [remainingCredit, ret.invoice_id]);
-                if (invUpdate.rows.length) remainingCredit -= (grandTotal - Number(invUpdate.rows[0].new_balance || 0));
-            }
-            if (remainingCredit > 0.01) {
-                const unpaid = await client.query(`SELECT id, (grand_total - COALESCE(amount_paid, 0)) as bal FROM sales_invoices WHERE customer_id = $1 AND status != 'Paid' ORDER BY invoice_date ASC`, [ret.customer_id]);
-                for (const inv of unpaid.rows) {
-                    const usage = Math.min(remainingCredit, Number(inv.bal));
-                    if (usage <= 0) continue;
-                    await client.query(`
-                        UPDATE sales_invoices 
-                        SET amount_paid = COALESCE(amount_paid, 0) + $1, 
-                            status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END 
-                        WHERE id = $2
-                    `, [usage, inv.id]);
-                    remainingCredit -= usage;
-                    if (remainingCredit <= 0) break;
-                }
-            }
+            // 3.7 Prioritized FIFO Credit Application
+            let creditRemaining = roundedGrandTotal;
 
-            // 7. Stock Routing
-            if (ret.batch_id) {
-                let targetStatus = 'Good';
-                if (ret.return_type === 'Expiry/Damage Return') {
-                    if (ret.reason?.match(/damage/i)) targetStatus = 'Damage';
-                    else if (ret.reason?.match(/expir/i)) targetStatus = 'Expiry';
-                }
-                const orig = (await client.query("SELECT * FROM inventory_batches WHERE id = $1", [ret.batch_id])).rows[0];
-                let finalBatchId = ret.batch_id;
-                if (orig.status !== targetStatus) {
-                    const existing = await client.query("SELECT id FROM inventory_batches WHERE product_id = $1 AND batch_code = $2 AND status = $3", [orig.product_id, orig.batch_code, targetStatus]);
-                    if (existing.rows.length) finalBatchId = existing.rows[0].id;
-                    else {
-                        const clone = await client.query(`INSERT INTO inventory_batches (product_id, grn_id, batch_code, mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate, quantity_initial, quantity_remaining, expiry_date, is_active, status)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, 0, $10, $11, $12) RETURNING id`,
-                            [orig.product_id, orig.grn_id, orig.batch_code, orig.mrp, orig.purchase_rate, orig.distributor_rate, orig.wholesale_rate, orig.dealer_rate, orig.retail_rate, orig.expiry_date, (targetStatus === 'Good'), targetStatus]);
-                        finalBatchId = clone.rows[0].id;
+            // Layer 1: Apply to Source Invoices specifically mentioned in the returns
+            const specificInvoices = [...new Set(items.map(i => i.invoice_id).filter(id => id))];
+            for (const invId of specificInvoices) {
+                if (creditRemaining <= 0) break;
+                const invRes = await client.query(`SELECT (grand_total - COALESCE(amount_paid, 0)) as balance FROM sales_invoices WHERE id = $1`, [invId]);
+                if (invRes.rows.length > 0) {
+                    const balance = Number(invRes.rows[0].balance);
+                    const apply = Math.min(creditRemaining, balance);
+                    if (apply > 0) {
+                        await client.query(`
+                            UPDATE sales_invoices 
+                            SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                                status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END
+                            WHERE id = $2
+                        `, [apply, invId]);
+                        creditRemaining -= apply;
                     }
                 }
-                await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining + $1 WHERE id = $2`, [ret.qty, finalBatchId]);
-                await client.query(`INSERT INTO stock_traceability(batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes) VALUES($1, $2, $3, 'IN', $4, 'Sales Return', $5)`,
-                    [finalBatchId, ret.product_id, ret.qty, srId, `Return to ${targetStatus} basket`]);
+            }
+
+            // Layer 2: Standard FIFO for whatever is left
+            if (creditRemaining > 0.49) { // Using 0.49 to handle tiny rounding remainders
+                const otherInvoices = await client.query(`
+                    SELECT id, (grand_total - COALESCE(amount_paid, 0)) as balance 
+                    FROM sales_invoices 
+                    WHERE customer_id = $1 AND status != 'Paid'
+                    ORDER BY invoice_date ASC, id ASC
+                `, [customerId]);
+                
+                for (const inv of otherInvoices.rows) {
+                    if (creditRemaining <= 0) break;
+                    const balance = Number(inv.balance);
+                    const apply = Math.min(creditRemaining, balance);
+                    if (apply > 0) {
+                        await client.query(`
+                            UPDATE sales_invoices 
+                            SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                                status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END
+                            WHERE id = $2
+                        `, [apply, inv.id]);
+                        creditRemaining -= apply;
+                    }
+                }
             }
         }
 
