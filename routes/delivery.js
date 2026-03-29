@@ -478,9 +478,9 @@ router.post('/sync', async (req, res) => {
         if (expenses && Array.isArray(expenses)) {
             for (const e of expenses) {
                 await client.query(`
-                    INSERT INTO dse_expenses (dse_id, expense_type, amount, description, status, sync_id, report_id)
-                    VALUES ($1, $2, $3, $4, 'Pending', $5, $6)
-                `, [e.collected_by || driverId, e.type || e.mode, e.amount, e.description || 'Trip Expense', syncId, reportId]);
+                    INSERT INTO dse_expenses (dse_id, expense_type, amount, description, status, sync_id, report_id, offline_id)
+                    VALUES ($1, $2, $3, $4, 'Pending', $5, $6, $7)
+                `, [e.collected_by || driverId, e.type || e.mode, e.amount, e.description || 'Trip Expense', syncId, reportId, e.id || e.offline_id || null]);
             }
         }
 
