@@ -387,16 +387,18 @@ router.post('/sync', async (req, res) => {
                         delivery_time = $2, 
                         submitted_at = NOW(),
                         sync_id = $3,
-                        verification_status = 'Pending'
+                        verification_status = 'Pending',
+                        failure_reason = $6
                     WHERE trip_id = $4 AND invoice_id = $5
-                `, [update.status, update.timestamp, syncId, trip_id, update.invoice_id]);
+                `, [update.status, update.timestamp, syncId, trip_id, update.invoice_id, update.reason || null]);
 
                 // Update Master Invoice Table Status
                 await client.query(`
                     UPDATE sales_invoices 
-                    SET delivery_status = $1
+                    SET delivery_status = $1,
+                        failure_reason = $3
                     WHERE id = $2
-                `, [update.status, update.invoice_id]);
+                `, [update.status, update.invoice_id, update.reason || null]);
             }
         }
 
