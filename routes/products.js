@@ -269,6 +269,23 @@ router.get('/:id/stats', async (req, res) => {
     }
 });
 
+// GET /api/products/:id/batches - Fetch available inventory batches for a product
+router.get('/:id/batches', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(`
+            SELECT id, batch_code, mrp, expiry_date, quantity_remaining, purchase_rate
+            FROM inventory_batches
+            WHERE product_id = $1 AND quantity_remaining > 0 AND status = 'Good'
+            ORDER BY expiry_date ASC
+        `, [id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Fetch Product Batches Error:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /api/products
 // POST /api/products
 router.post('/', async (req, res) => {
