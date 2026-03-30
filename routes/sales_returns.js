@@ -78,7 +78,7 @@ router.get('/', async (req, res) => {
             params.push(status);
         }
 
-        query += ` GROUP BY sr.id, c.customer_name, si.invoice_number, e.full_name
+        query += ` GROUP BY sr.id, c.customer_name, c.gstin, c.customer_phone, c.email, si.invoice_number, e.full_name
                    ORDER BY sr.return_date DESC, sr.id DESC`;
 
         const result = await pool.query(query, params);
