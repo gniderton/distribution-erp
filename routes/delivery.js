@@ -737,17 +737,6 @@ router.get('/sync/:id/details', async (req, res) => {
             SELECT * FROM dse_expenses WHERE sync_id = $1
         `, [syncId]);
 
-        // F. Linked Credit Notes (Sales Returns)
-        const creditNotes = await pool.query(`
-            SELECT sr.*, c.customer_name 
-            FROM sales_returns sr
-            JOIN customers c ON sr.customer_id = c.id
-            WHERE sr.sync_id = $1
-        `, [syncId]);
-
-        // G. Breakdown Manifest Logic
-        const allInvoices = manifest.rows;
-        
         res.json({
             header: header.rows[0],
             manifest: manifest.rows, // Back to the original flat list for approval
@@ -759,6 +748,7 @@ router.get('/sync/:id/details', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // 11.5 NEW: Sync History Details (Categorized for Settled Trips)
 router.get('/sync/:id/history', async (req, res) => {
@@ -989,9 +979,9 @@ router.post('/verify/settle', async (req, res) => {
 
             // 3.4 Create Consolidate Header
             const srRes = await client.query(`
-                INSERT INTO sales_returns (return_number, customer_id, invoice_id, return_date, type, grand_total, total_taxable, total_tax, status, created_by)
-                VALUES ($1, $2, $3, CURRENT_DATE, 'Sales Return', $4, $5, $6, 'Applied', $7) RETURNING id
-            `, [srNumber, customerId, sourceInvoiceId, roundedGrandTotal, totalTaxable, totalTax, verified_by]);
+                INSERT INTO sales_returns (return_number, customer_id, invoice_id, return_date, type, grand_total, total_taxable, total_tax, status, created_by, sync_id)
+                VALUES ($1, $2, $3, CURRENT_DATE, 'Sales Return', $4, $5, $6, 'Applied', $7, $8) RETURNING id
+            `, [srNumber, customerId, sourceInvoiceId, roundedGrandTotal, totalTaxable, totalTax, verified_by, sync_id]);
             const srId = srRes.rows[0].id;
 
             // 3.5 Create Lines and Process Stock
