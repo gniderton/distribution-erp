@@ -13,20 +13,40 @@ router.get('/', async (req, res) => {
                 sr.return_number, 
                 sr.return_date, 
                 sr.type, 
-                sr.grand_total, 
+                sr.grand_total as amount, 
                 sr.total_taxable, 
                 sr.total_tax, 
                 sr.status, 
-                sr.remarks,
+                sr.remarks as reason,
                 c.customer_name,
-                si.invoice_number as original_invoice_number,
+                c.gstin as customer_gst,
+                c.contact_primary as customer_contact,
+                c.email as customer_email,
+                c.address as customer_address,
+                c.district as customer_district,
+                c.pin as customer_pin,
+                si.invoice_number as linked_invoice_number,
                 e.full_name as created_by_name,
                 COALESCE(json_agg(json_build_object(
-                    'product_name', p.product_name,
-                    'qty', srl.qty,
-                    'rate', srl.rate,
-                    'amount', srl.amount,
-                    'reason', srl.reason
+                    'S.No', srl.id,
+                    'EAN Code', p.ean_code,
+                    'product_code', p.product_code,
+                    'hsn_code', p.hsn_code,
+                    'Item Name', p.product_name,
+                    'MRP', srl.mrp,
+                    'Price', srl.rate,
+                    'Qty', srl.qty,
+                    'Sch', srl.scheme_amount,
+                    'Disc %', 0,
+                    'GST %', srl.tax_percent,
+                    'Gross $', srl.gross_amount,
+                    'Disc. $', srl.scheme_amount,
+                    'Taxable $', srl.taxable_amount,
+                    'GST $', srl.tax_amount,
+                    'Net $', srl.amount,
+                    'Batch No', ib.batch_code,
+                    'Expiry', ib.expiry_date,
+                    '_product_id', srl.product_id
                 )) FILTER (WHERE srl.id IS NOT NULL), '[]') as items
             FROM sales_returns sr
             JOIN customers c ON sr.customer_id = c.id
@@ -34,6 +54,7 @@ router.get('/', async (req, res) => {
             LEFT JOIN employees e ON sr.created_by = e.id
             LEFT JOIN sales_return_lines srl ON sr.id = srl.return_id
             LEFT JOIN products p ON srl.product_id = p.id
+            LEFT JOIN inventory_batches ib ON srl.batch_id = ib.id
             WHERE sr.is_active = true
         `;
         const params = [];
