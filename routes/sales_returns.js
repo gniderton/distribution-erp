@@ -22,9 +22,9 @@ router.get('/', async (req, res) => {
                 c.gstin as customer_gst,
                 c.customer_phone as customer_contact,
                 c.email as customer_email,
-                '' as customer_address,
-                '' as customer_district,
-                '' as customer_pin,
+                COALESCE(ca.address_line1 || ' ' || COALESCE(ca.address_line2, ''), '') as customer_address,
+                COALESCE(ca.city, '') as customer_district,
+                COALESCE(ca.pincode, '') as customer_pin,
                 si.invoice_number as linked_invoice_number,
                 e.full_name as created_by_name,
                 COALESCE(json_agg(json_build_object(
@@ -50,6 +50,7 @@ router.get('/', async (req, res) => {
                 )) FILTER (WHERE srl.id IS NOT NULL), '[]') as items
             FROM sales_returns sr
             JOIN customers c ON sr.customer_id = c.id
+            LEFT JOIN customer_addresses ca ON c.id = ca.customer_id AND ca.is_default_billing = true
             LEFT JOIN sales_invoices si ON sr.invoice_id = si.id
             LEFT JOIN employees e ON sr.created_by = e.id
             LEFT JOIN sales_return_lines srl ON sr.id = srl.return_id
@@ -78,8 +79,9 @@ router.get('/', async (req, res) => {
             params.push(status);
         }
 
-        query += ` GROUP BY sr.id, c.customer_name, c.gstin, c.customer_phone, c.email, si.invoice_number, e.full_name
+        query += ` GROUP BY sr.id, c.customer_name, c.gstin, c.customer_phone, c.email, ca.address_line1, ca.address_line2, ca.city, ca.pincode, si.invoice_number, e.full_name
                    ORDER BY sr.return_date DESC, sr.id DESC`;
+
 
         const result = await pool.query(query, params);
         res.json(result.rows);
