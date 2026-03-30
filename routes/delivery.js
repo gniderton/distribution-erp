@@ -750,19 +750,82 @@ router.get('/sync/:id/details', async (req, res) => {
         
         res.json({
             header: header.rows[0],
+            manifest: manifest.rows, // Back to the original flat list for approval
+            returns: returns.rows,
+            payments: payments.rows,
+            expenses: expenses.rows
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 11.5 NEW: Sync History Details (Categorized for Settled Trips)
+router.get('/sync/:id/history', async (req, res) => {
+    try {
+        const syncId = req.params.id;
+
+        // A. Header
+        const header = await pool.query("SELECT * FROM sync_logs WHERE id = $1", [syncId]);
+        if (header.rows.length === 0) return res.status(404).json({ error: "Sync not found" });
+
+        // B. All Invoices (Manifest)
+        const manifest = await pool.query(`
+            SELECT ti.*, si.invoice_number, si.grand_total, si.customer_id, c.customer_name
+            FROM trip_invoices ti
+            JOIN sales_invoices si ON ti.invoice_id = si.id
+            JOIN customers c ON si.customer_id = c.id
+            WHERE ti.sync_id = $1
+        `, [syncId]);
+
+        // C. Returns
+        const returns = await pool.query(`
+            SELECT tr.*, p.product_name, si.invoice_number, c.customer_name
+            FROM trip_returns tr
+            JOIN products p ON tr.product_id = p.id
+            JOIN customers c ON tr.customer_id = c.id
+            LEFT JOIN sales_invoices si ON tr.invoice_id = si.id
+            WHERE tr.sync_id = $1
+        `, [syncId]);
+
+        // D. Payments
+        const payments = await pool.query(`
+            SELECT cp.*, c.customer_name
+            FROM customer_payments cp
+            JOIN customers c ON cp.customer_id = c.id
+            WHERE cp.sync_id = $1
+        `, [syncId]);
+
+        // E. Expenses
+        const expenses = await pool.query(`
+            SELECT * FROM dse_expenses WHERE sync_id = $1
+        `, [syncId]);
+
+        // F. Linked Credit Notes (Sales Returns)
+        const creditNotes = await pool.query(`
+            SELECT sr.*, c.customer_name 
+            FROM sales_returns sr
+            JOIN customers c ON sr.customer_id = c.id
+            WHERE sr.sync_id = $1
+        `, [syncId]);
+
+        const allInvoices = manifest.rows;
+        
+        res.json({
+            header: header.rows[0],
             delivered: allInvoices.filter(r => r.delivery_status === 'Delivered' && r.verification_status === 'Approved'),
             rejected: allInvoices.filter(r => r.delivery_status === 'Returned' || r.verification_status === 'Rejected'),
             undelivered: allInvoices.filter(r => r.delivery_status !== 'Delivered' && r.delivery_status !== 'Returned'),
             returns: returns.rows,
             payments: payments.rows,
             expenses: expenses.rows,
-            credit_notes: creditNotes.rows,
-            raw_manifest: allInvoices // Kept for safety
+            credit_notes: creditNotes.rows
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // 12. Settlement & Verification Gate (The "Hammer" API)
 router.post('/verify/settle', async (req, res) => {
