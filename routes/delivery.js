@@ -854,6 +854,11 @@ router.post('/verify/settle', async (req, res) => {
                 WHERE document_type = 'SR' 
                 RETURNING prefix, current_number
             `);
+
+            if (seqUpdate.rows.length === 0) {
+                throw new Error("Document sequence for 'SR' (Sales Returns) is missing. Please seed the document_sequences table.");
+            }
+
             const srNumber = `${seqUpdate.rows[0].prefix}${String(seqUpdate.rows[0].current_number).padStart(4, '0')}`;
 
             // 3.3 Preliminary Valuation for each item
