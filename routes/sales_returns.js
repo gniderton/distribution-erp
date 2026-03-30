@@ -33,7 +33,7 @@ router.get('/', async (req, res) => {
                     'product_code', p.product_code,
                     'hsn_code', h.hsn_code,
                     'Item Name', p.product_name,
-                    'MRP', srl.mrp,
+                    'MRP', ib.mrp,
                     'Price', srl.rate,
                     'Qty', srl.qty,
                     'Sch', srl.scheme_amount,
