@@ -2,10 +2,11 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 
-// 1. List Credit Note Headers
+// 1. List Credit Note Headers with Nested Items
 router.get('/', async (req, res) => {
     try {
         const { start_date, end_date, customer_id, status } = req.query;
+        
         let query = `
             SELECT 
                 sr.id, 
@@ -19,11 +20,20 @@ router.get('/', async (req, res) => {
                 sr.remarks,
                 c.customer_name,
                 si.invoice_number as original_invoice_number,
-                e.full_name as created_by_name
+                e.full_name as created_by_name,
+                COALESCE(json_agg(json_build_object(
+                    'product_name', p.product_name,
+                    'qty', srl.qty,
+                    'rate', srl.rate,
+                    'amount', srl.amount,
+                    'reason', srl.reason
+                )) FILTER (WHERE srl.id IS NOT NULL), '[]') as items
             FROM sales_returns sr
             JOIN customers c ON sr.customer_id = c.id
             LEFT JOIN sales_invoices si ON sr.invoice_id = si.id
             LEFT JOIN employees e ON sr.created_by = e.id
+            LEFT JOIN sales_return_lines srl ON sr.id = srl.return_id
+            LEFT JOIN products p ON srl.product_id = p.id
             WHERE sr.is_active = true
         `;
         const params = [];
@@ -46,7 +56,8 @@ router.get('/', async (req, res) => {
             params.push(status);
         }
 
-        query += ` ORDER BY sr.return_date DESC, sr.id DESC`;
+        query += ` GROUP BY sr.id, c.customer_name, si.invoice_number, e.full_name
+                   ORDER BY sr.return_date DESC, sr.id DESC`;
 
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -55,6 +66,7 @@ router.get('/', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // 2. Get Single Credit Note with Lines
 router.get('/:id', async (req, res) => {
@@ -100,4 +112,37 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+// 3. Get All Credit Notes for a Customer with Nested Items
+// Perfect for Appsmith "Customer History" view
+router.get('/customer/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const query = `
+            SELECT 
+                sr.id, 
+                sr.return_number, 
+                sr.return_date, 
+                sr.grand_total, 
+                sr.status,
+                COALESCE(json_agg(json_build_object(
+                    'product_name', p.product_name,
+                    'qty', srl.qty,
+                    'amount', srl.amount
+                )) FILTER (WHERE srl.id IS NOT NULL), '[]') as items
+            FROM sales_returns sr
+            LEFT JOIN sales_return_lines srl ON sr.id = srl.return_id
+            LEFT JOIN products p ON srl.product_id = p.id
+            WHERE sr.customer_id = $1 AND sr.is_active = true
+            GROUP BY sr.id
+            ORDER BY sr.return_date DESC
+        `;
+        const result = await pool.query(query, [id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Customer Credit Notes Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
+
