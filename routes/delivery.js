@@ -737,12 +737,27 @@ router.get('/sync/:id/details', async (req, res) => {
             SELECT * FROM dse_expenses WHERE sync_id = $1
         `, [syncId]);
 
+        // F. Linked Credit Notes (Sales Returns)
+        const creditNotes = await pool.query(`
+            SELECT sr.*, c.customer_name 
+            FROM sales_returns sr
+            JOIN customers c ON sr.customer_id = c.id
+            WHERE sr.sync_id = $1
+        `, [syncId]);
+
+        // G. Breakdown Manifest Logic
+        const allInvoices = manifest.rows;
+        
         res.json({
             header: header.rows[0],
-            manifest: manifest.rows,
+            delivered: allInvoices.filter(r => r.delivery_status === 'Delivered' && r.verification_status === 'Approved'),
+            rejected: allInvoices.filter(r => r.delivery_status === 'Returned' || r.verification_status === 'Rejected'),
+            undelivered: allInvoices.filter(r => r.delivery_status !== 'Delivered' && r.delivery_status !== 'Returned'),
             returns: returns.rows,
             payments: payments.rows,
-            expenses: expenses.rows
+            expenses: expenses.rows,
+            credit_notes: creditNotes.rows,
+            raw_manifest: allInvoices // Kept for safety
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
