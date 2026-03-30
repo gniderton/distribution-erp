@@ -716,9 +716,10 @@ router.get('/sync/:id/details', async (req, res) => {
 
         // C. Returns
         const returns = await pool.query(`
-            SELECT tr.*, p.product_name, si.invoice_number
+            SELECT tr.*, p.product_name, si.invoice_number, c.customer_name
             FROM trip_returns tr
             JOIN products p ON tr.product_id = p.id
+            JOIN customers c ON tr.customer_id = c.id
             LEFT JOIN sales_invoices si ON tr.invoice_id = si.id
             WHERE tr.sync_id = $1
         `, [syncId]);
