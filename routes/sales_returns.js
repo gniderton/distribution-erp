@@ -20,18 +20,18 @@ router.get('/', async (req, res) => {
                 sr.remarks as reason,
                 c.customer_name,
                 c.gstin as customer_gst,
-                c.contact_primary as customer_contact,
+                c.customer_phone as customer_contact,
                 c.email as customer_email,
-                c.address as customer_address,
-                c.district as customer_district,
-                c.pin as customer_pin,
+                '' as customer_address,
+                '' as customer_district,
+                '' as customer_pin,
                 si.invoice_number as linked_invoice_number,
                 e.full_name as created_by_name,
                 COALESCE(json_agg(json_build_object(
                     'S.No', srl.id,
                     'EAN Code', p.ean_code,
                     'product_code', p.product_code,
-                    'hsn_code', p.hsn_code,
+                    'hsn_code', h.hsn_code,
                     'Item Name', p.product_name,
                     'MRP', srl.mrp,
                     'Price', srl.rate,
@@ -54,6 +54,7 @@ router.get('/', async (req, res) => {
             LEFT JOIN employees e ON sr.created_by = e.id
             LEFT JOIN sales_return_lines srl ON sr.id = srl.return_id
             LEFT JOIN products p ON srl.product_id = p.id
+            LEFT JOIN hsn_codes h ON p.hsn_id = h.id
             LEFT JOIN inventory_batches ib ON srl.batch_id = ib.id
             WHERE sr.is_active = true
         `;
