@@ -332,9 +332,8 @@ router.post('/vendor-advances', async (req, res) => {
         for (const row of rows) {
             await client.query(`
                 INSERT INTO vendor_payments (
-                    vendor_id, payment_date, amount, payment_mode, reference_number,
-                    notes, unused_amount, status
-                ) VALUES ($1, $2, $3, $4, $5, 'Historical Vendor Advance', $3, 'Cleared')
+                    vendor_id, payment_date, amount, payment_mode, transaction_ref, remarks
+                ) VALUES ($1, $2, $3, $4, $5, 'Historical Vendor Advance')
             `, [
                 validateInt(row.vendor_id, 'vendor_id', `Vendor Advance ${row.reference_number}`), row.advance_date || new Date().toISOString(), parseFloat(row.amount) || 0,
                 row.payment_mode || 'Cash', row.reference_number || null
