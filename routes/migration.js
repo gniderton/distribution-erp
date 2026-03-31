@@ -248,9 +248,9 @@ router.post('/outstanding-bills', async (req, res) => {
         for (const row of rows) {
             const billIdRes = await client.query(`
                 INSERT INTO purchase_invoice_headers (
-                    vendor_id, invoice_number, vendor_invoice_date, status, 
+                    vendor_id, invoice_number, vendor_invoice_date, received_date, status, 
                     total_net, tax_amount, grand_total
-                ) VALUES ($1, $2, $3, 'Active', $4, 0, $4)
+                ) VALUES ($1, $2, $3, $3, 'Active', $4, 0, $4)
                 RETURNING id
             `, [
                 validateInt(row.vendor_id, 'vendor_id', row.old_bill_number), row.old_bill_number || `OLD-BILL-${Date.now()}`,
