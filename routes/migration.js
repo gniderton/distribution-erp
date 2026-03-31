@@ -12,6 +12,16 @@ const validateInt = (val, fieldName, recordName) => {
     return num;
 };
 
+// Helper to validate email format (checks for #N/A or invalid text)
+const validateEmail = (val, recordName) => {
+    if (val === null || val === undefined || val === '' || val === '#N/A') return null;
+    const emailRegex = /^.+@.+\..+$/;
+    if (!emailRegex.test(val)) {
+        throw new Error(`Data Error at '${recordName}': Invalid email format ('${val}'). Please fix or leave blank.`);
+    }
+    return val;
+};
+
 // Helper to generate sequences
 async function generateSequence(client, documentType) {
     const seqRes = await client.query(`
@@ -108,7 +118,7 @@ router.post('/customers', async (req, res) => {
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 RETURNING id
             `, [
-                row.customer_name, customer_code, row.whatsapp_number, row.email,
+                row.customer_name, customer_code, row.whatsapp_number, validateEmail(row.email, row.customer_name),
                 row.is_active === 'true' || row.is_active === true, row.gstin, row.pan,
                 parseFloat(row.credit_limit) || 0, parseInt(row.credit_days) || 0,
                 validateInt(row.channel_id, 'channel_id', row.customer_name),
@@ -155,7 +165,7 @@ router.post('/vendors', async (req, res) => {
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING id
             `, [
-                row.company_name || 'Unknown', vendor_code, row.contact_person, row.phone_number, row.email_address,
+                row.company_name || 'Unknown', vendor_code, row.contact_person, row.phone_number, validateEmail(row.email_address || row.email, row.company_name),
                 row.gstin, row.pan, parseFloat(row.credit_limit_amount) || 0, validateInt(row.credit_period_days, 'credit_period_days', row.company_name)
             ]);
             
