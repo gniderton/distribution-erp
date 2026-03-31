@@ -118,4 +118,28 @@ router.get('/route-types', async (req, res) => {
     }
 });
 
+// 9. Combined Template Data (For Product Imports)
+router.get('/template-data', async (req, res) => {
+    try {
+        const [brands, categories, taxes, hsn, vendors] = await Promise.all([
+            pool.query("SELECT id, brand_name FROM brands WHERE is_active = true ORDER BY brand_name ASC"),
+            pool.query("SELECT id, category_name FROM categories WHERE is_active = true ORDER BY category_name ASC"),
+            pool.query("SELECT id, tax_name FROM taxes WHERE is_active = true ORDER BY tax_name ASC"),
+            pool.query("SELECT id, hsn_code FROM hsn_codes WHERE is_active = true ORDER BY hsn_code ASC"),
+            pool.query("SELECT id, vendor_name FROM vendors WHERE is_active = true ORDER BY vendor_name ASC")
+        ]);
+
+        res.json({
+            brands: brands.rows,
+            categories: categories.rows,
+            taxes: taxes.rows,
+            hsn: hsn.rows,
+            vendors: vendors.rows
+        });
+    } catch (err) {
+        console.error('Error fetching template-data:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
