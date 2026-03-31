@@ -937,6 +937,7 @@ router.post('/verify/settle', async (req, res) => {
                 const brandOverride = await client.query(`SELECT ch.price_column FROM customer_brand_pricing cbp JOIN channels ch ON cbp.channel_id = ch.id JOIN products p ON p.brand_id = cbp.brand_id WHERE cbp.customer_id = $1 AND p.id = $2`, [ret.customer_id, ret.product_id]);
                 const priceCol = brandOverride.rows[0]?.price_column || defaultPriceCol;
 
+                // A. Target the specific Batch Rate
                 let rateInfo = await client.query(`SELECT b.${priceCol} as rate, t.tax_percentage FROM inventory_batches b JOIN products p ON b.product_id = p.id LEFT JOIN taxes t ON p.tax_id = t.id WHERE b.id = $1`, [ret.batch_id]);
                 if (!rateInfo.rows.length) {
                     rateInfo = await client.query(`SELECT p.${priceCol} as rate, t.tax_percentage FROM products p LEFT JOIN taxes t ON p.tax_id = t.id WHERE p.id = $1`, [ret.product_id]);
@@ -946,8 +947,19 @@ router.post('/verify/settle', async (req, res) => {
 
                 let netValuation = baseRate;
                 if (ret.invoice_id) {
-                    const lineRes = await client.query(`SELECT taxable_amount, shipped_qty FROM sales_invoice_lines WHERE invoice_id = $1 AND product_id = $2 LIMIT 1`, [ret.invoice_id, ret.product_id]);
-                    if (lineRes.rows.length > 0) netValuation = Number(lineRes.rows[0].taxable_amount) / (Number(lineRes.rows[0].shipped_qty) || 1);
+                    // Scenario 1: Direct link to a source invoice
+                    const lineRes = await client.query(`SELECT (taxable_amount / NULLIF(shipped_qty, 0)) as unit_net FROM sales_invoice_lines WHERE invoice_id = $1 AND product_id = $2 LIMIT 1`, [ret.invoice_id, ret.product_id]);
+                    if (lineRes.rows.length > 0) netValuation = Number(lineRes.rows[0].unit_net);
+                } else if (ret.batch_id) {
+                    // Scenario 2: Find the last time this customer bought THIS SPECIFIC batch to reverse correctly
+                    const historicSale = await client.query(`
+                        SELECT (sil.taxable_amount / NULLIF(sil.shipped_qty, 0)) as unit_net
+                        FROM sales_invoice_lines sil
+                        JOIN sales_invoices si ON si.id = sil.invoice_id
+                        WHERE si.customer_id = $1 AND sil.batch_id = $2
+                        ORDER BY si.invoice_date DESC, si.id DESC LIMIT 1
+                    `, [ret.customer_id, ret.batch_id]);
+                    if (historicSale.rows.length > 0) netValuation = Number(historicSale.rows[0].unit_net);
                 }
 
                 const qtyNum = Number(ret.qty);
@@ -1029,49 +1041,61 @@ router.post('/verify/settle', async (req, res) => {
             await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
                 [new Date(), `Grouped Sales Return: ${srNumber}`, 'SALES_RETURN', srId, JSON.stringify(ledgerLines)]);
 
-            // 3.7 Prioritized FIFO Credit Application
+            // 3.7 Prioritized Credit Application (Today's Bill First, then LIFO)
             let creditRemaining = roundedGrandTotal;
 
-            // Layer 1: Apply to Source Invoices specifically mentioned in the returns
+            // LAYER 1: Link directly to invoices mentioned in the returns data
             const specificInvoices = [...new Set(items.map(i => i.invoice_id).filter(id => id))];
             for (const invId of specificInvoices) {
-                if (creditRemaining <= 0) break;
+                if (creditRemaining <= 0.49) break;
                 const invRes = await client.query(`SELECT (grand_total - COALESCE(amount_paid, 0)) as balance FROM sales_invoices WHERE id = $1`, [invId]);
                 if (invRes.rows.length > 0) {
                     const balance = Number(invRes.rows[0].balance);
                     const apply = Math.min(creditRemaining, balance);
                     if (apply > 0) {
-                        await client.query(`
-                            UPDATE sales_invoices 
-                            SET amount_paid = COALESCE(amount_paid, 0) + $1,
-                                status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END
-                            WHERE id = $2
-                        `, [apply, invId]);
+                        await client.query(`UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + $1, status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [apply, invId]);
                         creditRemaining -= apply;
                     }
                 }
             }
 
-            // Layer 2: Standard FIFO for whatever is left
-            if (creditRemaining > 0.49) { // Using 0.49 to handle tiny rounding remainders
+            // LAYER 2: Target invoices on the CURRENT TRIP for this customer
+            if (creditRemaining > 0.49) {
+                const tripInvoices = await client.query(`
+                    SELECT si.id, (si.grand_total - COALESCE(si.amount_paid, 0)) as balance
+                    FROM sales_invoices si
+                    JOIN trip_invoices ti ON ti.invoice_id = si.id
+                    JOIN sync_logs sl ON sl.trip_id = ti.trip_id
+                    WHERE sl.id = $1 AND si.customer_id = $2 AND si.status != 'Paid'
+                    ORDER BY si.invoice_date DESC, si.id DESC
+                `, [sync_id, customerId]);
+
+                for (const inv of tripInvoices.rows) {
+                    if (creditRemaining <= 0.49) break;
+                    const balance = Number(inv.balance);
+                    const apply = Math.min(creditRemaining, balance);
+                    if (apply > 0) {
+                        await client.query(`UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + $1, status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [apply, inv.id]);
+                        creditRemaining -= apply;
+                    }
+                }
+            }
+
+            // LAYER 3: Standard LIFO (Newest First) for any other unpaid invoices
+            if (creditRemaining > 0.49) {
                 const otherInvoices = await client.query(`
                     SELECT id, (grand_total - COALESCE(amount_paid, 0)) as balance 
                     FROM sales_invoices 
                     WHERE customer_id = $1 AND status != 'Paid'
-                    ORDER BY invoice_date ASC, id ASC
+                    ORDER BY invoice_date DESC, id DESC
                 `, [customerId]);
                 
                 for (const inv of otherInvoices.rows) {
-                    if (creditRemaining <= 0) break;
+                    if (creditRemaining <= 0.49) break;
                     const balance = Number(inv.balance);
                     const apply = Math.min(creditRemaining, balance);
                     if (apply > 0) {
-                        await client.query(`
-                            UPDATE sales_invoices 
-                            SET amount_paid = COALESCE(amount_paid, 0) + $1,
-                                status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END
-                            WHERE id = $2
-                        `, [apply, inv.id]);
+                        await client.query(`UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + $1, status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [apply, inv.id]);
                         creditRemaining -= apply;
                     }
                 }
