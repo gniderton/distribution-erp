@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 
+// Helper to validate numeric inputs from Excel/CSV (throws descriptive error on "#N/A")
+const validateInt = (val, fieldName, recordName) => {
+    if (val === null || val === undefined || val === '') return null;
+    const num = parseInt(val);
+    if (isNaN(num)) {
+        throw new Error(`Data Error at '${recordName}': Invalid ${fieldName} value ('${val}'). Please check your source data.`);
+    }
+    return num;
+};
+
 // Helper to generate sequences
 async function generateSequence(client, documentType) {
     const seqRes = await client.query(`
@@ -101,7 +111,10 @@ router.post('/customers', async (req, res) => {
                 row.customer_name, customer_code, row.whatsapp_number, row.email,
                 row.is_active === 'true' || row.is_active === true, row.gstin, row.pan,
                 parseFloat(row.credit_limit) || 0, parseInt(row.credit_days) || 0,
-                row.channel_id || null, row.route_id || null, row.dse_id || null, row.route_type_id || null
+                validateInt(row.channel_id, 'channel_id', row.customer_name),
+                validateInt(row.route_id, 'route_id', row.customer_name),
+                validateInt(row.dse_id, 'dse_id', row.customer_name),
+                validateInt(row.route_type_id, 'route_type_id', row.customer_name)
             ]);
             
             const customer_id = insertCust.rows[0].id;
@@ -111,7 +124,7 @@ router.post('/customers', async (req, res) => {
                     INSERT INTO customer_addresses (
                         customer_id, address_line1, city, state, pincode, is_default_billing, is_default_shipping
                     ) VALUES ($1, $2, $3, $4, $5, true, true)
-                `, [customer_id, row.address_line1, row.city, row.state, row.pincode]);
+                `, [customer_id, row.address_line1, row.city, row.state, validateInt(row.pincode, 'pincode', row.customer_name)]);
             }
             importedCount++;
         }
@@ -143,7 +156,7 @@ router.post('/vendors', async (req, res) => {
                 RETURNING id
             `, [
                 row.company_name || 'Unknown', vendor_code, row.contact_person, row.phone_number, row.email_address,
-                row.gstin, row.pan, parseFloat(row.credit_limit_amount) || 0, parseInt(row.credit_period_days) || 0
+                row.gstin, row.pan, parseFloat(row.credit_limit_amount) || 0, validateInt(row.credit_period_days, 'credit_period_days', row.company_name)
             ]);
             
             const vendor_id = insertVend.rows[0].id;
@@ -188,7 +201,7 @@ router.post('/outstanding-invoices', async (req, res) => {
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Pending', 'Pending', 'Historical Import')
                 RETURNING id
             `, [
-                row.customer_id, dse_id, route_id, row.old_invoice_number || `OLD-${Date.now()}`,
+                validateInt(row.customer_id, 'customer_id', row.old_invoice_number), dse_id, route_id, row.old_invoice_number || `OLD-${Date.now()}`,
                 row.invoice_date || new Date().toISOString(), parseFloat(row.grand_total) || 0, parseFloat(row.amount_paid) || 0
             ]);
 
@@ -226,7 +239,7 @@ router.post('/outstanding-bills', async (req, res) => {
                 ) VALUES ($1, $2, $3, 'Active', $4, 0, $4)
                 RETURNING id
             `, [
-                row.vendor_id, row.old_bill_number || `OLD-BILL-${Date.now()}`,
+                validateInt(row.vendor_id, 'vendor_id', row.old_bill_number), row.old_bill_number || `OLD-BILL-${Date.now()}`,
                 row.bill_date || new Date().toISOString(), parseFloat(row.grand_total) || 0
             ]);
 
@@ -266,7 +279,7 @@ router.post('/customer-advances', async (req, res) => {
                     status, notes, unallocated_amount, is_advance
                 ) VALUES ($1, $2, $3, $4, $5, 'Cleared', 'Historical Advance Import', $3, true)
             `, [
-                row.customer_id, row.advance_date || new Date().toISOString(), parseFloat(row.amount) || 0,
+                validateInt(row.customer_id, 'customer_id', `Customer Advance ${row.reference_number}`), row.advance_date || new Date().toISOString(), parseFloat(row.amount) || 0,
                 row.payment_mode || 'Cash', row.reference_number || null
             ]);
             importedCount++;
@@ -296,7 +309,7 @@ router.post('/vendor-advances', async (req, res) => {
                     notes, unused_amount, status
                 ) VALUES ($1, $2, $3, $4, $5, 'Historical Vendor Advance', $3, 'Cleared')
             `, [
-                row.vendor_id, row.advance_date || new Date().toISOString(), parseFloat(row.amount) || 0,
+                validateInt(row.vendor_id, 'vendor_id', `Vendor Advance ${row.reference_number}`), row.advance_date || new Date().toISOString(), parseFloat(row.amount) || 0,
                 row.payment_mode || 'Cash', row.reference_number || null
             ]);
             importedCount++;
@@ -326,7 +339,7 @@ router.post('/opening-stock', async (req, res) => {
                     mrp, storage_status_id, created_at
                 ) VALUES ($1, $2, $3, $4, $4, $5, (SELECT id FROM storage_status WHERE status_name = $6 LIMIT 1), NOW())
             `, [
-                row.product_id, row.batch_code || 'OPENING-BATCH', row.expiry_date || null,
+                validateInt(row.product_id, 'product_id', `Product Batch ${row.batch_code}`), row.batch_code || 'OPENING-BATCH', row.expiry_date || null,
                 parseFloat(row.quantity) || 0, parseFloat(row.mrp) || 0, row.status_type || 'Good'
             ]);
             importedCount++;
