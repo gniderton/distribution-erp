@@ -210,12 +210,12 @@ router.post('/outstanding-invoices', async (req, res) => {
 
             const invIdRes = await client.query(`
                 INSERT INTO sales_invoices (
-                    customer_id, dse_id, route_id, invoice_number, invoice_date, 
-                    grand_total, amount_paid, payment_status, status, remarks
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'Pending', 'Pending', 'Historical Import')
+                    customer_id, invoice_number, invoice_date, 
+                    grand_total, paid_amount, status
+                ) VALUES ($1, $2, $3, $4, $5, 'Unpaid')
                 RETURNING id
             `, [
-                validateInt(row.customer_id, 'customer_id', row.old_invoice_number), dse_id, route_id, row.old_invoice_number || `OLD-${Date.now()}`,
+                validateInt(row.customer_id, 'customer_id', row.old_invoice_number), row.old_invoice_number || `OLD-${Date.now()}`,
                 row.invoice_date || new Date().toISOString(), parseFloat(row.grand_total) || 0, parseFloat(row.amount_paid) || 0
             ]);
 
@@ -248,8 +248,8 @@ router.post('/outstanding-bills', async (req, res) => {
         for (const row of rows) {
             const billIdRes = await client.query(`
                 INSERT INTO purchase_invoice_headers (
-                    vendor_id, invoice_number, invoice_date, status, 
-                    total_amount, total_tax, grand_total
+                    vendor_id, invoice_number, vendor_invoice_date, status, 
+                    total_net, tax_amount, grand_total
                 ) VALUES ($1, $2, $3, 'Active', $4, 0, $4)
                 RETURNING id
             `, [
