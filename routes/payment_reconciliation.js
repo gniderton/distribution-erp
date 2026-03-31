@@ -105,13 +105,19 @@ router.get('/:id/details', async (req, res) => {
                 cp.verification_status, cp.rejection_reason,
                 bse.status as bank_match_status,
                 bse.amount as bank_total_amount,
-                bse.consumed_amount as bank_consumed_amount
+                bse.consumed_amount as bank_consumed_amount,
+                -- 🚀 THE MISSING LINK: Show what the driver/staff selected in the app
+                (SELECT string_agg(si.invoice_number, ', ') 
+                 FROM customer_payment_allocations pa 
+                 JOIN sales_invoices si ON pa.invoice_id = si.id 
+                 WHERE pa.payment_id = cp.id AND pa.status = 'PENDING') as selected_invoices
             FROM customer_payments cp
             JOIN customers c ON cp.customer_id = c.id
             LEFT JOIN bank_statement_entries bse ON cp.transaction_ref = bse.bank_ref_id
             WHERE cp.report_id = $1
             ORDER BY cp.created_at ASC
         `, [id]);
+
 
         // C. Cash Denominations
         const denomsRes = await pool.query(`
@@ -217,12 +223,13 @@ router.post('/bulk-update', async (req, res) => {
                 // [NEW] VERIFICATION LOGIC: Use DSE Allocations with Auto-Resolution
                 if (itemAction === 'Verified') {
                     // 1. Check for DSE-specified allocations (PENDING status)
+                    // 🚀 CRITICAL: We prioritize the Staff's choice from the app first
                     const pendingAllocRes = await client.query(`
                         SELECT pa.*, si.grand_total, COALESCE(si.amount_paid, 0) as current_paid
                         FROM customer_payment_allocations pa
                         JOIN sales_invoices si ON pa.invoice_id = si.id
                         WHERE pa.payment_id = $1 AND pa.status = 'PENDING'
-                        ORDER BY si.invoice_date ASC
+                        ORDER BY si.invoice_date ASC, si.id ASC
                     `, [pay.id]);
 
                     let remainingToAllocate = Number(pay.amount);
@@ -272,13 +279,13 @@ router.post('/bulk-update', async (req, res) => {
                         }
                     }
 
-                    // 3. FIFO allocation for remaining amount (auto-resolution)
+                    // 3. FIFO allocation for remaining amount (Oldest Debt First)
                     if (remainingToAllocate > 0.01) {
                         const unpaidRes = await client.query(`
                             SELECT id, invoice_number, grand_total, COALESCE(amount_paid, 0) as amount_paid 
                             FROM sales_invoices 
                             WHERE customer_id = $1 AND status != 'Paid'
-                            ORDER BY invoice_date ASC
+                            ORDER BY invoice_date ASC, id ASC
                         `, [pay.customer_id]);
 
                         for (const inv of unpaidRes.rows) {
