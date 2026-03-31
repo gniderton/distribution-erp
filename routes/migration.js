@@ -257,13 +257,26 @@ router.post('/outstanding-bills', async (req, res) => {
                 row.bill_date || new Date().toISOString(), parseFloat(row.grand_total) || 0
             ]);
 
-            // Track amount paid by inserting a payment allocation directly if they had a partial payment
+            // Track amount paid by creating a migration payment and linking it
             if (parseFloat(row.amount_paid) > 0) {
+                // 1. Create a dummy payment record for the migration balance
+                const payRes = await client.query(`
+                    INSERT INTO vendor_payments (
+                        vendor_id, amount, payment_date, payment_mode, transaction_ref, remarks
+                    ) VALUES ($1, $2, $3, 'Cash', 'MIGRATION', 'Historical Payment Balance Import')
+                    RETURNING id
+                `, [
+                    validateInt(row.vendor_id, 'vendor_id', row.old_bill_number), 
+                    parseFloat(row.amount_paid),
+                    row.bill_date || new Date().toISOString()
+                ]);
+
+                // 2. Link it via payment_allocations
                 await client.query(`
                     INSERT INTO payment_allocations (
-                        purchase_invoice_id, amount
-                    ) VALUES ($1, $2)
-                `, [billIdRes.rows[0].id, parseFloat(row.amount_paid)]);
+                        payment_id, purchase_invoice_id, amount
+                    ) VALUES ($1, $2, $3)
+                `, [payRes.rows[0].id, billIdRes.rows[0].id, parseFloat(row.amount_paid)]);
             }
 
             importedCount++;
