@@ -362,12 +362,23 @@ router.post('/opening-stock', async (req, res) => {
         for (const row of rows) {
             await client.query(`
                 INSERT INTO inventory_batches (
-                    product_id, batch_code, expiry_date, quantity, available_quantity, 
-                    mrp, storage_status_id, created_at
-                ) VALUES ($1, $2, $3, $4, $4, $5, (SELECT id FROM storage_status WHERE status_name = $6 LIMIT 1), NOW())
+                    product_id, batch_code, expiry_date, 
+                    quantity_initial, quantity_remaining, 
+                    mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate,
+                    status, created_at
+                ) VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
             `, [
-                validateInt(row.product_id, 'product_id', `Product Batch ${row.batch_code}`), row.batch_code || 'OPENING-BATCH', row.expiry_date || null,
-                parseFloat(row.quantity) || 0, parseFloat(row.mrp) || 0, row.status_type || 'Good'
+                validateInt(row.product_id, 'product_id', `Product Batch ${row.batch_code}`), 
+                row.batch_code || 'OPENING-BATCH', 
+                row.expiry_date || null,
+                parseFloat(row.quantity) || 0, 
+                parseFloat(row.mrp) || 0,
+                parseFloat(row.purchase_rate) || 0,
+                parseFloat(row.distributor_rate) || 0,
+                parseFloat(row.wholesale_rate) || 0,
+                parseFloat(row.dealer_rate) || 0,
+                parseFloat(row.retail_rate) || 0,
+                row.status_type || 'Good'
             ]);
             importedCount++;
         }
