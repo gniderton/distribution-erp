@@ -14,12 +14,16 @@ const validateInt = (val, fieldName, recordName) => {
 
 // Helper to validate email format (checks for #N/A or invalid text)
 const validateEmail = (val, recordName) => {
-    if (val === null || val === undefined || val === '' || val === '#N/A') return null;
+    if (val === null || val === undefined) return null;
+    const cleanVal = String(val).trim();
+    // Broad-spectrum Excel error catch
+    if (cleanVal === '' || cleanVal === '#N/A' || cleanVal.startsWith('#VALUE') || cleanVal.startsWith('#REF') || cleanVal.startsWith('#DIV')) return null;
+    
     const emailRegex = /^.+@.+\..+$/;
-    if (!emailRegex.test(val)) {
-        throw new Error(`Data Error at '${recordName}': Invalid email format ('${val}'). Please fix or leave blank.`);
+    if (!emailRegex.test(cleanVal)) {
+        throw new Error(`Data Error at '${recordName}': Invalid email format ('${cleanVal}'). Please fix or leave blank.`);
     }
-    return val;
+    return cleanVal;
 };
 
 // Helper to generate sequences
