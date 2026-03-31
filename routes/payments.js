@@ -65,6 +65,71 @@ router.get('/invoices/:customerId', async (req, res) => {
     }
 });
 
+// [NEW] GET /api/payments/dse-pending-invoices - Global Pending Invoices Dashboard
+router.get('/dse-pending-invoices', async (req, res) => {
+    try {
+        const { day, dse_id } = req.query; 
+
+        let query = `
+            SELECT 
+                si.id,
+                si.invoice_number,
+                si.invoice_date,
+                si.grand_total as bill_amount,
+                COALESCE(si.amount_paid, 0) as paid_amount,
+                (si.grand_total - COALESCE(si.amount_paid, 0)) as balance,
+                si.status,
+                c.customer_name,
+                c.id as customer_id,
+                r.route_name,
+                e.full_name as dse_name,
+                
+                -- Metrics
+                COALESCE(c.credit_days, 0) as ard_days,
+                CURRENT_DATE - si.invoice_date::date as days_from_billed,
+                CURRENT_DATE - (si.invoice_date::date + COALESCE(c.credit_days, 0)) as overdue_days,
+                (si.invoice_date::date + COALESCE(c.credit_days, 0)) as due_date
+                
+            FROM sales_invoices si
+            JOIN customers c ON si.customer_id = c.id
+            LEFT JOIN routes r ON c.route_id = r.id
+            LEFT JOIN employees e ON c.dse_id = e.id
+            WHERE si.status != 'Paid'
+              AND si.status != 'Cancelled'
+        `;
+
+        const params = [];
+        let pIndex = 1;
+
+        if (day) {
+            query += ` AND r.route_name ILIKE $${pIndex}`;
+            params.push(`%${day}%`);
+            pIndex++;
+        }
+
+        if (dse_id) {
+            query += ` AND c.dse_id = $${pIndex}`;
+            params.push(dse_id);
+            pIndex++;
+        }
+
+        query += `
+            ORDER BY 
+                CASE 
+                    WHEN CURRENT_DATE > (si.invoice_date::date + COALESCE(c.credit_days, 0)) THEN 0 
+                    ELSE 1
+                END,
+                si.invoice_date ASC
+        `;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 // GET /api/payments/dse-pending-invoices/:dseId - DSE Pending Invoices Dashboard
 router.get('/dse-pending-invoices/:dseId', async (req, res) => {
     try {
