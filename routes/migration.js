@@ -240,8 +240,8 @@ router.post('/outstanding-invoices', async (req, res) => {
             // 2. Insert Dummy Line for Balance
             await client.query(`
                 INSERT INTO sales_invoice_lines (
-                    sales_invoice_id, product_name, quantity, unit_price, line_total
-                ) VALUES ($1, 'Historical Balance Import', 1, $2, $2)
+                    invoice_id, product_id, shipped_qty, rate, amount
+                ) VALUES ($1, 1, 1, $2, $2)
             `, [invoiceId, parseFloat(row.grand_total) || 0]);
 
             // 3. Automated Payment Logic: Handle Existing Paid Amount
