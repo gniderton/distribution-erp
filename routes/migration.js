@@ -203,8 +203,14 @@ router.post('/outstanding-invoices', async (req, res) => {
         let importedCount = 0;
 
         for (const row of rows) {
-            const customerId = validateInt(row.customer_id, 'customer_id', row.old_invoice_number);
-            const oldInvNo = row.old_invoice_number || `OLD-${Date.now()}`;
+            let customerId;
+            try {
+                customerId = validateInt(row.customer_id, 'customer_id', row.old_invoice_number);
+            } catch (e) {
+                throw new Error(`Data format error at '${row.old_invoice_number || 'unknown'}': ${e.message}`);
+            }
+
+            const oldInvNo = row.old_invoice_number || `OLD-${Date.now()}-${importedCount}`;
 
             // Search for customer by ID only
             const custRes = await client.query(`
@@ -214,54 +220,64 @@ router.post('/outstanding-invoices', async (req, res) => {
             `, [customerId]);
 
             if (custRes.rows.length === 0) {
-                throw new Error(`Data Error at '${oldInvNo}': Customer ID '${customerId}' not found. Please ensure customers are imported first.`);
+                throw new Error(`Migration Error: Customer ID '${customerId}' (for invoice ${oldInvNo}) does not exist in the database. Please import customers first.`);
             }
 
             const dse_id = custRes.rows[0].dse_id;
+            const grand_total = parseFloat(row.grand_total) || 0;
+            const amount_paid_val = parseFloat(row.amount_paid || row.paid_amount) || 0;
 
             // 1. Insert Sales Invoice Header
-            const invIdRes = await client.query(`
-                INSERT INTO sales_invoices (
-                    customer_id, invoice_number, invoice_date, 
-                    grand_total, paid_amount, total_taxable, status
-                ) VALUES ($1, $2, $3, $4, $5, $4, $6)
-                RETURNING id
-            `, [
-                customerId, 
-                oldInvNo,
-                row.invoice_date || new Date().toISOString(), 
-                parseFloat(row.grand_total) || 0, 
-                parseFloat(row.amount_paid || row.paid_amount) || 0,
-                (parseFloat(row.amount_paid || row.paid_amount) >= parseFloat(row.grand_total)) ? 'Paid' : 'Unpaid'
-            ]);
-
-            const invoiceId = invIdRes.rows[0].id;
-
-            // 2. Automated Payment Logic: Handle Existing Paid Amount
-            const paidAmt = parseFloat(row.amount_paid || row.paid_amount) || 0;
-            if (paidAmt > 0) {
-                // A. Create a payment record in customer_payments
-                const payRes = await client.query(`
-                    INSERT INTO customer_payments (
-                        customer_id, amount, payment_date, payment_mode, 
-                        transaction_ref, status, collected_by
-                    ) VALUES ($1, $2, $3, 'Cash', 'MIGRATION', 'Verified', $4)
+            let invoiceId;
+            try {
+                const invIdRes = await client.query(`
+                    INSERT INTO sales_invoices (
+                        customer_id, invoice_number, invoice_date, 
+                        grand_total, paid_amount, total_taxable, status
+                    ) VALUES ($1, $2, $3, $4, $5, $4, $6)
                     RETURNING id
                 `, [
                     customerId, 
-                    paidAmt, 
-                    row.invoice_date || new Date().toISOString(),
-                    dse_id // Use dse_id from the customer table
+                    oldInvNo,
+                    row.invoice_date || new Date().toISOString().split('T')[0], 
+                    grand_total, 
+                    amount_paid_val,
+                    (amount_paid_val >= grand_total && grand_total > 0) ? 'Paid' : 'Unpaid'
                 ]);
+                invoiceId = invIdRes.rows[0].id;
+            } catch (e) {
+                if (e.code === '23505') throw new Error(`Duplicate Invoice Number: '${oldInvNo}' already exists in the database.`);
+                throw new Error(`Database Error inserting invoice '${oldInvNo}': ${e.message}`);
+            }
 
-                const paymentId = payRes.rows[0].id;
+            // 2. Automated Payment Logic: Handle Existing Paid Amount
+            if (amount_paid_val > 0) {
+                try {
+                    // A. Create a payment record in customer_payments
+                    const payRes = await client.query(`
+                        INSERT INTO customer_payments (
+                            customer_id, amount, payment_date, payment_mode, 
+                            transaction_ref, status, collected_by
+                        ) VALUES ($1, $2, $3, 'Cash', 'MIGRATION', 'Verified', $4)
+                        RETURNING id
+                    `, [
+                        customerId, 
+                        amount_paid_val, 
+                        row.invoice_date || new Date().toISOString().split('T')[0],
+                        dse_id
+                    ]);
 
-                // B. Create the allocation in customer_payment_allocations
-                await client.query(`
-                    INSERT INTO customer_payment_allocations (
-                        payment_id, invoice_id, amount
-                    ) VALUES ($1, $2, $3)
-                `, [paymentId, invoiceId, paidAmt]);
+                    const paymentId = payRes.rows[0].id;
+
+                    // B. Create the allocation in customer_payment_allocations
+                    await client.query(`
+                        INSERT INTO customer_payment_allocations (
+                            payment_id, invoice_id, amount
+                        ) VALUES ($1, $2, $3)
+                    `, [paymentId, invoiceId, amount_paid_val]);
+                } catch (e) {
+                    throw new Error(`Error creating payment allocation for invoice '${oldInvNo}': ${e.message}`);
+                }
             }
 
             importedCount++;
