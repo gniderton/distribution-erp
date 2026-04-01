@@ -126,8 +126,8 @@ router.post('/', async (req, res) => {
             INSERT INTO employees (
                 employee_code, full_name, designation_id, email, contact_primary, contact_secondary,
                 address, joining_date, gender, aadhar_no, license_no,
-                bank_name, account_no, ifsc_code
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                bank_name, account_no, ifsc_code, login_pin
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, '1234')
             RETURNING id
         `, [
             employeeCode, full_name, designation_id, email, contact_primary, contact_secondary,

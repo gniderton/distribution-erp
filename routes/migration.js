@@ -203,27 +203,73 @@ router.post('/outstanding-invoices', async (req, res) => {
         let importedCount = 0;
 
         for (const row of rows) {
-            // First we need DSE/Route from the customer
-            const custRes = await client.query('SELECT dse_id, route_id FROM customers WHERE id = $1', [row.customer_id]);
-            const dse_id = custRes.rows.length ? custRes.rows[0].dse_id : null;
-            const route_id = custRes.rows.length ? custRes.rows[0].route_id : null;
+            const customerId = validateInt(row.customer_id, 'customer_id', row.old_invoice_number);
+            const oldInvNo = row.old_invoice_number || `OLD-${Date.now()}`;
 
+            // Search for customer by ID only
+            const custRes = await client.query(`
+                SELECT id, dse_id, route_id 
+                FROM customers 
+                WHERE id = $1
+            `, [customerId]);
+
+            if (custRes.rows.length === 0) {
+                throw new Error(`Data Error at '${oldInvNo}': Customer ID '${customerId}' not found. Please ensure customers are imported first.`);
+            }
+
+            const dse_id = custRes.rows[0].dse_id;
+
+            // 1. Insert Sales Invoice
             const invIdRes = await client.query(`
                 INSERT INTO sales_invoices (
                     customer_id, invoice_number, invoice_date, 
                     grand_total, paid_amount, status
-                ) VALUES ($1, $2, $3, $4, $5, 'Unpaid')
+                ) VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING id
             `, [
-                validateInt(row.customer_id, 'customer_id', row.old_invoice_number), row.old_invoice_number || `OLD-${Date.now()}`,
-                row.invoice_date || new Date().toISOString(), parseFloat(row.grand_total) || 0, parseFloat(row.amount_paid) || 0
+                customerId, 
+                oldInvNo,
+                row.invoice_date || new Date().toISOString(), 
+                parseFloat(row.grand_total) || 0, 
+                parseFloat(row.amount_paid || row.paid_amount) || 0,
+                (parseFloat(row.amount_paid || row.paid_amount) >= parseFloat(row.grand_total)) ? 'Paid' : 'Unpaid'
             ]);
 
+            const invoiceId = invIdRes.rows[0].id;
+
+            // 2. Insert Dummy Line for Balance
             await client.query(`
                 INSERT INTO sales_invoice_lines (
                     sales_invoice_id, product_name, quantity, unit_price, line_total
                 ) VALUES ($1, 'Historical Balance Import', 1, $2, $2)
-            `, [invIdRes.rows[0].id, parseFloat(row.grand_total) || 0]);
+            `, [invoiceId, parseFloat(row.grand_total) || 0]);
+
+            // 3. Automated Payment Logic: Handle Existing Paid Amount
+            const paidAmt = parseFloat(row.amount_paid || row.paid_amount) || 0;
+            if (paidAmt > 0) {
+                // A. Create a payment record in customer_payments
+                const payRes = await client.query(`
+                    INSERT INTO customer_payments (
+                        customer_id, amount, payment_date, payment_mode, 
+                        transaction_ref, status, collected_by, notes
+                    ) VALUES ($1, $2, $3, 'Cash', 'MIGRATION', 'Verified', $4, 'Historical Payment Balance Import')
+                    RETURNING id
+                `, [
+                    customerId, 
+                    paidAmt, 
+                    row.invoice_date || new Date().toISOString(),
+                    dse_id // Use dse_id from the customer table
+                ]);
+
+                const paymentId = payRes.rows[0].id;
+
+                // B. Create the allocation in customer_payment_allocations
+                await client.query(`
+                    INSERT INTO customer_payment_allocations (
+                        payment_id, invoice_id, amount
+                    ) VALUES ($1, $2, $3)
+                `, [paymentId, invoiceId, paidAmt]);
+            }
 
             importedCount++;
         }
