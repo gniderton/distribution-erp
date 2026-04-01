@@ -244,8 +244,8 @@ router.post('/outstanding-invoices', async (req, res) => {
                 const payRes = await client.query(`
                     INSERT INTO customer_payments (
                         customer_id, amount, payment_date, payment_mode, 
-                        transaction_ref, status, collected_by, notes
-                    ) VALUES ($1, $2, $3, 'Cash', 'MIGRATION', 'Verified', $4, 'Historical Payment Balance Import')
+                        transaction_ref, status, collected_by
+                    ) VALUES ($1, $2, $3, 'Cash', 'MIGRATION', 'Verified', $4)
                     RETURNING id
                 `, [
                     customerId, 
