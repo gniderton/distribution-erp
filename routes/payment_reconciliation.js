@@ -267,6 +267,7 @@ router.post('/bulk-update', async (req, res) => {
                             await client.query(`
                                 UPDATE sales_invoices 
                                 SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                                    paid_amount = COALESCE(paid_amount, 0) + $1,
                                     status = CASE 
                                         WHEN (grand_total - (COALESCE(amount_paid, 0) + $1)) <= 1 THEN 'Paid'
                                         ELSE 'Partially Paid' 
@@ -307,6 +308,7 @@ router.post('/bulk-update', async (req, res) => {
                             await client.query(`
                                 UPDATE sales_invoices 
                                 SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                                    paid_amount = COALESCE(paid_amount, 0) + $1,
                                     status = CASE 
                                         WHEN (grand_total - (COALESCE(amount_paid, 0) + $1)) <= 1 THEN 'Paid'
                                         ELSE 'Partially Paid' 
@@ -419,6 +421,7 @@ router.post('/bulk-update', async (req, res) => {
                         await client.query(`
                             UPDATE sales_invoices 
                             SET amount_paid = COALESCE(amount_paid, 0) - $1,
+                                paid_amount = COALESCE(paid_amount, 0) - $1,
                                     status = CASE 
                                         WHEN (COALESCE(amount_paid, 0) - $1) <= 1 THEN 'Unpaid'
                                         WHEN (grand_total - (COALESCE(amount_paid, 0) - $1)) <= 1 THEN 'Paid'
