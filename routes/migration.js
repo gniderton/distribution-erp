@@ -219,12 +219,12 @@ router.post('/outstanding-invoices', async (req, res) => {
 
             const dse_id = custRes.rows[0].dse_id;
 
-            // 1. Insert Sales Invoice
+            // 1. Insert Sales Invoice Header
             const invIdRes = await client.query(`
                 INSERT INTO sales_invoices (
                     customer_id, invoice_number, invoice_date, 
-                    grand_total, paid_amount, status
-                ) VALUES ($1, $2, $3, $4, $5, $6)
+                    grand_total, paid_amount, total_taxable, status
+                ) VALUES ($1, $2, $3, $4, $5, $4, $6)
                 RETURNING id
             `, [
                 customerId, 
@@ -237,14 +237,7 @@ router.post('/outstanding-invoices', async (req, res) => {
 
             const invoiceId = invIdRes.rows[0].id;
 
-            // 2. Insert Dummy Line for Balance
-            await client.query(`
-                INSERT INTO sales_invoice_lines (
-                    invoice_id, product_id, shipped_qty, rate, amount
-                ) VALUES ($1, 1, 1, $2, $2)
-            `, [invoiceId, parseFloat(row.grand_total) || 0]);
-
-            // 3. Automated Payment Logic: Handle Existing Paid Amount
+            // 2. Automated Payment Logic: Handle Existing Paid Amount
             const paidAmt = parseFloat(row.amount_paid || row.paid_amount) || 0;
             if (paidAmt > 0) {
                 // A. Create a payment record in customer_payments
