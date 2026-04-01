@@ -240,8 +240,8 @@ router.post('/outstanding-invoices', async (req, res) => {
                 const invIdRes = await client.query(`
                     INSERT INTO sales_invoices (
                         customer_id, invoice_number, invoice_date, 
-                        grand_total, paid_amount, total_taxable, status
-                    ) VALUES ($1, $2, $3, $4, $5, $4, $6)
+                        grand_total, paid_amount, amount_paid, total_taxable, status
+                    ) VALUES ($1, $2, $3, $4, $5, $5, $4, $6)
                     RETURNING id
                 `, [
                     customerId, 
