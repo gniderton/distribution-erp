@@ -223,11 +223,18 @@ router.post('/outstanding-invoices', async (req, res) => {
                 throw new Error(`Migration Error: Customer ID '${customerId}' (for invoice ${oldInvNo}) does not exist in the database. Please import customers first.`);
             }
 
+            // 1. Check if invoice already exists (Idempotency)
+            const existRes = await client.query('SELECT id FROM sales_invoices WHERE invoice_number = $1', [oldInvNo]);
+            if (existRes.rows.length > 0) {
+                importedCount++;
+                continue;
+            }
+
             const dse_id = custRes.rows[0].dse_id;
             const grand_total = parseFloat(row.grand_total) || 0;
             const amount_paid_val = parseFloat(row.amount_paid || row.paid_amount) || 0;
 
-            // 1. Insert Sales Invoice Header
+            // 2. Insert Sales Invoice Header
             let invoiceId;
             try {
                 const invIdRes = await client.query(`
@@ -246,7 +253,6 @@ router.post('/outstanding-invoices', async (req, res) => {
                 ]);
                 invoiceId = invIdRes.rows[0].id;
             } catch (e) {
-                if (e.code === '23505') throw new Error(`Duplicate Invoice Number: '${oldInvNo}' already exists in the database.`);
                 throw new Error(`Database Error inserting invoice '${oldInvNo}': ${e.message}`);
             }
 

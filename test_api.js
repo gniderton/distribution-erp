@@ -1,31 +1,24 @@
-const https = require('https');
+const express = require('express');
+const app = express();
+app.use(express.json());
+const migrationRouter = require('./routes/migration');
+app.use('/api/migration', migrationRouter);
 
-const options = {
-    hostname: 'smart-points-sin.loca.lt',
-    port: 443,
-    path: '/api/vendors',
-    method: 'GET',
-    headers: {
-        'Bypass-Tunnel-Reminder': 'true',
-        'Content-Type': 'application/json'
-    }
-};
-
-const req = https.request(options, (res) => {
-    let data = '';
-
-    res.on('data', (chunk) => {
-        data += chunk;
-    });
-
-    res.on('end', () => {
-        console.log("Tunnel Status:", res.statusCode);
-        console.log("Tunnel Body:", data);
+app.listen(6000, () => {
+    console.log('Server started on 6000');
+    
+    fetch('http://localhost:6000/api/migration/outstanding-invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{ customer_id: 1, grand_total: 100, amount_paid: 50 }])
+    })
+    .then(res => res.text())
+    .then(text => {
+        console.log('Response HTTP:', text);
+        process.exit();
+    })
+    .catch(err => {
+        console.error('Fetch Error:', err);
+        process.exit();
     });
 });
-
-req.on('error', (e) => {
-    console.error(`Problem with request: ${e.message}`);
-});
-
-req.end();
