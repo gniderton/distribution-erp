@@ -337,7 +337,20 @@ router.get('/trips/:id/picklist', async (req, res) => {
             ORDER BY p.product_name, sil.mrp
         `, [req.params.id]);
 
-        res.json(result.rows);
+        const tripInfoRes = await pool.query(`
+            SELECT 
+                dt.id as trip_id, dt.trip_number, dt.created_at as "date", dt.vehicle_number,
+                e.full_name as driver_name, t.name as team_name
+            FROM delivery_trips dt
+            LEFT JOIN employees e ON dt.driver_id = e.id
+            LEFT JOIN delivery_teams t ON dt.team_id = t.id
+            WHERE dt.id = $1
+        `, [req.params.id]);
+
+        res.json({
+            trip_info: tripInfoRes.rows[0] || {},
+            items: result.rows
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -435,7 +448,20 @@ router.get('/trips/:id/manifest', async (req, res) => {
             ORDER BY c.route_sequence ASC
         `, [req.params.id]);
 
-        res.json(result.rows);
+        const tripInfoRes = await pool.query(`
+            SELECT 
+                dt.id as trip_id, dt.trip_number, dt.created_at as "date", dt.vehicle_number,
+                e.full_name as driver_name, t.name as team_name
+            FROM delivery_trips dt
+            LEFT JOIN employees e ON dt.driver_id = e.id
+            LEFT JOIN delivery_teams t ON dt.team_id = t.id
+            WHERE dt.id = $1
+        `, [req.params.id]);
+
+        res.json({
+            trip_info: tripInfoRes.rows[0] || {},
+            items: result.rows
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
