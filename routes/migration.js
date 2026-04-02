@@ -225,50 +225,70 @@ router.post('/outstanding-invoices', async (req, res) => {
 
             // 1. Check if invoice already exists (Idempotency)
             const existRes = await client.query('SELECT id FROM sales_invoices WHERE invoice_number = $1', [oldInvNo]);
-            if (existRes.rows.length > 0) {
-                importedCount++;
-                continue;
-            }
-
+            
             const dse_id = custRes.rows[0].dse_id;
             const grand_total = parseFloat(row.grand_total) || 0;
             const amount_paid_val = parseFloat(row.amount_paid || row.paid_amount) || 0;
-
-            // 2. Insert Sales Invoice Header
+            
             let invoiceId;
-            try {
-                const invIdRes = await client.query(`
-                    INSERT INTO sales_invoices (
-                        customer_id, invoice_number, invoice_date, 
-                        grand_total, paid_amount, amount_paid, total_taxable, status
-                    ) VALUES ($1, $2, $3, $4, $5, $5, $4, $6)
-                    RETURNING id
+            let existingPaidTotal = 0;
+
+            if (existRes.rows.length > 0) {
+                invoiceId = existRes.rows[0].id;
+                // Get current allocation sum for robustness (check if payment was already migrated)
+                const allocRes = await client.query('SELECT COALESCE(SUM(amount), 0) as total FROM customer_payment_allocations WHERE invoice_id = $1', [invoiceId]);
+                existingPaidTotal = parseFloat(allocRes.rows[0].total);
+                
+                // Update header just in case it was out of sync (idempotent update)
+                await client.query(`
+                    UPDATE sales_invoices SET 
+                        status = $1, paid_amount = $2, amount_paid = $2, grand_total = $3, total_taxable = $3,
+                        delivery_status = 'Delivered'
+                    WHERE id = $4
                 `, [
-                    customerId, 
-                    oldInvNo,
-                    row.invoice_date || new Date().toISOString().split('T')[0], 
-                    grand_total, 
-                    amount_paid_val,
-                    (amount_paid_val >= grand_total && grand_total > 0) ? 'Paid' : 'Unpaid'
+                    (amount_paid_val >= grand_total && grand_total > 0) ? 'Paid' : 'Unpaid', 
+                    amount_paid_val, 
+                    grand_total,
+                    invoiceId
                 ]);
-                invoiceId = invIdRes.rows[0].id;
-            } catch (e) {
-                throw new Error(`Database Error inserting invoice '${oldInvNo}': ${e.message}`);
+            } else {
+                // 2. Insert Sales Invoice Header
+                try {
+                    const invIdRes = await client.query(`
+                        INSERT INTO sales_invoices (
+                            customer_id, invoice_number, invoice_date, 
+                            grand_total, paid_amount, amount_paid, total_taxable, status,
+                            delivery_status
+                        ) VALUES ($1, $2, $3, $4, $5, $5, $4, $6, 'Delivered')
+                        RETURNING id
+                    `, [
+                        customerId, 
+                        oldInvNo,
+                        row.invoice_date || new Date().toISOString().split('T')[0], 
+                        grand_total, 
+                        amount_paid_val,
+                        (amount_paid_val >= grand_total && grand_total > 0) ? 'Paid' : 'Unpaid'
+                    ]);
+                    invoiceId = invIdRes.rows[0].id;
+                } catch (e) {
+                    throw new Error(`Database Error inserting invoice '${oldInvNo}': ${e.message}`);
+                }
             }
 
-            // 2. Automated Payment Logic: Handle Existing Paid Amount
-            if (amount_paid_val > 0) {
+            // 2. Automated Payment Logic: Handle Existing Paid Amount (Backfill if missing)
+            const remainingToPay = amount_paid_val - existingPaidTotal;
+            if (remainingToPay > 0) {
                 try {
                     // A. Create a payment record in customer_payments
                     const payRes = await client.query(`
                         INSERT INTO customer_payments (
                             customer_id, amount, payment_date, payment_mode, 
-                            transaction_ref, status, collected_by
-                        ) VALUES ($1, $2, $3, 'Cash', 'MIGRATION', 'Verified', $4)
+                            transaction_ref, status, collected_by, verification_status, verified_by
+                        ) VALUES ($1, $2, $3, 'Cash', 'MIGRATION', 'Verified', $4, 'Verified', 1)
                         RETURNING id
                     `, [
                         customerId, 
-                        amount_paid_val, 
+                        remainingToPay, 
                         row.invoice_date || new Date().toISOString().split('T')[0],
                         dse_id
                     ]);
@@ -280,7 +300,7 @@ router.post('/outstanding-invoices', async (req, res) => {
                         INSERT INTO customer_payment_allocations (
                             payment_id, invoice_id, amount
                         ) VALUES ($1, $2, $3)
-                    `, [paymentId, invoiceId, amount_paid_val]);
+                    `, [paymentId, invoiceId, remainingToPay]);
                 } catch (e) {
                     throw new Error(`Error creating payment allocation for invoice '${oldInvNo}': ${e.message}`);
                 }

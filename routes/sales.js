@@ -1225,8 +1225,25 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 const linesRes = await client.query('SELECT * FROM sales_order_lines WHERE sales_order_id = $1', [orderId]);
                 let lines = linesRes.rows;
 
-                // [FIX] 2.5 SCHEME LOGIC (Bulk Admin) - Corrected Signature and Return Handling
-                const orderedItems = lines.map(l => ({ product_id: l.product_id, qty: l.ordered_qty }));
+                const pids = lines.map(l => l.product_id);
+                const stockRes = await client.query(`
+                    SELECT product_id, SUM(quantity_remaining) as total 
+                    FROM inventory_batches 
+                    WHERE product_id = ANY($1) AND is_active = true 
+                    GROUP BY product_id
+                `, [pids]);
+                const stockMap = {};
+                stockRes.rows.forEach(r => stockMap[r.product_id] = parseFloat(r.total));
+
+                // [FIX] 2.5 SCHEME LOGIC (Bulk Admin) - Use Deliverable Qty (Min of Ordered vs Available)
+                // This ensures we ONLY apply schemes for items we can actually ship today.
+                const orderedItems = lines.map(l => {
+                    const availableReal = stockMap[l.product_id] || 0;
+                    const availableTransit = transitMap[l.product_id] ? parseFloat(transitMap[l.product_id].qty) : 0;
+                    const deliverableQty = Math.min(Number(l.ordered_qty), availableReal + availableTransit);
+                    return { product_id: l.product_id, qty: deliverableQty };
+                });
+                
                 const { freeItems, priceSlabs } = await calculateFreeItems(orderedItems, so.customer_id, client);
 
                 const freeMap = {};
