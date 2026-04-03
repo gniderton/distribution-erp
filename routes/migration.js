@@ -492,4 +492,96 @@ router.post('/opening-stock', async (req, res) => {
     } finally { client.release(); }
 });
 
+// GET /api/migration/opening-capital
+router.get('/opening-capital', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        // 1. Inventory Value (Migrated batches only)
+        const invRes = await client.query(`
+            SELECT COALESCE(SUM(quantity_remaining * purchase_rate), 0) as value 
+            FROM inventory_batches 
+            WHERE grn_id IS NULL
+        `);
+
+        // 2. Opening Receivables (Migrated invoices only)
+        const recRes = await client.query(`
+            SELECT COALESCE(SUM(balance_amount), 0) as value 
+            FROM sales_invoices 
+            WHERE sales_order_id IS NULL AND status != 'Cancelled'
+        `);
+
+        // 3. Opening Payables (Migrated purchase invoices minus their allocations)
+        const payRes = await client.query(`
+            SELECT (
+                (SELECT COALESCE(SUM(grand_total), 0) FROM purchase_invoice_headers WHERE purchase_order_id IS NULL AND status != 'Cancelled') -
+                (SELECT COALESCE(SUM(amount), 0) FROM payment_allocations WHERE purchase_invoice_id IN (SELECT id FROM purchase_invoice_headers WHERE purchase_order_id IS NULL))
+            ) as value
+        `);
+
+        // 4. Loans Given
+        const loanGivenRes = await client.query(`
+            SELECT COALESCE(SUM(balance_principal + balance_interest), 0) as value 
+            FROM loans 
+            WHERE loan_type = 'GIVEN' AND status = 'Active'
+        `);
+
+        // 5. Loans Taken
+        const loanTakenRes = await client.query(`
+            SELECT COALESCE(SUM(balance_principal + balance_interest), 0) as value 
+            FROM loans 
+            WHERE loan_type = 'TAKEN' AND status = 'Active'
+        `);
+
+        // 6. Fixed Assets (Active assets)
+        const assetRes = await client.query(`
+            SELECT COALESCE(SUM(purchase_cost), 0) as value 
+            FROM assets 
+            WHERE status NOT IN ('Sold', 'Scrapped')
+        `);
+
+        // 7. Bank & Cash Balances
+        const bankRes = await client.query(`
+            SELECT COALESCE(SUM(current_balance), 0) as value 
+            FROM bank_accounts 
+            WHERE is_active = true
+        `);
+
+        const inventory = parseFloat(invRes.rows[0].value);
+        const receivables = parseFloat(recRes.rows[0].value);
+        const loansGiven = parseFloat(loanGivenRes.rows[0].value);
+        const fixedAssets = parseFloat(assetRes.rows[0].value);
+        const bankCash = parseFloat(bankRes.rows[0].value);
+
+        const payables = parseFloat(payRes.rows[0].value);
+        const loansTaken = parseFloat(loanTakenRes.rows[0].value);
+
+        const totalAssets = inventory + receivables + loansGiven + fixedAssets + bankCash;
+        const totalLiabilities = payables + loansTaken;
+        const openingCapital = totalAssets - totalLiabilities;
+
+        res.json({
+            assets: {
+                inventory,
+                receivables,
+                loans_given: loansGiven,
+                fixed_assets: fixedAssets,
+                bank_cash: bankCash,
+                total_assets: totalAssets
+            },
+            liabilities: {
+                payables,
+                loans_taken: loansTaken,
+                total_liabilities: totalLiabilities
+            },
+            opening_capital: openingCapital
+        });
+
+    } catch (err) {
+        console.error('Opening Capital Error:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
