@@ -49,7 +49,7 @@ const handleSmsWebhook = async (req, res) => {
             if (/returned/i.test(content)) isCredit = false;
 
             // 4. Account Matching
-            const acctMatch = content.match(/A\/c X+?(\d{4})/i) || content.match(/ending X+(\d{3,4})/i);
+            const acctMatch = content.match(/A\/c X+?(\d{4,10})/i) || content.match(/ending X+(\d{4,10})/i);
             if (acctMatch) last4 = acctMatch[1];
         }
 
@@ -70,7 +70,7 @@ const handleSmsWebhook = async (req, res) => {
             const refMatch = content.match(/NEFT\/([A-Z0-9]+)\//i) || content.match(/Info-\s?([A-Z0-9\/-]+)/i);
             if (refMatch) bank_ref_id = refMatch[1];
 
-            const acctMatch = content.match(/A\/c (?:no\.\s?)?X+(\d{4,6})/i);
+            const acctMatch = content.match(/A\/c (?:no\.\s?)?X+(\d{4,10})/i);
             if (acctMatch) last4 = acctMatch[1];
         }
 
