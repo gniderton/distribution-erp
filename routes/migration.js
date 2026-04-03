@@ -70,7 +70,7 @@ router.post('/loans', async (req, res) => {
             const loan_number = await generateSequence(client, 'LOAN');
 
             // Insert into Loans table
-            await client.query(`
+            const loanRes = await client.query(`
                 INSERT INTO loans (
                     loan_number, loan_type, party_type, party_id, party_name,
                     principal_amount, interest_rate_pa, tenor_months, emi_amount,
@@ -82,10 +82,32 @@ router.post('/loans', async (req, res) => {
                     $7, $7, $8, 0,
                     'Active', $9, 1
                 )
+                RETURNING id
             `, [
                 loan_number, type, party_type, party_id, party_name,
                 total_amount, loan_date, balance_principal, remarks
             ]);
+
+            const loanId = loanRes.rows[0].id;
+
+            // --- [ NEW ] LOAN TRANSACTIONS FOR MIGRATION ---
+            // 1. Initial Disbursement (Full Principal)
+            await client.query(`
+                INSERT INTO loan_transactions (
+                    loan_id, transaction_date, amount, principal_portion, interest_portion,
+                    transaction_type, payment_mode, reference_no, remarks
+                ) VALUES ($1, $2, $3, $4, 0, 'DISBURSEMENT', 'MIGRATION', 'MIGRATION', 'Historical Disbursement')
+            `, [loanId, loan_date, total_amount, total_amount]);
+
+            // 2. Already Paid Portion (Settlement)
+            if (paid_amount > 0) {
+                await client.query(`
+                    INSERT INTO loan_transactions (
+                        loan_id, transaction_date, amount, principal_portion, interest_portion,
+                        transaction_type, payment_mode, reference_no, remarks
+                    ) VALUES ($1, $2, $3, $4, 0, 'INSTALLMENT', 'MIGRATION', 'MIGRATION', 'Historical Migration Settlement')
+                `, [loanId, loan_date, paid_amount, paid_amount]);
+            }
 
             importedCount++;
         }
