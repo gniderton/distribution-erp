@@ -75,8 +75,15 @@ const handleSmsWebhook = async (req, res) => {
         }
 
         // --- FINAL VALIDATION & DB INSERT ---
-        if (!amount || !bank_ref_id) {
-            return res.json({ success: false, message: "Could not parse amount or ref", bank: bank_name });
+        if (!amount) {
+            return res.json({ success: false, message: "Could not parse amount", bank: bank_name });
+        }
+
+        // --- FALLBACK REF ID ---
+        // If no Ref ID is found in SMS (common for small alerts), generate one to prevent dropping it.
+        if (!bank_ref_id) {
+            const dateStr = new Date().toISOString().split('T')[0];
+            bank_ref_id = `SYNC-${last4 || 'UKN'}-${amount}-${dateStr}`;
         }
 
         if (last4 && last4.length > 4) last4 = last4.substring(last4.length - 4);
