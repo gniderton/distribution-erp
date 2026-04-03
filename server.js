@@ -55,6 +55,10 @@ app.get('/api/debug/db-info', async (req, res) => {
 const vendorRoutes = require('./routes/vendors');
 const productRoutes = require('./routes/products');
 
+// [NEW] Automated Bank Sync (SMS/Email Alerts)
+app.use('/api/bank-inbound', require('./routes/bankInbound'));
+app.use('/api/sms', require('./routes/bankInbound')); // Shorthand alias
+
 app.use('/api/vendors', require('./routes/vendors'));
 app.use('/api/vendor-payments', require('./routes/vendor_payments'));
 app.use('/api/debit-notes', require('./routes/debit_notes')); // [NEW] Debit Notes
@@ -102,7 +106,15 @@ app.use('/api/finance/cheques', require('./routes/cheques')); // [NEW] Cheque Ma
 app.use('/api/finance/transfers', require('./routes/transfers')); // [NEW] Internal Transfers
 app.use('/api/finance/loans', require('./routes/loans')); // [NEW] Loan Management
 app.use('/api', require('./routes/accounting')); // [NEW] Alias for shorter paths like /api/journal-entries
-app.use('/api/backups', require('./routes/backups')); // [NEW] Automated & Manual Backups
+app.get('/api/backups/trigger', async (req, res) => {
+    try {
+        const { performBackup } = require('./services/backupService');
+        const result = await performBackup();
+        res.json({ success: true, message: result.filename });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // [TEMP] Migration Endpoint to fix Combo Schema
 app.get('/api/fix-combo-db', async (req, res) => {
@@ -186,7 +198,8 @@ async function initializeDatabase() {
             { id: '135', path: '135_sync_dn_rs_sequences.sql' },
             { id: '136', path: '136_fix_ledger_view_sorting.sql' },
             { id: '137', path: '137_emp_designation_to_id.sql' },
-            { id: '185', path: '185_employee_targets_schema.sql' }
+            { id: '185', path: '185_employee_targets_schema.sql' },
+            { id: '190', path: '190_bank_sync_unique_constraint.sql' }
         ];
 
         for (const m of migrations) {
