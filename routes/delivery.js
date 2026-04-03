@@ -334,7 +334,7 @@ router.get('/trips/:id/picklist', async (req, res) => {
             ORDER BY p.product_name, sil.mrp
         `, [req.params.id]);
 
-        res.json({ items: result.rows, trip_id: req.params.id });
+        res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -460,7 +460,7 @@ router.get('/trips/:id/manifest', async (req, res) => {
             ORDER BY c.route_sequence ASC
         `, [req.params.id]);
 
-        res.json({ manifest: result.rows, trip_id: req.params.id });
+        res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
