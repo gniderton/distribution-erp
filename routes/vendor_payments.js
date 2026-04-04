@@ -160,7 +160,7 @@ router.post('/', async (req, res) => {
         }
 
         // 5. Handle Bank Statement Consumption (Online Mode)
-        if (mode === 'Online' && bank_statement_entry_id) {
+        if (mode && mode.toUpperCase() === 'ONLINE' && bank_statement_entry_id) {
             await client.query(`
                 UPDATE bank_statement_entries 
                 SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
