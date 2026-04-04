@@ -274,9 +274,9 @@ router.delete('/:id', async (req, res) => {
             await client.query("DELETE FROM journal_entries WHERE id = $1", [record.journal_entry_id]);
         }
 
-        // 5. Deactivate Related Cheques (if applicable)
+        // 5. Cancel Related Cheques (if applicable)
         await client.query(`
-            UPDATE cheques SET is_active = false 
+            UPDATE cheques SET status = 'CANCELLED' 
             WHERE reference_type = 'EXPENSE' AND reference_id = $1
         `, [id]);
 
