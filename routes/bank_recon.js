@@ -82,24 +82,33 @@ router.post('/upload', async (req, res) => {
             const batchId = `BATCH-${Date.now()}`;
 
             for (let entry of entries) {
-                await client.query(`
-                    INSERT INTO bank_statement_entries (
-                        transaction_date, bank_name, particulars, bank_ref_id, 
-                        debit_amount, credit_amount, amount, upload_batch_id,
+                // 🛡️ Smart De-duplication Check
+                const existing = await client.query(`
+                    SELECT id FROM bank_statement_entries 
+                    WHERE (bank_ref_id = $1 AND amount = $2 AND transaction_date = $3)
+                       OR (transaction_date = $3 AND particulars = $4 AND debit_amount = $5 AND credit_amount = $6)
+                    LIMIT 1
+                `, [entry.bank_ref_id || null, entry.credit_amount || 0, entry.transaction_date, entry.particulars, entry.debit_amount || 0, entry.credit_amount || 0]);
+
+                if (existing.rows.length === 0) {
+                    await client.query(`
+                        INSERT INTO bank_statement_entries (
+                            transaction_date, bank_name, particulars, bank_ref_id, 
+                            debit_amount, credit_amount, amount, upload_batch_id,
+                            bank_account_id
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    `, [
+                        entry.transaction_date,
+                        entry.bank_name,
+                        entry.particulars,
+                        entry.bank_ref_id || null,
+                        entry.debit_amount || 0,
+                        entry.credit_amount || 0,
+                        entry.credit_amount || 0, // Legacy amount column = credit
+                        batchId,
                         bank_account_id
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                    ON CONFLICT (transaction_date, particulars, debit_amount, credit_amount) DO NOTHING
-                `, [
-                    entry.transaction_date,
-                    entry.bank_name,
-                    entry.particulars,
-                    entry.bank_ref_id || null,
-                    entry.debit_amount || 0,
-                    entry.credit_amount || 0,
-                    entry.credit_amount || 0, // Legacy amount column = credit
-                    batchId,
-                    bank_account_id
-                ]);
+                    ]);
+                }
             }
 
             await client.query('COMMIT');

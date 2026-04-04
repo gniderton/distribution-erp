@@ -19,7 +19,7 @@ function parseAxisCSV(content) {
                 if (name.includes('DEBIT')) colMap.debit = idx;
                 if (name.includes('CREDIT')) colMap.credit = idx;
                 if (name.includes('AMOUNT')) colMap.amount = idx;
-                if (name.includes('TYPE')) colMap.type = idx;
+                if (name.includes('TYPE') || name.includes('DEBIT/CREDIT')) colMap.type = idx;
             });
             continue;
         }
