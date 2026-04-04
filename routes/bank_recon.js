@@ -13,13 +13,25 @@ router.post('/upload', async (req, res) => {
     let entries = [];
     let buffer = null;
 
-    // Detect if content is Base64 (Retool FilePicker default)
-    if (content.length > 50 && !content.includes('\n') && !content.includes(',')) {
+    // 🛡️ Data Sanitization for Appsmith
+    if (typeof content !== 'string') {
+        return res.status(400).json({ error: "Invalid 'content' type. Please ensure you have set Data Format to 'Base64' in Appsmith's FilePicker." });
+    }
+
+    // Detect and Strip Data URI prefix (e.g., data:application/pdf;base64,....)
+    const isDataURI = content.startsWith('data:') && content.includes(';base64,');
+    if (isDataURI) {
+        content = content.split(';base64,').pop();
+    }
+
+    // Detect if content is Base64 (Retool/Appsmith FilePicker default)
+    const isBase64 = content.length > 50 && (!content.includes('\n') || isDataURI);
+    if (isBase64) {
         try {
             buffer = Buffer.from(content, 'base64');
             // Check for XLSX magic bytes "PK" (50 4B)
             if (buffer[0] === 0x50 && buffer[1] === 0x4B) {
-                // It's an Excel file
+                // It's an Excel file, keep buffer
             } else {
                 // Try to treat as text
                 content = buffer.toString('utf8');
