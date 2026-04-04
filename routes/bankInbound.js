@@ -90,33 +90,51 @@ const handleSmsWebhook = async (req, res) => {
 
         let bank_account_id = null;
         if (last4) {
+            console.log(`[Bank Inbound] Searching for account suffix: ${last4}`);
             const acctQuery = await pool.query(
                 "SELECT id FROM bank_accounts WHERE account_number LIKE '%' || $1 AND is_active = true LIMIT 1",
                 [last4]
             );
-            if (acctQuery.rows.length > 0) bank_account_id = acctQuery.rows[0].id;
+            if (acctQuery.rows.length > 0) {
+                bank_account_id = acctQuery.rows[0].id;
+                console.log(`[Bank Inbound] MATCHED to Account ID: ${bank_account_id}`);
+            } else {
+                console.log(`[Bank Inbound] FAILED: No active account ends with ${last4}`);
+            }
         }
 
         if (!bank_account_id) {
+            console.log(`[Bank Inbound] REJECTED: Final Bank Account ID is null.`);
             return res.json({ 
                 success: false, 
-                message: "Ignored: No matching company account found." 
+                message: `Ignored: ERP does not recognize account ending in ${last4 || 'unknown'}` 
             });
         }
 
+        console.log(`[Bank Inbound] INSERTING: Ref=${bank_ref_id}, Amt=${amount}, Acct=${bank_account_id}`);
         const result = await pool.query(`
             INSERT INTO bank_statement_entries 
             (transaction_date, bank_name, particulars, bank_ref_id, amount, credit_amount, debit_amount, status, bank_account_id)
             VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, $6, 'Alert-Pending', $7)
             ON CONFLICT (bank_account_id, bank_ref_id, amount, transaction_date) DO NOTHING
             RETURNING id
-        `, [bank_name, content, bank_ref_id, amount, isCredit ? amount : 0, isCredit ? 0 : amount, bank_account_id]);
+        `, [
+            bank_name,
+            content.substring(0, 500),
+            bank_ref_id,
+            amount,
+            isCredit ? amount : 0,
+            isCredit ? 0 : amount,
+            bank_account_id
+        ]);
 
-        if (result.rows.length === 0) {
-            return res.json({ success: true, message: "Duplicate transaction ignored" });
+        if (result.rows.length > 0) {
+            console.log(`[Bank Inbound] SUCCESS: Saved as ID ${result.rows[0].id}`);
+            return res.json({ success: true, message: "Transaction recorded successfully", id: result.rows[0].id });
+        } else {
+            console.log(`[Bank Inbound] DUPLICATE: This transaction was already recorded.`);
+            return res.json({ success: true, message: "Duplicate ignored (Already exists)" });
         }
-
-        res.json({ success: true, message: "Transaction added", id: result.rows[0].id, bank: bank_name, type: isCredit ? 'Credit' : 'Debit' });
 
     } catch (err) {
         console.error("[Bank Webhook] Error:", err.message);
