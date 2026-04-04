@@ -55,13 +55,14 @@ function parseAxisCSV(content) {
 
         if ((debit > 0 || credit > 0) && date && particulars) {
             const refId = extractReference(particulars);
+            const amount = Math.max(debit, credit);
             entries.push({
                 transaction_date: formatDateAxis(date.replace(/"/g, '').trim()),
                 particulars: particulars,
                 bank_ref_id: refId,
                 debit_amount: debit,
                 credit_amount: credit,
-                amount: credit, // Legacy support
+                amount: amount, 
                 bank_name: 'Axis'
             });
         }
@@ -91,14 +92,15 @@ function parseIDFCText(content) {
 
         if (debit > 0 || credit > 0) {
             const refId = extractReference(particulars);
+            const amount = Math.max(debit, credit);
             entries.push({
                 transaction_date: formatDateIDFC(date),
                 particulars: particulars,
-                bank_ref_id: refId, // Now optional
+                bank_ref_id: refId,
                 debit_amount: debit,
                 credit_amount: credit,
-                amount: credit, // Legacy support
-                bank_name: 'IDFC'
+                amount: amount,
+                bank_name: 'IDFC First Bank (Calicut)'
             });
         }
     }
@@ -128,12 +130,15 @@ function parseExcel(buffer, bank_name) {
     const colMap = {};
     header.forEach((cell, idx) => {
         if (!cell) return;
-        const name = String(cell).toLowerCase().replace(/[\s\n\t\(\)\/]/g, ''); // Clean formatting
-        if (name.includes('transactiondate') || name.includes('date')) colMap.date = idx;
+        const name = String(cell).toLowerCase().replace(/[\s\n\t\(\)\/]/g, ''); 
+        if ((name.includes('transactiondate') || name.includes('date')) && !name.includes('value')) colMap.date = idx;
         if (name.includes('particular')) colMap.particulars = idx;
-        if (name.includes('debit')) colMap.debit = idx;
-        if (name.includes('credit')) colMap.credit = idx;
-        if (name.includes('amount')) colMap.amount = idx; 
+        
+        // Strict mapping: Ignore 'Balance' for debit/credit
+        if (name.includes('debit') && !name.includes('balance')) colMap.debit = idx;
+        if (name.includes('credit') && !name.includes('balance')) colMap.credit = idx;
+        
+        if (name === 'amount') colMap.amount = idx; // Pure amount column
         if (name.includes('type')) colMap.type = idx;
     });
 
@@ -166,13 +171,14 @@ function parseExcel(buffer, bank_name) {
 
         if ((debit > 0 || credit > 0) && dateStr && particulars) {
             const refId = extractReference(particulars);
+            const amount = Math.max(debit, credit);
             entries.push({
                 transaction_date: formatGenericDate(dateStr),
                 particulars: String(particulars),
                 bank_ref_id: refId,
                 debit_amount: debit,
                 credit_amount: credit,
-                amount: credit, // Legacy support
+                amount: amount,
                 bank_name: bank_name
             });
         }

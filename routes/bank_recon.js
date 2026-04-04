@@ -90,7 +90,7 @@ router.post('/upload', async (req, res) => {
                         OR (transaction_date = $3 AND particulars = $4 AND debit_amount = $5 AND credit_amount = $6)
                     )
                     LIMIT 1
-                `, [entry.bank_ref_id || null, entry.credit_amount || 0, entry.transaction_date, entry.particulars, entry.debit_amount || 0, entry.credit_amount || 0, bank_account_id]);
+                `, [entry.bank_ref_id || null, entry.amount || 0, entry.transaction_date, entry.particulars, entry.debit_amount || 0, entry.credit_amount || 0, bank_account_id]);
 
                 if (existing.rows.length === 0) {
                     await client.query(`
@@ -106,7 +106,7 @@ router.post('/upload', async (req, res) => {
                         entry.bank_ref_id || null,
                         entry.debit_amount || 0,
                         entry.credit_amount || 0,
-                        entry.credit_amount || 0, // Legacy amount column = credit
+                        entry.amount || 0, 
                         batchId,
                         bank_account_id
                     ]);
