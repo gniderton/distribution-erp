@@ -4,33 +4,61 @@ function parseAxisCSV(content) {
     const lines = content.split('\n');
     const entries = [];
     let startParsing = false;
+    let colMap = { date: 1, particulars: 3, debit: 4, credit: 5 }; // Default for the report format
 
     for (let line of lines) {
-        if (line.includes('S.No,Transaction Date')) {
+        const upperLine = line.toUpperCase();
+        // 1. Detect Header
+        if (upperLine.includes('TRANSACTION DATE') && upperLine.includes('PARTICULARS')) {
             startParsing = true;
+            const headers = line.split(',');
+            headers.forEach((h, idx) => {
+                const name = h.toUpperCase();
+                if (name.includes('TRANSACTION DATE')) colMap.date = idx;
+                if (name.includes('PARTICULARS')) colMap.particulars = idx;
+                if (name.includes('DEBIT')) colMap.debit = idx;
+                if (name.includes('CREDIT')) colMap.credit = idx;
+                if (name.includes('AMOUNT')) colMap.amount = idx;
+                if (name.includes('TYPE')) colMap.type = idx;
+            });
             continue;
         }
+
         if (!startParsing || !line.trim()) continue;
-        if (line.includes('TRANSACTION TOTAL')) break;
+        if (upperLine.includes('TRANSACTION TOTAL') || upperLine.includes('CLOSING BALANCE')) break;
+        if (upperLine.includes('OPENING BALANCE')) continue;
 
         const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); // Split by comma outside quotes
-        if (parts.length < 7) continue;
+        if (parts.length < 5) continue;
 
-        const date = parts[1];
-        const particulars = parts[3].replace(/"/g, '').trim();
-        const amountStr = parts[4].replace(/"/g, '').replace(/[	,]/g, '').trim();
-        const type = parts[5].trim().toUpperCase(); // CR or DR
-        const amount = parseFloat(amountStr);
+        const date = parts[colMap.date];
+        const particulars = parts[colMap.particulars]?.replace(/"/g, '').trim();
+        
+        let debit = 0;
+        let credit = 0;
 
-        if (!isNaN(amount)) {
+        // Clean amount strings of quotes, tabs, and commas
+        const cleanVal = (val) => parseFloat(String(val).replace(/"/g, '').replace(/[\t\s,]/g, '').trim()) || 0;
+
+        if (colMap.debit !== undefined && colMap.credit !== undefined) {
+            debit = cleanVal(parts[colMap.debit]);
+            credit = cleanVal(parts[colMap.credit]);
+        } else if (colMap.amount !== undefined && colMap.type !== undefined) {
+            const val = cleanVal(parts[colMap.amount]);
+            const type = parts[colMap.type]?.toUpperCase() || '';
+            if (type.includes('CR')) credit = val;
+            else if (type.includes('DR')) debit = val;
+        }
+
+        if ((debit > 0 || credit > 0) && date && particulars) {
             const refId = extractReference(particulars);
             entries.push({
-                transaction_date: formatDateAxis(date),
+                transaction_date: formatDateAxis(date.replace(/"/g, '').trim()),
                 particulars: particulars,
-                bank_ref_id: refId, // Now optional
-                debit_amount: type === 'DR' ? amount : 0,
-                credit_amount: type === 'CR' ? amount : 0,
-                amount: type === 'CR' ? amount : 0, // Legacy support
+                bank_ref_id: refId,
+                debit_amount: debit,
+                credit_amount: credit,
+                amount: credit, // Legacy support
                 bank_name: 'Axis'
             });
         }
@@ -97,23 +125,14 @@ function parseExcel(buffer, bank_name) {
     const colMap = {};
     header.forEach((cell, idx) => {
         if (!cell) return;
-        const name = cell.toLowerCase().replace(/[\s\n\t]/g, '');
-        if (name.includes('date')) colMap.date = idx;
+        const name = String(cell).toLowerCase().replace(/[\s\n\t\(\)\/]/g, ''); // Clean formatting
+        if (name.includes('transactiondate') || name.includes('date')) colMap.date = idx;
         if (name.includes('particular')) colMap.particulars = idx;
         if (name.includes('debit')) colMap.debit = idx;
         if (name.includes('credit')) colMap.credit = idx;
-        if (name.includes('amount')) colMap.amount = idx; // Some use 'Amount' and 'Type'
+        if (name.includes('amount')) colMap.amount = idx; 
         if (name.includes('type')) colMap.type = idx;
     });
-
-    // Fallback if generic labels fail (IDFC often has un-labelled headers)
-    // Based on inspection: 0: Date, 2: Particulars, 4: Debit, 5: Credit
-    if (Object.keys(colMap).length < 2) {
-        colMap.date = 0;
-        colMap.particulars = 2;
-        colMap.debit = 4;
-        colMap.credit = 5;
-    }
 
     for (let i = headerIdx + 1; i < data.length; i++) {
         const row = data[i];
@@ -122,17 +141,24 @@ function parseExcel(buffer, bank_name) {
         const dateStr = row[colMap.date];
         const particulars = row[colMap.particulars];
 
+        if (!dateStr || !particulars || String(particulars).toUpperCase().includes('TOTAL')) continue;
+
         let debit = 0;
         let credit = 0;
 
+        const cleanVal = (val) => {
+            if (typeof val === 'number') return val;
+            return parseFloat(String(val).replace(/[\t\s,]/g, '').trim()) || 0;
+        };
+
         if (colMap.debit !== undefined && colMap.credit !== undefined) {
-            debit = parseFloat(row[colMap.debit]) || 0;
-            credit = parseFloat(row[colMap.credit]) || 0;
+            debit = cleanVal(row[colMap.debit]);
+            credit = cleanVal(row[colMap.credit]);
         } else if (colMap.amount !== undefined && colMap.type !== undefined) {
             const type = String(row[colMap.type]).toUpperCase();
-            const val = parseFloat(row[colMap.amount]);
+            const val = cleanVal(row[colMap.amount]);
             if (type.includes('CR')) credit = val;
-            if (type.includes('DR')) debit = val;
+            else if (type.includes('DR')) debit = val;
         }
 
         if ((debit > 0 || credit > 0) && dateStr && particulars) {
