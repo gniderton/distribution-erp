@@ -76,7 +76,7 @@ router.post('/upload', async (req, res) => {
                         debit_amount, credit_amount, amount, upload_batch_id,
                         bank_account_id
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                    ON CONFLICT (bank_account_id, transaction_date, particulars, bank_ref_id, debit_amount, credit_amount) DO NOTHING
+                    ON CONFLICT (bank_ref_id, amount, transaction_date) DO NOTHING
                 `, [
                     entry.transaction_date,
                     entry.bank_name,
