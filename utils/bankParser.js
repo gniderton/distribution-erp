@@ -11,15 +11,18 @@ function parseAxisCSV(content) {
         // 1. Detect Header
         if (upperLine.includes('TRANSACTION DATE') && upperLine.includes('PARTICULARS')) {
             startParsing = true;
+            colMap = {}; // Reset default map to use discovered columns only
             const headers = line.split(',');
             headers.forEach((h, idx) => {
                 const name = h.toUpperCase();
+                if (name === 'DEBIT') colMap.debit = idx;
+                else if (name === 'CREDIT') colMap.credit = idx;
+                else if (name.includes('DEBIT') && name.includes('CREDIT')) colMap.type = idx;
+                
                 if (name.includes('TRANSACTION DATE')) colMap.date = idx;
                 if (name.includes('PARTICULARS')) colMap.particulars = idx;
-                if (name.includes('DEBIT')) colMap.debit = idx;
-                if (name.includes('CREDIT')) colMap.credit = idx;
                 if (name.includes('AMOUNT')) colMap.amount = idx;
-                if (name.includes('TYPE') || name.includes('DEBIT/CREDIT')) colMap.type = idx;
+                if (name.includes('TYPE')) colMap.type = idx;
             });
             continue;
         }
