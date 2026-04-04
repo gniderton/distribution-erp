@@ -266,19 +266,19 @@ router.delete('/:id', async (req, res) => {
             `, [record.amount, record.bank_statement_entry_id]);
         }
 
-        // 3. Delete Journal Entry (triggers bank balance reversal via DB trigger)
+        // 3. Soft Deactivate and Nullify Reference (to avoid FK violation during JE deletion)
+        await client.query("UPDATE expenses SET is_active = false, journal_entry_id = NULL WHERE id = $1", [id]);
+
+        // 4. Delete Journal Entry (triggers bank balance reversal via DB trigger)
         if (record.journal_entry_id) {
             await client.query("DELETE FROM journal_entries WHERE id = $1", [record.journal_entry_id]);
         }
 
-        // 4. Deactivate Related Cheques (if applicable)
+        // 5. Deactivate Related Cheques (if applicable)
         await client.query(`
             UPDATE cheques SET is_active = false 
             WHERE reference_type = 'EXPENSE' AND reference_id = $1
         `, [id]);
-
-        // 5. Deactivate Main Record
-        await client.query("UPDATE expenses SET is_active = false WHERE id = $1", [id]);
 
         await client.query('COMMIT');
         res.json({ success: true, message: "Expense record and accounting effects reversed successfully" });
