@@ -309,12 +309,12 @@ router.post('/payment', async (req, res) => {
         `, [asset_id, payment_date, amount, journalId, remarks, bank_statement_entry_id]);
 
         // 4. Handle Online (Bank Statement Consumption)
-        if (payment_mode === 'Online' && bank_statement_entry_id) {
+        if (payment_mode && payment_mode.toUpperCase() === 'ONLINE' && bank_statement_entry_id) {
             await client.query(`
                 UPDATE bank_statement_entries 
                 SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
                     status = CASE 
-                        WHEN (debit_amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
+                        WHEN (amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
                         ELSE 'Partially Consumed'
                     END
                 WHERE id = $2
@@ -419,7 +419,7 @@ router.post('/:id/sale-payment', async (req, res) => {
         `, [id, payment_date, amount, journalId, `${remarks || ''}${online_reference_no ? ' (Ref: ' + online_reference_no + ')' : ''}`.trim(), bank_statement_entry_id]);
 
         // 5. Handle Bank Statement (Reconciliation)
-        if (payment_mode === 'Online' && bank_statement_entry_id) {
+        if (payment_mode && payment_mode.toUpperCase() === 'ONLINE' && bank_statement_entry_id) {
             await client.query(`
                 UPDATE bank_statement_entries 
                 SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
@@ -651,12 +651,12 @@ router.post('/:id/sale-payment', async (req, res) => {
         `, [id, payment_date, amount, journalId, `${remarks || ''}${online_reference_no ? ' (Ref: ' + online_reference_no + ')' : ''}`.trim()]);
 
         // 5. Handle Bank Statement (Reconciliation)
-        if (payment_mode === 'Online' && bank_statement_entry_id) {
+        if (payment_mode && payment_mode.toUpperCase() === 'ONLINE' && bank_statement_entry_id) {
             await client.query(`
                 UPDATE bank_statement_entries 
                 SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
                     status = CASE 
-                        WHEN (credit_amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
+                        WHEN (amount - (COALESCE(consumed_amount, 0) + $1)) <= 0.01 THEN 'Exhausted'
                         ELSE 'Partially Consumed'
                     END
                 WHERE id = $2
