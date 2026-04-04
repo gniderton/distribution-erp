@@ -114,6 +114,83 @@ router.post('/', async (req, res) => {
     }
 });
 
+// @route   DELETE /api/finance/transfers/:id
+// @desc    Reverse an internal transfer
+router.delete('/:id', async (req, res) => {
+    const { id } = req.params;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Fetch Transfer Details
+        const transferRes = await client.query(`
+            SELECT 
+                journal_entry_id, 
+                from_bank_statement_entry_id, 
+                to_bank_statement_entry_id, 
+                amount,
+                is_active
+            FROM internal_transfers 
+            WHERE id = $1
+        `, [id]);
+
+        if (transferRes.rows.length === 0) throw new Error('Transfer not found');
+        const transfer = transferRes.rows[0];
+
+        if (!transfer.is_active) {
+            return res.json({ success: true, message: 'Transfer already reversed' });
+        }
+
+        // 2. Reverse Bank Statement Consumption (From-side)
+        if (transfer.from_bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = GREATEST(0, COALESCE(consumed_amount, 0) - $1),
+                    status = CASE 
+                        WHEN (amount - (GREATEST(0, COALESCE(consumed_amount, 0) - $1))) >= amount - 0.01 THEN 'Available'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [transfer.amount, transfer.from_bank_statement_entry_id]);
+        }
+
+        // 3. Reverse Bank Statement Consumption (To-side)
+        if (transfer.to_bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = GREATEST(0, COALESCE(consumed_amount, 0) - $1),
+                    status = CASE 
+                        WHEN (amount - (GREATEST(0, COALESCE(consumed_amount, 0) - $1))) >= amount - 0.01 THEN 'Available'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [transfer.amount, transfer.to_bank_statement_entry_id]);
+        }
+
+        // 4. Nullify Reference & Deactivate
+        await client.query(`
+            UPDATE internal_transfers 
+            SET is_active = false, journal_entry_id = NULL 
+            WHERE id = $1
+        `, [id]);
+
+        // 5. Delete Journal Entry (Triggers bank balance reversal for BOTH accounts)
+        if (transfer.journal_entry_id) {
+            await client.query(`DELETE FROM journal_entries WHERE id = $1`, [transfer.journal_entry_id]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Transfer and accounting effects reversed successfully' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Delete Transfer Error:', err.message);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // @route   GET /api/finance/transfers
 // @desc    Get transfer history
 router.get('/', async (req, res) => {
@@ -126,6 +203,7 @@ router.get('/', async (req, res) => {
             FROM internal_transfers it
             JOIN bank_accounts fa ON it.from_account_id = fa.id
             JOIN bank_accounts ta ON it.to_account_id = ta.id
+            WHERE it.is_active = true
             ORDER BY it.transfer_date DESC, it.id DESC
         `);
         res.json(result.rows);
