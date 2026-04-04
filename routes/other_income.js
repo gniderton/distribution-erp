@@ -209,4 +209,64 @@ router.post('/', async (req, res) => {
     }
 });
 
+// 4. Delete (Deactivate) Other Income
+router.delete('/:id', async (req, res) => {
+    const { id } = req.params;
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. Fetch record to get linked IDs
+        const recordRes = await client.query(`
+            SELECT journal_entry_id, bank_statement_entry_id, amount, is_active 
+            FROM other_income WHERE id = $1
+        `, [id]);
+
+        if (recordRes.rows.length === 0) throw new Error("Other Income record not found");
+        const record = recordRes.rows[0];
+
+        if (!record.is_active) {
+            return res.json({ success: true, message: "Record already deactivated" });
+        }
+
+        // 2. Reverse Bank Statement Consumption (if applicable)
+        if (record.bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = GREATEST(0, COALESCE(consumed_amount, 0) - $1),
+                    status = CASE 
+                        WHEN (credit_amount - (GREATEST(0, COALESCE(consumed_amount, 0) - $1))) >= credit_amount - 0.01 THEN 'Available'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [record.amount, record.bank_statement_entry_id]);
+        }
+
+        // 3. Delete Journal Entry (triggers bank balance reversal via DB trigger)
+        if (record.journal_entry_id) {
+            await client.query("DELETE FROM journal_entries WHERE id = $1", [record.journal_entry_id]);
+        }
+
+        // 4. Deactivate Related Cheques (if applicable)
+        await client.query(`
+            UPDATE cheques SET is_active = false 
+            WHERE reference_type = 'OTHER_INCOME' AND reference_id = $1
+        `, [id]);
+
+        // 5. Deactivate Main Record
+        await client.query("UPDATE other_income SET is_active = false WHERE id = $1", [id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Other Income record and accounting effects reversed successfully" });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Delete Other Income Error:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
