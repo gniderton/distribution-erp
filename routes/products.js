@@ -337,8 +337,7 @@ router.put('/batches/:id', async (req, res) => {
                 wholesale_rate = COALESCE($6, wholesale_rate),
                 dealer_rate = COALESCE($7, dealer_rate),
                 retail_rate = COALESCE($8, retail_rate),
-                status = COALESCE($9, status),
-                updated_at = NOW()
+                status = COALESCE($9, status)
             WHERE id = $10
         `, [
             batch_code, mrp, expiry_date, purchase_rate,
