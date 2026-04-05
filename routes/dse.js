@@ -260,25 +260,19 @@ router.post('/eod-sync', async (req, res) => {
             denominations.coins || 0, denominations.total || 0, syncId, reportId
         ]);
 
-        // --- 4. Finalize Daily Sales Report Totals ---
-        const totalCash = payments.filter(p => p.mode === 'Cash').reduce((acc, p) => acc + (p.amount || 0), 0);
-        const totalCheque = payments.filter(p => p.mode === 'Cheque').reduce((acc, p) => acc + (p.amount || 0), 0);
-        const totalOnline = payments.filter(p => p.mode === 'Online').reduce((acc, p) => acc + (p.amount || 0), 0);
-
+        // --- 4. Finalize Daily Sales Report Totals (Smart Summary Logic) ---
         await client.query(`
             UPDATE daily_sales_reports SET
                 total_orders = $1,
                 total_order_value = $2,
-                total_collection_cash = $3,
-                total_collection_cheque = $4,
-                total_collection_online = $5,
-                total_expense = $6,
+                total_collection_cash = (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE report_id = $3 AND payment_mode = 'Cash'),
+                total_collection_cheque = (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE report_id = $3 AND payment_mode = 'Cheque'),
+                total_collection_online = (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE report_id = $3 AND payment_mode NOT IN ('Cash', 'Cheque')),
+                total_expense = (SELECT COALESCE(SUM(amount), 0) FROM dse_expenses WHERE report_id = $3),
                 submitted_at = NOW()
-            WHERE id = $7
+            WHERE id = $3
         `, [
             orders.length, totalOrderValue,
-            totalCash, totalCheque, totalOnline,
-            totalExpense,
             reportId
         ]);
 
