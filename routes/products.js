@@ -307,6 +307,66 @@ router.get('/:id/batches', async (req, res) => {
     }
 });
 
+// 27b. PUT /api/products/batches/:id - Update batch details with recalculated margins
+router.put('/batches/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // 0. Flatten the body if it comes from a Sectioned JSON Form
+        let flatBody = { ...req.body };
+        Object.keys(flatBody).forEach(key => {
+            if (typeof flatBody[key] === 'object' && flatBody[key] !== null && !Array.isArray(flatBody[key])) {
+                flatBody = { ...flatBody, ...flatBody[key] };
+                delete flatBody[key];
+            }
+        });
+
+        const {
+            batch_code, mrp, expiry_date, purchase_rate,
+            distributor_rate, wholesale_rate, dealer_rate, retail_rate, status
+        } = flatBody;
+
+        // 1. Update the record
+        await pool.query(`
+            UPDATE inventory_batches SET
+                batch_code = COALESCE($1, batch_code),
+                mrp = COALESCE($2, mrp),
+                expiry_date = COALESCE($3, expiry_date),
+                purchase_rate = COALESCE($4, purchase_rate),
+                distributor_rate = COALESCE($5, distributor_rate),
+                wholesale_rate = COALESCE($6, wholesale_rate),
+                dealer_rate = COALESCE($7, dealer_rate),
+                retail_rate = COALESCE($8, retail_rate),
+                status = COALESCE($9, status),
+                updated_at = NOW()
+            WHERE id = $10
+        `, [
+            batch_code, mrp, expiry_date, purchase_rate,
+            distributor_rate, wholesale_rate, dealer_rate, retail_rate, status,
+            id
+        ]);
+
+        // 2. Fetch the updated row with same margin calculation as the GET list
+        const updatedRes = await pool.query(`
+            SELECT 
+                id, batch_code, mrp, expiry_date, quantity_remaining, purchase_rate, status, product_id,
+                distributor_rate, wholesale_rate, dealer_rate, retail_rate,
+                ROUND(CASE WHEN purchase_rate > 0 THEN ((distributor_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END, 2) as distributor_margin_pct,
+                ROUND(CASE WHEN purchase_rate > 0 THEN ((wholesale_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END, 2) as wholesale_margin_pct,
+                ROUND(CASE WHEN purchase_rate > 0 THEN ((dealer_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END, 2) as dealer_margin_pct,
+                ROUND(CASE WHEN purchase_rate > 0 THEN ((retail_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END, 2) as retail_margin_pct
+            FROM inventory_batches
+            WHERE id = $1
+        `, [id]);
+
+        res.json({ success: true, batch: updatedRes.rows[0] });
+
+    } catch (err) {
+        console.error("Edit Product Batch Error:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /api/products
 // POST /api/products
 router.post('/', async (req, res) => {
