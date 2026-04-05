@@ -279,11 +279,11 @@ router.get('/:id/batches', async (req, res) => {
             SELECT 
                 id, batch_code, mrp, expiry_date, quantity_remaining, purchase_rate, status,
                 distributor_rate, wholesale_rate, dealer_rate, retail_rate,
-                -- 📐 Calculated Margin Percentages
-                CASE WHEN purchase_rate > 0 THEN ((distributor_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END as distributor_margin_pct,
-                CASE WHEN purchase_rate > 0 THEN ((wholesale_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END as wholesale_margin_pct,
-                CASE WHEN purchase_rate > 0 THEN ((dealer_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END as dealer_margin_pct,
-                CASE WHEN purchase_rate > 0 THEN ((retail_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END as retail_margin_pct
+                -- 📐 Calculated Margin Percentages (Rounded to 2 Decimals)
+                ROUND(CASE WHEN purchase_rate > 0 THEN ((distributor_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END, 2) as distributor_margin_pct,
+                ROUND(CASE WHEN purchase_rate > 0 THEN ((wholesale_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END, 2) as wholesale_margin_pct,
+                ROUND(CASE WHEN purchase_rate > 0 THEN ((dealer_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END, 2) as dealer_margin_pct,
+                ROUND(CASE WHEN purchase_rate > 0 THEN ((retail_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END, 2) as retail_margin_pct
             FROM inventory_batches
             WHERE product_id = $1
         `;
