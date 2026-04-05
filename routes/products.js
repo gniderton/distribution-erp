@@ -269,16 +269,37 @@ router.get('/:id/stats', async (req, res) => {
     }
 });
 
-// GET /api/products/:id/batches - Fetch available inventory batches for a product
+// GET /api/products/:id/batches - Fetch available inventory batches for a product with margins
 router.get('/:id/batches', async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query(`
-            SELECT id, batch_code, mrp, expiry_date, quantity_remaining, purchase_rate, status
+        const { stock_type = 'all' } = req.query; // all, non-zero, zero
+
+        let query = `
+            SELECT 
+                id, batch_code, mrp, expiry_date, quantity_remaining, purchase_rate, status,
+                distributor_rate, wholesale_rate, dealer_rate, retail_rate,
+                -- 📐 Calculated Margin Percentages
+                CASE WHEN purchase_rate > 0 THEN ((distributor_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END as distributor_margin_pct,
+                CASE WHEN purchase_rate > 0 THEN ((wholesale_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END as wholesale_margin_pct,
+                CASE WHEN purchase_rate > 0 THEN ((dealer_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END as dealer_margin_pct,
+                CASE WHEN purchase_rate > 0 THEN ((retail_rate - purchase_rate) / purchase_rate) * 100 ELSE 0 END as retail_margin_pct
             FROM inventory_batches
             WHERE product_id = $1
-            ORDER BY created_at DESC
-        `, [id]);
+        `;
+
+        const params = [id];
+
+        // 🎯 Stock Filtering Logic
+        if (stock_type === 'non-zero') {
+            query += ` AND quantity_remaining > 0`;
+        } else if (stock_type === 'zero') {
+            query += ` AND quantity_remaining <= 0`;
+        }
+
+        query += ` ORDER BY created_at DESC`;
+
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
         console.error("Fetch Product Batches Error:", err.message);
