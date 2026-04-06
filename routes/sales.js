@@ -720,6 +720,155 @@ router.post('/orders/:id/dispatch', async (req, res) => {
 
 // --- SALES RETURNS (Credit/Debit Notes) ---
 
+
+// POST /api/sales/returns/manual - Create a Manual Credit Note (LIFO Allocation)
+router.post('/returns/manual', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const {
+            customer_id, invoice_id, type, remarks, items,
+            return_date, created_by
+        } = req.body;
+
+        if (!items || items.length === 0) return res.status(400).json({ error: 'No items or amount in return' });
+
+        await client.query('BEGIN');
+
+        // 1. Generate Return Number (SRN-YY-SEQ) - Same series
+        const yy = new Date().getFullYear().toString().slice(-2);
+        const seqRes = await client.query("SELECT COUNT(*) FROM sales_returns WHERE return_number LIKE $1", [`SRN-${yy}-%`]);
+        const nextSeq = parseInt(seqRes.rows[0].count) + 1;
+        const returnNumber = `SRN-${yy}-${String(nextSeq).padStart(4, '0')}`;
+
+        // 2. Initial Totals Calculation
+        let totalTaxable = 0;
+        let totalTax = 0;
+        let grandTotal = 0;
+
+        // 3. Insert Header
+        const headRes = await client.query(`
+            INSERT INTO sales_returns (
+                return_number, customer_id, invoice_id, return_date,
+                type, remarks, status, created_by
+            ) VALUES ($1, $2, $3, $4, $5, $6, 'Applied', $7)
+            RETURNING id
+        `, [
+            returnNumber, customer_id, invoice_id, return_date || new Date(),
+            type || 'Sales Return', remarks, created_by
+        ]);
+        const returnId = headRes.rows[0].id;
+
+        // 4. Process Lines
+        for (const item of items) {
+            // These values are expected to be recalculated by Appsmith (Net, Taxable, etc.)
+            const qty = Number(item.Qty || 1);
+            const taxable = Number(item['Taxable $'] || 0);
+            const taxAmt = Number(item['GST $'] || 0);
+            const lineTotal = Number(item['Net $'] || 0);
+            const rate = Number(item.Price || 0);
+            const taxPct = Number(item['GST %'] || 0);
+
+            await client.query(`
+                INSERT INTO sales_return_lines (
+                    return_id, product_id, batch_id, qty, rate,
+                    tax_percent, tax_amount, amount, reason, return_to_stock
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            `, [
+                returnId, 
+                item._product_id?.startsWith('FLAT_') ? null : item._product_id, 
+                item.batch_id || null, 
+                qty, rate,
+                taxPct, taxAmt, lineTotal, item.reason || remarks,
+                item.return_to_stock === true // Flat adjustments usually false
+            ]);
+
+            totalTaxable += taxable;
+            totalTax += taxAmt;
+            grandTotal += lineTotal;
+        }
+
+        // Update Header with finalized totals
+        await client.query(`
+            UPDATE sales_returns 
+            SET total_taxable = $1, total_tax = $2, grand_total = $3 
+            WHERE id = $4
+        `, [totalTaxable, totalTax, grandTotal, returnId]);
+
+        // 5. ALLOCATION LOGIC (LIFO)
+        let remainingToAllocate = grandTotal;
+
+        // A. Priority: Linked Invoice
+        if (invoice_id && remainingToAllocate > 0) {
+            const invRes = await client.query(`
+                SELECT id, grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0) as balance
+                FROM sales_invoices WHERE id = $1
+            `, [invoice_id]);
+            
+            if (invRes.rows.length > 0) {
+                const balance = Number(invRes.rows[0].balance);
+                const alloc = Math.min(balance, remainingToAllocate);
+                if (alloc > 0) {
+                    await client.query(`
+                        INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id)
+                        VALUES ($1, $2, NOW(), $3)
+                    `, [invoice_id, alloc, returnId]);
+                    remainingToAllocate -= alloc;
+                }
+            }
+        }
+
+        // B. Spillover: LIFO (Newest First)
+        if (remainingToAllocate > 0.01) {
+            const pendingRes = await client.query(`
+                SELECT id, (grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0)) as balance
+                FROM sales_invoices
+                WHERE customer_id = $1 AND status != 'Cancelled'
+                AND (grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0)) > 0
+                AND id != $2
+                ORDER BY invoice_date DESC, created_at DESC
+            `, [customer_id, invoice_id || -1]);
+
+            for (const inv of pendingRes.rows) {
+                if (remainingToAllocate <= 0.01) break;
+                const alloc = Math.min(Number(inv.balance), remainingToAllocate);
+                await client.query(`
+                    INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id)
+                    VALUES ($1, $2, NOW(), $3)
+                `, [inv.id, alloc, returnId]);
+                remainingToAllocate -= alloc;
+            }
+        }
+
+        // 6. ACCOUNTING (LEDGER)
+        const acc_ar = 1101, acc_returns = 4003, acc_cgst = 2011, acc_sgst = 2012;
+        const ledgerLines = [
+            { code: acc_ar, debit: 0, credit: grandTotal },
+            { code: acc_returns, debit: totalTaxable, credit: 0 }
+        ];
+
+        if (totalTax > 0) {
+            const halfTax = Number((totalTax / 2).toFixed(2));
+            const otherHalf = Number((totalTax - halfTax).toFixed(2));
+            ledgerLines.push({ code: acc_cgst, debit: halfTax, credit: 0 });
+            ledgerLines.push({ code: acc_sgst, debit: otherHalf, credit: 0 });
+        }
+
+        await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [
+            new Date(), `Manual Credit Note: ${returnNumber}`, 'SALES_RET', returnId, JSON.stringify(ledgerLines)
+        ]);
+
+        await client.query('COMMIT');
+        res.status(201).json({ success: true, return_number: returnNumber, id: returnId, message: 'Credit Note Applied' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Manual Return Error:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // POST /api/sales/returns - Create a Return (Draft)
 router.post('/returns', async (req, res) => {
     const client = await pool.connect();
