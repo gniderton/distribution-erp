@@ -234,14 +234,15 @@ router.post('/:id/bounce', async (req, res) => {
         if (chqRes.rows.length === 0) throw new Error('Cheque not found or already processed');
         const chq = chqRes.rows[0];
 
-        // 2. Update status and reason
+        // 2. Update status, reason, and specifically the bounce_date
         await client.query(`
             UPDATE cheques 
             SET status = 'BOUNCED', 
                 remarks = $1,
+                bounce_date = $2,
                 updated_at = NOW()
-            WHERE id = $2
-        `, [bounce_reason, id]);
+            WHERE id = $3
+        `, [bounce_reason, bounce_date || new Date(), id]);
 
         const acc_ar = 1101;
         const acc_ap = 2001;
