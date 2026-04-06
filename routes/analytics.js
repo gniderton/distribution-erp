@@ -413,9 +413,10 @@ router.get('/sales-fy-report', async (req, res) => {
                     DATE_TRUNC('month', payment_date)::date as month,
                     SUM(amount) as payments_collected
                 FROM customer_payments
-                WHERE payment_date >= $1 AND payment_date <= $2 AND status = 'Verified'
+                WHERE payment_date >= $1 AND payment_date <= $2 AND verification_status = 'Verified'
                 GROUP BY 1
             )
+
             SELECT 
                 m.month_start as month,
                 TRIM(TO_CHAR(m.month_start, 'Month YYYY')) as month_name,
