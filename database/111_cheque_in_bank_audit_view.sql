@@ -1,0 +1,102 @@
+-- Migration: Add cheque recognition to view_bank_statement_details
+-- Run Date: 2026-04-06
+
+DROP VIEW IF EXISTS view_bank_statement_details;
+
+CREATE VIEW view_bank_statement_details AS
+SELECT 
+    bse.id AS statement_entry_id,
+    bse.transaction_date,
+    bse.bank_account_id,
+    ba.bank_name AS account,
+    bse.particulars AS bank_narration,
+    bse.debit_amount,
+    bse.credit_amount,
+    bse.status AS reconciliation_status,
+    CASE
+        WHEN cp.id IS NOT NULL THEN 'Sales Receipt'
+        WHEN vp.id IS NOT NULL THEN 'Vendor Payment'
+        WHEN ex.id IS NOT NULL THEN 'Expense'
+        WHEN oi.id IS NOT NULL THEN 'Other Income'
+        WHEN (tr_from.id IS NOT NULL OR tr_to.id IS NOT NULL) THEN 'Internal Transfer'
+        WHEN ea.id IS NOT NULL THEN 'Salary Advance'
+        WHEN at.id IS NOT NULL THEN
+            CASE
+                WHEN at.transaction_type = 'PAYMENT' THEN 'Asset Purchase'
+                WHEN at.transaction_type = 'SALE_PAYMENT' THEN 'Asset Sale'
+                ELSE 'Asset Trans'
+            END
+        WHEN lt.id IS NOT NULL THEN 'Loan Transaction'
+        WHEN es.id IS NOT NULL THEN 'Salary Payment'
+        WHEN chq.id IS NOT NULL THEN
+            CASE
+                WHEN chq.type = 'INCOMING' THEN 'Cheque Receipt'
+                WHEN chq.type = 'OUTGOING' THEN 'Cheque Payment'
+                ELSE 'Cheque'
+            END
+        ELSE 'Unreconciled'
+    END AS transaction_type,
+    COALESCE(
+        cp.payment_number,
+        vp.payment_number::varchar,
+        ex.expense_number::varchar,
+        oi.income_number::varchar,
+        tr_from.reference_no::varchar,
+        tr_to.reference_no::varchar,
+        ('ADV-' || ea.id)::varchar,
+        ('SAL-' || es.id)::varchar,
+        chq.cheque_number::varchar,
+        'N/A'
+    ) AS erp_reference,
+    COALESCE(
+        custom.customer_name,
+        vend.vendor_name,
+        ee.name,
+        ie.name,
+        ea_emp.full_name,
+        es_emp.full_name,
+        chq_customer.customer_name,
+        chq_vendor.vendor_name,
+        'Internal/System'
+    ) AS party_name,
+    COALESCE(
+        ex.description, oi.description, vp.remarks, tr_from.remarks, tr_to.remarks,
+        ea.remarks, at.remarks, lt.remarks, chq.remarks, 'N/A'
+    ) AS user_narration,
+    COALESCE(emp.full_name, ea_creator.full_name, 'System') AS recorded_by,
+    COALESCE(
+        cp.payment_date, vp.payment_date, ex.expense_date, oi.transaction_date,
+        tr_from.transfer_date, tr_to.transfer_date, ea.advance_date,
+        at.transaction_date, lt.transaction_date, es.created_at::date,
+        chq.clearance_date
+    ) AS erp_date,
+    COALESCE(
+        cp.created_at, vp.created_at, ex.created_at, oi.created_at,
+        tr_from.created_at, tr_to.created_at, ea.created_at,
+        at.created_at::timestamptz, lt.created_at, es.created_at,
+        chq.updated_at
+    ) AS erp_recorded_at
+FROM bank_statement_entries bse
+LEFT JOIN bank_accounts ba ON bse.bank_account_id = ba.id
+LEFT JOIN customer_payments cp ON bse.id = cp.bank_statement_entry_id
+LEFT JOIN customers custom ON cp.customer_id = custom.id
+LEFT JOIN vendor_payments vp ON bse.id = vp.bank_statement_entry_id
+LEFT JOIN vendors vend ON vp.vendor_id = vend.id
+LEFT JOIN expenses ex ON bse.id = ex.bank_statement_entry_id
+LEFT JOIN expense_entities ee ON ex.entity_id = ee.id
+LEFT JOIN other_income oi ON bse.id = oi.bank_statement_entry_id
+LEFT JOIN income_entities ie ON oi.entity_id = ie.id
+LEFT JOIN internal_transfers tr_from ON bse.id = tr_from.from_bank_statement_entry_id
+LEFT JOIN internal_transfers tr_to ON bse.id = tr_to.to_bank_statement_entry_id
+LEFT JOIN employee_advances ea ON bse.id = ea.bank_statement_entry_id
+LEFT JOIN employees ea_emp ON ea.employee_id = ea_emp.id
+LEFT JOIN asset_transactions at ON bse.id = at.bank_statement_entry_id
+LEFT JOIN loan_transactions lt ON bse.id = lt.bank_statement_entry_id
+LEFT JOIN employee_salaries es ON bse.id = es.bank_statement_entry_id
+LEFT JOIN employees es_emp ON es.employee_id = es_emp.id
+LEFT JOIN employees emp ON COALESCE(ex.created_by, oi.created_by) = emp.id
+LEFT JOIN employees ea_creator ON ea.created_by = ea_creator.id
+-- New: Cheque JOIN
+LEFT JOIN cheques chq ON bse.id = chq.bank_statement_entry_id
+LEFT JOIN customers chq_customer ON chq.party_id = chq_customer.id AND chq.party_type = 'CUSTOMER'
+LEFT JOIN vendors chq_vendor ON chq.party_id = chq_vendor.id AND chq.party_type = 'VENDOR';
