@@ -79,6 +79,7 @@ router.get('/', async (req, res) => {
                         'Gross', (pl.accepted_qty * pl.rate),
                         'Sch', pl.scheme_amount,
                         'Disc %', pl.discount_percent,
+                        'Disc Amt', pl.discount_amount,
                         'Taxable', (pl.amount - pl.tax_amount),
                         'GST $', pl.tax_amount,
                         'Net $', pl.amount,
@@ -143,6 +144,7 @@ router.post('/', async (req, res) => {
             const accepted_qty = Number(line.accepted_qty) || 0;
             const rate = Number(line.rate) || 0;
             const discount_percent = Number(line.discount_percent) || 0;
+            const discount_amount = Number(line.discount_amount) || 0;
             const scheme_amount = Number(line.scheme_amount) || 0;
             const tax_amount_line = Number(line.tax_amount) || 0;
 
@@ -161,6 +163,7 @@ router.post('/', async (req, res) => {
                 rejected_qty: Number(line.rejected_qty) || 0,
                 rate: rate,
                 discount_percent: discount_percent,
+                discount_amount: discount_amount,
                 scheme_amount: scheme_amount,
                 tax_amount: tax_amount_line,
                 amount: amount,
