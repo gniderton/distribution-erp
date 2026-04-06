@@ -461,10 +461,17 @@ router.get('/reports/p-and-l', async (req, res) => {
             WITH months AS (
                 SELECT generate_series($1::date, $2::date, '1 month'::interval)::date as month_start
             ),
-            sales_summary AS (
+            sales_headers AS (
+                SELECT 
+                    DATE_TRUNC('month', invoice_date)::date as month,
+                    SUM(total_taxable) as revenue
+                FROM sales_invoices
+                WHERE invoice_date >= $1 AND invoice_date <= $2 AND status NOT IN ('Cancelled', 'Reversed')
+                GROUP BY 1
+            ),
+            sales_cogs AS (
                 SELECT 
                     DATE_TRUNC('month', si.invoice_date)::date as month,
-                    SUM(si.total_taxable) as revenue,
                     SUM(sil.shipped_qty * COALESCE(ib.purchase_rate, 0)) as cogs
                 FROM sales_invoices si
                 JOIN sales_invoice_lines sil ON si.id = sil.invoice_id
@@ -472,10 +479,17 @@ router.get('/reports/p-and-l', async (req, res) => {
                 WHERE si.invoice_date >= $1 AND si.invoice_date <= $2 AND si.status NOT IN ('Cancelled', 'Reversed')
                 GROUP BY 1
             ),
-            returns_summary AS (
+            returns_headers AS (
+                SELECT 
+                    DATE_TRUNC('month', return_date)::date as month,
+                    SUM(total_taxable) as returns_revenue
+                FROM sales_returns
+                WHERE return_date >= $1 AND return_date <= $2 AND status = 'Applied'
+                GROUP BY 1
+            ),
+            returns_cogs AS (
                 SELECT 
                     DATE_TRUNC('month', sr.return_date)::date as month,
-                    SUM(sr.total_taxable) as returns_revenue,
                     SUM(srl.qty * COALESCE(ib.purchase_rate, 0)) as returns_cogs
                 FROM sales_returns sr
                 JOIN sales_return_lines srl ON sr.id = srl.return_id
@@ -528,23 +542,26 @@ router.get('/reports/p-and-l', async (req, res) => {
                 m.month_start as month,
                 TRIM(TO_CHAR(m.month_start, 'Month YYYY')) as month_name,
                 COALESCE(s.revenue, 0) as revenue,
-                COALESCE(s.cogs, 0) as cogs,
+                COALESCE(sc.cogs, 0) as cogs,
                 COALESCE(r.returns_revenue, 0) as returns,
-                COALESCE(r.returns_cogs, 0) as returns_cogs,
+                COALESCE(rc.returns_cogs, 0) as returns_cogs,
                 COALESCE(e.total_expenses, 0) as expenses,
                 COALESCE(sal.total_salaries, 0) as salaries,
                 COALESCE(oi.other_income, 0) as other_income,
                 COALESCE(at.asset_net, 0) as asset_net,
                 COALESCE(sl.stock_loss, 0) as stock_losses
             FROM months m
-            LEFT JOIN sales_summary s ON m.month_start = s.month
-            LEFT JOIN returns_summary r ON m.month_start = r.month
+            LEFT JOIN sales_headers s ON m.month_start = s.month
+            LEFT JOIN sales_cogs sc ON m.month_start = sc.month
+            LEFT JOIN returns_headers r ON m.month_start = r.month
+            LEFT JOIN returns_cogs rc ON m.month_start = rc.month
             LEFT JOIN expenses_summary e ON m.month_start = e.month
             LEFT JOIN salaries_summary sal ON m.month_start = sal.month
             LEFT JOIN other_income_summary oi ON m.month_start = oi.month
             LEFT JOIN asset_transactions at ON m.month_start = at.month
             LEFT JOIN stock_losses sl ON m.month_start = sl.month
             ORDER BY m.month_start
+
         `, [fyStart, fyEnd, fyStartYear, fyEndYear]);
 
         const breakup = result.rows.map(r => {
