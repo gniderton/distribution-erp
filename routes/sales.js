@@ -155,7 +155,7 @@ router.get('/invoices/:id', async (req, res) => {
             const headerRes = await client.query(`
                 SELECT 
                     si.*, 
-                    c.customer_name, ca.address_line1 as customer_address, c.gst as customer_gst, c.phone as customer_phone,
+                    c.customer_name, ca.address_line1 as customer_address, c.gstin as customer_gst, c.customer_phone as customer_phone,
                     so.so_number, so.order_date as so_date, so.remarks as so_remarks,
                     e.full_name as dse_name,
                     r.route_name,
@@ -602,6 +602,7 @@ router.post('/orders/:id/dispatch', async (req, res) => {
                         cogs: 0, 
                         slabDeduction: 0 
                     };
+                    console.log(`[DEBUG] Created batch group: ${groupKey}, batch_id: ${batchId}`);
                 }
 
                 // Price Slab Deduction Calculation
@@ -644,6 +645,7 @@ router.post('/orders/:id/dispatch', async (req, res) => {
                 if (priceSlabs[pid]) reasons.push(priceSlabs[pid].reason);
                 const lineTier = reasons.length > 0 ? reasons.join(', ') : null;
 
+                console.log(`[DEBUG] Inserting Invoice Line: PID=${pid}, BatchID=${group.batch_id}, Qty=${group.qty}`);
                 await client.query(`
                     INSERT INTO sales_invoice_lines (
                         invoice_id, product_id, batch_id, shipped_qty, rate, mrp,
