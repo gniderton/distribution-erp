@@ -391,21 +391,27 @@ router.get('/sales-fy-report', async (req, res) => {
                     '1 month'::interval
                 )::date as month_start
             ),
-            sales AS (
+            sales_summary AS (
                 SELECT 
-                    DATE_TRUNC('month', invoice_date)::date as month,
-                    SUM(total_taxable) as taxable_sales,
-                    SUM(grand_total - paid_amount) as month_receivables
-                FROM sales_invoices
-                WHERE invoice_date >= $1 AND invoice_date <= $2 AND status NOT IN ('Cancelled', 'Reversed')
+                    DATE_TRUNC('month', si.invoice_date)::date as month,
+                    SUM(si.total_taxable) as taxable_sales,
+                    SUM(si.grand_total - si.paid_amount) as month_receivables,
+                    SUM(sil.shipped_qty * COALESCE(ib.purchase_rate, 0)) as cogs_sales
+                FROM sales_invoices si
+                JOIN sales_invoice_lines sil ON si.id = sil.invoice_id
+                LEFT JOIN inventory_batches ib ON sil.batch_id = ib.id
+                WHERE si.invoice_date >= $1 AND si.invoice_date <= $2 AND si.status NOT IN ('Cancelled', 'Reversed')
                 GROUP BY 1
             ),
-            returns AS (
+            returns_summary AS (
                 SELECT 
-                    DATE_TRUNC('month', return_date)::date as month,
-                    SUM(total_taxable) as taxable_returns
-                FROM sales_returns
-                WHERE return_date >= $1 AND return_date <= $2 AND status = 'Applied'
+                    DATE_TRUNC('month', sr.return_date)::date as month,
+                    SUM(sr.total_taxable) as taxable_returns,
+                    SUM(srl.qty * COALESCE(ib.purchase_rate, 0)) as cogs_returns
+                FROM sales_returns sr
+                JOIN sales_return_lines srl ON sr.id = srl.return_id
+                LEFT JOIN inventory_batches ib ON srl.batch_id = ib.id
+                WHERE sr.return_date >= $1 AND sr.return_date <= $2 AND sr.status = 'Applied'
                 GROUP BY 1
             ),
             collections AS (
@@ -416,43 +422,73 @@ router.get('/sales-fy-report', async (req, res) => {
                 WHERE payment_date >= $1 AND payment_date <= $2 AND verification_status = 'Verified'
                 GROUP BY 1
             )
-
             SELECT 
                 m.month_start as month,
                 TRIM(TO_CHAR(m.month_start, 'Month YYYY')) as month_name,
                 COALESCE(s.taxable_sales, 0) as sales,
                 COALESCE(r.taxable_returns, 0) as returns,
                 COALESCE(c.payments_collected, 0) as collected,
-                COALESCE(s.month_receivables, 0) as receivables
+                COALESCE(s.month_receivables, 0) as receivables,
+                COALESCE(s.cogs_sales, 0) as cost_sales,
+                COALESCE(r.cogs_returns, 0) as cost_returns
             FROM months m
-            LEFT JOIN sales s ON m.month_start = s.month
-            LEFT JOIN returns r ON m.month_start = r.month
+            LEFT JOIN sales_summary s ON m.month_start = s.month
+            LEFT JOIN returns_summary r ON m.month_start = r.month
             LEFT JOIN collections c ON m.month_start = c.month
             ORDER BY m.month_start
         `, [fyStart, fyEnd]);
 
-        const breakup = result.rows.map(r => ({
-            month: r.month,
-            month_name: r.month_name,
-            sales: parseFloat(r.sales),
-            returns: parseFloat(r.returns),
-            net_taxable: parseFloat(r.sales) - parseFloat(r.returns),
-            collected: parseFloat(r.collected),
-            receivables: parseFloat(r.receivables)
-        }));
+        const breakup = result.rows.map(r => {
+            const sales = parseFloat(r.sales);
+            const returns = parseFloat(r.returns);
+            const costSales = parseFloat(r.cost_sales);
+            const costReturns = parseFloat(r.cost_returns);
+            const netSales = sales - returns;
+            const netCost = costSales - costReturns;
+            
+            return {
+                month: r.month,
+                month_name: r.month_name,
+                sales: sales,
+                returns: returns,
+                net_taxable: netSales,
+                collected: parseFloat(r.collected),
+                receivables: parseFloat(r.receivables),
+                cost_sales: costSales,
+                cost_returns: costReturns,
+                gross_profit: sales - costSales,
+                net_profit: netSales - netCost,
+                gross_margin_percent: sales > 0 ? parseFloat(((sales - costSales) / sales * 100).toFixed(2)) : 0,
+                net_margin_percent: netSales > 0 ? parseFloat(((netSales - netCost) / netSales * 100).toFixed(2)) : 0
+            };
+        });
 
         const summaryData = breakup.reduce((acc, x) => ({
             total_taxable_sales: acc.total_taxable_sales + x.sales,
             total_taxable_returns: acc.total_taxable_returns + x.returns,
             total_collected: acc.total_collected + x.collected,
-            total_receivables: acc.total_receivables + x.receivables
-        }), { total_taxable_sales: 0, total_taxable_returns: 0, total_collected: 0, total_receivables: 0 });
+            total_receivables: acc.total_receivables + x.receivables,
+            total_cost_sales: acc.total_cost_sales + x.cost_sales,
+            total_cost_returns: acc.total_cost_returns + x.cost_returns
+        }), { 
+            total_taxable_sales: 0, total_taxable_returns: 0, total_collected: 0, 
+            total_receivables: 0, total_cost_sales: 0, total_cost_returns: 0 
+        });
+
+        const netTaxable = summaryData.total_taxable_sales - summaryData.total_taxable_returns;
+        const netCost = summaryData.total_cost_sales - summaryData.total_cost_returns;
 
         res.json({
             summary: {
                 year_range: `April ${fyStartYear} - March ${fyEndYear}`,
                 ...summaryData,
-                net_taxable_sales: summaryData.total_taxable_sales - summaryData.total_taxable_returns
+                net_taxable_sales: netTaxable,
+                gross_profit: summaryData.total_taxable_sales - summaryData.total_cost_sales,
+                net_profit: netTaxable - netCost,
+                gross_margin_percent: summaryData.total_taxable_sales > 0 ? 
+                    parseFloat(((summaryData.total_taxable_sales - summaryData.total_cost_sales) / summaryData.total_taxable_sales * 100).toFixed(2)) : 0,
+                net_margin_percent: netTaxable > 0 ? 
+                    parseFloat(((netTaxable - netCost) / netTaxable * 100).toFixed(2)) : 0
             },
             monthly_breakup: breakup
         });
