@@ -300,7 +300,59 @@ router.get('/unified/:id', async (req, res) => {
             return res.status(404).json({ error: 'Order not found' });
         }
 
-        res.json(result.rows[0]);
+        const data = result.rows[0];
+
+        // --- PDF GROUPING LOGIC (Group by MRP, pick Highest Qty Batch) ---
+        if (data.invoice_lines && Array.isArray(data.invoice_lines)) {
+            const grouped = {};
+            
+            data.invoice_lines.forEach(line => {
+                const key = `${line.product_id}_${line.mrp}`;
+                if (!grouped[key]) {
+                    // Initialize group with a deep copy of the first contributor
+                    grouped[key] = { 
+                        ...line, 
+                        contributors: [{ 
+                            batch_code: line.batch_code, 
+                            expiry_date: line.expiry_date, 
+                            qty: Number(line.shipped_qty) 
+                        }] 
+                    };
+                } else {
+                    // Sum totals
+                    grouped[key].shipped_qty = Number(grouped[key].shipped_qty) + Number(line.shipped_qty);
+                    grouped[key].gross_amount = Number(grouped[key].gross_amount) + Number(line.gross_amount);
+                    grouped[key].scheme_amount = Number(grouped[key].scheme_amount) + Number(line.scheme_amount);
+                    grouped[key].discount_amount = Number(grouped[key].discount_amount) + Number(line.discount_amount);
+                    grouped[key].taxable_amount = Number(grouped[key].taxable_amount) + Number(line.taxable_amount);
+                    grouped[key].tax_amount = Number(grouped[key].tax_amount) + Number(line.tax_amount);
+                    grouped[key].amount = Number(grouped[key].amount) + Number(line.amount);
+                    
+                    // Track contributor for "Winner" selection
+                    grouped[key].contributors.push({ 
+                        batch_code: line.batch_code, 
+                        expiry_date: line.expiry_date, 
+                        qty: Number(line.shipped_qty) 
+                    });
+                }
+            });
+
+            // Finalize and pick the "Winning" batch info
+            data.invoice_lines = Object.values(grouped).map((g, idx) => {
+                // Find contributor with max qty
+                const winner = g.contributors.reduce((max, curr) => curr.qty > max.qty ? curr : max, g.contributors[0]);
+                
+                return {
+                    ...g,
+                    s_no: idx + 1,
+                    batch_code: winner.batch_code,
+                    expiry_date: winner.expiry_date,
+                    contributors: undefined // Remove helper data
+                };
+            });
+        }
+
+        res.json(data);
 
     } catch (err) {
         console.error('Unified Detail API Error:', err);
