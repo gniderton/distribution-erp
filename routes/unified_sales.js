@@ -342,11 +342,17 @@ router.get('/unified/:id', async (req, res) => {
                 // Find contributor with max qty
                 const winner = g.contributors.reduce((max, curr) => curr.qty > max.qty ? curr : max, g.contributors[0]);
                 
+                // Recalculate effective discount percent for the merged line
+                const effectiveDiscPercent = g.gross_amount > 0 
+                    ? ((g.discount_amount / g.gross_amount) * 100).toFixed(2) 
+                    : g.discount_percent;
+
                 return {
                     ...g,
                     s_no: idx + 1,
                     batch_code: winner.batch_code,
                     expiry_date: winner.expiry_date,
+                    discount_percent: effectiveDiscPercent,
                     contributors: undefined // Remove helper data
                 };
             });
