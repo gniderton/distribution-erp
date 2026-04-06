@@ -368,7 +368,7 @@ router.get('/employees/:id/dashboard', async (req, res) => {
 });
 
 
-// --- SALES FY REPORT ---
+// --- SALES FY REPORT (Simplified) ---
 router.get('/sales-fy-report', async (req, res) => {
     try {
         const { year } = req.query;
@@ -376,7 +376,6 @@ router.get('/sales-fy-report', async (req, res) => {
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
 
-        // Determine FY Start Year (Default to current FY)
         let fyStartYear = year ? parseInt(year) : (currentMonth >= 4 ? currentYear : currentYear - 1);
         const fyEndYear = fyStartYear + 1;
 
@@ -385,33 +384,15 @@ router.get('/sales-fy-report', async (req, res) => {
 
         const result = await pool.query(`
             WITH months AS (
-                SELECT generate_series(
-                    $1::date, 
-                    $2::date, 
-                    '1 month'::interval
-                )::date as month_start
+                SELECT generate_series($1::date, $2::date, '1 month'::interval)::date as month_start
             ),
             sales_summary AS (
                 SELECT 
-                    DATE_TRUNC('month', si.invoice_date)::date as month,
-                    SUM(si.total_taxable) as taxable_sales,
-                    SUM(si.grand_total - si.paid_amount) as month_receivables,
-                    SUM(sil.shipped_qty * COALESCE(ib.purchase_rate, 0)) as cogs_sales
-                FROM sales_invoices si
-                JOIN sales_invoice_lines sil ON si.id = sil.invoice_id
-                LEFT JOIN inventory_batches ib ON sil.batch_id = ib.id
-                WHERE si.invoice_date >= $1 AND si.invoice_date <= $2 AND si.status NOT IN ('Cancelled', 'Reversed')
-                GROUP BY 1
-            ),
-            returns_summary AS (
-                SELECT 
-                    DATE_TRUNC('month', sr.return_date)::date as month,
-                    SUM(sr.total_taxable) as taxable_returns,
-                    SUM(srl.qty * COALESCE(ib.purchase_rate, 0)) as cogs_returns
-                FROM sales_returns sr
-                JOIN sales_return_lines srl ON sr.id = srl.return_id
-                LEFT JOIN inventory_batches ib ON srl.batch_id = ib.id
-                WHERE sr.return_date >= $1 AND sr.return_date <= $2 AND sr.status = 'Applied'
+                    DATE_TRUNC('month', invoice_date)::date as month,
+                    SUM(total_taxable) as taxable_sales,
+                    SUM(grand_total - paid_amount) as month_receivables
+                FROM sales_invoices
+                WHERE invoice_date >= $1 AND invoice_date <= $2 AND status NOT IN ('Cancelled', 'Reversed')
                 GROUP BY 1
             ),
             collections AS (
@@ -426,69 +407,32 @@ router.get('/sales-fy-report', async (req, res) => {
                 m.month_start as month,
                 TRIM(TO_CHAR(m.month_start, 'Month YYYY')) as month_name,
                 COALESCE(s.taxable_sales, 0) as sales,
-                COALESCE(r.taxable_returns, 0) as returns,
                 COALESCE(c.payments_collected, 0) as collected,
-                COALESCE(s.month_receivables, 0) as receivables,
-                COALESCE(s.cogs_sales, 0) as cost_sales,
-                COALESCE(r.cogs_returns, 0) as cost_returns
+                COALESCE(s.month_receivables, 0) as receivables
             FROM months m
             LEFT JOIN sales_summary s ON m.month_start = s.month
-            LEFT JOIN returns_summary r ON m.month_start = r.month
             LEFT JOIN collections c ON m.month_start = c.month
             ORDER BY m.month_start
         `, [fyStart, fyEnd]);
 
-        const breakup = result.rows.map(r => {
-            const sales = parseFloat(r.sales);
-            const returns = parseFloat(r.returns);
-            const costSales = parseFloat(r.cost_sales);
-            const costReturns = parseFloat(r.cost_returns);
-            const netSales = sales - returns;
-            const netCost = costSales - costReturns;
-            
-            return {
-                month: r.month,
-                month_name: r.month_name,
-                sales: sales,
-                returns: returns,
-                net_taxable: netSales,
-                collected: parseFloat(r.collected),
-                receivables: parseFloat(r.receivables),
-                cost_sales: costSales,
-                cost_returns: costReturns,
-                gross_profit: sales - costSales,
-                net_profit: netSales - netCost,
-                gross_margin_percent: sales > 0 ? parseFloat(((sales - costSales) / sales * 100).toFixed(2)) : 0,
-                net_margin_percent: netSales > 0 ? parseFloat(((netSales - netCost) / netSales * 100).toFixed(2)) : 0
-            };
-        });
+        const breakup = result.rows.map(r => ({
+            month: r.month,
+            month_name: r.month_name,
+            sales: parseFloat(r.sales),
+            collected: parseFloat(r.collected),
+            receivables: parseFloat(r.receivables)
+        }));
 
-        const summaryData = breakup.reduce((acc, x) => ({
-            total_taxable_sales: acc.total_taxable_sales + x.sales,
-            total_taxable_returns: acc.total_taxable_returns + x.returns,
+        const summary = breakup.reduce((acc, x) => ({
+            total_sales: acc.total_sales + x.sales,
             total_collected: acc.total_collected + x.collected,
-            total_receivables: acc.total_receivables + x.receivables,
-            total_cost_sales: acc.total_cost_sales + x.cost_sales,
-            total_cost_returns: acc.total_cost_returns + x.cost_returns
-        }), { 
-            total_taxable_sales: 0, total_taxable_returns: 0, total_collected: 0, 
-            total_receivables: 0, total_cost_sales: 0, total_cost_returns: 0 
-        });
-
-        const netTaxable = summaryData.total_taxable_sales - summaryData.total_taxable_returns;
-        const netCost = summaryData.total_cost_sales - summaryData.total_cost_returns;
+            total_receivables: acc.total_receivables + x.receivables
+        }), { total_sales: 0, total_collected: 0, total_receivables: 0 });
 
         res.json({
             summary: {
                 year_range: `April ${fyStartYear} - March ${fyEndYear}`,
-                ...summaryData,
-                net_taxable_sales: netTaxable,
-                gross_profit: summaryData.total_taxable_sales - summaryData.total_cost_sales,
-                net_profit: netTaxable - netCost,
-                gross_margin_percent: summaryData.total_taxable_sales > 0 ? 
-                    parseFloat(((summaryData.total_taxable_sales - summaryData.total_cost_sales) / summaryData.total_taxable_sales * 100).toFixed(2)) : 0,
-                net_margin_percent: netTaxable > 0 ? 
-                    parseFloat(((netTaxable - netCost) / netTaxable * 100).toFixed(2)) : 0
+                ...summary
             },
             monthly_breakup: breakup
         });
@@ -499,5 +443,328 @@ router.get('/sales-fy-report', async (req, res) => {
 });
 
 
+
+// --- 1. PROFIT & LOSS (P&L) REPORT ---
+router.get('/reports/p-and-l', async (req, res) => {
+    try {
+        const { year } = req.query;
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+
+        let fyStartYear = year ? parseInt(year) : (currentMonth >= 4 ? currentYear : currentYear - 1);
+        const fyEndYear = fyStartYear + 1;
+        const fyStart = `${fyStartYear}-04-01`;
+        const fyEnd = `${fyEndYear}-03-31`;
+
+        const result = await pool.query(`
+            WITH months AS (
+                SELECT generate_series($1::date, $2::date, '1 month'::interval)::date as month_start
+            ),
+            sales_summary AS (
+                SELECT 
+                    DATE_TRUNC('month', si.invoice_date)::date as month,
+                    SUM(si.total_taxable) as revenue,
+                    SUM(sil.shipped_qty * COALESCE(ib.purchase_rate, 0)) as cogs
+                FROM sales_invoices si
+                JOIN sales_invoice_lines sil ON si.id = sil.invoice_id
+                LEFT JOIN inventory_batches ib ON sil.batch_id = ib.id
+                WHERE si.invoice_date >= $1 AND si.invoice_date <= $2 AND si.status NOT IN ('Cancelled', 'Reversed')
+                GROUP BY 1
+            ),
+            returns_summary AS (
+                SELECT 
+                    DATE_TRUNC('month', sr.return_date)::date as month,
+                    SUM(sr.total_taxable) as returns_revenue,
+                    SUM(srl.qty * COALESCE(ib.purchase_rate, 0)) as returns_cogs
+                FROM sales_returns sr
+                JOIN sales_return_lines srl ON sr.id = srl.return_id
+                LEFT JOIN inventory_batches ib ON srl.batch_id = ib.id
+                WHERE sr.return_date >= $1 AND sr.return_date <= $2 AND sr.status = 'Applied'
+                GROUP BY 1
+            ),
+            expenses_summary AS (
+                SELECT 
+                    DATE_TRUNC('month', expense_date)::date as month,
+                    SUM(grand_total) as total_expenses
+                FROM expenses
+                WHERE expense_date >= $1 AND expense_date <= $2 AND is_active = true
+                GROUP BY 1
+            ),
+            salaries_summary AS (
+                SELECT 
+                    (year || '-' || LPAD(month::text, 2, '0') || '-01')::date as month,
+                    SUM(net_salary) as total_salaries
+                FROM employee_salaries
+                WHERE (year = $3 AND month >= 4) OR (year = $4 AND month <= 3)
+                GROUP BY 1
+            ),
+            other_income_summary AS (
+                SELECT 
+                    DATE_TRUNC('month', transaction_date)::date as month,
+                    SUM(amount) as other_income
+                FROM other_income
+                WHERE transaction_date >= $1 AND transaction_date <= $2 AND is_active = true
+                GROUP BY 1
+            ),
+            asset_transactions AS (
+                SELECT 
+                    DATE_TRUNC('month', COALESCE(purchase_date, created_at))::date as month,
+                    SUM(CASE WHEN purchase_cost > 0 THEN -purchase_cost ELSE 0 END) + SUM(COALESCE(sale_total_amount, 0)) as asset_net
+                FROM assets
+                WHERE (purchase_date >= $1 AND purchase_date <= $2) OR (created_at >= $1 AND created_at <= ($2::date + 1))
+                GROUP BY 1
+            ),
+            stock_losses AS (
+                SELECT 
+                    DATE_TRUNC('month', sa.created_at)::date as month,
+                    SUM(ABS(sa.qty) * COALESCE(ib.purchase_rate, 0)) as stock_loss
+                FROM stock_adjustments sa
+                JOIN inventory_batches ib ON sa.product_id = ib.product_id AND sa.batch_code = ib.batch_code
+                WHERE sa.qty < 0 AND sa.created_at >= $1 AND sa.created_at <= ($2::date + 1)
+                GROUP BY 1
+            )
+            SELECT 
+                m.month_start as month,
+                TRIM(TO_CHAR(m.month_start, 'Month YYYY')) as month_name,
+                COALESCE(s.revenue, 0) as revenue,
+                COALESCE(s.cogs, 0) as cogs,
+                COALESCE(r.returns_revenue, 0) as returns,
+                COALESCE(r.returns_cogs, 0) as returns_cogs,
+                COALESCE(e.total_expenses, 0) as expenses,
+                COALESCE(sal.total_salaries, 0) as salaries,
+                COALESCE(oi.other_income, 0) as other_income,
+                COALESCE(at.asset_net, 0) as asset_net,
+                COALESCE(sl.stock_loss, 0) as stock_losses
+            FROM months m
+            LEFT JOIN sales_summary s ON m.month_start = s.month
+            LEFT JOIN returns_summary r ON m.month_start = r.month
+            LEFT JOIN expenses_summary e ON m.month_start = e.month
+            LEFT JOIN salaries_summary sal ON m.month_start = sal.month
+            LEFT JOIN other_income_summary oi ON m.month_start = oi.month
+            LEFT JOIN asset_transactions at ON m.month_start = at.month
+            LEFT JOIN stock_losses sl ON m.month_start = sl.month
+            ORDER BY m.month_start
+        `, [fyStart, fyEnd, fyStartYear, fyEndYear]);
+
+        const breakup = result.rows.map(r => {
+            const revenue = parseFloat(r.revenue);
+            const returns = parseFloat(r.returns);
+            const netRevenue = revenue - returns;
+            const cogs = parseFloat(r.cogs) - parseFloat(r.returns_cogs);
+            const grossProfit = netRevenue - cogs;
+            const totalOutflow = parseFloat(r.expenses) + parseFloat(r.salaries) + parseFloat(r.stock_losses);
+            const netProfit = grossProfit - totalOutflow + parseFloat(r.other_income) + parseFloat(r.asset_net);
+
+            return {
+                month_name: r.month_name,
+                revenue,
+                returns,
+                net_revenue: netRevenue,
+                cogs,
+                gross_profit: grossProfit,
+                gross_margin_percent: netRevenue > 0 ? (grossProfit / netRevenue * 100).toFixed(2) : 0,
+                expenses: parseFloat(r.expenses),
+                salaries: parseFloat(r.salaries),
+                other_income: parseFloat(r.other_income),
+                asset_net: parseFloat(r.asset_net),
+                stock_losses: parseFloat(r.stock_losses),
+                net_profit: netProfit,
+                net_margin_percent: netRevenue > 0 ? (netProfit / netRevenue * 100).toFixed(2) : 0
+            };
+        });
+
+        const summary = breakup.reduce((acc, x) => ({
+            total_revenue: acc.total_revenue + x.revenue,
+            total_returns: acc.total_returns + x.returns,
+            total_cogs: acc.total_cogs + x.cogs,
+            total_expenses: acc.total_expenses + x.expenses,
+            total_salaries: acc.total_salaries + x.salaries,
+            total_other_income: acc.total_other_income + x.other_income,
+            total_asset_net: acc.total_asset_net + x.asset_net,
+            total_stock_losses: acc.total_stock_losses + x.stock_losses,
+            total_net_profit: acc.total_net_profit + x.net_profit
+        }), { 
+            total_revenue: 0, total_returns: 0, total_cogs: 0, 
+            total_expenses: 0, total_salaries: 0, total_other_income: 0,
+            total_asset_net: 0, total_stock_losses: 0, total_net_profit: 0
+        });
+
+        res.json({
+            summary: {
+                year_range: `April ${fyStartYear} - March ${fyEndYear}`,
+                ...summary,
+                net_revenue: summary.total_revenue - summary.total_returns,
+                gross_profit: (summary.total_revenue - summary.total_returns) - summary.total_cogs
+            },
+            monthly_breakup: breakup
+        });
+    } catch (err) {
+        console.error('P&L report error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- 2. CASH FLOW REPORT ---
+router.get('/reports/cash-flow', async (req, res) => {
+    try {
+        const { year } = req.query;
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+
+        let fyStartYear = year ? parseInt(year) : (currentMonth >= 4 ? currentYear : currentYear - 1);
+        const fyEndYear = fyStartYear + 1;
+        const fyStart = `${fyStartYear}-04-01`;
+        const fyEnd = `${fyEndYear}-03-31`;
+
+        const result = await pool.query(`
+            WITH months AS (
+                SELECT generate_series($1::date, $2::date, '1 month'::interval)::date as month_start
+            ),
+            inflows AS (
+                SELECT 
+                    DATE_TRUNC('month', payment_date)::date as month,
+                    SUM(amount) as customer_collections
+                FROM customer_payments
+                WHERE payment_date >= $1 AND payment_date <= $2 AND verification_status = 'Verified'
+                GROUP BY 1
+            ),
+            other_inflows AS (
+                SELECT 
+                    DATE_TRUNC('month', transaction_date)::date as month,
+                    SUM(amount) as other_income
+                FROM other_income
+                WHERE transaction_date >= $1 AND transaction_date <= $2 AND is_active = true
+                GROUP BY 1
+            ),
+            outflows_vendor AS (
+                SELECT 
+                    DATE_TRUNC('month', payment_date)::date as month,
+                    SUM(amount) as vendor_payments
+                FROM vendor_payments
+                WHERE payment_date >= $1 AND payment_date <= $2 AND is_active = true
+                GROUP BY 1
+            ),
+            outflows_expenses AS (
+                SELECT 
+                    DATE_TRUNC('month', expense_date)::date as month,
+                    SUM(grand_total) as expense_payments
+                FROM expenses
+                WHERE expense_date >= $1 AND expense_date <= $2 AND is_active = true
+                GROUP BY 1
+            ),
+            outflows_salaries AS (
+                SELECT 
+                    DATE_TRUNC('month', payment_date)::date as month,
+                    SUM(net_salary) as salary_payments
+                FROM employee_salaries
+                WHERE payment_date >= $1 AND payment_date <= $2
+                GROUP BY 1
+            )
+            SELECT 
+                m.month_start as month,
+                TRIM(TO_CHAR(m.month_start, 'Month YYYY')) as month_name,
+                COALESCE(i.customer_collections, 0) as collections,
+                COALESCE(oi.other_income, 0) as other_income,
+                COALESCE(ov.vendor_payments, 0) as vendor_payments,
+                COALESCE(oe.expense_payments, 0) as expense_payments,
+                COALESCE(os.salary_payments, 0) as salary_payments
+            FROM months m
+            LEFT JOIN inflows i ON m.month_start = i.month
+            LEFT JOIN other_inflows oi ON m.month_start = oi.month
+            LEFT JOIN outflows_vendor ov ON m.month_start = ov.month
+            LEFT JOIN outflows_expenses oe ON m.month_start = oe.month
+            LEFT JOIN outflows_salaries os ON m.month_start = os.month
+            ORDER BY m.month_start
+        `, [fyStart, fyEnd]);
+
+        const breakup = result.rows.map(r => {
+            const inflow = parseFloat(r.collections) + parseFloat(r.other_income);
+            const outflow = parseFloat(r.vendor_payments) + parseFloat(r.expense_payments) + parseFloat(r.salary_payments);
+            return {
+                month_name: r.month_name,
+                inflow,
+                outflow,
+                net_cash_flow: inflow - outflow,
+                details: {
+                    collections: parseFloat(r.collections),
+                    other_income: parseFloat(r.other_income),
+                    vendor_payments: parseFloat(r.vendor_payments),
+                    expenses: parseFloat(r.expense_payments),
+                    salaries: parseFloat(r.salary_payments)
+                }
+            };
+        });
+
+        res.json({
+            summary: {
+                total_inflow: breakup.reduce((sum, x) => sum + x.inflow, 0),
+                total_outflow: breakup.reduce((sum, x) => sum + x.outflow, 0),
+                net_cash_flow: breakup.reduce((sum, x) => sum + x.net_cash_flow, 0)
+            },
+            monthly_breakup: breakup
+        });
+    } catch (err) {
+        console.error('Cash flow report error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- 3. BALANCE SHEET (SNAPSHOT) ---
+router.get('/reports/balance-sheet', async (req, res) => {
+    try {
+        const stats = await pool.query(`
+            SELECT 
+                (SELECT COALESCE(SUM(current_balance), 0) FROM bank_accounts WHERE is_active = true) as bank_cash,
+                (SELECT COALESCE(SUM(grand_total - paid_amount), 0) FROM sales_invoices WHERE status NOT IN ('Cancelled', 'Reversed')) as trade_receivables,
+                (SELECT COALESCE(SUM(quantity_remaining * purchase_rate), 0) FROM inventory_batches WHERE quantity_remaining > 0) as inventory_value,
+                (SELECT COALESCE(SUM(purchase_cost), 0) - COALESCE(SUM(sale_total_amount), 0) FROM assets) as fixed_assets,
+                (
+                    (SELECT COALESCE(SUM(grand_total), 0) FROM purchase_invoice_headers WHERE status NOT IN ('Cancelled', 'Reversed')) - 
+                    (SELECT COALESCE(SUM(amount), 0) FROM vendor_payments WHERE is_active = true)
+                ) as trade_payables,
+                (SELECT COALESCE(SUM(balance_principal), 0) FROM loans WHERE status = 'Active') as loans_outstanding
+        `);
+
+        const data = stats.rows[0];
+        const totalAssets = parseFloat(data.bank_cash) + parseFloat(data.trade_receivables) + parseFloat(data.inventory_value) + parseFloat(data.fixed_assets);
+        const totalLiabilities = parseFloat(data.trade_payables) + parseFloat(data.loans_outstanding);
+
+        res.json({
+            as_of: new Date().toISOString(),
+            assets: {
+                current_assets: {
+                    bank_and_cash: parseFloat(data.bank_cash),
+                    trade_receivables: parseFloat(data.trade_receivables),
+                    inventory_on_hand: parseFloat(data.inventory_value),
+                    total_current: parseFloat(data.bank_cash) + parseFloat(data.trade_receivables) + parseFloat(data.inventory_value)
+                },
+                fixed_assets: {
+                    net_fixed_assets: parseFloat(data.fixed_assets)
+                },
+                total_assets: totalAssets
+            },
+            liabilities: {
+                current_liabilities: {
+                    trade_payables: parseFloat(data.trade_payables)
+                },
+                long_term_liabilities: {
+                    loans: parseFloat(data.loans_outstanding)
+                },
+                total_liabilities: totalLiabilities
+            },
+            equity: {
+                net_worth: totalAssets - totalLiabilities
+            }
+        });
+    } catch (err) {
+        console.error('Balance sheet error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 module.exports = router;
+
 
