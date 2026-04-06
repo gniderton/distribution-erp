@@ -377,7 +377,6 @@ router.get('/sales-fy-report', async (req, res) => {
         const currentMonth = now.getMonth() + 1;
 
         // Determine FY Start Year (Default to current FY)
-        // If it's April or later, current year is FY start. Else previous year.
         let fyStartYear = year ? parseInt(year) : (currentMonth >= 4 ? currentYear : currentYear - 1);
         const fyEndYear = fyStartYear + 1;
 
@@ -395,7 +394,8 @@ router.get('/sales-fy-report', async (req, res) => {
             sales AS (
                 SELECT 
                     DATE_TRUNC('month', invoice_date)::date as month,
-                    SUM(total_taxable) as taxable_sales
+                    SUM(total_taxable) as taxable_sales,
+                    SUM(grand_total - paid_amount) as month_receivables
                 FROM sales_invoices
                 WHERE invoice_date >= $1 AND invoice_date <= $2 AND status NOT IN ('Cancelled', 'Reversed')
                 GROUP BY 1
@@ -407,16 +407,26 @@ router.get('/sales-fy-report', async (req, res) => {
                 FROM sales_returns
                 WHERE return_date >= $1 AND return_date <= $2 AND status = 'Applied'
                 GROUP BY 1
+            ),
+            collections AS (
+                SELECT 
+                    DATE_TRUNC('month', payment_date)::date as month,
+                    SUM(amount) as payments_collected
+                FROM customer_payments
+                WHERE payment_date >= $1 AND payment_date <= $2 AND status = 'Verified'
+                GROUP BY 1
             )
             SELECT 
                 m.month_start as month,
                 TRIM(TO_CHAR(m.month_start, 'Month YYYY')) as month_name,
                 COALESCE(s.taxable_sales, 0) as sales,
                 COALESCE(r.taxable_returns, 0) as returns,
-                (COALESCE(s.taxable_sales, 0) - COALESCE(r.taxable_returns, 0)) as net
+                COALESCE(c.payments_collected, 0) as collected,
+                COALESCE(s.month_receivables, 0) as receivables
             FROM months m
             LEFT JOIN sales s ON m.month_start = s.month
             LEFT JOIN returns r ON m.month_start = r.month
+            LEFT JOIN collections c ON m.month_start = c.month
             ORDER BY m.month_start
         `, [fyStart, fyEnd]);
 
@@ -425,18 +435,23 @@ router.get('/sales-fy-report', async (req, res) => {
             month_name: r.month_name,
             sales: parseFloat(r.sales),
             returns: parseFloat(r.returns),
-            net: parseFloat(r.net)
+            net_taxable: parseFloat(r.sales) - parseFloat(r.returns),
+            collected: parseFloat(r.collected),
+            receivables: parseFloat(r.receivables)
         }));
 
-        const totalSales = breakup.reduce((acc, x) => acc + x.sales, 0);
-        const totalReturns = breakup.reduce((acc, x) => acc + x.returns, 0);
+        const summaryData = breakup.reduce((acc, x) => ({
+            total_taxable_sales: acc.total_taxable_sales + x.sales,
+            total_taxable_returns: acc.total_taxable_returns + x.returns,
+            total_collected: acc.total_collected + x.collected,
+            total_receivables: acc.total_receivables + x.receivables
+        }), { total_taxable_sales: 0, total_taxable_returns: 0, total_collected: 0, total_receivables: 0 });
 
         res.json({
             summary: {
                 year_range: `April ${fyStartYear} - March ${fyEndYear}`,
-                total_taxable_sales: totalSales,
-                total_taxable_returns: totalReturns,
-                net_taxable_sales: totalSales - totalReturns
+                ...summaryData,
+                net_taxable_sales: summaryData.total_taxable_sales - summaryData.total_taxable_returns
             },
             monthly_breakup: breakup
         });
@@ -445,6 +460,7 @@ router.get('/sales-fy-report', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 module.exports = router;
 
