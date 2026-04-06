@@ -228,6 +228,12 @@ router.get('/returns', async (req, res) => {
             pIdx++;
         }
 
+        if (req.query.customer_id) {
+            where.push(`sr.customer_id = $${pIdx}`);
+            params.push(req.query.customer_id);
+            pIdx++;
+        }
+
         // Default filter logic (e.g. <= 7 days) if requested
         if (days) {
             where.push(`sr.return_date >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'`);
