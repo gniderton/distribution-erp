@@ -27,19 +27,27 @@ SELECT
             END
         WHEN lt.id IS NOT NULL THEN 'Loan Transaction'
         WHEN es.id IS NOT NULL THEN 'Salary Payment'
+        WHEN chq.id IS NOT NULL THEN
+            CASE
+                WHEN chq.type = 'INCOMING' THEN 'Cheque Receipt'
+                WHEN chq.type = 'OUTGOING' THEN 'Cheque Payment'
+                ELSE 'Cheque'
+            END
         ELSE 'Unreconciled'
     END as transaction_type,
     -- ERP Reference
     COALESCE(
         cp.payment_number, 
-        vp.payment_number, 
-        ex.expense_number, 
-        oi.income_number, 
-        tr_from.reference_no,
-        tr_to.reference_no,
-        'ADV-' || ea.id,
-        'SAL-' || es.id,
-        'N/A'
+        vp.payment_number::character varying, 
+        ex.expense_number::character varying, 
+        oi.income_number::character varying, 
+        tr_from.reference_no::character varying,
+        tr_to.reference_no::character varying,
+        l.loan_number::character varying,
+        ('ADV-' || ea.id)::character varying,
+        ('SAL-' || es.id)::character varying,
+        chq.cheque_number::character varying,
+        'N/A'::character varying
     ) as erp_reference,
     -- Party Name
     COALESCE(
@@ -47,8 +55,11 @@ SELECT
         vend.vendor_name, 
         ee.name, 
         ie.name, 
+        l.party_name,
         ea_emp.full_name,
         es_emp.full_name,
+        chq_customer.customer_name,
+        chq_vendor.vendor_name,
         'Internal/System'
     ) as party_name,
     -- User Narration
@@ -61,12 +72,14 @@ SELECT
         ea.remarks,
         at.remarks,
         lt.remarks,
+        'Loan: ' || l.loan_number,
+        chq.remarks,
         'N/A'
     ) as user_narration,
     -- Auditor Columns
     COALESCE(emp.full_name, ea_creator.full_name, 'System') as recorded_by,
-    COALESCE(cp.payment_date, vp.payment_date, ex.expense_date, oi.transaction_date, tr_from.transfer_date, tr_to.transfer_date, ea.advance_date, at.transaction_date, lt.transaction_date, es.created_at::date) as erp_date,
-    COALESCE(cp.created_at, vp.created_at, ex.created_at, oi.created_at, tr_from.created_at, tr_to.created_at, ea.created_at, at.created_at, lt.created_at, es.created_at) as erp_recorded_at
+    COALESCE(cp.payment_date, vp.payment_date, ex.expense_date, oi.transaction_date, tr_from.transfer_date, tr_to.transfer_date, ea.advance_date, at.transaction_date, lt.transaction_date, es.created_at::date, chq.clearance_date) as erp_date,
+    COALESCE(cp.created_at, vp.created_at, ex.created_at, oi.created_at, tr_from.created_at, tr_to.created_at, ea.created_at, at.created_at::timestamp with time zone, lt.created_at, es.created_at, chq.updated_at::timestamp with time zone) as erp_recorded_at
 FROM bank_statement_entries bse
 LEFT JOIN bank_accounts ba ON bse.bank_account_id = ba.id
 LEFT JOIN customer_payments cp ON bse.id = cp.bank_statement_entry_id
@@ -83,8 +96,11 @@ LEFT JOIN employee_advances ea ON bse.id = ea.bank_statement_entry_id
 LEFT JOIN employees ea_emp ON ea.employee_id = ea_emp.id
 LEFT JOIN asset_transactions at ON bse.id = at.bank_statement_entry_id
 LEFT JOIN loan_transactions lt ON bse.id = lt.bank_statement_entry_id
+LEFT JOIN loans l ON lt.loan_id = l.id
 LEFT JOIN employee_salaries es ON bse.id = es.bank_statement_entry_id
 LEFT JOIN employees es_emp ON es.employee_id = es_emp.id
--- Join with employees to get recorded_by name
 LEFT JOIN employees emp ON COALESCE(ex.created_by, oi.created_by) = emp.id
-LEFT JOIN employees ea_creator ON ea.created_by = ea_creator.id;
+LEFT JOIN employees ea_creator ON ea.created_by = ea_creator.id
+LEFT JOIN cheques chq ON bse.id = chq.bank_statement_entry_id
+LEFT JOIN customers chq_customer ON chq.party_id = chq_customer.id AND chq.party_type = 'CUSTOMER'
+LEFT JOIN vendors chq_vendor ON chq.party_id = chq_vendor.id AND chq.party_type = 'VENDOR';
