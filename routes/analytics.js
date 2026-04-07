@@ -808,18 +808,19 @@ router.get('/reports/fy-operating-balances', async (req, res) => {
             const stats = await pool.query(`
                 SELECT 
                     (
-                        -- Customer Payments deposited to this bank
+                        -- Customer Payments deposited to this bank (Cast $1 to TEXT)
                         (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE deposit_bank = $1::text AND payment_date >= $2) +
-                        -- Cleared Cheques deposited to this bank
-                        (SELECT COALESCE(SUM(amount), 0) FROM cheques WHERE bank_account_id = $1 AND status = 'CLEARED' AND created_at >= $2)
+                        -- Cleared Cheques deposited to this bank (Cast $1 to INTEGER)
+                        (SELECT COALESCE(SUM(amount), 0) FROM cheques WHERE bank_account_id = $1::integer AND status = 'CLEARED' AND created_at >= $2)
                     ) as inflow,
                     (
-                        -- Vendor Payments from this bank
-                        (SELECT COALESCE(SUM(amount), 0) FROM vendor_payments WHERE bank_account_id = $1 AND is_active = true AND payment_date >= $2) +
+                        -- Vendor Payments from this bank (Cast $1 to INTEGER)
+                        (SELECT COALESCE(SUM(amount), 0) FROM vendor_payments WHERE bank_account_id = $1::integer AND is_active = true AND payment_date >= $2) +
                         -- (Assume other bank expenses are generic for now if not linked directly)
                         0
                     ) as outflow
             `, [bank.id, fyStart]);
+
 
             const row = stats.rows[0];
             return {
