@@ -507,21 +507,47 @@ router.put('/:id/verify-request', async (req, res) => {
     }
 });
 
-// POST /api/customers/:id/verify - Admin approves verification
-router.post('/:id/verify', async (req, res) => {
+// POST /api/customers/:id/pricing - Upsert Brand Pricing Overrides
+// Supports single object or array of { brand_id, channel_id }
+router.post('/:id/pricing', async (req, res) => {
+    const { id } = req.params;
+    let overrides = req.body;
+    if (!Array.isArray(overrides)) overrides = [overrides];
+
+    const client = await pool.connect();
     try {
-        const { id } = req.params;
-        const { verified_by } = req.body;
+        await client.query('BEGIN');
+        
+        for (const op of overrides) {
+            const query = `
+                INSERT INTO customer_brand_pricing (customer_id, brand_id, channel_id)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (customer_id, brand_id) 
+                DO UPDATE SET channel_id = EXCLUDED.channel_id
+            `;
+            await client.query(query, [id, op.brand_id, op.channel_id]);
+        }
 
-        await pool.query(`
-            UPDATE customers SET
-                verification_status = 'Verified',
-                last_verified_at = NOW(),
-                verified_by = $1
-            WHERE id = $2
-        `, [verified_by, id]);
+        await client.query('COMMIT');
+        res.json({ success: true, message: `Updated ${overrides.length} pricing overrides` });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Pricing Upsert Error:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
 
-        res.json({ success: true, message: 'Customer verified successfully' });
+// DELETE /api/customers/:id/pricing/:brand_id - Remove an override
+router.delete('/:id/pricing/:brand_id', async (req, res) => {
+    try {
+        const { id, brand_id } = req.params;
+        await pool.query(
+            'DELETE FROM customer_brand_pricing WHERE customer_id = $1 AND brand_id = $2',
+            [id, brand_id]
+        );
+        res.json({ success: true, message: 'Override removed' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
