@@ -1068,6 +1068,7 @@ router.post('/verify/settle', async (req, res) => {
                     if (ret.return_type === 'Expiry/Damage Return') {
                         if (ret.reason?.match(/damage/i)) targetStatus = 'Damage';
                         else if (ret.reason?.match(/expir/i)) targetStatus = 'Expiry';
+                        else if (ret.reason?.match(/good/i)) targetStatus = 'Good';
                     }
                     const orig = (await client.query("SELECT * FROM inventory_batches WHERE id = $1", [ret.batch_id])).rows[0];
                     let finalBatchId = ret.batch_id;
