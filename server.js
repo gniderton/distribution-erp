@@ -106,15 +106,7 @@ app.use('/api/finance/cheques', require('./routes/cheques')); // [NEW] Cheque Ma
 app.use('/api/finance/transfers', require('./routes/transfers')); // [NEW] Internal Transfers
 app.use('/api/finance/loans', require('./routes/loans')); // [NEW] Loan Management
 app.use('/api', require('./routes/accounting')); // [NEW] Alias for shorter paths like /api/journal-entries
-app.get('/api/backups/trigger', async (req, res) => {
-    try {
-        const { performBackup } = require('./services/backupService');
-        const result = await performBackup();
-        res.json({ success: true, message: result.filename });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+app.use('/api/backups', require('./routes/backups')); 
 
 // [TEMP] Migration Endpoint to fix Combo Schema
 app.get('/api/fix-combo-db', async (req, res) => {
