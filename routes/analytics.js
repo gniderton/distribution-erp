@@ -438,6 +438,8 @@ router.get('/reports/sales-lines', async (req, res) => {
                 c.customer_name as customer,
                 p.product_name as product,
                 p.product_code as sku,
+                b.brand_name as brand,
+                cat.category_name as category,
                 sil.shipped_qty as qty,
                 sil.rate as unit_rate,
                 sil.tax_amount as tax,
@@ -447,9 +449,12 @@ router.get('/reports/sales-lines', async (req, res) => {
             JOIN sales_invoices si ON sil.invoice_id = si.id
             JOIN products p ON sil.product_id = p.id
             JOIN customers c ON si.customer_id = c.id
+            JOIN brands b ON p.brand_id = b.id
+            JOIN categories cat ON p.category_id = cat.id
             WHERE si.invoice_date >= $1 AND si.invoice_date <= $2
               AND si.status != 'Cancelled'
         `;
+
 
         const params = [sd, ed];
         if (customer_id) {
