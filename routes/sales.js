@@ -1965,8 +1965,9 @@ router.post('/invoices/regenerate', async (req, res) => {
                 await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batchId]);
                 await client.query(`
                     INSERT INTO stock_traceability(batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type)
-                    VALUES($1, $2, -$3, 'OUT', $4, 'Sales Invoice')
+                    VALUES($1, $2, ($3 * -1)::numeric, 'OUT', $4, 'Sales Invoice')
                 `, [batchId, pid, take, invId]);
+
 
                 batchGroups[groupKey].qty += take;
                 batchGroups[groupKey].gross += (take * batchRate);
