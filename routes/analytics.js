@@ -321,8 +321,8 @@ router.get('/reports/p-and-l', async (req, res) => {
 
         const stats = await pool.query(`
             SELECT 
-                -- REVENUE (Sales Revenue 4001 only)
-                (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code = 4001 AND je.transaction_date >= $1 AND je.transaction_date <= $2) as revenue,
+                -- NET REVENUE (Sales 4001 + Returns 4003)
+                (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code IN (4001, 4003) AND je.transaction_date >= $1 AND je.transaction_date <= $2) as revenue,
                 
                 -- COGS (Account 5001 and 5002 only)
                 (SELECT COALESCE(SUM(jl.debit - jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE (coa.code = 5001 OR coa.code = 5002) AND je.transaction_date >= $1 AND je.transaction_date <= $2) as cogs,
@@ -330,9 +330,10 @@ router.get('/reports/p-and-l', async (req, res) => {
                 -- OPERATING EXPENSES (All other Expense accounts)
                 (SELECT COALESCE(SUM(jl.debit - jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'EXPENSE' AND coa.code NOT IN (5001, 5002) AND je.transaction_date >= $1 AND je.transaction_date <= $2) as expenses,
                 
-                -- OTHER INCOME (All other Income accounts, e.g. 4002 Discount Received)
-                (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'INCOME' AND coa.code != 4001 AND je.transaction_date >= $1 AND je.transaction_date <= $2) as other_income
+                -- OTHER INCOME (All other Income accounts, excluding Sales/Returns)
+                (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'INCOME' AND coa.code NOT IN (4001, 4003) AND je.transaction_date >= $1 AND je.transaction_date <= $2) as other_income
         `, [sd, ed]);
+
 
 
         const data = stats.rows[0];
