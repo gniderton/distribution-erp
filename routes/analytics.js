@@ -782,6 +782,67 @@ router.get('/reports/balance-sheet', async (req, res) => {
 });
 
 
+// --- 4. OPERATING BALANCES (CURRENT FY ONLY) ---
+router.get('/reports/fy-operating-balances', async (req, res) => {
+    try {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
+        const fyStart = `${fyStartYear}-04-01`;
+
+        const stats = await pool.query(`
+            SELECT 
+                -- 1. CASH IN
+                (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE payment_mode = 'Cash' AND payment_date >= $1) as cash_in,
+                -- 2. CASH OUT
+                (SELECT COALESCE(SUM(grand_total), 0) FROM expenses WHERE payment_source_id = 3 AND expense_date >= $1) +
+                (SELECT COALESCE(SUM(net_salary), 0) FROM employee_salaries WHERE payment_mode = 'Cash' AND payment_date >= $1) as cash_out,
+                -- 3. BANK IN
+                (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE payment_mode IN ('NEFT', 'UPI') AND payment_date >= $1) +
+                (SELECT COALESCE(SUM(amount), 0) FROM cheques WHERE status = 'CLEARED' AND created_at >= $1) as bank_in,
+                -- 4. BANK OUT
+                (SELECT COALESCE(SUM(amount), 0) FROM vendor_payments WHERE payment_mode != 'Cash' AND payment_date >= $1) +
+                (SELECT COALESCE(SUM(grand_total), 0) FROM expenses WHERE payment_source_id != 3 AND expense_date >= $1) +
+                (SELECT COALESCE(SUM(net_salary), 0) FROM employee_salaries WHERE payment_mode != 'Cash' AND payment_date >= $1) as bank_out,
+                -- 5. CHEQUES IN HAND
+                (SELECT COALESCE(SUM(amount), 0) FROM cheques WHERE status = 'PENDING' AND created_at >= $1) as cheques_in_hand
+        `, [fyStart]);
+
+        const data = stats.rows[0];
+        const cashIn = parseFloat(data.cash_in);
+        const cashOut = parseFloat(data.cash_out);
+        const bankIn = parseFloat(data.bank_in);
+        const bankOut = parseFloat(data.bank_out);
+        const chequesInHand = parseFloat(data.cheques_in_hand);
+
+        res.json({
+            fy_start: fyStart,
+            operating_metrics: {
+                cash: {
+                    inflow: cashIn,
+                    outflow: cashOut,
+                    net_movement: cashIn - cashOut
+                },
+                bank: {
+                    inflow: bankIn,
+                    outflow: bankOut,
+                    net_movement: bankIn - bankOut
+                },
+                cheques: {
+                    in_hand: chequesInHand
+                }
+            },
+            total_liquidity_from_ops: (cashIn - cashOut) + (bankIn - bankOut) + chequesInHand
+        });
+    } catch (err) {
+        console.error('Operating balances error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 module.exports = router;
+
 
 
