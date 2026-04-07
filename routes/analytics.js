@@ -421,4 +421,66 @@ router.get('/reports/fy-operating-balances', async (req, res) => {
     }
 });
 
+// --- 7. SALES LINE REPORT (DETAILED) ---
+router.get('/reports/sales-lines', async (req, res) => {
+    try {
+        const { start_date, end_date, customer_id, product_id } = req.query;
+        const now = new Date();
+        const fyStart = `${now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1}-04-01`;
+        
+        const sd = start_date || fyStart;
+        const ed = end_date || now.toISOString().split('T')[0];
+
+        let query = `
+            SELECT 
+                si.invoice_date as date,
+                si.invoice_number as invoice_no,
+                c.customer_name as customer,
+                p.product_name as product,
+                p.product_code as sku,
+                sil.shipped_qty as qty,
+                sil.rate as unit_rate,
+                sil.tax_amount as tax,
+                sil.amount as total_amount,
+                si.status
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN products p ON sil.product_id = p.id
+            JOIN customers c ON si.customer_id = c.id
+            WHERE si.invoice_date >= $1 AND si.invoice_date <= $2
+              AND si.status != 'Cancelled'
+        `;
+
+        const params = [sd, ed];
+        if (customer_id) {
+            params.push(customer_id);
+            query += ` AND si.customer_id = $${params.length}`;
+        }
+        if (product_id) {
+            params.push(product_id);
+            query += ` AND sil.product_id = $${params.length}`;
+        }
+
+        query += ` ORDER BY si.invoice_date DESC, si.invoice_number DESC LIMIT 1000`;
+
+        const result = await pool.query(query, params);
+
+        res.json({
+            period: { start: sd, end: ed },
+            count: result.rowCount,
+            lines: result.rows.map(row => ({
+                ...row,
+                qty: parseFloat(row.qty),
+                unit_rate: parseFloat(row.unit_rate),
+                tax: parseFloat(row.tax),
+                total_amount: parseFloat(row.total_amount)
+            }))
+        });
+    } catch (err) {
+        console.error('Sales Line Report Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
+
