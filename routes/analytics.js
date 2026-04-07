@@ -791,55 +791,84 @@ router.get('/reports/fy-operating-balances', async (req, res) => {
         const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
         const fyStart = `${fyStartYear}-04-01`;
 
-        const stats = await pool.query(`
+        // 1. Get List of Real Banks (Excluding Cash)
+        const banksRes = await pool.query(`SELECT id, bank_name, account_number FROM bank_accounts WHERE account_number != 'CASH' AND is_active = true`);
+        const banks = banksRes.rows;
+
+        // 2. Aggregate Cash Metrics
+        const cashStats = await pool.query(`
             SELECT 
-                -- 1. CASH IN
-                (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE payment_mode = 'Cash' AND payment_date >= $1) as cash_in,
-                -- 2. CASH OUT
+                (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE payment_mode = 'Cash' AND payment_date >= $1) as inflow,
                 (SELECT COALESCE(SUM(grand_total), 0) FROM expenses WHERE payment_source_id = 3 AND expense_date >= $1) +
-                (SELECT COALESCE(SUM(net_salary), 0) FROM employee_salaries WHERE payment_mode = 'Cash' AND payment_date >= $1) as cash_out,
-                -- 3. BANK IN
-                (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE payment_mode IN ('NEFT', 'UPI') AND payment_date >= $1) +
-                (SELECT COALESCE(SUM(amount), 0) FROM cheques WHERE status = 'CLEARED' AND created_at >= $1) as bank_in,
-                -- 4. BANK OUT
-                (SELECT COALESCE(SUM(amount), 0) FROM vendor_payments WHERE payment_mode != 'Cash' AND payment_date >= $1) +
-                (SELECT COALESCE(SUM(grand_total), 0) FROM expenses WHERE payment_source_id != 3 AND expense_date >= $1) +
-                (SELECT COALESCE(SUM(net_salary), 0) FROM employee_salaries WHERE payment_mode != 'Cash' AND payment_date >= $1) as bank_out,
-                -- 5. CHEQUES IN HAND
-                (SELECT COALESCE(SUM(amount), 0) FROM cheques WHERE status = 'PENDING' AND created_at >= $1) as cheques_in_hand
+                (SELECT COALESCE(SUM(net_salary), 0) FROM employee_salaries WHERE payment_mode = 'Cash' AND payment_date >= $1) as outflow
         `, [fyStart]);
 
-        const data = stats.rows[0];
-        const cashIn = parseFloat(data.cash_in);
-        const cashOut = parseFloat(data.cash_out);
-        const bankIn = parseFloat(data.bank_in);
-        const bankOut = parseFloat(data.bank_out);
-        const chequesInHand = parseFloat(data.cheques_in_hand);
+        // 3. Aggregate Bank Metrics (Per Bank)
+        const bankDataPromises = banks.map(async (bank) => {
+            const stats = await pool.query(`
+                SELECT 
+                    (
+                        -- Customer Payments deposited to this bank
+                        (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE deposit_bank = $1::text AND payment_date >= $2) +
+                        -- Cleared Cheques deposited to this bank
+                        (SELECT COALESCE(SUM(amount), 0) FROM cheques WHERE bank_account_id = $1 AND status = 'CLEARED' AND created_at >= $2)
+                    ) as inflow,
+                    (
+                        -- Vendor Payments from this bank
+                        (SELECT COALESCE(SUM(amount), 0) FROM vendor_payments WHERE bank_account_id = $1 AND is_active = true AND payment_date >= $2) +
+                        -- (Assume other bank expenses are generic for now if not linked directly)
+                        0
+                    ) as outflow
+            `, [bank.id, fyStart]);
+
+            const row = stats.rows[0];
+            return {
+                id: bank.id,
+                bank_name: bank.bank_name,
+                account_number: bank.account_number,
+                inflow: parseFloat(row.inflow),
+                outflow: parseFloat(row.outflow),
+                net_movement: parseFloat(row.inflow) - parseFloat(row.outflow)
+            };
+        });
+
+        const bankDetails = await Promise.all(bankDataPromises);
+
+        // 4. Cheques in Hand (FY)
+        const chequesRes = await pool.query(`SELECT COALESCE(SUM(amount), 0) as total FROM cheques WHERE status = 'PENDING' AND created_at >= $1`, [fyStart]);
+        const chequesInHand = parseFloat(chequesRes.rows[0].total);
+
+        // 5. Overall Summary
+        const cashNet = parseFloat(cashStats.rows[0].inflow) - parseFloat(cashStats.rows[0].outflow);
+        const bankInTotal = bankDetails.reduce((sum, b) => sum + b.inflow, 0);
+        const bankOutTotal = bankDetails.reduce((sum, b) => sum + b.outflow, 0);
 
         res.json({
             fy_start: fyStart,
             operating_metrics: {
                 cash: {
-                    inflow: cashIn,
-                    outflow: cashOut,
-                    net_movement: cashIn - cashOut
+                    inflow: parseFloat(cashStats.rows[0].inflow),
+                    outflow: parseFloat(cashStats.rows[0].outflow),
+                    net_movement: cashNet
                 },
-                bank: {
-                    inflow: bankIn,
-                    outflow: bankOut,
-                    net_movement: bankIn - bankOut
+                bank_summary: {
+                    inflow: bankInTotal,
+                    outflow: bankOutTotal,
+                    net_movement: bankInTotal - bankOutTotal
                 },
+                bank_details: bankDetails,
                 cheques: {
                     in_hand: chequesInHand
                 }
             },
-            total_liquidity_from_ops: (cashIn - cashOut) + (bankIn - bankOut) + chequesInHand
+            total_liquidity_from_ops: cashNet + (bankInTotal - bankOutTotal) + chequesInHand
         });
     } catch (err) {
         console.error('Operating balances error:', err);
         res.status(500).json({ error: err.message });
     }
 });
+
 
 
 module.exports = router;
