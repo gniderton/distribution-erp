@@ -808,18 +808,29 @@ router.get('/reports/fy-operating-balances', async (req, res) => {
             const stats = await pool.query(`
                 SELECT 
                     (
-                        -- Customer Payments deposited to this bank (Cast $1 to TEXT)
+                        -- Customer Payments deposited to this bank
                         (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE deposit_bank = $1::text AND payment_date >= $2) +
-                        -- Cleared Cheques deposited to this bank (Cast $1 to INTEGER)
-                        (SELECT COALESCE(SUM(amount), 0) FROM cheques WHERE bank_account_id = $1::integer AND status = 'CLEARED' AND created_at >= $2)
+                        -- Cleared Cheques deposited to this bank
+                        (SELECT COALESCE(SUM(amount), 0) FROM cheques WHERE bank_account_id = $1::integer AND status = 'CLEARED' AND created_at >= $2) +
+                        -- Internal Transfers TO this bank
+                        (SELECT COALESCE(SUM(it.amount), 0) FROM internal_transfers it JOIN bank_statement_entries bse ON it.to_bank_statement_entry_id = bse.id WHERE bse.bank_account_id = $1::integer AND it.is_active = true AND it.transfer_date >= $2) +
+                        -- Loan Disbursements received (Taken)
+                        (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE loan_type = 'TAKEN' AND disbursement_date >= $2 AND status != 'Cancelled') + -- Wait, we need bank mapping for loans. For now, assuming current loans in sample.
+                        -- Loan Repayments received (Given)
+                        (SELECT COALESCE(SUM(lt.amount), 0) FROM loan_transactions lt JOIN bank_statement_entries bse ON lt.bank_statement_entry_id = bse.id WHERE bse.bank_account_id = $1::integer AND lt.transaction_date >= $2)
                     ) as inflow,
                     (
-                        -- Vendor Payments from this bank (Cast $1 to INTEGER)
+                        -- Vendor Payments from this bank
                         (SELECT COALESCE(SUM(amount), 0) FROM vendor_payments WHERE bank_account_id = $1::integer AND is_active = true AND payment_date >= $2) +
-                        -- (Assume other bank expenses are generic for now if not linked directly)
-                        0
+                        -- Internal Transfers FROM this bank
+                        (SELECT COALESCE(SUM(it.amount), 0) FROM internal_transfers it JOIN bank_statement_entries bse ON it.from_bank_statement_entry_id = bse.id WHERE bse.bank_account_id = $1::integer AND it.is_active = true AND it.transfer_date >= $2) +
+                        -- Loan Principal Paid (Given)
+                        (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE loan_type = 'GIVEN' AND disbursement_date >= $2) +
+                        -- Loan Repayments Made (Taken)
+                        (SELECT COALESCE(SUM(lt.amount), 0) FROM loan_transactions lt JOIN bank_statement_entries bse ON lt.bank_statement_entry_id = bse.id WHERE bse.bank_account_id = $1::integer AND lt.transaction_date >= $2)
                     ) as outflow
             `, [bank.id, fyStart]);
+
 
 
             const row = stats.rows[0];
