@@ -13,7 +13,6 @@ router.get('/dashboard/summary', async (req, res) => {
         `);
 
         // 2. Total Outstanding (Sum of grand_total - payments)
-        // Note: Faster to use ledger view or sum invoices - sum verified payments
         const outstandingRes = await pool.query(`
             SELECT coalesce(SUM(grand_total), 0) as total_invoiced 
             FROM sales_invoices 
@@ -89,7 +88,6 @@ router.get('/customers/:id/dashboard', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // 1. Sales, Rank & General Metrics (Aggregated from the same view as the activity)
         const summaryRes = await pool.query(`
             WITH CustomerTotals AS (
                 SELECT 
@@ -114,7 +112,6 @@ router.get('/customers/:id/dashboard', async (req, res) => {
 
         const s = summaryRes.rows[0] || { gross_sales: 0, balance: 0, sales_rank: 0, total_customers: 0 };
 
-        // 2. Customer Limits Info
         const custRes = await pool.query(`
             SELECT customer_name, credit_limit, credit_days 
             FROM customers WHERE id = $1
@@ -122,9 +119,6 @@ router.get('/customers/:id/dashboard', async (req, res) => {
         
         const c = custRes.rows[0];
 
-        // 3. Avg Credit Days (Time to close the bill)
-        // Note: For cheques, we use clearance_date if available
-        // Subtracting two dates in PG returns integer days directly.
         const creditRes = await pool.query(`
             SELECT COALESCE(AVG(COALESCE(chq.clearance_date, p.payment_date) - sih.invoice_date), 0) as avg_days
             FROM customer_payment_allocations cpa
@@ -134,7 +128,6 @@ router.get('/customers/:id/dashboard', async (req, res) => {
             WHERE sih.customer_id = $1 AND sih.status = 'Paid'
         `, [id]);
 
-        // 4. Last Activity (Recent 10 Transactions)
         const recentRes = await pool.query(`
             SELECT type, reference_number, date, debit_amount, credit_amount, status
             FROM view_customer_ledger
@@ -143,7 +136,6 @@ router.get('/customers/:id/dashboard', async (req, res) => {
             LIMIT 10
         `, [id]);
 
-        // 5. Brand-wise Sales (FY: April 1 - March 31)
         const now = new Date();
         const currentMonth = now.getMonth() + 1;
         const currentYear = now.getFullYear();
@@ -187,41 +179,24 @@ router.get('/customers/:id/dashboard', async (req, res) => {
 router.get('/employees/:id/dashboard', async (req, res) => {
     try {
         const { id } = req.params;
-
-        // Validation: Ensure ID is a number
         if (isNaN(id) || isNaN(parseInt(id))) {
-            return res.status(400).json({ 
-                error: "Invalid Employee ID", 
-                message: `Received '${id}' but expected a numeric employee ID. Please check your Appsmith variable mapping.` 
-            });
+            return res.status(400).json({ error: "Invalid Employee ID" });
         }
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
-
-        // 1. Calculate Periods
         const monthStart = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
-        
         let fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
         const fyStart = `${fyStartYear}-04-01`;
 
-        // 2. Fetch Assigned Customer IDs
         const custRes = await pool.query('SELECT id FROM customers WHERE dse_id = $1', [id]);
         const customerIds = custRes.rows.map(r => r.id);
 
         if (customerIds.length === 0) {
-            return res.json({
-                message: "No customers assigned to this employee",
-                metrics: { month: {}, fy: {} },
-                top_customers: [],
-                brand_sales: [],
-                ageing: {},
-                zero_billing: []
-            });
+            return res.json({ message: "No customers assigned", metrics: { month: {}, fy: {} } });
         }
 
         const getPeriodMetrics = async (startDate) => {
-            // A. Core Totals (Taxable)
             const stats = await pool.query(`
                 SELECT 
                     COALESCE(SUM(total_taxable), 0) as gross_sales,
@@ -231,15 +206,12 @@ router.get('/employees/:id/dashboard', async (req, res) => {
                 WHERE customer_id = ANY($1) AND invoice_date >= $2 AND status != 'Cancelled'
             `, [customerIds, startDate, id]);
 
-            // B. Avg Credit Days
             const creditRes = await pool.query(`
                 SELECT COALESCE(AVG(p.payment_date - sih.invoice_date), 0) as avg_days
                 FROM customer_payment_allocations cpa
                 JOIN sales_invoices sih ON cpa.invoice_id = sih.id
                 JOIN customer_payments p ON cpa.payment_id = p.id
-                WHERE sih.customer_id = ANY($1) 
-                  AND sih.invoice_date >= $2
-                  AND cpa.status = 'ACTIVE'
+                WHERE sih.customer_id = ANY($1) AND sih.invoice_date >= $2 AND cpa.status = 'ACTIVE'
             `, [customerIds, startDate]);
 
             const s = stats.rows[0];
@@ -252,15 +224,11 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             };
         };
 
-        // Execution
         const monthMetrics = await getPeriodMetrics(monthStart);
         const fyMetrics = await getPeriodMetrics(fyStart);
 
-        // 4. Top 10 Customers (Month)
         const topCustomers = await pool.query(`
-            SELECT 
-                c.customer_name,
-                COALESCE(SUM(si.total_taxable), 0) as taxable_sales
+            SELECT c.customer_name, COALESCE(SUM(si.total_taxable), 0) as taxable_sales
             FROM customers c
             JOIN sales_invoices si ON c.id = si.customer_id
             WHERE c.dse_id = $1 AND si.invoice_date >= $2 AND si.status != 'Cancelled'
@@ -269,11 +237,8 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             LIMIT 10
         `, [id, monthStart]);
 
-        // 5. Brand-wise Sales (Month)
         const brandSales = await pool.query(`
-            SELECT 
-                b.brand_name,
-                COALESCE(SUM(sil.rate * sil.shipped_qty), 0) as taxable_sales
+            SELECT b.brand_name, COALESCE(SUM(sil.rate * sil.shipped_qty), 0) as taxable_sales
             FROM sales_invoice_lines sil
             JOIN sales_invoices si ON sil.invoice_id = si.id
             JOIN products p ON sil.product_id = p.id
@@ -283,21 +248,6 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             ORDER BY taxable_sales DESC
         `, [customerIds, monthStart]);
 
-        // 6. Category-wise Sales (Month)
-        const catSales = await pool.query(`
-            SELECT 
-                cat.category_name,
-                COALESCE(SUM(sil.rate * sil.shipped_qty), 0) as taxable_sales
-            FROM sales_invoice_lines sil
-            JOIN sales_invoices si ON sil.invoice_id = si.id
-            JOIN products p ON sil.product_id = p.id
-            JOIN categories cat ON p.category_id = cat.id
-            WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.status != 'Cancelled'
-            GROUP BY cat.id, cat.category_name
-            ORDER BY taxable_sales DESC
-        `, [customerIds, monthStart]);
-
-        // 7. Collection Ageing (Real-time)
         const ageingRes = await pool.query(`
             SELECT 
                 CASE 
@@ -314,51 +264,20 @@ router.get('/employees/:id/dashboard', async (req, res) => {
         const ageingMap = { '0-30 Days': 0, '31-60 Days': 0, '61+ Days': 0 };
         ageingRes.rows.forEach(r => ageingMap[r.bucket] = parseFloat(r.outstanding));
 
-        // 8. Zero-Billing Customers (On Today's Route + Last 30 Days)
-        const zeroBilling = await pool.query(`
-            SELECT c.customer_name, c.customer_phone, c.latitude, c.longitude,
-                   (SELECT MAX(invoice_date) FROM sales_invoices WHERE customer_id = c.id) as last_invoice_date
-            FROM customers c
-            JOIN routes r ON c.route_id = r.id
-            WHERE c.dse_id = $1 
-              AND TRIM(TO_CHAR(CURRENT_DATE, 'Day')) ILIKE r.service_day
-              AND NOT EXISTS (
-                SELECT 1 FROM sales_invoices 
-                WHERE customer_id = c.id AND invoice_date >= CURRENT_DATE - INTERVAL '30 days'
-            )
-            ORDER BY last_invoice_date ASC NULLS FIRST
-        `, [id]);
-
-        // 9. Target & Performance Points (Month)
         const targetRes = await pool.query(`
-            SELECT 
-                t.*,
-                p.name as plan_name,
-                p.config as plan_config,
-                COALESCE((SELECT SUM(points) FROM performance_points_history WHERE employee_id = $1 AND EXTRACT(MONTH FROM date) = $2 AND EXTRACT(YEAR FROM date) = $3), 0) as total_points,
-                COALESCE((SELECT COUNT(*) FROM employee_daily_achievement WHERE employee_id = $1 AND EXTRACT(MONTH FROM date) = $2 AND EXTRACT(YEAR FROM date) = $3 AND is_successful = TRUE), 0) as success_days
+            SELECT t.*, p.name as plan_name,
+                COALESCE((SELECT SUM(points) FROM performance_points_history WHERE employee_id = $1 AND EXTRACT(MONTH FROM date) = $2 AND EXTRACT(YEAR FROM date) = $3), 0) as total_points
             FROM employee_targets t
             JOIN incentive_plans p ON t.plan_id = p.id
             WHERE t.employee_id = $1 AND t.month = $2 AND t.year = $3
         `, [id, currentMonth, currentYear]);
 
         res.json({
-            metrics: {
-                month: monthMetrics,
-                fy: fyMetrics
-            },
+            metrics: { month: monthMetrics, fy: fyMetrics },
             top_customers: topCustomers.rows,
             brand_sales: brandSales.rows,
-            category_sales: catSales.rows,
             ageing: ageingMap,
-            zero_billing: zeroBilling.rows,
-            performance: targetRes.rows[0] || { 
-                total_points: 0, 
-                success_days: 0, 
-                sales_target_taxable: 0,
-                plan_name: 'No Plan Assigned',
-                plan_config: {}
-            }
+            performance: targetRes.rows[0] || { total_points: 0, plan_name: 'No Plan Assigned' }
         });
 
     } catch (err) {
@@ -367,532 +286,129 @@ router.get('/employees/:id/dashboard', async (req, res) => {
     }
 });
 
-
-// --- SALES FY REPORT (Simplified) ---
-router.get('/sales-fy-report', async (req, res) => {
-    try {
-        const { year } = req.query;
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
-
-        let fyStartYear = year ? parseInt(year) : (currentMonth >= 4 ? currentYear : currentYear - 1);
-        const fyEndYear = fyStartYear + 1;
-
-        const fyStart = `${fyStartYear}-04-01`;
-        const fyEnd = `${fyEndYear}-03-31`;
-
-        const result = await pool.query(`
-            WITH months AS (
-                SELECT generate_series($1::date, $2::date, '1 month'::interval)::date as month_start
-            ),
-            sales_summary AS (
-                SELECT 
-                    DATE_TRUNC('month', invoice_date)::date as month,
-                    SUM(total_taxable) as taxable_sales,
-                    SUM(grand_total - paid_amount) as month_receivables
-                FROM sales_invoices
-                WHERE invoice_date >= $1 AND invoice_date <= $2 AND status NOT IN ('Cancelled', 'Reversed')
-                GROUP BY 1
-            ),
-            collections AS (
-                SELECT 
-                    DATE_TRUNC('month', payment_date)::date as month,
-                    SUM(amount) as payments_collected
-                FROM customer_payments
-                WHERE payment_date >= $1 AND payment_date <= $2 AND verification_status = 'Verified'
-                GROUP BY 1
-            )
-            SELECT 
-                m.month_start as month,
-                TRIM(TO_CHAR(m.month_start, 'Month YYYY')) as month_name,
-                COALESCE(s.taxable_sales, 0) as sales,
-                COALESCE(c.payments_collected, 0) as collected,
-                COALESCE(s.month_receivables, 0) as receivables
-            FROM months m
-            LEFT JOIN sales_summary s ON m.month_start = s.month
-            LEFT JOIN collections c ON m.month_start = c.month
-            ORDER BY m.month_start
-        `, [fyStart, fyEnd]);
-
-        const breakup = result.rows.map(r => ({
-            month: r.month,
-            month_name: r.month_name,
-            sales: parseFloat(r.sales),
-            collected: parseFloat(r.collected),
-            receivables: parseFloat(r.receivables)
-        }));
-
-        const summary = breakup.reduce((acc, x) => ({
-            total_sales: acc.total_sales + x.sales,
-            total_collected: acc.total_collected + x.collected,
-            total_receivables: acc.total_receivables + x.receivables
-        }), { total_sales: 0, total_collected: 0, total_receivables: 0 });
-
-        res.json({
-            summary: {
-                year_range: `April ${fyStartYear} - March ${fyEndYear}`,
-                ...summary
-            },
-            monthly_breakup: breakup
-        });
-    } catch (err) {
-        console.error('Sales FY report error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-
-
-// --- 1. PROFIT & LOSS (P&L) REPORT ---
-router.get('/reports/p-and-l', async (req, res) => {
-    try {
-        const { year } = req.query;
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
-
-        let fyStartYear = year ? parseInt(year) : (currentMonth >= 4 ? currentYear : currentYear - 1);
-        const fyEndYear = fyStartYear + 1;
-        const fyStart = `${fyStartYear}-04-01`;
-        const fyEnd = `${fyEndYear}-03-31`;
-
-        const result = await pool.query(`
-            WITH months AS (
-                SELECT generate_series($1::date, $2::date, '1 month'::interval)::date as month_start
-            ),
-            sales_headers AS (
-                SELECT 
-                    DATE_TRUNC('month', invoice_date)::date as month,
-                    SUM(total_taxable) as revenue
-                FROM sales_invoices
-                WHERE invoice_date >= $1 AND invoice_date <= $2 AND status NOT IN ('Cancelled', 'Reversed')
-                GROUP BY 1
-            ),
-            sales_cogs AS (
-                SELECT 
-                    DATE_TRUNC('month', si.invoice_date)::date as month,
-                    SUM(sil.shipped_qty * COALESCE(ib.purchase_rate, 0)) as cogs
-                FROM sales_invoices si
-                JOIN sales_invoice_lines sil ON si.id = sil.invoice_id
-                LEFT JOIN inventory_batches ib ON sil.batch_id = ib.id
-                WHERE si.invoice_date >= $1 AND si.invoice_date <= $2 AND si.status NOT IN ('Cancelled', 'Reversed')
-                GROUP BY 1
-            ),
-            returns_headers AS (
-                SELECT 
-                    DATE_TRUNC('month', return_date)::date as month,
-                    SUM(total_taxable) as returns_revenue
-                FROM sales_returns
-                WHERE return_date >= $1 AND return_date <= $2 AND status = 'Applied'
-                GROUP BY 1
-            ),
-            returns_cogs AS (
-                SELECT 
-                    DATE_TRUNC('month', sr.return_date)::date as month,
-                    SUM(srl.qty * COALESCE(ib.purchase_rate, 0)) as returns_cogs
-                FROM sales_returns sr
-                JOIN sales_return_lines srl ON sr.id = srl.return_id
-                LEFT JOIN inventory_batches ib ON srl.batch_id = ib.id
-                WHERE sr.return_date >= $1 AND sr.return_date <= $2 AND sr.status = 'Applied'
-                GROUP BY 1
-            ),
-            expenses_summary AS (
-                SELECT 
-                    DATE_TRUNC('month', expense_date)::date as month,
-                    SUM(grand_total) as total_expenses
-                FROM expenses
-                WHERE expense_date >= $1 AND expense_date <= $2 AND is_active = true
-                GROUP BY 1
-            ),
-            salaries_summary AS (
-                SELECT 
-                    (year || '-' || LPAD(month::text, 2, '0') || '-01')::date as month,
-                    SUM(net_salary) as total_salaries
-                FROM employee_salaries
-                WHERE (year = $3 AND month >= 4) OR (year = $4 AND month <= 3)
-                GROUP BY 1
-            ),
-            other_income_summary AS (
-                SELECT 
-                    DATE_TRUNC('month', transaction_date)::date as month,
-                    SUM(amount) as other_income
-                FROM other_income
-                WHERE transaction_date >= $1 AND transaction_date <= $2 AND is_active = true
-                GROUP BY 1
-            ),
-            asset_transactions AS (
-                SELECT 
-                    DATE_TRUNC('month', COALESCE(purchase_date, created_at))::date as month,
-                    SUM(CASE WHEN purchase_cost > 0 THEN -purchase_cost ELSE 0 END) + SUM(COALESCE(sale_total_amount, 0)) as asset_net
-                FROM assets
-                WHERE (purchase_date >= $1 AND purchase_date <= $2) OR (created_at >= $1 AND created_at <= ($2::date + 1))
-                GROUP BY 1
-            ),
-            stock_losses AS (
-                SELECT 
-                    DATE_TRUNC('month', sa.created_at)::date as month,
-                    SUM(ABS(sa.qty) * COALESCE(ib.purchase_rate, 0)) as stock_loss
-                FROM stock_adjustments sa
-                JOIN inventory_batches ib ON sa.product_id = ib.product_id AND sa.batch_code = ib.batch_code
-                WHERE sa.qty < 0 AND sa.created_at >= $1 AND sa.created_at <= ($2::date + 1)
-                GROUP BY 1
-            )
-            SELECT 
-                m.month_start as month,
-                TRIM(TO_CHAR(m.month_start, 'Month YYYY')) as month_name,
-                COALESCE(s.revenue, 0) as revenue,
-                COALESCE(sc.cogs, 0) as cogs,
-                COALESCE(r.returns_revenue, 0) as returns,
-                COALESCE(rc.returns_cogs, 0) as returns_cogs,
-                COALESCE(e.total_expenses, 0) as expenses,
-                COALESCE(sal.total_salaries, 0) as salaries,
-                COALESCE(oi.other_income, 0) as other_income,
-                COALESCE(at.asset_net, 0) as asset_net,
-                COALESCE(sl.stock_loss, 0) as stock_losses
-            FROM months m
-            LEFT JOIN sales_headers s ON m.month_start = s.month
-            LEFT JOIN sales_cogs sc ON m.month_start = sc.month
-            LEFT JOIN returns_headers r ON m.month_start = r.month
-            LEFT JOIN returns_cogs rc ON m.month_start = rc.month
-            LEFT JOIN expenses_summary e ON m.month_start = e.month
-            LEFT JOIN salaries_summary sal ON m.month_start = sal.month
-            LEFT JOIN other_income_summary oi ON m.month_start = oi.month
-            LEFT JOIN asset_transactions at ON m.month_start = at.month
-            LEFT JOIN stock_losses sl ON m.month_start = sl.month
-            ORDER BY m.month_start
-
-        `, [fyStart, fyEnd, fyStartYear, fyEndYear]);
-
-        const breakup = result.rows.map(r => {
-            const revenue = parseFloat(r.revenue);
-            const returns = parseFloat(r.returns);
-            const netRevenue = revenue - returns;
-            const cogs = parseFloat(r.cogs) - parseFloat(r.returns_cogs);
-            const grossProfit = netRevenue - cogs;
-            const totalOutflow = parseFloat(r.expenses) + parseFloat(r.salaries) + parseFloat(r.stock_losses);
-            const netProfit = grossProfit - totalOutflow + parseFloat(r.other_income) + parseFloat(r.asset_net);
-
-            return {
-                month_name: r.month_name,
-                revenue,
-                returns,
-                net_revenue: netRevenue,
-                cogs,
-                gross_profit: grossProfit,
-                gross_margin_percent: netRevenue > 0 ? (grossProfit / netRevenue * 100).toFixed(2) : 0,
-                expenses: parseFloat(r.expenses),
-                salaries: parseFloat(r.salaries),
-                other_income: parseFloat(r.other_income),
-                asset_net: parseFloat(r.asset_net),
-                stock_losses: parseFloat(r.stock_losses),
-                net_profit: netProfit,
-                net_margin_percent: netRevenue > 0 ? (netProfit / netRevenue * 100).toFixed(2) : 0
-            };
-        });
-
-        const summary = breakup.reduce((acc, x) => ({
-            total_revenue: acc.total_revenue + x.revenue,
-            total_returns: acc.total_returns + x.returns,
-            total_cogs: acc.total_cogs + x.cogs,
-            total_expenses: acc.total_expenses + x.expenses,
-            total_salaries: acc.total_salaries + x.salaries,
-            total_other_income: acc.total_other_income + x.other_income,
-            total_asset_net: acc.total_asset_net + x.asset_net,
-            total_stock_losses: acc.total_stock_losses + x.stock_losses,
-            total_net_profit: acc.total_net_profit + x.net_profit
-        }), { 
-            total_revenue: 0, total_returns: 0, total_cogs: 0, 
-            total_expenses: 0, total_salaries: 0, total_other_income: 0,
-            total_asset_net: 0, total_stock_losses: 0, total_net_profit: 0
-        });
-
-        res.json({
-            summary: {
-                year_range: `April ${fyStartYear} - March ${fyEndYear}`,
-                ...summary,
-                net_revenue: summary.total_revenue - summary.total_returns,
-                gross_profit: (summary.total_revenue - summary.total_returns) - summary.total_cogs
-            },
-            monthly_breakup: breakup
-        });
-    } catch (err) {
-        console.error('P&L report error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// --- 2. CASH FLOW REPORT ---
+// --- 3. CASH FLOW (GL-POWERED) ---
 router.get('/reports/cash-flow', async (req, res) => {
     try {
-        const { year } = req.query;
+        const { start_date, end_date } = req.query;
         const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
+        const fyStart = `${now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1}-04-01`;
+        const sd = start_date || fyStart;
+        const ed = end_date || now.toISOString().split('T')[0];
 
-        let fyStartYear = year ? parseInt(year) : (currentMonth >= 4 ? currentYear : currentYear - 1);
-        const fyEndYear = fyStartYear + 1;
-        const fyStart = `${fyStartYear}-04-01`;
-        const fyEnd = `${fyEndYear}-03-31`;
-
-        const result = await pool.query(`
-            WITH months AS (
-                SELECT generate_series($1::date, $2::date, '1 month'::interval)::date as month_start
-            ),
-            inflows AS (
-                SELECT 
-                    DATE_TRUNC('month', payment_date)::date as month,
-                    SUM(amount) as customer_collections
-                FROM customer_payments
-                WHERE payment_date >= $1 AND payment_date <= $2 AND verification_status = 'Verified'
-                GROUP BY 1
-            ),
-            other_inflows AS (
-                SELECT 
-                    DATE_TRUNC('month', transaction_date)::date as month,
-                    SUM(amount) as other_income
-                FROM other_income
-                WHERE transaction_date >= $1 AND transaction_date <= $2 AND is_active = true
-                GROUP BY 1
-            ),
-            outflows_vendor AS (
-                SELECT 
-                    DATE_TRUNC('month', payment_date)::date as month,
-                    SUM(amount) as vendor_payments
-                FROM vendor_payments
-                WHERE payment_date >= $1 AND payment_date <= $2 AND is_active = true
-                GROUP BY 1
-            ),
-            outflows_expenses AS (
-                SELECT 
-                    DATE_TRUNC('month', expense_date)::date as month,
-                    SUM(grand_total) as expense_payments
-                FROM expenses
-                WHERE expense_date >= $1 AND expense_date <= $2 AND is_active = true
-                GROUP BY 1
-            ),
-            outflows_salaries AS (
-                SELECT 
-                    DATE_TRUNC('month', payment_date)::date as month,
-                    SUM(net_salary) as salary_payments
-                FROM employee_salaries
-                WHERE payment_date >= $1 AND payment_date <= $2
-                GROUP BY 1
-            )
+        const stats = await pool.query(`
             SELECT 
-                m.month_start as month,
-                TRIM(TO_CHAR(m.month_start, 'Month YYYY')) as month_name,
-                COALESCE(i.customer_collections, 0) as collections,
-                COALESCE(oi.other_income, 0) as other_income,
-                COALESCE(ov.vendor_payments, 0) as vendor_payments,
-                COALESCE(oe.expense_payments, 0) as expense_payments,
-                COALESCE(os.salary_payments, 0) as salary_payments
-            FROM months m
-            LEFT JOIN inflows i ON m.month_start = i.month
-            LEFT JOIN other_inflows oi ON m.month_start = oi.month
-            LEFT JOIN outflows_vendor ov ON m.month_start = ov.month
-            LEFT JOIN outflows_expenses oe ON m.month_start = oe.month
-            LEFT JOIN outflows_salaries os ON m.month_start = os.month
-            ORDER BY m.month_start
-        `, [fyStart, fyEnd]);
+                (SELECT COALESCE(SUM(jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'ASSET' AND (coa.code = '1002' OR coa.code = '1003') AND je.transaction_date >= $1 AND je.transaction_date <= $2) as inflow,
+                (SELECT COALESCE(SUM(jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'ASSET' AND (coa.code = '1002' OR coa.code = '1003') AND je.transaction_date >= $1 AND je.transaction_date <= $2) as outflow
+        `, [sd, ed]);
 
-        const breakup = result.rows.map(r => {
-            const inflow = parseFloat(r.collections) + parseFloat(r.other_income);
-            const outflow = parseFloat(r.vendor_payments) + parseFloat(r.expense_payments) + parseFloat(r.salary_payments);
-            return {
-                month_name: r.month_name,
-                inflow,
-                outflow,
-                net_cash_flow: inflow - outflow,
-                details: {
-                    collections: parseFloat(r.collections),
-                    other_income: parseFloat(r.other_income),
-                    vendor_payments: parseFloat(r.vendor_payments),
-                    expenses: parseFloat(r.expense_payments),
-                    salaries: parseFloat(r.salary_payments)
-                }
-            };
-        });
+        const inflow = parseFloat(stats.rows[0].inflow);
+        const outflow = parseFloat(stats.rows[0].outflow);
 
-        res.json({
-            summary: {
-                total_inflow: breakup.reduce((sum, x) => sum + x.inflow, 0),
-                total_outflow: breakup.reduce((sum, x) => sum + x.outflow, 0),
-                net_cash_flow: breakup.reduce((sum, x) => sum + x.net_cash_flow, 0)
-            },
-            monthly_breakup: breakup
-        });
+        res.json({ period: { start: sd, end: ed }, summary: { total_inflow: inflow, total_outflow: outflow, net_cash_flow: inflow - outflow } });
     } catch (err) {
-        console.error('Cash flow report error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// --- 3. BALANCE SHEET (SNAPSHOT) ---
+// --- 2. PROFIT & LOSS (GL-POWERED) ---
+router.get('/reports/p-and-l', async (req, res) => {
+    try {
+        const { start_date, end_date } = req.query;
+        const now = new Date();
+        const fyStart = `${now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1}-04-01`;
+        const sd = start_date || fyStart;
+        const ed = end_date || now.toISOString().split('T')[0];
+
+        const stats = await pool.query(`
+            SELECT 
+                (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'INCOME' AND je.transaction_date >= $1 AND je.transaction_date <= $2) as revenue,
+                (SELECT COALESCE(SUM(jl.debit - jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code LIKE '50%' AND je.transaction_date >= $1 AND je.transaction_date <= $2) as cogs,
+                (SELECT COALESCE(SUM(jl.debit - jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'EXPENSE' AND coa.code NOT LIKE '50%' AND je.transaction_date >= $1 AND je.transaction_date <= $2) as expenses,
+                (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'OTHER_INCOME' AND je.transaction_date >= $1 AND je.transaction_date <= $2) as other_income
+        `, [sd, ed]);
+
+        const data = stats.rows[0];
+        const revenue = parseFloat(data.revenue);
+        const cogs = parseFloat(data.cogs);
+        const expenses = parseFloat(data.expenses);
+        const otherIncome = parseFloat(data.other_income);
+        const grossProfit = revenue - cogs;
+
+        res.json({ period: { start: sd, end: ed }, metrics: { revenue, cogs, gross_profit: grossProfit, gross_margin: revenue > 0 ? (grossProfit / revenue) * 100 : 0, operating_expenses: expenses, other_income: otherIncome, net_profit: grossProfit - expenses + otherIncome } });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- 4. BALANCE SHEET (GL-POWERED) ---
 router.get('/reports/balance-sheet', async (req, res) => {
     try {
         const stats = await pool.query(`
             SELECT 
-                (SELECT COALESCE(SUM(current_balance), 0) FROM bank_accounts WHERE is_active = true) as bank_cash,
-                (SELECT COALESCE(SUM(grand_total - paid_amount), 0) FROM sales_invoices WHERE status NOT IN ('Cancelled', 'Reversed')) as trade_receivables,
-                (SELECT COALESCE(SUM(quantity_remaining * purchase_rate), 0) FROM inventory_batches WHERE quantity_remaining > 0) as inventory_value,
-                (SELECT COALESCE(SUM(purchase_cost), 0) - COALESCE(SUM(sale_total_amount), 0) FROM assets) as fixed_assets,
-                (
-                    (SELECT COALESCE(SUM(grand_total), 0) FROM purchase_invoice_headers WHERE status NOT IN ('Cancelled', 'Reversed')) - 
-                    (SELECT COALESCE(SUM(amount), 0) FROM vendor_payments WHERE is_active = true)
-                ) as trade_payables,
-                (SELECT COALESCE(SUM(balance_principal), 0) FROM loans WHERE status = 'Active') as loans_outstanding
+                (SELECT COALESCE(SUM(jl.debit - jl.credit), 0) FROM journal_lines jl JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'ASSET') as assets,
+                (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'LIABILITY') as liabilities,
+                (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'EQUITY') as equity
         `);
 
         const data = stats.rows[0];
-        const totalAssets = parseFloat(data.bank_cash) + parseFloat(data.trade_receivables) + parseFloat(data.inventory_value) + parseFloat(data.fixed_assets);
-        const totalLiabilities = parseFloat(data.trade_payables) + parseFloat(data.loans_outstanding);
-
-        res.json({
-            as_of: new Date().toISOString(),
-            assets: {
-                current_assets: {
-                    bank_and_cash: parseFloat(data.bank_cash),
-                    trade_receivables: parseFloat(data.trade_receivables),
-                    inventory_on_hand: parseFloat(data.inventory_value),
-                    total_current: parseFloat(data.bank_cash) + parseFloat(data.trade_receivables) + parseFloat(data.inventory_value)
-                },
-                fixed_assets: {
-                    net_fixed_assets: parseFloat(data.fixed_assets)
-                },
-                total_assets: totalAssets
-            },
-            liabilities: {
-                current_liabilities: {
-                    trade_payables: parseFloat(data.trade_payables)
-                },
-                long_term_liabilities: {
-                    loans: parseFloat(data.loans_outstanding)
-                },
-                total_liabilities: totalLiabilities
-            },
-            equity: {
-                net_worth: totalAssets - totalLiabilities
-            }
-        });
+        res.json({ as_of: new Date(), assets: parseFloat(data.assets), liabilities: parseFloat(data.liabilities), equity: parseFloat(data.equity), net_worth: parseFloat(data.assets) - parseFloat(data.liabilities) });
     } catch (err) {
-        console.error('Balance sheet error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
+// --- 5. SALES FY REPORT (GL-POWERED) ---
+router.get('/sales-fy-report', async (req, res) => {
+    try {
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const fyStartYear = currentMonth >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+        const fyStart = `${fyStartYear}-04-01`;
+        const fyEnd = `${fyStartYear + 1}-03-31`;
 
-// --- 4. OPERATING BALANCES (CURRENT FY ONLY) ---
+        const monthlyStats = await pool.query(`
+            WITH months AS (SELECT generate_series($1::date, LEAST($2::date, CURRENT_DATE), '1 month'::interval) as month_start)
+            SELECT TO_CHAR(m.month_start, 'MMMM YYYY') as month_name,
+                COALESCE((SELECT SUM(jl.credit - jl.debit) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code = '4001' AND je.transaction_date >= m.month_start AND je.transaction_date < m.month_start + interval '1 month'), 0) as revenue,
+                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE (coa.type = 'ASSET' AND (coa.code = '1002' OR coa.code = '1003')) AND je.reference_type = 'CUST_PAY' AND je.transaction_date >= m.month_start AND je.transaction_date < m.month_start + interval '1 month'), 0) as collected
+            FROM months m ORDER BY m.month_start ASC
+        `, [fyStart, fyEnd]);
+
+        const receivablesRes = await pool.query(`SELECT SUM(jl.debit - jl.credit) as balance FROM journal_lines jl JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code = '1101'`);
+
+        res.json({ fy_start: fyStart, total_outstanding_receivables: parseFloat(receivablesRes.rows[0].balance || 0), monthly_data: monthlyStats.rows.map(r => ({ month_name: r.month_name.trim(), revenue: parseFloat(r.revenue), collected: parseFloat(r.collected), receivables: parseFloat(r.revenue) - parseFloat(r.collected) })) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- 6. OPERATING BALANCES (GL-POWERED BANK SPLIT) ---
 router.get('/reports/fy-operating-balances', async (req, res) => {
     try {
         const now = new Date();
-        const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
-        const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
+        const fyStartYear = currentMonth >= 4 ? now.getFullYear() : now.getFullYear() - 1;
         const fyStart = `${fyStartYear}-04-01`;
 
-        // 1. Get List of Real Banks (Excluding Cash)
-        const banksRes = await pool.query(`SELECT id, bank_name, account_number FROM bank_accounts WHERE account_number != 'CASH' AND is_active = true`);
-        const banks = banksRes.rows;
+        const accountsRes = await pool.query(`SELECT id, bank_name, account_number FROM bank_accounts WHERE is_active = true`);
+        const accounts = accountsRes.rows;
 
-        // 2. Aggregate Cash Metrics (Including Transfers)
-        const cashStats = await pool.query(`
-            SELECT 
-                (
-                    (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE payment_mode = 'Cash' AND payment_date >= $1) +
-                    -- Internal Transfers FROM Bank TO Cash (Inflow to Cash)
-                    (SELECT COALESCE(SUM(it.amount), 0) FROM internal_transfers it JOIN bank_statement_entries bse ON it.from_bank_statement_entry_id = bse.id WHERE bse.bank_account_id != 1 AND it.to_account_id = 3 AND it.is_active = true AND it.transfer_date >= $1)
-                ) as inflow,
-                (
-                    (SELECT COALESCE(SUM(grand_total), 0) FROM expenses WHERE payment_source_id = 3 AND expense_date >= $1) +
-                    (SELECT COALESCE(SUM(net_salary), 0) FROM employee_salaries WHERE payment_mode = 'Cash' AND payment_date >= $1) +
-                    -- Internal Transfers FROM Cash TO Bank (Outflow from Cash - Deposit)
-                    (SELECT COALESCE(SUM(it.amount), 0) FROM internal_transfers it JOIN bank_statement_entries bse ON it.to_bank_statement_entry_id = bse.id WHERE bse.bank_account_id != 1 AND it.from_account_id = 3 AND it.is_active = true AND it.transfer_date >= $1)
-                ) as outflow
-        `, [fyStart]);
-
-
-        // 3. Aggregate Bank Metrics (Per Bank)
-        const bankDataPromises = banks.map(async (bank) => {
+        const details = await Promise.all(accounts.map(async (acc) => {
             const stats = await pool.query(`
-                SELECT 
-                    (
-                        -- Customer Payments deposited to this bank
-                        (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE deposit_bank = $1::text AND payment_date >= $2) +
-                        -- Cleared Cheques deposited to this bank
-                        (SELECT COALESCE(SUM(amount), 0) FROM cheques WHERE bank_account_id = $1::integer AND status = 'CLEARED' AND created_at >= $2) +
-                        -- Internal Transfers TO this bank
-                        (SELECT COALESCE(SUM(it.amount), 0) FROM internal_transfers it JOIN bank_statement_entries bse ON it.to_bank_statement_entry_id = bse.id WHERE bse.bank_account_id = $1::integer AND it.is_active = true AND it.transfer_date >= $2) +
-                        -- Loan Disbursements received (Taken)
-                        (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE loan_type = 'TAKEN' AND disbursement_date >= $2 AND status != 'Cancelled') + -- Wait, we need bank mapping for loans. For now, assuming current loans in sample.
-                        -- Loan Repayments received (Given)
-                        (SELECT COALESCE(SUM(lt.amount), 0) FROM loan_transactions lt JOIN bank_statement_entries bse ON lt.bank_statement_entry_id = bse.id WHERE bse.bank_account_id = $1::integer AND lt.transaction_date >= $2)
-                    ) as inflow,
-                    (
-                        -- Vendor Payments from this bank
-                        (SELECT COALESCE(SUM(amount), 0) FROM vendor_payments WHERE bank_account_id = $1::integer AND is_active = true AND payment_date >= $2) +
-                        -- Internal Transfers FROM this bank
-                        (SELECT COALESCE(SUM(it.amount), 0) FROM internal_transfers it JOIN bank_statement_entries bse ON it.from_bank_statement_entry_id = bse.id WHERE bse.bank_account_id = $1::integer AND it.is_active = true AND it.transfer_date >= $2) +
-                        -- Loan Principal Paid (Given)
-                        (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE loan_type = 'GIVEN' AND disbursement_date >= $2) +
-                        -- Loan Repayments Made (Taken)
-                        (SELECT COALESCE(SUM(lt.amount), 0) FROM loan_transactions lt JOIN bank_statement_entries bse ON lt.bank_statement_entry_id = bse.id WHERE bse.bank_account_id = $1::integer AND lt.transaction_date >= $2)
-                    ) as outflow
-            `, [bank.id, fyStart]);
-
-
-
+                SELECT COALESCE(SUM(jl.debit), 0) as inflow, COALESCE(SUM(jl.credit), 0) as outflow
+                FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id
+                WHERE jl.bank_account_id = $1 AND je.transaction_date >= $2
+            `, [acc.id, fyStart]);
             const row = stats.rows[0];
-            return {
-                id: bank.id,
-                bank_name: bank.bank_name,
-                account_number: bank.account_number,
-                inflow: parseFloat(row.inflow),
-                outflow: parseFloat(row.outflow),
-                net_movement: parseFloat(row.inflow) - parseFloat(row.outflow)
-            };
-        });
+            return { id: acc.id, name: acc.bank_name, account_number: acc.account_number, inflow: parseFloat(row.inflow), outflow: parseFloat(row.outflow), net_movement: parseFloat(row.inflow) - parseFloat(row.outflow) };
+        }));
 
-        const bankDetails = await Promise.all(bankDataPromises);
+        const chequesRes = await pool.query(`SELECT SUM(jl.debit - jl.credit) as balance FROM journal_lines jl JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code = '1004'`);
 
-        // 4. Cheques in Hand (FY)
-        const chequesRes = await pool.query(`SELECT COALESCE(SUM(amount), 0) as total FROM cheques WHERE status = 'PENDING' AND created_at >= $1`, [fyStart]);
-        const chequesInHand = parseFloat(chequesRes.rows[0].total);
-
-        // 5. Overall Summary
-        const cashNet = parseFloat(cashStats.rows[0].inflow) - parseFloat(cashStats.rows[0].outflow);
-        const bankInTotal = bankDetails.reduce((sum, b) => sum + b.inflow, 0);
-        const bankOutTotal = bankDetails.reduce((sum, b) => sum + b.outflow, 0);
-
-        res.json({
-            fy_start: fyStart,
-            operating_metrics: {
-                cash: {
-                    inflow: parseFloat(cashStats.rows[0].inflow),
-                    outflow: parseFloat(cashStats.rows[0].outflow),
-                    net_movement: cashNet
-                },
-                bank_summary: {
-                    inflow: bankInTotal,
-                    outflow: bankOutTotal,
-                    net_movement: bankInTotal - bankOutTotal
-                },
-                bank_details: bankDetails,
-                cheques: {
-                    in_hand: chequesInHand
-                }
-            },
-            total_liquidity_from_ops: cashNet + (bankInTotal - bankOutTotal) + chequesInHand
-        });
+        res.json({ fy_start: fyStart, accounts: details, cheques_in_hand: parseFloat(chequesRes.rows[0].balance || 0), total_operating_liquidity: details.reduce((sum, d) => sum + d.net_movement, 0) + parseFloat(chequesRes.rows[0].balance || 0) });
     } catch (err) {
-        console.error('Operating balances error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-
-
 module.exports = router;
-
-
-
