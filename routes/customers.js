@@ -507,6 +507,24 @@ router.put('/:id/verify-request', async (req, res) => {
     }
 });
 
+// GET /api/customers/:id/pricing - List Pricing Overrides for a customer
+router.get('/:id/pricing', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(`
+            SELECT cbp.*, b.brand_name, ch.channel_name as override_channel
+            FROM customer_brand_pricing cbp
+            JOIN brands b ON cbp.brand_id = b.id
+            JOIN channels ch ON cbp.channel_id = ch.id
+            WHERE cbp.customer_id = $1
+            ORDER BY b.brand_name ASC
+        `, [id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // POST /api/customers/:id/pricing - Upsert Brand Pricing Overrides
 // Supports single object or array of { brand_id, channel_id }
 router.post('/:id/pricing', async (req, res) => {
