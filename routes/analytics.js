@@ -297,8 +297,8 @@ router.get('/reports/cash-flow', async (req, res) => {
 
         const stats = await pool.query(`
             SELECT 
-                (SELECT COALESCE(SUM(jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'ASSET' AND (coa.code = '1002' OR coa.code = '1003') AND je.transaction_date >= $1 AND je.transaction_date <= $2) as inflow,
-                (SELECT COALESCE(SUM(jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'ASSET' AND (coa.code = '1002' OR coa.code = '1003') AND je.transaction_date >= $1 AND je.transaction_date <= $2) as outflow
+                (SELECT COALESCE(SUM(jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'ASSET' AND (coa.code = 1002 OR coa.code = 1003) AND je.transaction_date >= $1 AND je.transaction_date <= $2) as inflow,
+                (SELECT COALESCE(SUM(jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'ASSET' AND (coa.code = 1002 OR coa.code = 1003) AND je.transaction_date >= $1 AND je.transaction_date <= $2) as outflow
         `, [sd, ed]);
 
         const inflow = parseFloat(stats.rows[0].inflow);
@@ -322,8 +322,8 @@ router.get('/reports/p-and-l', async (req, res) => {
         const stats = await pool.query(`
             SELECT 
                 (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'INCOME' AND je.transaction_date >= $1 AND je.transaction_date <= $2) as revenue,
-                (SELECT COALESCE(SUM(jl.debit - jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code LIKE '50%' AND je.transaction_date >= $1 AND je.transaction_date <= $2) as cogs,
-                (SELECT COALESCE(SUM(jl.debit - jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'EXPENSE' AND coa.code NOT LIKE '50%' AND je.transaction_date >= $1 AND je.transaction_date <= $2) as expenses,
+                (SELECT COALESCE(SUM(jl.debit - jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code >= 5000 AND coa.code < 6000 AND je.transaction_date >= $1 AND je.transaction_date <= $2) as cogs,
+                (SELECT COALESCE(SUM(jl.debit - jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'EXPENSE' AND coa.code >= 6000 AND je.transaction_date >= $1 AND je.transaction_date <= $2) as expenses,
                 (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'OTHER_INCOME' AND je.transaction_date >= $1 AND je.transaction_date <= $2) as other_income
         `, [sd, ed]);
 
@@ -369,12 +369,12 @@ router.get('/sales-fy-report', async (req, res) => {
         const monthlyStats = await pool.query(`
             WITH months AS (SELECT generate_series($1::date, LEAST($2::date, CURRENT_DATE), '1 month'::interval) as month_start)
             SELECT TO_CHAR(m.month_start, 'MMMM YYYY') as month_name,
-                COALESCE((SELECT SUM(jl.credit - jl.debit) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code = '4001' AND je.transaction_date >= m.month_start AND je.transaction_date < m.month_start + interval '1 month'), 0) as revenue,
-                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE (coa.type = 'ASSET' AND (coa.code = '1002' OR coa.code = '1003')) AND je.reference_type = 'CUST_PAY' AND je.transaction_date >= m.month_start AND je.transaction_date < m.month_start + interval '1 month'), 0) as collected
+                COALESCE((SELECT SUM(jl.credit - jl.debit) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code = 4001 AND je.transaction_date >= m.month_start AND je.transaction_date < m.month_start + interval '1 month'), 0) as revenue,
+                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE (coa.type = 'ASSET' AND (coa.code = 1002 OR coa.code = 1003)) AND je.reference_type = 'CUST_PAY' AND je.transaction_date >= m.month_start AND je.transaction_date < m.month_start + interval '1 month'), 0) as collected
             FROM months m ORDER BY m.month_start ASC
         `, [fyStart, fyEnd]);
 
-        const receivablesRes = await pool.query(`SELECT SUM(jl.debit - jl.credit) as balance FROM journal_lines jl JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code = '1101'`);
+        const receivablesRes = await pool.query(`SELECT SUM(jl.debit - jl.credit) as balance FROM journal_lines jl JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code = 1101`);
 
         res.json({ fy_start: fyStart, total_outstanding_receivables: parseFloat(receivablesRes.rows[0].balance || 0), monthly_data: monthlyStats.rows.map(r => ({ month_name: r.month_name.trim(), revenue: parseFloat(r.revenue), collected: parseFloat(r.collected), receivables: parseFloat(r.revenue) - parseFloat(r.collected) })) });
     } catch (err) {
@@ -403,7 +403,8 @@ router.get('/reports/fy-operating-balances', async (req, res) => {
             return { id: acc.id, name: acc.bank_name, account_number: acc.account_number, inflow: parseFloat(row.inflow), outflow: parseFloat(row.outflow), net_movement: parseFloat(row.inflow) - parseFloat(row.outflow) };
         }));
 
-        const chequesRes = await pool.query(`SELECT SUM(jl.debit - jl.credit) as balance FROM journal_lines jl JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code = '1004'`);
+        const chequesRes = await pool.query(`SELECT SUM(jl.debit - jl.credit) as balance FROM journal_lines jl JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code = 1004`);
+
 
         res.json({ fy_start: fyStart, accounts: details, cheques_in_hand: parseFloat(chequesRes.rows[0].balance || 0), total_operating_liquidity: details.reduce((sum, d) => sum + d.net_movement, 0) + parseFloat(chequesRes.rows[0].balance || 0) });
     } catch (err) {
