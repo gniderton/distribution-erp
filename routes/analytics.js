@@ -795,13 +795,22 @@ router.get('/reports/fy-operating-balances', async (req, res) => {
         const banksRes = await pool.query(`SELECT id, bank_name, account_number FROM bank_accounts WHERE account_number != 'CASH' AND is_active = true`);
         const banks = banksRes.rows;
 
-        // 2. Aggregate Cash Metrics
+        // 2. Aggregate Cash Metrics (Including Transfers)
         const cashStats = await pool.query(`
             SELECT 
-                (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE payment_mode = 'Cash' AND payment_date >= $1) as inflow,
-                (SELECT COALESCE(SUM(grand_total), 0) FROM expenses WHERE payment_source_id = 3 AND expense_date >= $1) +
-                (SELECT COALESCE(SUM(net_salary), 0) FROM employee_salaries WHERE payment_mode = 'Cash' AND payment_date >= $1) as outflow
+                (
+                    (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE payment_mode = 'Cash' AND payment_date >= $1) +
+                    -- Internal Transfers FROM Bank TO Cash (Inflow to Cash)
+                    (SELECT COALESCE(SUM(it.amount), 0) FROM internal_transfers it JOIN bank_statement_entries bse ON it.from_bank_statement_entry_id = bse.id WHERE bse.bank_account_id != 1 AND it.to_account_id = 3 AND it.is_active = true AND it.transfer_date >= $1)
+                ) as inflow,
+                (
+                    (SELECT COALESCE(SUM(grand_total), 0) FROM expenses WHERE payment_source_id = 3 AND expense_date >= $1) +
+                    (SELECT COALESCE(SUM(net_salary), 0) FROM employee_salaries WHERE payment_mode = 'Cash' AND payment_date >= $1) +
+                    -- Internal Transfers FROM Cash TO Bank (Outflow from Cash - Deposit)
+                    (SELECT COALESCE(SUM(it.amount), 0) FROM internal_transfers it JOIN bank_statement_entries bse ON it.to_bank_statement_entry_id = bse.id WHERE bse.bank_account_id != 1 AND it.from_account_id = 3 AND it.is_active = true AND it.transfer_date >= $1)
+                ) as outflow
         `, [fyStart]);
+
 
         // 3. Aggregate Bank Metrics (Per Bank)
         const bankDataPromises = banks.map(async (bank) => {
