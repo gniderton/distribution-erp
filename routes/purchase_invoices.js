@@ -146,14 +146,14 @@ router.post('/', async (req, res) => {
             const discount_percent = Number(line.discount_percent) || 0;
             const discount_amount = Number(line.discount_amount) || 0;
             const scheme_amount = Number(line.scheme_amount) || 0;
-            const tax_amount_line = Number(line.tax_amount) || 0;
+            const tax_amount_line = Math.round((Number(line.tax_amount) || 0) * 100) / 100;
 
             // Recalculate Row Total for safety?
             // Amount = Taxable + Tax
             // Taxable = (Qty * Rate) - (Qty * Rate * Disc%) - Scheme
             // For now, we trust the Frontend's "Net Amount" logic to match the paper bill exactly, 
-            // but we MUST ensure it is a valid Number type.
-            const amount = Number(line.amount) || 0;
+            // but we MUST ensure it is a valid Number type and rounded correctly.
+            const amount = Math.round((Number(line.amount) || 0) * 100) / 100;
 
             return {
                 ...line,
@@ -175,10 +175,10 @@ router.post('/', async (req, res) => {
             };
         });
 
-        // 2. Sanitize Header Totals
-        const safe_total_net = Number(req.body.total_net) || 0;
-        const safe_tax = Number(req.body.tax_amount) || 0;
-        const safe_grand = Number(req.body.grand_total) || 0;
+        // 2. Sanitize Header Totals (Enforce Rounding for Ledger Consistency)
+        const safe_total_net = Math.round((Number(req.body.total_net) || 0) * 100) / 100;
+        const safe_tax = Math.round((Number(req.body.tax_amount) || 0) * 100) / 100;
+        const safe_grand = Math.round(Number(req.body.grand_total) || 0); // Net Grand Total to nearest integer
 
         // Fix PO ID: Ensure '0' or 0 or '' becomes null
         const safe_po_id = (purchase_order_id && purchase_order_id !== 0 && purchase_order_id !== '0') ? Number(purchase_order_id) : null;
