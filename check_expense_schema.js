@@ -1,23 +1,18 @@
 const { pool } = require('./config/db');
-
-async function checkSchema() {
+async function checkExpenseSalaries() {
     try {
-        const res = await pool.query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'dse_expenses' AND column_name = 'status';
-        `);
+        const exp = await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'expenses'`);
+        console.log("expenses:", exp.rows.map(r => r.column_name));
+        
+        const sal = await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'employee_salaries'`);
+        console.log("employee_salaries:", sal.rows.map(r => r.column_name));
 
-        if (res.rows.length > 0) {
-            console.log("Column 'status' exists in 'dse_expenses'. Schema likely applied.");
-        } else {
-            console.log("Column 'status' MISSING in 'dse_expenses'. Schema NOT applied.");
-        }
+        const adj = await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'stock_adjustments'`);
+        console.log("stock_adjustments:", adj.rows.map(r => r.column_name));
     } catch (err) {
-        console.error(err);
+        console.error(err.message);
     } finally {
-        pool.end();
+        process.exit();
     }
 }
-
-checkSchema();
+checkExpenseSalaries();

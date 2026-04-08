@@ -93,6 +93,7 @@ app.use('/api/entities', require('./routes/entities')); // [NEW] Master entities
 app.use('/api/verify-requests', require('./routes/verify_requests')); // [NEW] Customer Staging & Onboarding
 app.use('/api/targets', require('./routes/targets')); // [NEW] Employee Targets & Performance
 app.use('/api/ai', require('./routes/ai')); // [NEW] Gemini Vision AI OCR
+app.use('/api/eway-bill', require('./routes/eway_bill')); // [NEW] KDK E-Way Bill & Settings
 
 // [NEW] Finance Module
 app.use('/api/finance/reconciliation', require('./routes/payment_reconciliation'));
@@ -191,7 +192,9 @@ async function initializeDatabase() {
             { id: '136', path: '136_fix_ledger_view_sorting.sql' },
             { id: '137', path: '137_emp_designation_to_id.sql' },
             { id: '185', path: '185_employee_targets_schema.sql' },
-            { id: '190', path: '190_bank_sync_unique_constraint.sql' }
+            { id: '190', path: '190_bank_sync_unique_constraint.sql' },
+            { id: '191', path: '191_payment_integrity_triggers.sql' },
+            { id: '192', path: '192_eway_bill_and_settings.sql' }
         ];
 
         for (const m of migrations) {
