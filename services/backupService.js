@@ -1,6 +1,8 @@
 const { pool } = require('../config/db');
 const path = require('path');
 const fs = require('fs');
+const cron = require('node-cron');
+const nodemailer = require('nodemailer');
 
 // Ensure backups folder exists
 const backupDir = path.join(__dirname, '../backups');
@@ -9,9 +11,48 @@ if (!fs.existsSync(backupDir)) {
 }
 
 /**
+ * Sends the backup file via Email
+ */
+async function sendBackupEmail(filepath, filename) {
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+    const receivers = process.env.BACKUP_RECEIVERS || "gnidertonlimited@gmail.com, anfal.gniderton@gmail.com";
+
+    if (!user || !pass) {
+        console.warn("[Backup Email] Skipping Email: SMTP_USER or SMTP_PASS not configured in .env");
+        return;
+    }
+
+    console.log(`[Backup Email] Preparing to send ${filename} to ${receivers}...`);
+
+    let transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user, pass }
+    });
+
+    try {
+        await transporter.sendMail({
+            from: `"ERP Backup System" <${user}>`,
+            to: receivers,
+            subject: `📊 Nightly Database Backup: ${filename}`,
+            text: `Attached is the universal database backup generated on ${new Date().toLocaleString()}.\n\nNote: This is an automated system message.`,
+            attachments: [
+                {
+                    filename: filename,
+                    path: filepath
+                }
+            ]
+        });
+        console.log(`[Backup Email] Success! Email sent to ${receivers}`);
+    } catch (err) {
+        console.error("[Backup Email] Failed to send email:", err.message);
+    }
+}
+
+/**
  * Performs a universal backup by querying all tables to JSON
  */
-async function performBackup() {
+async function performBackup(shouldEmail = true) {
     try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `universal-backup-${timestamp}.json`;
@@ -19,8 +60,6 @@ async function performBackup() {
 
         console.log(`[Universal Backup] Starting export to ${filename}...`);
 
-        // Use connection from environment
-        const conn = process.env.DATABASE_URL;
         const tableRes = await pool.query(`
             SELECT tablename 
             FROM pg_tables 
@@ -37,17 +76,19 @@ async function performBackup() {
             data: {}
         };
 
-        // 2. Loop through and extract all data
         for (const table of tables) {
-            console.log(`[Universal Backup] Exporting ${table}...`);
             const dataRes = await pool.query(`SELECT * FROM public."${table}"`);
             fullBackup.data[table] = dataRes.rows;
         }
 
-        // 3. Write to file
         fs.writeFileSync(filepath, JSON.stringify(fullBackup, null, 2));
-        
         console.log(`[Universal Backup] Success! Saved ${tables.length} tables to ${filename}`);
+
+        // Trigger Email if requested
+        if (shouldEmail) {
+            await sendBackupEmail(filepath, filename);
+        }
+
         return { filename, filepath, stats: { tables: tables.length } };
     } catch (err) {
         console.error(`[Universal Backup] Critical Error: ${err.message}`);
@@ -56,28 +97,23 @@ async function performBackup() {
 }
 
 /**
- * Basic native scheduler (2:00 AM)
+ * Nightly Cron Job (2:00 AM)
  */
 function scheduleNightlyBackup() {
-    const now = new Date();
-    const nextRun = new Date();
-    nextRun.setHours(2, 0, 0, 0);
-
-    if (nextRun <= now) {
-        nextRun.setDate(nextRun.getDate() + 1);
-    }
-
-    const delay = nextRun - now;
-    console.log(`[Backup Scheduler] Next run scheduled for ${nextRun.toLocaleString()}`);
-
-    setTimeout(async () => {
+    console.log("[Backup Scheduler] Initializing Daily 2:00 AM Cron Job...");
+    
+    // Pattern: 0 2 * * * (Minute 0, Hour 2, every day)
+    cron.schedule('0 2 * * *', async () => {
+        console.log("[Backup Scheduler] Running Nightly Backup Task...");
         try {
-            await performBackup();
+            await performBackup(true); // Perform and Email
         } catch (e) {
             console.error("[Backup Scheduler] Fail:", e.message);
         }
-        scheduleNightlyBackup();
-    }, delay);
+    }, {
+        scheduled: true,
+        timezone: "Asia/Kolkata" // Matches your local timezone
+    });
 }
 
 module.exports = { performBackup, scheduleNightlyBackup };

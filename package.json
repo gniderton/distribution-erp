@@ -17,6 +17,8 @@
     "pg": "^8.11.3",
     "xlsx": "^0.18.5",
     "@google/generative-ai": "^0.3.0",
-    "axios": "^1.6.7"
+    "axios": "^1.6.7",
+    "nodemailer": "^6.9.7",
+    "node-cron": "^3.0.3"
   }
 }

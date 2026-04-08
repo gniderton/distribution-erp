@@ -213,7 +213,7 @@ router.post('/bulk-update', async (req, res) => {
                 const resPay = await client.query(`
                     UPDATE customer_payments 
                     SET verification_status = $1, rejection_reason = $2, verified_by = $3, verified_at = NOW()
-                    WHERE id = $4
+                    WHERE id = $4 AND verification_status = 'Pending'
                     RETURNING *
                 `, [itemAction, itemReason, user_id, item.id]);
 
@@ -741,7 +741,7 @@ router.patch('/:id/verify-cash', async (req, res) => {
                 verification_data = $1::jsonb,
                 verified_by = $2, 
                 verified_at = NOW()
-            WHERE id = $3
+            WHERE id = $3 AND verification_status = 'Pending'
         `, [JSON.stringify(denominations), user_id, id]);
 
         // Post Journal Entry
@@ -793,7 +793,7 @@ router.patch('/:id/verify-cheque', async (req, res) => {
                 verification_data = $5::jsonb,
                 verified_by = $6,
                 verified_at = NOW()
-            WHERE id = $7 AND payment_mode = 'Cheque'
+            WHERE id = $7 AND payment_mode = 'Cheque' AND verification_status = 'Pending'
         `, [
             cheque_number,
             cheque_date,
@@ -874,7 +874,7 @@ router.patch('/:id/verify-online', async (req, res) => {
                 bank_statement_entry_id = $1,
                 verified_by = $2, 
                 verified_at = NOW()
-            WHERE id = $3
+            WHERE id = $3 AND verification_status = 'Pending'
         `, [bank_stmt_id, user_id, id]);
 
         // Post Journal Entry

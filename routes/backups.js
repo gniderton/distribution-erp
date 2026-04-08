@@ -11,11 +11,13 @@ const backupDir = path.join(__dirname, '../backups');
  */
 router.post('/trigger', async (req, res) => {
     try {
-        const result = await performBackup();
+        const { shouldEmail = true } = req.body;
+        const result = await performBackup(shouldEmail);
         res.json({ 
             success: true, 
             message: "Manual Backup Triggered Successfully", 
-            filename: result.filename 
+            filename: result.filename,
+            emailed: shouldEmail
         });
     } catch (err) {
         console.error("[Backup Route] Error:", err.message);
