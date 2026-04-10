@@ -6,7 +6,8 @@ const { Pool } = require('pg');
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 10000, // 10 seconds
+    max: 15, // Increase pool size for concurrent Appsmith/dashboard hits
+    connectionTimeoutMillis: 10000, 
     idleTimeoutMillis: 30000,
     keepAlive: true
 });

@@ -15,7 +15,7 @@ dns.lookup = (hostname, options, callback) => {
     } else {
         options = { ...options, family: 4 };
     }
-    return originalLookup(hostname, options, callback);
+    return originalLookup.call(dns, hostname, options, callback);
 };
 
 require('dotenv').config();
@@ -31,9 +31,18 @@ app.use(cors()); // Allow Retool to access this API
 app.use(express.json({ limit: '10mb' })); // Parse JSON bodies (increased for bank statements)
 app.use(express.text({ type: 'text/plain', limit: '10mb' })); // Fallback for raw text payloads (Appsmith RAW JSON)
 
-// Health Check
+// Health Check (Standard)
 app.get('/', (req, res) => {
-    res.json({ message: 'Distribution ERP API is running', status: 'Active' });
+    res.json({ 
+        message: 'Distribution ERP API is running', 
+        status: 'Active',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// [NEW] Pure Health Check (No DB, for Render Readiness)
+app.get('/api/health', (req, res) => {
+    res.status(200).send('OK');
 });
 
 // [DEBUG] DB Info

@@ -269,6 +269,45 @@ router.get('/:id/stats', async (req, res) => {
     }
 });
 
+// GET /api/products/batches - Global fetch for all products
+router.get('/batches', async (req, res) => {
+    try {
+        const { stock_type = 'all', product_ids } = req.query;
+
+        let query = `
+            SELECT 
+                id, product_id, batch_code, mrp, expiry_date, quantity_remaining, purchase_rate, status,
+                distributor_rate, wholesale_rate, dealer_rate, retail_rate
+            FROM inventory_batches
+            WHERE 1=1
+        `;
+
+        const params = [];
+        let paramIdx = 1;
+
+        if (product_ids) {
+            const ids = product_ids.split(',').map(id => parseInt(id)).filter(id => !isNaN(id));
+            if (ids.length > 0) {
+                query += ` AND product_id = ANY($${paramIdx})`;
+                params.push(ids);
+                paramIdx++;
+            }
+        }
+
+        if (stock_type === 'non-zero') {
+            query += ` AND quantity_remaining > 0`;
+        }
+
+        query += ` ORDER BY product_id, created_at DESC`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Global Batches Fetch Error:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/products/:id/batches - Fetch available inventory batches for a product with margins
 router.get('/:id/batches', async (req, res) => {
     try {
