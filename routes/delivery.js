@@ -730,7 +730,7 @@ router.get('/sync-logs', async (req, res) => {
 });
 
 // 10a. List Checked Sync Logs (History)
-router.get('/sync-logs/history', async (req, res) => {
+router.get('/sync/history', async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT 
