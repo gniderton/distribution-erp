@@ -168,5 +168,64 @@ router.get('/customer/:id', async (req, res) => {
     }
 });
 
+
+// 4. NULLIFY (Delete/Cancel) a Sales Return
+router.delete('/:id', async (req, res) => {
+    const { id } = req.params;
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+
+        // A. Verify the return exists and its current status
+        const srRes = await client.query('SELECT status, return_number, is_active FROM sales_returns WHERE id = $1', [id]);
+        if (srRes.rows.length === 0) {
+            throw new Error("Credit Note not found");
+        }
+        if (srRes.rows[0].status === 'Cancelled' || !srRes.rows[0].is_active) {
+            throw new Error("Credit Note is already cancelled");
+        }
+
+        // B. Rollback Allocations (Restore Invoice Balances)
+        // This is the most important step for financial cleanup
+        await client.query('DELETE FROM customer_payment_allocations WHERE return_id = $1', [id]);
+
+        // C. Rollback Stock (Only if returned to stock)
+        const linesRes = await client.query('SELECT product_id, batch_id, qty, return_to_stock FROM sales_return_lines WHERE return_id = $1', [id]);
+        for (const line of linesRes.rows) {
+            if (line.return_to_stock && line.batch_id) {
+                const batchRes = await client.query('SELECT quantity_remaining, batch_code FROM inventory_batches WHERE id = $1', [line.batch_id]);
+                if (batchRes.rows.length > 0) {
+                    const available = Number(batchRes.rows[0].quantity_remaining);
+                    
+                    // Safety Check: Prevent negative stock if returned qty was already sold
+                    if (available < line.qty) {
+                        throw new Error(`Cannot nullify: Batch ${batchRes.rows[0].batch_code} only has ${available} qty left, but we need to remove ${line.qty} (returned stock already sold)`);
+                    }
+                    
+                    await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [line.qty, line.batch_id]);
+                    await client.query('INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type) VALUES ($1, $2, $3, $4, $5, $6)', [line.batch_id, line.product_id, -line.qty, 'CANCEL_RET', id, 'Sales Return Cancellation']);
+                }
+            }
+        }
+
+        // D. Rollback Accounting
+        await client.query("UPDATE journal_entries SET is_active = false WHERE reference_type = 'SALES_RET' AND reference_id = $1", [id]);
+
+        // E. Finalize Cancellation
+        await client.query("UPDATE sales_returns SET status = 'Cancelled', is_active = false WHERE id = $1", [id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: `Credit Note ${srRes.rows[0].return_number} has been nullified successfully.` });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Nullify Credit Note Error:', err.message);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
 

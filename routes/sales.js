@@ -743,10 +743,15 @@ router.post('/returns/manual', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Generate Return Number (SRN-YY-SEQ) - Same series
-        const yy = new Date().getFullYear().toString().slice(-2);
-        const seqRes = await client.query("SELECT COUNT(*) FROM sales_returns WHERE return_number LIKE $1", [`SRN-${yy}-%`]);
-        const nextSeq = parseInt(seqRes.rows[0].count) + 1;
-        const returnNumber = `SRN-${yy}-${String(nextSeq).padStart(4, '0')}`;
+        // 1. Generate Return Number (SR-XXXX)
+        const seqRes = await client.query("SELECT return_number FROM sales_returns WHERE return_number LIKE 'SR-%' ORDER BY return_number DESC LIMIT 1");
+        let nextSeq = 1;
+        if (seqRes.rows.length > 0) {
+            const parts = seqRes.rows[0].return_number.split('-');
+            const lastNum = parseInt(parts[parts.length - 1]);
+            if (!isNaN(lastNum)) nextSeq = lastNum + 1;
+        }
+        const returnNumber = `SR-${String(nextSeq).padStart(4, '0')}`;
 
         // 2. Initial Totals Calculation
         let totalTaxable = 0;
@@ -891,10 +896,15 @@ router.post('/returns', async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Generate Return Number (SRN-YY-SEQ)
-        const yy = new Date().getFullYear().toString().slice(-2);
-        const seqRes = await client.query("SELECT COUNT(*) FROM sales_returns WHERE return_number LIKE $1", [`SRN - ${yy} -% `]);
-        const nextSeq = parseInt(seqRes.rows[0].count) + 1;
-        const returnNumber = `SRN - ${yy} - ${String(nextSeq).padStart(4, '0')}`;
+        // 1. Generate Return Number (SR-XXXX)
+        const seqRes = await client.query("SELECT return_number FROM sales_returns WHERE return_number LIKE 'SR-%' ORDER BY return_number DESC LIMIT 1");
+        let nextSeq = 1;
+        if (seqRes.rows.length > 0) {
+            const parts = seqRes.rows[0].return_number.split('-');
+            const lastNum = parseInt(parts[parts.length - 1]);
+            if (!isNaN(lastNum)) nextSeq = lastNum + 1;
+        }
+        const returnNumber = `SR-${String(nextSeq).padStart(4, '0')}`;
 
         // 2. Insert Header (Calculate totals later)
         const headRes = await client.query(`
