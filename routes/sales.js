@@ -773,30 +773,96 @@ router.post('/returns/manual', async (req, res) => {
 
         // 4. Process Lines
         for (const item of items) {
-            // These values are expected to be recalculated by Appsmith (Net, Taxable, etc.)
             const qty = Number(item.Qty || 1);
-            const taxable = Number(item['Taxable $'] || 0);
-            const taxAmt = Number(item['GST $'] || 0);
-            const lineTotal = Number(item['Net $'] || 0);
             const rate = Number(item.Price || 0);
             const taxPct = Number(item['GST %'] || 0);
+            const productId = item._product_id?.startsWith('FLAT_') ? null : item._product_id;
+            const batchId = item.batch_id || null;
+            const inventoryStatus = item.inventory_status || 'Good'; // [NEW] Status from UI
 
-            await client.query(`
+            // A. Valuation Logic (Matching Delivery Sync)
+            let unitNet = Number(item['Taxable $'] || 0) / qty; 
+            
+            // If linked to an invoice, try to fetch the precise historic net rate
+            if (invoice_id && productId) {
+                const histRes = await client.query(`
+                    SELECT (taxable_amount / NULLIF(shipped_qty, 0)) as unit_net 
+                    FROM sales_invoice_lines 
+                    WHERE invoice_id = $1 AND product_id = $2 LIMIT 1
+                `, [invoice_id, productId]);
+                if (histRes.rows.length > 0) unitNet = Number(histRes.rows[0].unit_net);
+            }
+
+            const grossAmount = qty * rate;
+            const taxableAmount = Number((qty * unitNet).toFixed(2));
+            const schemeAmount = Number((grossAmount - taxableAmount).toFixed(2));
+            const taxAmount = Number((taxableAmount * (taxPct / 100)).toFixed(2));
+            const lineTotal = Number((taxableAmount + taxAmount).toFixed(2));
+
+            // B. Insert Line - Placeholder batchId, will update if routed
+            const lineRes = await client.query(`
                 INSERT INTO sales_return_lines (
                     return_id, product_id, batch_id, qty, rate,
-                    tax_percent, tax_amount, amount, reason, return_to_stock
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    gross_amount, scheme_amount, taxable_amount, 
+                    tax_percent, tax_amount, amount, reason, 
+                    return_to_stock, inventory_status
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                RETURNING id
             `, [
-                returnId, 
-                item._product_id?.startsWith('FLAT_') ? null : item._product_id, 
-                item.batch_id || null, 
-                qty, rate,
-                taxPct, taxAmt, lineTotal, item.reason || remarks,
-                item.return_to_stock === true // Flat adjustments usually false
+                returnId, productId, batchId, qty, rate,
+                grossAmount, schemeAmount, taxableAmount,
+                taxPct, taxAmount, lineTotal, item.reason || remarks,
+                item.return_to_stock === true, inventoryStatus
             ]);
+            const lineId = lineRes.rows[0].id;
 
-            totalTaxable += taxable;
-            totalTax += taxAmt;
+            // C. Stock Routing (Matching Delivery Sync "Gold Standard")
+            if (item.return_to_stock === true && batchId) {
+                const origBatchRes = await client.query("SELECT * FROM inventory_batches WHERE id = $1", [batchId]);
+                const orig = origBatchRes.rows[0];
+                let finalBatchId = batchId;
+
+                if (orig && orig.status !== inventoryStatus) {
+                    // Find or Create a twin batch with the new status (Damage/Expiry/Good)
+                    const existingRes = await client.query(
+                        "SELECT id FROM inventory_batches WHERE product_id = $1 AND batch_code = $2 AND status = $3",
+                        [orig.product_id, orig.batch_code, inventoryStatus]
+                    );
+                    
+                    if (existingRes.rows.length > 0) {
+                        finalBatchId = existingRes.rows[0].id;
+                    } else {
+                        const cloneRes = await client.query(`
+                            INSERT INTO inventory_batches (
+                                product_id, grn_id, batch_code, mrp, purchase_rate, 
+                                distributor_rate, wholesale_rate, dealer_rate, retail_rate, 
+                                quantity_initial, quantity_remaining, expiry_date, is_active, status
+                            )
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, 0, $10, true, $11)
+                            RETURNING id
+                        `, [
+                            orig.product_id, orig.grn_id, orig.batch_code, orig.mrp, 
+                            orig.purchase_rate, orig.distributor_rate, orig.wholesale_rate, 
+                            orig.dealer_rate, orig.retail_rate, orig.expiry_date, inventoryStatus
+                        ]);
+                        finalBatchId = cloneRes.rows[0].id;
+                    }
+                    
+                    // Update line record with the actual batch that received the stock
+                    await client.query("UPDATE sales_return_lines SET batch_id = $1 WHERE id = $2", [finalBatchId, lineId]);
+                }
+
+                await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining + $1 WHERE id = $2`, [qty, finalBatchId]);
+                await client.query(`
+                    INSERT INTO stock_traceability (
+                        batch_id, product_id, quantity_change, transaction_type, 
+                        reference_id, reference_type, notes
+                    ) VALUES ($1, $2, $3, 'IN', $4, 'Sales Return', $5)
+                `, [finalBatchId, productId, qty, returnId, `Manual Return - Routed to ${inventoryStatus} bucket`]);
+            }
+
+            totalTaxable += taxableAmount;
+            totalTax += taxAmount;
             grandTotal += lineTotal;
         }
 
