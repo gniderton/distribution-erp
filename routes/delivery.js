@@ -857,12 +857,46 @@ router.get('/sync/:id/history', async (req, res) => {
 
         const allInvoices = manifest.rows;
         
+        const delivered = allInvoices.filter(r => r.delivery_status === 'Delivered' && r.verification_status === 'Approved');
+        const rejected = allInvoices.filter(r => r.delivery_status === 'Returned' || r.verification_status === 'Rejected');
+        const undelivered = allInvoices.filter(r => r.delivery_status !== 'Delivered' && r.delivery_status !== 'Returned');
+
+        // Helper for Product Aggregation (Invoices)
+        const getSummary = async (list) => {
+            if (!list || list.length === 0) return [];
+            const ids = list.map(i => i.invoice_id);
+            const res = await pool.query(`
+                SELECT p.product_name, sil.mrp, SUM(sil.shipped_qty) as total_qty, SUM(sil.amount) as total_amount
+                FROM sales_invoice_lines sil
+                JOIN products p ON sil.product_id = p.id
+                WHERE sil.invoice_id = ANY($1)
+                GROUP BY p.product_name, sil.mrp
+                ORDER BY p.product_name
+            `, [ids]);
+            return res.rows;
+        };
+
+        // Helper for Product Aggregation (Returns)
+        const getReturnSummary = (list) => {
+            const groups = {};
+            list.forEach(r => {
+                const key = r.product_name;
+                if (!groups[key]) groups[key] = { product_name: r.product_name, total_qty: 0 };
+                groups[key].total_qty += Number(r.qty);
+            });
+            return Object.values(groups);
+        };
+
         res.json({
             header: header.rows[0],
-            delivered: allInvoices.filter(r => r.delivery_status === 'Delivered' && r.verification_status === 'Approved'),
-            rejected: allInvoices.filter(r => r.delivery_status === 'Returned' || r.verification_status === 'Rejected'),
-            undelivered: allInvoices.filter(r => r.delivery_status !== 'Delivered' && r.delivery_status !== 'Returned'),
+            delivered,
+            delivered_summary: await getSummary(delivered),
+            rejected,
+            rejected_summary: await getSummary(rejected),
+            undelivered,
+            undelivered_summary: await getSummary(undelivered),
             returns: returns.rows,
+            returns_summary: getReturnSummary(returns.rows),
             payments: payments.rows,
             expenses: expenses.rows,
             credit_notes: creditNotes.rows
