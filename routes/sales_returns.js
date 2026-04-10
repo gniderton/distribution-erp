@@ -209,8 +209,8 @@ router.delete('/:id', async (req, res) => {
             }
         }
 
-        // D. Rollback Accounting
-        await client.query("UPDATE journal_entries SET is_active = false WHERE reference_type = 'SALES_RET' AND reference_id = $1", [id]);
+        // D. Rollback Accounting (Hard delete as journal_entries doesn't have status/is_active)
+        await client.query("DELETE FROM journal_entries WHERE reference_type = 'SALES_RET' AND reference_id = $1", [id]);
 
         // E. Finalize Cancellation
         await client.query("UPDATE sales_returns SET status = 'Cancelled', is_active = false WHERE id = $1", [id]);
