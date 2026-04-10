@@ -742,16 +742,15 @@ router.post('/returns/manual', async (req, res) => {
 
         await client.query('BEGIN');
 
-        // 1. Generate Return Number (SRN-YY-SEQ) - Same series
-        // 1. Generate Return Number (SR-XXXX)
-        const seqRes = await client.query("SELECT return_number FROM sales_returns WHERE return_number LIKE 'SR-%' ORDER BY return_number DESC LIMIT 1");
-        let nextSeq = 1;
-        if (seqRes.rows.length > 0) {
-            const parts = seqRes.rows[0].return_number.split('-');
-            const lastNum = parseInt(parts[parts.length - 1]);
-            if (!isNaN(lastNum)) nextSeq = lastNum + 1;
-        }
-        const returnNumber = `SR-${String(nextSeq).padStart(4, '0')}`;
+        // 1. Generate Return Number from Sequence Table (Unified with Delivery Settlement)
+        const seqUpdate = await client.query(`
+            UPDATE document_sequences 
+            SET current_number = current_number + 1 
+            WHERE document_type = 'SR' 
+            RETURNING prefix, current_number
+        `);
+        if (seqUpdate.rows.length === 0) throw new Error("Document sequence for 'SR' missing.");
+        const returnNumber = `${seqUpdate.rows[0].prefix}${String(seqUpdate.rows[0].current_number).padStart(4, '0')}`;
 
         // 2. Initial Totals Calculation
         let totalTaxable = 0;
