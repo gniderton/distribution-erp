@@ -191,4 +191,96 @@ router.post('/', async (req, res) => {
     }
 });
 
+// @route   GET /api/vendor-payments/history/:vendor_id
+// @desc    Get all payments for a specific vendor (Table view)
+router.get('/history/:vendor_id', async (req, res) => {
+    try {
+        const { vendor_id } = req.params;
+        const result = await pool.query(`
+            SELECT 
+                id, 
+                payment_number, 
+                payment_date, 
+                amount, 
+                payment_mode, 
+                transaction_ref,
+                remarks
+            FROM vendor_payments
+            WHERE vendor_id = $1 AND is_active = true
+            ORDER BY payment_date DESC, created_at DESC
+        `, [vendor_id]);
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Payment History Error:', err.message);
+        res.status(500).json({ error: 'Server Error fetching payment history' });
+    }
+});
+
+// @route   GET /api/vendor-payments/:payment_id/slip-details
+// @desc    Get deep details for PDF generation (headers + allocations)
+router.get('/:payment_id/slip-details', async (req, res) => {
+    try {
+        const { payment_id } = req.params;
+
+        // 1. Fetch Header Info
+        const headerRes = await pool.query(`
+            SELECT 
+                vp.id,
+                vp.payment_number,
+                vp.payment_date,
+                vp.amount,
+                vp.payment_mode,
+                vp.transaction_ref as manual_ref,
+                vp.remarks,
+                v.vendor_name,
+                v.vendor_code,
+                v.gst_number as vendor_gst,
+                v.pan as vendor_pan,
+                va.address_line_1 as vendor_address_1,
+                va.address_line_2 as vendor_address_2,
+                ba.account_name as bank_name,
+                bse.reference_number as stmt_ref
+            FROM vendor_payments vp
+            JOIN vendors v ON vp.vendor_id = v.id
+            LEFT JOIN vendor_addresses va ON v.id = va.vendor_id 
+            LEFT JOIN bank_accounts ba ON vp.bank_account_id = ba.id
+            LEFT JOIN bank_statement_entries bse ON vp.bank_statement_entry_id = bse.id
+            WHERE vp.id = $1
+            LIMIT 1
+        `, [payment_id]);
+
+        if (headerRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Payment not found' });
+        }
+
+        const header = headerRes.rows[0];
+        // Reference logic: Prefer stmt_ref, fallback to manual_ref
+        header.final_ref = header.stmt_ref || header.manual_ref || '-';
+
+        // 2. Fetch Allocations
+        const allocRes = await pool.query(`
+            SELECT 
+                pih.received_date as invoice_date,
+                pih.vendor_invoice_number as bill_no_vendor,
+                pih.invoice_number as our_series,
+                pih.grand_total as bill_amount,
+                pa.amount as amount_paid
+            FROM payment_allocations pa
+            JOIN purchase_invoice_headers pih ON pa.purchase_invoice_id = pih.id
+            WHERE pa.payment_id = $1
+            ORDER BY pih.received_date ASC
+        `, [payment_id]);
+
+        res.json({
+            header: header,
+            allocations: allocRes.rows
+        });
+
+    } catch (err) {
+        console.error('Slip Details Error:', err.message);
+        res.status(500).json({ error: 'Server Error fetching slip details' });
+    }
+});
+
 module.exports = router;

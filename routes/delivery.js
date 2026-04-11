@@ -55,7 +55,7 @@ router.get('/invoices-pool', async (req, res) => {
             LEFT JOIN routes rt ON c.route_id = rt.id
             LEFT JOIN sales_orders so ON si.sales_order_id = so.id
             LEFT JOIN employees dse ON so.dse_id = dse.id
-            WHERE si.delivery_status IN ('Pending', 'Partial') -- Not Delivered yet
+            WHERE si.delivery_status IN ('Pending', 'Undelivered', 'Partial') -- Not Delivered yet
             ORDER BY rt.route_name, dse.full_name, c.route_sequence
         `);
         res.json(result.rows);
