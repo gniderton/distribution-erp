@@ -237,8 +237,8 @@ router.get('/:payment_id/slip-details', async (req, res) => {
                 v.vendor_code,
                 v.gst_number as vendor_gst,
                 v.pan as vendor_pan,
-                va.address_line_1 as vendor_address_1,
-                va.address_line_2 as vendor_address_2,
+                va.address_line as vendor_address,
+                va.city as vendor_city,
                 ba.account_name as bank_name,
                 bse.reference_number as stmt_ref
             FROM vendor_payments vp
