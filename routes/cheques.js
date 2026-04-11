@@ -74,9 +74,12 @@ router.post('/:id/clear', async (req, res) => {
         if (chqRes.rows.length === 0) throw new Error('Cheque not found or already processed');
         const chq = chqRes.rows[0];
 
-        if (!bank_account_id) throw new Error('Bank Account is required for clearing');
+        // 2a. RESOLVE BANK ACCOUNT: Derive it from the statement entry
+        const bseRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [bank_statement_entry_id]);
+        if (bseRes.rows.length === 0) throw new Error('Bank Statement Entry not found');
+        const resolvedBankId = bseRes.rows[0].bank_account_id;
 
-        // 2. Update status and link statement
+        // 2. Update status and link statement (Use resolvedBankId)
         await client.query(`
             UPDATE cheques 
             SET status = 'CLEARED', 
@@ -86,7 +89,7 @@ router.post('/:id/clear', async (req, res) => {
                 remarks = $4,
                 updated_at = NOW()
             WHERE id = $5
-        `, [clearance_date || new Date(), bank_account_id, bank_statement_entry_id, remarks, id]);
+        `, [clearance_date || new Date(), resolvedBankId, bank_statement_entry_id, remarks, id]);
 
         // 2b. Consume Bank Statement Entry
         await client.query(`
@@ -100,23 +103,20 @@ router.post('/:id/clear', async (req, res) => {
         `, [chq.amount, bank_statement_entry_id]);
 
         // 3. Post Accounting Entry
-        // Clearing Account -> Bank Account
         const acc_bank = 1002;
         const acc_cheque_in_hand = 1004;
         const acc_cheque_issued = 2004;
 
         let ledgerLines = [];
         if (chq.type === 'INCOMING') {
-            // Received Cheque Cleared: Dr Bank (Asset increases), Cr Cheques in Hand (Asset decreases)
             ledgerLines = [
-                { code: acc_bank, debit: Number(chq.amount), credit: 0, bank_account_id: bank_account_id },
+                { code: acc_bank, debit: Number(chq.amount), credit: 0, bank_account_id: resolvedBankId },
                 { code: acc_cheque_in_hand, debit: 0, credit: Number(chq.amount) }
             ];
         } else {
-            // Issued Cheque Cleared: Dr Cheques Issued (Liability decreases), Cr Bank (Asset decreases)
             ledgerLines = [
                 { code: acc_cheque_issued, debit: Number(chq.amount), credit: 0 },
-                { code: acc_bank, debit: 0, credit: Number(chq.amount), bank_account_id: bank_account_id }
+                { code: acc_bank, debit: 0, credit: Number(chq.amount), bank_account_id: resolvedBankId }
             ];
         }
 
@@ -161,7 +161,12 @@ router.post('/bulk-clear', async (req, res) => {
             if (chqRes.rows.length === 0) continue;
             const chq = chqRes.rows[0];
 
-            // 2. Update status and link statement
+            // 1a. RESOLVE BANK ACCOUNT: Derive it from the statement entry
+            const bseRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [bank_statement_entry_id]);
+            if (bseRes.rows.length === 0) continue;
+            const resolvedBankId = bseRes.rows[0].bank_account_id;
+
+            // 2. Update status and link statement (Use resolvedBankId)
             await client.query(`
                 UPDATE cheques 
                 SET status = 'CLEARED', 
@@ -171,7 +176,7 @@ router.post('/bulk-clear', async (req, res) => {
                     remarks = $4,
                     updated_at = NOW()
                 WHERE id = $5
-            `, [clearance_date || new Date(), bank_account_id, bank_statement_entry_id, remarks, cheque_id]);
+            `, [clearance_date || new Date(), resolvedBankId, bank_statement_entry_id, remarks, cheque_id]);
 
             // 2b. Consume Bank Statement Entry
             await client.query(`
@@ -192,13 +197,13 @@ router.post('/bulk-clear', async (req, res) => {
             let ledgerLines = [];
             if (chq.type === 'INCOMING') {
                 ledgerLines = [
-                    { code: acc_bank, debit: Number(chq.amount), credit: 0, bank_account_id: bank_account_id },
+                    { code: acc_bank, debit: Number(chq.amount), credit: 0, bank_account_id: resolvedBankId },
                     { code: acc_cheque_in_hand, debit: 0, credit: Number(chq.amount) }
                 ];
             } else {
                 ledgerLines = [
                     { code: acc_cheque_issued, debit: Number(chq.amount), credit: 0 },
-                    { code: acc_bank, debit: 0, credit: Number(chq.amount), bank_account_id: bank_account_id }
+                    { code: acc_bank, debit: 0, credit: Number(chq.amount), bank_account_id: resolvedBankId }
                 ];
             }
 
