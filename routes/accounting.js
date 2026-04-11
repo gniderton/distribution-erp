@@ -126,6 +126,8 @@ router.get('/general-ledger', async (req, res) => {
         console.error('General Ledger API Error:', err);
         res.status(500).json({ error: err.message });
     }
+});
+
 // 4. Ledger Style Statement (Detailed with Opening/Running Balance)
 router.get('/statement', async (req, res) => {
     try {
