@@ -1286,4 +1286,91 @@ router.post('/finalize', async (req, res) => {
     }
 });
 
+// --- C. Warehouse Operations ---
+
+/**
+ * @route   POST /api/delivery/mark-self-collected
+ * @desc    Finalize a warehouse pickup for an invoice (Direct Collection)
+ * @rules   Blocked if Invoice is 'In Transit' or 'Scheduled' for a trip.
+ */
+router.post('/mark-self-collected', async (req, res) => {
+    const { 
+        invoice_id, collector_name, collector_phone, 
+        collector_id_type, collector_id_number, collector_document_name,
+        created_by, notes 
+    } = req.body;
+
+    if (!invoice_id || !collector_name || !collector_phone || !collector_id_number) {
+        return res.status(400).json({ error: "Missing required collector details" });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Fetch Invoice and Check Current Status
+        const invRes = await client.query(`
+            SELECT id, invoice_number, delivery_status 
+            FROM sales_invoices 
+            WHERE id = $1 FOR UPDATE
+        `, [invoice_id]);
+
+        if (invRes.rows.length === 0) {
+            throw new Error('Invoice not found');
+        }
+
+        const inv = invRes.rows[0];
+
+        // 2. APPLY STRICT OPERATIONAL RULES
+        // Rule: Only 'Pending' or 'Undelivered' can be self-collected.
+        // Block: 'In Transit', 'Scheduled', 'Delivered'.
+        if (inv.delivery_status !== 'Pending' && inv.delivery_status !== 'Undelivered') {
+            throw new Error(`Cannot self-collect. Invoice is currently '${inv.delivery_status}'. Collections are only allowed for 'Pending' or 'Undelivered' bills.`);
+        }
+
+        // 3. SECURE CHECK: Ensure it's not currently assigned to an Active/Scheduled Trip
+        const tripCheck = await client.query(`
+            SELECT ti.id, dt.trip_number, dt.status as trip_status
+            FROM trip_invoices ti
+            JOIN delivery_trips dt ON ti.trip_id = dt.id
+            WHERE ti.invoice_id = $1 AND dt.status IN ('Scheduled', 'In Transit')
+        `, [invoice_id]);
+
+        if (tripCheck.rows.length > 0) {
+            const trip = tripCheck.rows[0];
+            throw new Error(`Invoice is already assigned to active Trip ${trip.trip_number} (${trip.trip_status}). Remove it from the trip first to proceed with Warehouse Collection.`);
+        }
+
+        // 4. Update Invoice Status
+        await client.query(`
+            UPDATE sales_invoices 
+            SET delivery_status = 'Self-Collected'
+            WHERE id = $1
+        `, [invoice_id]);
+
+        // 5. Create Permanent Collection Record
+        await client.query(`
+            INSERT INTO warehouse_collections (
+                invoice_id, collector_name, collector_phone, 
+                collector_id_type, collector_id_number, collector_document_name,
+                created_by, notes
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `, [
+            invoice_id, collector_name, collector_phone, 
+            collector_id_type, collector_id_number, collector_document_name,
+            created_by, notes
+        ]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Invoice marked as Self-Collected at Warehouse." });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Self-Collect Error:', err.message);
+        res.status(400).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
