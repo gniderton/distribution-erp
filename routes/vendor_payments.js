@@ -235,7 +235,7 @@ router.get('/:payment_id/slip-details', async (req, res) => {
                 vp.remarks,
                 v.vendor_name,
                 v.vendor_code,
-                v.gst_number as vendor_gst,
+                v.gst as vendor_gst,
                 v.pan as vendor_pan,
                 va.address_line as vendor_address,
                 va.city as vendor_city,
