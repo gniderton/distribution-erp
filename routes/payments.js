@@ -778,6 +778,55 @@ router.post('/ocr-cheque', async (req, res) => {
     }
 });
 
+// GET /api/payments/allocations - View all payment allocations with payment and invoice details
+router.get('/allocations', async (req, res) => {
+    try {
+        const { customer_id, payment_id, limit = 100, offset = 0 } = req.query;
+        let query = `
+            SELECT 
+                pa.id as allocation_id,
+                pa.amount as allocated_amount,
+                pa.allocated_at,
+                pa.status as allocation_status,
+                cp.payment_number,
+                cp.payment_date,
+                cp.payment_mode,
+                si.invoice_number,
+                si.invoice_date,
+                si.grand_total as invoice_amount,
+                c.customer_name
+            FROM customer_payment_allocations pa
+            JOIN customer_payments cp ON pa.payment_id = cp.id
+            JOIN sales_invoices si ON pa.invoice_id = si.id
+            JOIN customers c ON cp.customer_id = c.id
+        `;
+        const params = [];
+        const where = [];
+        let pIdx = 1;
+
+        if (customer_id) {
+            where.push(`cp.customer_id = $${pIdx}`);
+            params.push(customer_id);
+            pIdx++;
+        }
+        if (payment_id) {
+            where.push(`pa.payment_id = $${pIdx}`);
+            params.push(payment_id);
+            pIdx++;
+        }
+
+        if (where.length > 0) query += ` WHERE ${where.join(' AND ')}`;
+
+        query += ` ORDER BY pa.allocated_at DESC LIMIT $${pIdx} OFFSET $${pIdx + 1}`;
+        params.push(limit, offset);
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/payments/:id - Get Single Payment Details
 router.get('/:id', async (req, res) => {
     try {
@@ -825,4 +874,6 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+
 module.exports = router;
+
