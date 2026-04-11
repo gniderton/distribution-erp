@@ -249,6 +249,53 @@ router.post('/:id/bounce', async (req, res) => {
             WHERE id = $3
         `, [bounce_reason, bounce_date || new Date(), id]);
 
+        // 2.5 REVERT PAYMENT ALLOCATIONS (If linked to a Customer Payment)
+        if (chq.reference_type === 'CUSTOMER_PAYMENT' && chq.reference_id) {
+            const paymentId = chq.reference_id;
+            
+            // a. Mark allocations as REVERSED
+            await client.query(`
+                UPDATE customer_payment_allocations 
+                SET status = 'REVERSED' 
+                WHERE payment_id = $1
+            `, [paymentId]);
+
+            // b. Find all affected invoices
+            const affectedInvsRes = await client.query(`
+                SELECT DISTINCT invoice_id FROM customer_payment_allocations WHERE payment_id = $1
+            `, [paymentId]);
+
+            // c. Re-calculate status and balance for each affected invoice
+            for (const row of affectedInvsRes.rows) {
+                const invId = row.invoice_id;
+                await client.query(`
+                    UPDATE sales_invoices si
+                    SET 
+                        amount_paid = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                                      COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0) +
+                                      COALESCE((SELECT SUM(grand_total) FROM sales_returns WHERE invoice_id = si.id AND status = 'Applied'), 0),
+                        status = 'Unpaid' -- Reset to Unpaid (logic below will refine if partially paid)
+                    WHERE id = $1
+                `, [invId]);
+
+                // Refine status based on new amount_paid
+                await client.query(`
+                    UPDATE sales_invoices si
+                    SET status = CASE 
+                        WHEN amount_paid <= 0 THEN 'Unpaid'
+                        WHEN amount_paid < (grand_total - 0.01) THEN 'Partially Paid'
+                        ELSE 'Paid'
+                    END
+                    WHERE id = $1
+                `, [invId]);
+            }
+
+            // d. Mark the payment itself as Rejected (Bounced)
+            await client.query(`
+                UPDATE customer_payments SET status = 'Rejected', rejection_reason = 'Cheque Bounced' WHERE id = $1
+            `, [paymentId]);
+        }
+
         const acc_ar = 1101;
         const acc_ap = 2001;
         const acc_bank = 1002;
