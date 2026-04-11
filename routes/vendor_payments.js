@@ -239,8 +239,8 @@ router.get('/:payment_id/slip-details', async (req, res) => {
                 v.pan as vendor_pan,
                 va.address_line as vendor_address,
                 va.city as vendor_city,
-                ba.account_name as bank_name,
-                bse.reference_number as stmt_ref
+                ba.bank_name as bank_name,
+                bse.bank_ref_id as stmt_ref
             FROM vendor_payments vp
             JOIN vendors v ON vp.vendor_id = v.id
             LEFT JOIN vendor_addresses va ON v.id = va.vendor_id 
