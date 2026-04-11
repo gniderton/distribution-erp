@@ -785,6 +785,7 @@ router.get('/allocations', async (req, res) => {
         let query = `
             SELECT 
                 pa.id as allocation_id,
+                cp.id as payment_id,
                 pa.amount as allocated_amount,
                 pa.allocated_at,
                 pa.status as allocation_status,
