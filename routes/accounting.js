@@ -43,6 +43,28 @@ router.get('/journal-entries', async (req, res) => {
     }
 });
 
+// 1.1 List Ledger Options for Selectors (Dynamic Banks + Groups)
+router.get('/ledger-options', async (req, res) => {
+    try {
+        const banksRes = await pool.query('SELECT id, bank_name FROM bank_accounts WHERE is_active = true ORDER BY bank_name');
+        
+        const options = [
+            { label: "💰 All Liquid Assets", value: "group:ALL" },
+            { label: "💵 Cash in Hand", value: "group:CASH" },
+            { label: "🏦 All Bank Accounts", value: "group:BANKS" },
+            { label: "📝 All Cheques", value: "group:CHEQUE" }
+        ];
+
+        banksRes.rows.forEach(b => {
+            options.push({ label: `🏦 ${b.bank_name}`, value: `bank:${b.id}` });
+        });
+
+        res.json(options);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 2. Get Single Journal Entry with Lines
 router.get('/journal-entries/:id', async (req, res) => {
     const { id } = req.params;
@@ -149,11 +171,13 @@ router.get('/statement', async (req, res) => {
         } else if (group === 'BANKS') {
             filterSql = " AND (coa.code = 1002) ";
         } else if (bank_account_id) {
-            filterSql = ` AND (jl.bank_account_id = $${pIdx++}) `;
-            params.push(bank_account_id);
+            const ids = bank_account_id.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+            filterSql = ` AND (jl.bank_account_id = ANY($${pIdx++}::bigint[])) `;
+            params.push(ids);
         } else if (coa_id) {
-            filterSql = ` AND (jl.account_id = $${pIdx++}) `;
-            params.push(coa_id);
+            const ids = coa_id.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+            filterSql = ` AND (jl.account_id = ANY($${pIdx++}::bigint[])) `;
+            params.push(ids);
         } else {
             // Default: "Liquid Assets" (Cash + Banks + Cheques)
             filterSql = " AND (coa.code IN (1002, 1003, 1004, 2004)) ";
