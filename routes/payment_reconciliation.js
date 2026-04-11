@@ -357,8 +357,8 @@ router.post('/bulk-update', async (req, res) => {
                             ) VALUES ($1, $2, $3, $4, 'INCOMING', 'CUSTOMER', $5, 'CUSTOMER_PAYMENT', $6, 'PENDING')
                         `, [pay.transaction_ref, pay.cheque_date, pay.bank_name, pay.amount, pay.customer_id, pay.id]);
 
-                    } else if (['neft', 'upi', 'online', 'bank transfer', 'imps', 'rtgs'].includes(pay.payment_mode?.toLowerCase())) {
-                        const bankEntryId = item.bank_stmt_id || item.transaction_ref; 
+                    } else if (['neft', 'upi', 'online', 'bank transfer', 'imps', 'rtgs', 'cheque'].includes(pay.payment_mode?.toLowerCase())) {
+                        const bankEntryId = item.bank_stmt_id || (item.bank_stmt_id === 0 ? 0 : null); 
                         console.log(`[Bank Match] Payment ${pay.id} (${pay.payment_mode}), ID: ${bankEntryId}, Amount: ${pay.amount}`);
 
                         if (bankEntryId && !isNaN(bankEntryId)) {
