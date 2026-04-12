@@ -313,11 +313,43 @@ router.get('/reports/cash-flow', async (req, res) => {
 // --- 2. PROFIT & LOSS (DETAILED GL-POWERED) ---
 router.get('/reports/p-and-l', async (req, res) => {
     try {
-        const { start_date, end_date } = req.query;
+        const { start_date, end_date, fy, quarter, month } = req.query;
         const now = new Date();
-        const fyStart = `${now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1}-04-01`;
-        const sd = start_date || fyStart;
-        const ed = end_date || now.toISOString().split('T')[0];
+        
+        let sd, ed;
+
+        if (fy) {
+            const startYear = parseInt(fy);
+            // Default to whole FY
+            sd = `${startYear}-04-01`;
+            ed = `${startYear + 1}-03-31`;
+
+            if (quarter) {
+                const q = parseInt(quarter);
+                if (q === 1) { sd = `${startYear}-04-01`; ed = `${startYear}-06-30`; }
+                else if (q === 2) { sd = `${startYear}-07-01`; ed = `${startYear}-09-30`; }
+                else if (q === 3) { sd = `${startYear}-10-01`; ed = `${startYear}-12-31`; }
+                else if (q === 4) { sd = `${startYear + 1}-01-01`; ed = `${startYear + 1}-03-31`; }
+            } else if (month) {
+                const m = parseInt(month); // 1 = April, 12 = March
+                let calMonth, calYear;
+                if (m >= 1 && m <= 9) {
+                    calMonth = m + 3; // 1->4 (April), 9->12 (Dec)
+                    calYear = startYear;
+                } else {
+                    calMonth = m - 9; // 10->1 (Jan), 12->3 (March)
+                    calYear = startYear + 1;
+                }
+                sd = `${calYear}-${calMonth.toString().padStart(2, '0')}-01`;
+                ed = new Date(calYear, calMonth, 0).toISOString().split('T')[0];
+            }
+        } else {
+            // Fallback to existing logic if no FY is provided
+            const fyStartYear = now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+            const fyStart = `${fyStartYear}-04-01`;
+            sd = start_date || fyStart;
+            ed = end_date || now.toISOString().split('T')[0];
+        }
 
         // 1. Fetch Balances grouped by Account for INCOME and EXPENSE
         const balRes = await pool.query(`
@@ -325,8 +357,8 @@ router.get('/reports/p-and-l', async (req, res) => {
                 coa.code,
                 coa.name,
                 coa.type,
-                COALESCE(SUM(jl.credit - jl.debit), 0) as balance_income, -- Credit positive for income
-                COALESCE(SUM(jl.debit - jl.credit), 0) as balance_expense  -- Debit positive for expense
+                COALESCE(SUM(jl.credit - jl.debit), 0) as balance_income,
+                COALESCE(SUM(jl.debit - jl.credit), 0) as balance_expense
             FROM journal_lines jl
             JOIN journal_entries je ON jl.journal_entry_id = je.id
             JOIN chart_of_accounts coa ON jl.account_id = coa.id
