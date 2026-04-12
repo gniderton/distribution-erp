@@ -603,5 +603,141 @@ router.get('/reports/sales-lines', async (req, res) => {
     }
 });
 
+// --- 5. BALANCE SHEET (ULTRA PROFESSIONAL / CORPORATE GRADE) ---
+// Note: Balance Sheet is point-in-time. We show data up to the 'end_date' of the period.
+router.get('/reports/balance-sheet', async (req, res) => {
+    try {
+        const { fy, quarter, month } = req.query;
+        const now = new Date();
+        
+        let ed; // End date for point-in-time balance
+
+        if (fy) {
+            const startYear = parseInt(fy);
+            ed = `${startYear + 1}-03-31`; // Default to end of FY
+
+            if (quarter) {
+                const q = parseInt(quarter);
+                if (q === 1) ed = `${startYear}-06-30`;
+                else if (q === 2) ed = `${startYear}-09-30`;
+                else if (q === 3) ed = `${startYear}-12-31`;
+                else if (q === 4) ed = `${startYear + 1}-03-31`;
+            } else if (month) {
+                const m = parseInt(month);
+                let calYear = m >= 1 && m <= 3 ? startYear + 1 : startYear;
+                ed = new Date(calYear, m, 0).toISOString().split('T')[0];
+            }
+        } else {
+            ed = now.toISOString().split('T')[0];
+        }
+
+        // 1. Fetch Balances for ASSET, LIABILITY, EQUITY (Net across history up to ed)
+        const balRes = await pool.query(`
+            SELECT 
+                coa.code,
+                coa.name,
+                coa.type,
+                COALESCE(SUM(jl.debit - jl.credit), 0) as net_debit_balance
+            FROM journal_lines jl
+            JOIN journal_entries je ON jl.journal_entry_id = je.id
+            JOIN chart_of_accounts coa ON jl.account_id = coa.id
+            WHERE coa.type IN ('ASSET', 'LIABILITY', 'EQUITY')
+              AND je.transaction_date <= $1
+            GROUP BY coa.id, coa.code, coa.name, coa.type
+            ORDER BY coa.code ASC
+        `, [ed]);
+
+        // 2. Fetch current Net Profit for Retained Earnings bridge
+        // We calculate Net Profit (Income - Expense) up to the same point-in-time
+        const profitRes = await pool.query(`
+            SELECT 
+                COALESCE(SUM(CASE WHEN coa.type = 'INCOME' THEN (jl.credit - jl.debit) ELSE 0 END), 0) -
+                COALESCE(SUM(CASE WHEN coa.type = 'EXPENSE' THEN (jl.debit - jl.credit) ELSE 0 END), 0) as net_profit
+            FROM journal_lines jl
+            JOIN journal_entries je ON jl.journal_entry_id = je.id
+            JOIN chart_of_accounts coa ON jl.account_id = coa.id
+            WHERE coa.type IN ('INCOME', 'EXPENSE')
+              AND je.transaction_date <= $1
+        `, [ed]);
+
+        const currentNetProfit = parseFloat(profitRes.rows[0].net_profit);
+
+        // 3. Structure the Report into Corporate Hierarchy
+        const sections = {
+            assets: {
+                title: "Assets",
+                fixed_assets: { title: "Fixed Assets", lines: [], total: 0 },
+                current_assets: { title: "Current Assets", lines: [], total: 0 },
+                total: 0
+            },
+            liabilities_equity: {
+                title: "Liabilities & Equity",
+                current_liabilities: { title: "Current Liabilities", lines: [], total: 0 },
+                long_term_liabilities: { title: "Long Term Liabilities", lines: [], total: 0 },
+                equity: { title: "Equity", lines: [], total: 0 },
+                total: 0
+            }
+        };
+
+        balRes.rows.forEach(row => {
+            const code = parseInt(row.code);
+            const balance = parseFloat(row.net_debit_balance);
+            
+            if (balance === 0) return;
+
+            const lineItem = { code: row.code, name: row.name, amount: 0 };
+
+            if (row.type === 'ASSET') {
+                lineItem.amount = balance;
+                if (code >= 1200 && code <= 1299) {
+                    sections.assets.fixed_assets.lines.push(lineItem);
+                    sections.assets.fixed_assets.total += balance;
+                } else {
+                    sections.assets.current_assets.lines.push(lineItem);
+                    sections.assets.current_assets.total += balance;
+                }
+                sections.assets.total += balance;
+            } else if (row.type === 'LIABILITY' || row.type === 'EQUITY') {
+                const creditBalance = -balance; // Convert to positive if it's a credit balance
+                lineItem.amount = creditBalance;
+                
+                if (row.type === 'EQUITY') {
+                    sections.liabilities_equity.equity.lines.push(lineItem);
+                    sections.liabilities_equity.equity.total += creditBalance;
+                } else if (code >= 2100) {
+                    sections.liabilities_equity.long_term_liabilities.lines.push(lineItem);
+                    sections.liabilities_equity.long_term_liabilities.total += creditBalance;
+                } else {
+                    sections.liabilities_equity.current_liabilities.lines.push(lineItem);
+                    sections.liabilities_equity.current_liabilities.total += creditBalance;
+                }
+                sections.liabilities_equity.total += creditBalance;
+            }
+        });
+
+        // 4. Injected Professional Bridge: Retained Earnings from current year profit
+        if (currentNetProfit !== 0) {
+            const profitLabel = currentNetProfit >= 0 ? "Surplus (Net Profit)" : "Deficit (Net Loss)";
+            sections.liabilities_equity.equity.lines.push({ code: "PL", name: profitLabel, amount: currentNetProfit });
+            sections.liabilities_equity.equity.total += currentNetProfit;
+            sections.liabilities_equity.total += currentNetProfit;
+        }
+
+        res.json({
+            as_of: ed,
+            sections: sections,
+            summary: {
+                total_assets: sections.assets.total,
+                total_liabilities_and_equity: sections.liabilities_equity.total,
+                is_balanced: Math.abs(sections.assets.total - sections.liabilities_equity.total) < 0.01
+            }
+        });
+
+    } catch (err) {
+        console.error('Balance Sheet Report Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
 
