@@ -424,24 +424,7 @@ router.get('/reports/p-and-l', async (req, res) => {
     }
 });
 
-// --- 4. BALANCE SHEET (GL-POWERED) ---
-router.get('/reports/balance-sheet', async (req, res) => {
-    try {
-        const stats = await pool.query(`
-            SELECT 
-                (SELECT COALESCE(SUM(jl.debit - jl.credit), 0) FROM journal_lines jl JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'ASSET') as assets,
-                (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'LIABILITY') as liabilities,
-                (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'EQUITY') as equity
-        `);
-
-        const data = stats.rows[0];
-        res.json({ as_of: new Date(), assets: parseFloat(data.assets), liabilities: parseFloat(data.liabilities), equity: parseFloat(data.equity), net_worth: parseFloat(data.assets) - parseFloat(data.liabilities) });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// --- 5. SALES FY REPORT (GL-POWERED) ---
+// --- 4. SALES FY REPORT (GL-POWERED) ---
 router.get('/sales-fy-report', async (req, res) => {
     try {
         const now = new Date();
