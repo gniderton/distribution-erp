@@ -452,9 +452,20 @@ router.get('/reports/sales-lines', async (req, res) => {
             baseQuery += ` AND sil.product_id = $${params.length}`;
         }
 
-        // 1. Get Total Count
-        const countRes = await pool.query(`SELECT COUNT(*) as total ${baseQuery}`, params);
-        const totalCount = parseInt(countRes.rows[0].total);
+        // 1. Get Summary Stats (Total Gross, Tax, Count) for the entire filtered period
+        const summaryRes = await pool.query(`
+            SELECT 
+                COUNT(*) as total_lines,
+                COALESCE(SUM(sil.amount), 0) as total_gross,
+                COALESCE(SUM(sil.tax_amount), 0) as total_tax
+            ${baseQuery}
+        `, params);
+        
+        const summary = {
+            total_lines: parseInt(summaryRes.rows[0].total_lines),
+            total_gross: parseFloat(summaryRes.rows[0].total_gross),
+            total_tax: parseFloat(summaryRes.rows[0].total_tax)
+        };
 
         // 2. Get Data with Pagination
         let dataQuery = `
@@ -476,13 +487,14 @@ router.get('/reports/sales-lines', async (req, res) => {
             LIMIT $${params.length + 1} OFFSET $${params.length + 2}
         `;
 
-        params.push(limit, offset);
-        const result = await pool.query(dataQuery, params);
+        const dataParams = [...params, limit, offset];
+        const result = await pool.query(dataQuery, dataParams);
 
         res.json({
             period: { start: sd, end: ed },
+            summary: summary,
             pagination: {
-                total_count: totalCount,
+                total_count: summary.total_lines,
                 limit: parseInt(limit),
                 offset: parseInt(offset)
             },
