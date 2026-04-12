@@ -331,17 +331,13 @@ router.get('/reports/p-and-l', async (req, res) => {
                 else if (q === 3) { sd = `${startYear}-10-01`; ed = `${startYear}-12-31`; }
                 else if (q === 4) { sd = `${startYear + 1}-01-01`; ed = `${startYear + 1}-03-31`; }
             } else if (month) {
-                const m = parseInt(month); // 1 = April, 12 = March
-                let calMonth, calYear;
-                if (m >= 1 && m <= 9) {
-                    calMonth = m + 3; // 1->4 (April), 9->12 (Dec)
-                    calYear = startYear;
-                } else {
-                    calMonth = m - 9; // 10->1 (Jan), 12->3 (March)
-                    calYear = startYear + 1;
+                const m = parseInt(month); // 1 = Jan, 12 = Dec
+                let calYear = startYear;
+                if (m >= 1 && m <= 3) {
+                    calYear = startYear + 1; // Jan-Mar belong to the next calendar year in this FY
                 }
-                sd = `${calYear}-${calMonth.toString().padStart(2, '0')}-01`;
-                ed = new Date(calYear, calMonth, 0).toISOString().split('T')[0];
+                sd = `${calYear}-${m.toString().padStart(2, '0')}-01`;
+                ed = new Date(calYear, m, 0).toISOString().split('T')[0];
             }
         } else {
             // Fallback to existing logic if no FY is provided
