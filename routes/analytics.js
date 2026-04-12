@@ -425,11 +425,22 @@ router.get('/reports/fy-operating-balances', async (req, res) => {
 router.get('/reports/sales-lines', async (req, res) => {
     try {
         const { start_date, end_date, customer_id, product_id, limit = 50, offset = 0 } = req.query;
+        
+        // Helper: Convert DD/MM/YYYY to YYYY-MM-DD if needed
+        const normalizeDate = (d) => {
+            if (!d) return null;
+            if (typeof d === 'string' && d.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                const [day, month, year] = d.split('/');
+                return `${year}-${month}-${day}`;
+            }
+            return d;
+        };
+
         const now = new Date();
         const fyStart = `${now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1}-04-01`;
         
-        const sd = start_date || fyStart;
-        const ed = end_date || now.toISOString().split('T')[0];
+        const sd = normalizeDate(start_date) || fyStart;
+        const ed = normalizeDate(end_date) || now.toISOString().split('T')[0];
 
         let baseQuery = `
             FROM sales_invoice_lines sil
