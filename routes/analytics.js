@@ -467,7 +467,7 @@ router.get('/reports/sales-lines', async (req, res) => {
         const summaryRes = await pool.query(`
             SELECT 
                 COUNT(*) as total_lines,
-                COALESCE(SUM(sil.amount - sil.tax_amount), 0) as total_taxable,
+                COALESCE(SUM(sil.taxable_amount), 0) as total_taxable,
                 COALESCE(SUM(sil.tax_amount), 0) as total_tax,
                 COALESCE(SUM(sil.amount), 0) as total_grand
             ${baseQuery}
@@ -493,6 +493,7 @@ router.get('/reports/sales-lines', async (req, res) => {
                 sil.shipped_qty as qty,
                 sil.rate as unit_rate,
                 sil.tax_amount as tax,
+                sil.taxable_amount as taxable,
                 sil.amount as total_amount,
                 si.status
             ${baseQuery}
@@ -517,6 +518,7 @@ router.get('/reports/sales-lines', async (req, res) => {
                 qty: parseFloat(row.qty),
                 unit_rate: parseFloat(row.unit_rate),
                 tax: parseFloat(row.tax),
+                taxable: parseFloat(row.taxable),
                 total_amount: parseFloat(row.total_amount)
             }))
         });
