@@ -89,43 +89,51 @@ router.post('/', async (req, res) => {
         // 1b. Create Accounting Entry (Ledger)
         const acc_ap = 2001;
         const acc_bank = 1002;
+        const acc_cash = 1003;
         const acc_cheque_issued = 2004;
         let ledgerLines = [];
         let description = '';
 
+        const normalizedMode = (mode || '').toUpperCase();
+
         if (type === 'PAYMENT') {
             description = `Payment Out: ${paymentNumber}`;
-            const targetAcc = (mode === 'Cheque') ? acc_cheque_issued : acc_bank;
+            
+            // Choose account based on mode
+            let targetAcc = acc_bank;
+            if (normalizedMode === 'CHEQUE') targetAcc = acc_cheque_issued;
+            if (normalizedMode === 'CASH') targetAcc = acc_cash;
 
-            // Dr Accounts Payable (Liability decreases), Cr Bank/Cheque Issued
+            // Dr Accounts Payable (Liability decreases), Cr Bank/Cash/Cheque Issued
             ledgerLines = [
                 { code: acc_ap, debit: Number(amount), credit: 0 },
-                { code: targetAcc, debit: 0, credit: Number(amount), bank_account_id: (mode === 'Cheque') ? null : bank_account_id }
+                { code: targetAcc, debit: 0, credit: Number(amount), bank_account_id: (normalizedMode === 'CHEQUE') ? null : bank_account_id }
             ];
 
-            if (mode === 'Cheque') {
-            const bId = (req.body.bank_id === 'undefined' || !req.body.bank_id) ? null : req.body.bank_id;
-            // Ensure specific cheque fields are in body or use transaction_ref
-            await client.query(`
-                INSERT INTO cheques (
-                    cheque_number, cheque_date, bank_id, bank_name, amount, 
-                    type, party_type, party_id, reference_type, reference_id, status
-                ) VALUES ($1, $2, $3, $4, $5, 'OUTGOING', 'VENDOR', $6, 'VENDOR_PAYMENT', $7, 'PENDING')
-            `, [
-                transaction_ref, 
-                req.body.cheque_date || payment_date, 
-                bId,
-                req.body.bank_name || 'Own Bank', 
-                amount, 
-                vendor_id, 
-                paymentId
-            ]);
-        }
-    } else {
+            if (normalizedMode === 'CHEQUE') {
+                const bId = (req.body.bank_id === 'undefined' || !req.body.bank_id) ? null : req.body.bank_id;
+                await client.query(`
+                    INSERT INTO cheques (
+                        cheque_number, cheque_date, bank_id, bank_name, amount, 
+                        type, party_type, party_id, reference_type, reference_id, status
+                    ) VALUES ($1, $2, $3, $4, $5, 'OUTGOING', 'VENDOR', $6, 'VENDOR_PAYMENT', $7, 'PENDING')
+                `, [
+                    transaction_ref, 
+                    req.body.cheque_date || payment_date, 
+                    bId,
+                    req.body.bank_name || 'Own Bank', 
+                    amount, 
+                    vendor_id, 
+                    paymentId
+                ]);
+            }
+        } else {
             description = `Refund In: ${paymentNumber}`;
-            // Dr Bank (Asset increases), Cr Accounts Payable
+            // Dr Bank/Cash (Asset increases), Cr Accounts Payable
+            let targetAcc = (normalizedMode === 'CASH') ? acc_cash : acc_bank;
+
             ledgerLines = [
-                { code: acc_bank, debit: Number(amount), credit: 0, bank_account_id: bank_account_id },
+                { code: targetAcc, debit: Number(amount), credit: 0, bank_account_id: bank_account_id },
                 { code: acc_ap, debit: 0, credit: Number(amount) }
             ];
         }
@@ -135,7 +143,7 @@ router.post('/', async (req, res) => {
         `, [
             payment_date,
             description,
-            'PAYMENT',
+            'PURCH_PAY',
             paymentId,
             JSON.stringify(ledgerLines)
         ]);
