@@ -310,7 +310,7 @@ router.get('/reports/cash-flow', async (req, res) => {
     }
 });
 
-// --- 2. PROFIT & LOSS (GL-POWERED) ---
+// --- 2. PROFIT & LOSS (DETAILED GL-POWERED) ---
 router.get('/reports/p-and-l', async (req, res) => {
     try {
         const { start_date, end_date } = req.query;
@@ -319,32 +319,79 @@ router.get('/reports/p-and-l', async (req, res) => {
         const sd = start_date || fyStart;
         const ed = end_date || now.toISOString().split('T')[0];
 
-        const stats = await pool.query(`
+        // 1. Fetch Balances grouped by Account for INCOME and EXPENSE
+        const balRes = await pool.query(`
             SELECT 
-                -- NET REVENUE (Sales 4001 + Returns 4003)
-                (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.code IN (4001, 4003) AND je.transaction_date >= $1 AND je.transaction_date <= $2) as revenue,
-                
-                -- COGS (Account 5001 and 5002 only)
-                (SELECT COALESCE(SUM(jl.debit - jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE (coa.code = 5001 OR coa.code = 5002) AND je.transaction_date >= $1 AND je.transaction_date <= $2) as cogs,
-                
-                -- OPERATING EXPENSES (All other Expense accounts)
-                (SELECT COALESCE(SUM(jl.debit - jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'EXPENSE' AND coa.code NOT IN (5001, 5002) AND je.transaction_date >= $1 AND je.transaction_date <= $2) as expenses,
-                
-                -- OTHER INCOME (All other Income accounts, excluding Sales/Returns)
-                (SELECT COALESCE(SUM(jl.credit - jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'INCOME' AND coa.code NOT IN (4001, 4003) AND je.transaction_date >= $1 AND je.transaction_date <= $2) as other_income
+                coa.code,
+                coa.name,
+                coa.type,
+                COALESCE(SUM(jl.credit - jl.debit), 0) as balance_income, -- Credit positive for income
+                COALESCE(SUM(jl.debit - jl.credit), 0) as balance_expense  -- Debit positive for expense
+            FROM journal_lines jl
+            JOIN journal_entries je ON jl.journal_entry_id = je.id
+            JOIN chart_of_accounts coa ON jl.account_id = coa.id
+            WHERE coa.type IN ('INCOME', 'EXPENSE')
+              AND je.transaction_date >= $1 AND je.transaction_date <= $2
+            GROUP BY coa.id, coa.code, coa.name, coa.type
+            ORDER BY coa.code ASC
         `, [sd, ed]);
 
+        const rows = balRes.rows;
 
+        // 2. Categorization Logic
+        const sections = {
+            revenue: { title: "Revenue", lines: [], total: 0 },
+            cogs: { title: "Cost of Goods Sold (Direct)", lines: [], total: 0 },
+            operating_expenses: { title: "Operating Expenses (Indirect)", lines: [], total: 0 },
+            other_income: { title: "Other Income", lines: [], total: 0 }
+        };
 
-        const data = stats.rows[0];
-        const revenue = parseFloat(data.revenue);
-        const cogs = parseFloat(data.cogs);
-        const expenses = parseFloat(data.expenses);
-        const otherIncome = parseFloat(data.other_income);
-        const grossProfit = revenue - cogs;
+        rows.forEach(row => {
+            const code = parseInt(row.code);
+            const balance = row.type === 'INCOME' ? parseFloat(row.balance_income) : parseFloat(row.balance_expense);
+            
+            if (balance === 0) return; // Skip zero balances
 
-        res.json({ period: { start: sd, end: ed }, metrics: { revenue, cogs, gross_profit: grossProfit, gross_margin: revenue > 0 ? (grossProfit / revenue) * 100 : 0, operating_expenses: expenses, other_income: otherIncome, net_profit: grossProfit - expenses + otherIncome } });
+            const lineItem = { code: row.code, name: row.name, amount: balance };
+
+            if (row.type === 'INCOME') {
+                if (code === 4001 || code === 4003) {
+                    sections.revenue.lines.push(lineItem);
+                    sections.revenue.total += balance;
+                } else {
+                    sections.other_income.lines.push(lineItem);
+                    sections.other_income.total += balance;
+                }
+            } else if (row.type === 'EXPENSE') {
+                if (code === 5001 || code === 5002) {
+                    sections.cogs.lines.push(lineItem);
+                    sections.cogs.total += balance;
+                } else {
+                    sections.operating_expenses.lines.push(lineItem);
+                    sections.operating_expenses.total += balance;
+                }
+            }
+        });
+
+        const grossProfit = sections.revenue.total - sections.cogs.total;
+        const netProfit = grossProfit - sections.operating_expenses.total + sections.other_income.total;
+
+        res.json({
+            period: { start: sd, end: ed },
+            sections,
+            summary: {
+                total_revenue: sections.revenue.total,
+                total_cogs: sections.cogs.total,
+                gross_profit: grossProfit,
+                operating_expenses: sections.operating_expenses.total,
+                other_income: sections.other_income.total,
+                net_profit: netProfit,
+                gross_margin: sections.revenue.total > 0 ? (grossProfit / sections.revenue.total * 100).toFixed(2) + '%' : '0%',
+                net_margin: sections.revenue.total > 0 ? (netProfit / sections.revenue.total * 100).toFixed(2) + '%' : '0%'
+            }
+        });
     } catch (err) {
+        console.error('P&L Report Error:', err);
         res.status(500).json({ error: err.message });
     }
 });
