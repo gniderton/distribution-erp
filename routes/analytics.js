@@ -463,19 +463,21 @@ router.get('/reports/sales-lines', async (req, res) => {
             baseQuery += ` AND sil.product_id = $${params.length}`;
         }
 
-        // 1. Get Summary Stats (Total Gross, Tax, Count) for the entire filtered period
+        // 1. Get Summary Stats (Taxable, Tax, Count) for the entire filtered period
         const summaryRes = await pool.query(`
             SELECT 
                 COUNT(*) as total_lines,
-                COALESCE(SUM(sil.amount), 0) as total_gross,
-                COALESCE(SUM(sil.tax_amount), 0) as total_tax
+                COALESCE(SUM(sil.amount - sil.tax_amount), 0) as total_taxable,
+                COALESCE(SUM(sil.tax_amount), 0) as total_tax,
+                COALESCE(SUM(sil.amount), 0) as total_grand
             ${baseQuery}
         `, params);
         
         const summary = {
             total_lines: parseInt(summaryRes.rows[0].total_lines),
-            total_gross: parseFloat(summaryRes.rows[0].total_gross),
-            total_tax: parseFloat(summaryRes.rows[0].total_tax)
+            total_taxable: parseFloat(summaryRes.rows[0].total_taxable),
+            total_tax: parseFloat(summaryRes.rows[0].total_tax),
+            total_grand: parseFloat(summaryRes.rows[0].total_grand)
         };
 
         // 2. Get Data with Pagination
