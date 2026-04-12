@@ -724,3 +724,65 @@ router.get('/reports/balance-sheet', async (req, res) => {
 
 module.exports = router;
 
+// --- INTEGRITY AUDIT API ---
+// Scans transactional modules for sync gaps with General Ledger
+router.get('/reports/integrity-audit', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const modules = [
+            { name: 'Income', table: 'other_income', type: 'OTHER_INC' },
+            { name: 'Expenses', table: 'expenses', type: 'EXPENSE' },
+            { name: 'Debit Notes', table: 'debit_notes', type: 'DEBIT_NOTE' },
+            { name: 'Sales Invoices', table: 'sales_invoices', type: 'SALES_INV' },
+            { name: 'Sales Returns', table: 'sales_returns', type: 'SALES_RET' },
+            { name: 'Customer Payments', table: 'customer_payments', type: 'CUST_PAY' },
+            { name: 'Purchase Invoices', table: 'purchase_invoice_headers', type: 'PURCH_INV' },
+            { name: 'Vendor Payments', table: 'vendor_payments', type: 'PAYMENT' },
+            { name: 'Internal Transfers', table: 'internal_transfers', type: 'TRANSFER' },
+            { name: 'Loan Transactions', table: 'loan_transactions', type: 'LOAN_TRX' },
+            { name: 'Stock Adjustments', table: 'stock_adjustments', type: 'STK_ADJ' },
+            { name: 'Asset Transactions', table: 'asset_transactions', type: 'ASSET_TRX' },
+            { name: 'Employee Salaries', table: 'employee_salaries', type: 'SALARY' },
+            { name: 'Employee Advances', table: 'employee_advances', type: 'EMP_ADV' }
+        ];
+
+        const report = {};
+        let totalGaps = 0;
+
+        for (const mod of modules) {
+            // 1. Fetch Active Module IDs
+            const tableData = await client.query(`SELECT id::text FROM ${mod.table} WHERE is_active = true`);
+            const tableIds = new Set(tableData.rows.map(r => r.id));
+
+            // 2. Fetch Ledger Reference IDs
+            const ledgerData = await client.query(`SELECT reference_id FROM journal_entries WHERE reference_type = $1 AND reference_id IS NOT NULL`, [mod.type]);
+            const ledgerIds = new Set(ledgerData.rows.map(r => r.reference_id));
+
+            // 3. Find Missing & Orphans
+            const missing = [...tableIds].filter(id => !ledgerIds.has(id));
+            const orphans = [...ledgerIds].filter(id => id.match(/^[0-9]+$/) && !tableIds.has(id));
+
+            totalGaps += missing.length;
+
+            report[mod.name] = {
+                status: missing.length === 0 ? 'Consistent' : 'Gaps Detected',
+                missing_count: missing.length,
+                orphan_count: orphans.length
+            };
+        }
+
+        res.json({
+            timestamp: new Date().toISOString(),
+            integrity_score: totalGaps === 0 ? '100%' : Math.max(0, 100 - (totalGaps / 10)).toFixed(2) + '%',
+            total_gaps: totalGaps,
+            module_health: report
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+module.exports = router;
