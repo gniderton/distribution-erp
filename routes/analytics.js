@@ -424,14 +424,40 @@ router.get('/reports/fy-operating-balances', async (req, res) => {
 // --- 7. SALES LINE REPORT (DETAILED) ---
 router.get('/reports/sales-lines', async (req, res) => {
     try {
-        const { start_date, end_date, customer_id, product_id } = req.query;
+        const { start_date, end_date, customer_id, product_id, limit = 50, offset = 0 } = req.query;
         const now = new Date();
         const fyStart = `${now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1}-04-01`;
         
         const sd = start_date || fyStart;
         const ed = end_date || now.toISOString().split('T')[0];
 
-        let query = `
+        let baseQuery = `
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN products p ON sil.product_id = p.id
+            JOIN customers c ON si.customer_id = c.id
+            JOIN brands b ON p.brand_id = b.id
+            JOIN categories cat ON p.category_id = cat.id
+            WHERE si.invoice_date >= $1 AND si.invoice_date <= $2
+              AND si.status != 'Cancelled'
+        `;
+
+        const params = [sd, ed];
+        if (customer_id) {
+            params.push(customer_id);
+            baseQuery += ` AND si.customer_id = $${params.length}`;
+        }
+        if (product_id) {
+            params.push(product_id);
+            baseQuery += ` AND sil.product_id = $${params.length}`;
+        }
+
+        // 1. Get Total Count
+        const countRes = await pool.query(`SELECT COUNT(*) as total ${baseQuery}`, params);
+        const totalCount = parseInt(countRes.rows[0].total);
+
+        // 2. Get Data with Pagination
+        let dataQuery = `
             SELECT 
                 si.invoice_date as date,
                 si.invoice_number as invoice_no,
@@ -445,33 +471,21 @@ router.get('/reports/sales-lines', async (req, res) => {
                 sil.tax_amount as tax,
                 sil.amount as total_amount,
                 si.status
-            FROM sales_invoice_lines sil
-            JOIN sales_invoices si ON sil.invoice_id = si.id
-            JOIN products p ON sil.product_id = p.id
-            JOIN customers c ON si.customer_id = c.id
-            JOIN brands b ON p.brand_id = b.id
-            JOIN categories cat ON p.category_id = cat.id
-            WHERE si.invoice_date >= $1 AND si.invoice_date <= $2
-              AND si.status != 'Cancelled'
+            ${baseQuery}
+            ORDER BY si.invoice_date DESC, si.invoice_number DESC
+            LIMIT $${params.length + 1} OFFSET $${params.length + 2}
         `;
 
-
-        const params = [sd, ed];
-        if (customer_id) {
-            params.push(customer_id);
-            query += ` AND si.customer_id = $${params.length}`;
-        }
-        if (product_id) {
-            params.push(product_id);
-            query += ` AND sil.product_id = $${params.length}`;
-        }
-
-        query += ` ORDER BY si.invoice_date DESC, si.invoice_number DESC LIMIT 1000`;
-
-        const result = await pool.query(query, params);
+        params.push(limit, offset);
+        const result = await pool.query(dataQuery, params);
 
         res.json({
             period: { start: sd, end: ed },
+            pagination: {
+                total_count: totalCount,
+                limit: parseInt(limit),
+                offset: parseInt(offset)
+            },
             count: result.rowCount,
             lines: result.rows.map(row => ({
                 ...row,
