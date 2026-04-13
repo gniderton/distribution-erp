@@ -129,7 +129,7 @@ router.get('/source-transactions', async (req, res) => {
                 -- 1. Customer Payments
                 SELECT 
                     id, payment_date as date, 'Customer Payment' as type, payment_mode as mode,
-                    (SELECT full_name FROM customers WHERE id = customer_id) as details,
+                    (SELECT customer_name FROM customers WHERE id = customer_id) as details,
                     transaction_ref as reference, bank_id as account_id,
                     amount as inflow, 0 as outflow, 'public.customer_payments' as source_table
                 FROM customer_payments
@@ -140,7 +140,7 @@ router.get('/source-transactions', async (req, res) => {
                 -- 2. Vendor Payments
                 SELECT 
                     id, payment_date as date, 'Vendor Payment' as type, payment_mode as mode,
-                    (SELECT name FROM vendors WHERE id = vendor_id) as details,
+                    (SELECT vendor_name FROM vendors WHERE id = vendor_id) as details,
                     transaction_ref as reference, bank_account_id as account_id,
                     0 as inflow, amount as outflow, 'public.vendor_payments' as source_table
                 FROM vendor_payments
