@@ -137,7 +137,8 @@ router.get('/source-transactions', async (req, res) => {
                     END as account_id,
                     amount as inflow, 0 as outflow, 'public.customer_payments' as source_table
                 FROM customer_payments
-                WHERE is_active = true
+                WHERE is_active = true 
+                AND (bank_statement_entry_id IS NOT NULL OR payment_date >= '2026-04-01')
 
                 UNION ALL
 
@@ -148,6 +149,7 @@ router.get('/source-transactions', async (req, res) => {
                     transaction_ref as reference, bank_account_id as account_id,
                     0 as inflow, amount as outflow, 'public.vendor_payments' as source_table
                 FROM vendor_payments
+                WHERE bank_statement_entry_id IS NOT NULL OR payment_date >= '2026-04-01'
 
                 UNION ALL
 
@@ -157,6 +159,7 @@ router.get('/source-transactions', async (req, res) => {
                     description as details, reference_no as reference, payment_source_id as account_id,
                     0 as inflow, grand_total as outflow, 'public.expenses' as source_table
                 FROM expenses
+                WHERE bank_statement_entry_id IS NOT NULL OR expense_date >= '2026-04-01'
 
                 UNION ALL
 
