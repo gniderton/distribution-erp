@@ -247,6 +247,19 @@ router.get('/source-transactions', async (req, res) => {
                     CASE WHEN type = 'Issued' THEN amount ELSE 0 END as outflow,
                     'public.cheques' as source_table
                 FROM cheques
+
+                UNION ALL
+
+                -- 11. Ledger-Based Bank Movements (Cheque Clearances, etc)
+                SELECT 
+                    je.id, je.transaction_date as date, 'Cheque Cleared' as type, 'BANK' as mode,
+                    je.description as details, 'JE-' || je.id as reference,
+                    jl.bank_account_id as account_id,
+                    jl.debit as inflow, jl.credit as outflow, 'public.journal_lines' as source_table
+                FROM journal_lines jl
+                JOIN journal_entries je ON jl.journal_entry_id = je.id
+                WHERE (je.reference_type = 'CHQ_CLEAR' OR je.reference_type = 'BANK_STMT')
+                AND jl.bank_account_id IS NOT NULL
             )
             SELECT * FROM all_raw_transactions
             WHERE date >= $1 AND date <= $2
