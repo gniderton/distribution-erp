@@ -185,7 +185,7 @@ router.get('/source-transactions', async (req, res) => {
 
                 -- 7. Employee Advances/Salaries
                 SELECT 
-                    id, transaction_date as date, 'Payroll' as type, 'BANK' as mode,
+                    id, advance_date as date, 'Payroll' as type, 'BANK' as mode,
                     (SELECT full_name FROM employees WHERE id = employee_id) as details,
                     'PAY-' || id as reference, from_account_id as account_id,
                     0 as inflow, amount as outflow, 'public.employee_advances' as source_table
