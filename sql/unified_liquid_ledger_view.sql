@@ -1,16 +1,22 @@
--- 🛡️ Unified Liquid Ledger Forensic View (v9: Liquid-Only Hardening)
--- Purges non-liquid contaminants like COGS, GRN, and Inventory Adjustments that don't represent physical cash flow.
+-- 🛡️ Unified Liquid Ledger Forensic View (v10: Pure Cash Fortress)
+-- Ensures 'Cash in Hand' ONLY contains physical 'CASH' transactions. 
+-- UPI, ONLINE, and NEFT are forensically forced to the Bank Ledger (1002).
 DROP VIEW IF EXISTS view_unified_liquid_ledger;
 
 CREATE VIEW view_unified_liquid_ledger AS
--- 1. Customer Payments (Strict Cash/Online/NEFT Only)
+-- 1. Customer Payments (Strict Cash Purity)
 SELECT 
     cp.payment_date as trans_date,
     'CUSTOMER: ' || cp.id as party_name,
     'Collection (' || cp.payment_mode || ')' as description,
     cp.amount as amount_in,
     0 as amount_out,
-    CASE WHEN TRIM(cp.payment_mode) ILIKE 'CHEQUE' THEN 1004 ELSE COALESCE(cp.bank_id, 1) END as liquid_account_id,
+    -- 🛡️ FORTRESS LOGIC: Only 'CASH' stays in 1. Everything else (UPI/ONLINE/NEFT) is forced to Bank (1002).
+    CASE 
+        WHEN TRIM(cp.payment_mode) ILIKE 'CHEQUE' THEN 1004 
+        WHEN TRIM(cp.payment_mode) ILIKE 'CASH' THEN 1
+        ELSE 1002 
+    END as liquid_account_id,
     cp.bank_id as direct_bank_id,
     'customer_payments' as source_table,
     cp.id as source_id,
@@ -20,7 +26,11 @@ FROM customer_payments cp
 LEFT JOIN journal_entries je ON je.reference_id = cp.id AND je.reference_type = 'CUSTOMER_PAYMENT'
 WHERE cp.is_active = true 
   AND cp.payment_number IS NOT NULL
-  AND cp.payment_mode NOT ILIKE 'CHEQUE'
+  -- 🛡️ PURGE: Filter Cash view to only show CASH
+  AND (
+      (cp.payment_mode ILIKE 'CASH')
+      OR (cp.payment_mode NOT ILIKE 'CHEQUE' AND cp.bank_id != 1)
+  )
 
 UNION ALL
 
@@ -42,14 +52,19 @@ WHERE status NOT ILIKE 'Cancelled'
 
 UNION ALL
 
--- 3. Vendor Payments (Strict Cash/Online/NEFT Only)
+-- 3. Vendor Payments (Strict Cash Purity)
 SELECT 
     vp.payment_date as trans_date,
     'VENDOR: ' || vp.vendor_id as party_name,
     'Payment (' || vp.payment_mode || ')' as description,
     0 as amount_in,
     vp.amount as amount_out,
-    CASE WHEN TRIM(vp.payment_mode) ILIKE 'CHEQUE' THEN 1004 ELSE COALESCE(vp.bank_account_id, 1) END as liquid_account_id,
+    -- 🛡️ FORTRESS LOGIC: Only 'CASH' stays in 1. Everything else (UPI/ONLINE/NEFT) is forced to Bank (1002).
+    CASE 
+        WHEN TRIM(vp.payment_mode) ILIKE 'CHEQUE' THEN 1004 
+        WHEN TRIM(vp.payment_mode) ILIKE 'CASH' THEN 1
+        ELSE 1002 
+    END as liquid_account_id,
     vp.bank_account_id as direct_bank_id,
     'vendor_payments' as source_table,
     vp.id as source_id,
@@ -59,11 +74,15 @@ FROM vendor_payments vp
 LEFT JOIN journal_entries je ON je.reference_id = vp.id AND je.reference_type = 'VENDOR_PAYMENT'
 WHERE vp.remarks NOT ILIKE '%Historical Payment Balance Import%'
   AND vp.remarks NOT ILIKE '%Migration Entry for Axis Bank%'
-  AND vp.payment_mode NOT ILIKE 'CHEQUE'
+  -- 🛡️ PURGE: Filter Cash view to only show CASH
+  AND (
+      (vp.payment_mode ILIKE 'CASH')
+      OR (vp.payment_mode NOT ILIKE 'CHEQUE' AND vp.bank_account_id != 1)
+  )
 
 UNION ALL
 
--- 4. DSE Expenses
+-- 4. DSE Expenses (Always Cash)
 SELECT 
     expense_date as trans_date,
     'DSE EXPENSE' as party_name,
@@ -224,7 +243,7 @@ WHERE payment_date IS NOT NULL
 
 UNION ALL
 
--- 13. Manual Adjustments (Surgically Filtered for Liquid Moves Only)
+-- 13. Manual Adjustments (Strict Liquid Move Filter)
 SELECT 
     je.transaction_date as trans_date,
     'JOURNAL ADJUSTMENT' as party_name,
@@ -239,15 +258,16 @@ SELECT
     je.id as journal_entry_id
 FROM journal_entries je
 JOIN journal_lines jl ON je.id = jl.journal_entry_id
-WHERE je.reference_type != 'SETTLEMENT' -- 🛡️ PURGE: Settlement noise
+WHERE je.reference_type != 'SETTLEMENT'
   AND jl.account_id IN (1, 1002, 1003, 1005, 1004)
-  -- 🛡️ LIQUID HARDENING: Absolutely NO inventory or cost noise in the liquid flow
   AND je.description NOT ILIKE '%COGS%'
   AND je.description NOT ILIKE '%GRN%'
   AND je.description NOT ILIKE '%Inwarding%'
   AND je.description NOT ILIKE '%Inventory%'
   AND je.description NOT ILIKE '%Stock%'
   AND je.description NOT ILIKE '%Purchase Adjustment%'
+  -- 🛡️ PROTECT CASH: UPI/Bank description items forced to 1002
+  AND (jl.account_id != 1 OR (je.description NOT ILIKE '%UPI%' AND je.description NOT ILIKE '%Bank%' AND je.description NOT ILIKE '%Online%'))
 
 UNION ALL
 
@@ -258,7 +278,7 @@ SELECT
     description,
     amount as amount_in,
     0 as amount_out,
-    CASE WHEN description ILIKE '%Bank%' OR description ILIKE '%Cheque%' THEN 1002 ELSE account_id END as liquid_account_id,
+    CASE WHEN description ILIKE '%Bank%' OR description ILIKE '%Cheque%' OR description ILIKE '%UPI%' THEN 1002 ELSE account_id END as liquid_account_id,
     account_id as direct_bank_id,
     'opening_balances' as source_table,
     id as source_id,
@@ -266,4 +286,4 @@ SELECT
     journal_entry_id
 FROM opening_balances
 WHERE is_active = true
-  AND (account_id != 1 OR (description NOT ILIKE '%Bank%' AND description NOT ILIKE '%Cheque%'));
+  AND (account_id != 1 OR (description NOT ILIKE '%Bank%' AND description NOT ILIKE '%Cheque%' AND description NOT ILIKE '%UPI%'));
