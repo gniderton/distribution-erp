@@ -232,11 +232,16 @@ router.get('/unified-liquid-ledger', async (req, res) => {
 
         const targetAccountId = bank_account_id ? 1002 : liquid_account_id;
 
-        // 🛡️ PARTITIONED FILTERING: If a bank is specified, we ONLY care about that bank.
-        // If no bank is specified (Generic Liquid), we show all rows for that liquid COA.
-        let accountFilterSql = `v.liquid_account_id = $1`;
+        // 🛡️ PARTITIONED FILTERING: sequential parameters $1, $2, etc.
+        let accountFilterSql = "";
+        let filterParams = [];
+
         if (bank_account_id) {
-            accountFilterSql = `(v.direct_bank_id = $2 OR bse.bank_account_id = $2)`;
+            accountFilterSql = `(v.direct_bank_id = $1 OR bse.bank_account_id = $1)`;
+            filterParams.push(bank_account_id);
+        } else {
+            accountFilterSql = `v.liquid_account_id = $1`;
+            filterParams.push(targetAccountId);
         }
 
         let openingQuery = `
@@ -244,7 +249,7 @@ router.get('/unified-liquid-ledger', async (req, res) => {
             FROM view_unified_liquid_ledger v LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id
             WHERE ${accountFilterSql}
         `;
-        const openingParams = bank_account_id ? [targetAccountId, bank_account_id] : [targetAccountId];
+        const openingParams = [...filterParams];
         if (start_date) { openingQuery += ` AND v.trans_date < $${openingParams.length + 1}`; openingParams.push(start_date); }
 
         const openingRes = await pool.query(openingQuery, openingParams);
@@ -254,7 +259,7 @@ router.get('/unified-liquid-ledger', async (req, res) => {
             SELECT v.* FROM view_unified_liquid_ledger v LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id
             WHERE ${accountFilterSql}
         `;
-        const paramsMain = bank_account_id ? [targetAccountId, bank_account_id] : [targetAccountId];
+        const paramsMain = [...filterParams];
         if (start_date) { paramsMain.push(start_date); queryMain += ` AND v.trans_date >= $${paramsMain.length}`; }
         if (end_date) { paramsMain.push(end_date); queryMain += ` AND v.trans_date <= $${paramsMain.length}`; }
 
