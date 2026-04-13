@@ -167,7 +167,20 @@ router.get('/general-ledger', async (req, res) => {
 // 4. Ledger Style Statement (Detailed with Opening/Running Balance)
 router.get('/statement', async (req, res) => {
     try {
-        const { start_date, end_date, bank_account_id, coa_id, group, selection } = req.query;
+        let { start_date, end_date, bank_account_id, coa_id, group, selection } = req.query;
+        
+        // Helper to handle DD-MM-YYYY format
+        const ensureIsoDate = (d) => {
+            if (!d) return d;
+            if (/^\d{2}-\d{2}-\d{4}$/.test(d)) {
+                const [day, month, year] = d.split('-');
+                return `${year}-${month}-${day}`;
+            }
+            return d;
+        };
+
+        start_date = ensureIsoDate(start_date);
+        end_date = ensureIsoDate(end_date);
         
         if (!start_date || !end_date) {
             return res.status(400).json({ error: "start_date and end_date are required" });
