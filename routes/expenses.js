@@ -113,25 +113,21 @@ router.post('/', async (req, res) => {
         const { prefix, current_number } = seqRes.rows[0];
         const expenseNumber = `${prefix}${current_number.toString().padStart(5, '0')}`;
 
-        // 1. Get Source Account Code (Cash/Bank/Cheque)
+        // 1. Get Source Account ID (Cash/Bank/Cheque)
         let resolvedPaymentSourceId = pSourceId;
-        let paymentAccountCode = 1002; // Default Bank
+        let paymentCOAId = 2004; // Defaults to Cheques Issued if Cheque
+        const coa_map = { 1: 3, 2: 4453, 3: 4454 }; // bank_id -> coa_id
 
-        if (payment_mode === 'Cheque') {
-            paymentAccountCode = 2004; // Cheques Issued
-        } else {
+        if (payment_mode !== 'Cheque') {
             let sourceRes;
             if (!isNaN(pSourceId)) {
-                sourceRes = await client.query('SELECT id, bank_name FROM bank_accounts WHERE id = $1', [pSourceId]);
+                sourceRes = await client.query('SELECT id FROM bank_accounts WHERE id = $1', [pSourceId]);
             } else {
-                sourceRes = await client.query('SELECT id, bank_name FROM bank_accounts WHERE bank_name = $1', [pSourceId]);
+                sourceRes = await client.query('SELECT id FROM bank_accounts WHERE bank_name = $1', [pSourceId]);
             }
             if (sourceRes.rows.length === 0) throw new Error(`Invalid Payment Source: "${pSourceId}"`);
-
-            const bankRecord = sourceRes.rows[0];
-            const isCash = bankRecord.bank_name.toLowerCase().includes('cash');
-            paymentAccountCode = isCash ? 1003 : 1002;
-            resolvedPaymentSourceId = bankRecord.id;
+            resolvedPaymentSourceId = sourceRes.rows[0].id;
+            paymentCOAId = coa_map[resolvedPaymentSourceId] || 2; // Real Bank COA or Generic Bank
         }
 
         // 2. Get Expense Category Detail
@@ -146,10 +142,10 @@ router.post('/', async (req, res) => {
             const halfTax = Number(tax_amount) / 2;
             journalLines.push({ code: 1011, debit: halfTax, credit: 0 });
             journalLines.push({ code: 1012, debit: halfTax, credit: 0 });
-            journalLines.push({ code: paymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: payment_mode === 'Cheque' ? null : resolvedPaymentSourceId });
+            journalLines.push({ code: paymentCOAId, debit: 0, credit: Number(grand_total), bank_account_id: payment_mode === 'Cheque' ? null : resolvedPaymentSourceId });
         } else {
             journalLines.push({ code: categoryCode, debit: Number(grand_total), credit: 0 });
-            journalLines.push({ code: paymentAccountCode, debit: 0, credit: Number(grand_total), bank_account_id: payment_mode === 'Cheque' ? null : resolvedPaymentSourceId });
+            journalLines.push({ code: paymentCOAId, debit: 0, credit: Number(grand_total), bank_account_id: payment_mode === 'Cheque' ? null : resolvedPaymentSourceId });
         }
 
 
