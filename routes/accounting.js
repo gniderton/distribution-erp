@@ -258,10 +258,34 @@ router.get('/source-transactions', async (req, res) => {
 
         // Selection Defaults: If everything is empty, show Liquid (Cash+Banks)
         const finalBankArr = (bankArr.length === 0 && coaArr.length === 0) ? [1, 2, 3] : bankArr;
-        const finalCoaArr = coaArr.length > 0 ? coaArr : [-1]; // -1 to ensure no phantom matches
+        const finalCoaArr = coaArr.length > 0 ? coaArr : [-1];
 
+        // 1. Calculate Opening Balance (Prior to start date)
+        const openingQuery = `
+            WITH all_raw_transactions AS (
+                -- (Duplicate of the UNION ALL logic filtered for < $1)
+                -- Simplified for speed: We only need the SUM
+                ${query.split('ORDER BY')[0]}
+            )
+            SELECT COALESCE(SUM(inflow - outflow), 0) as balance 
+            FROM all_raw_transactions 
+            WHERE date < $1 AND (
+                account_id = ANY($3::bigint[]) 
+                OR (account_id = ANY($4::bigint[]) OR account_id = ANY(SELECT id FROM chart_of_accounts WHERE id = ANY($4::bigint[])))
+            )
+        `;
+
+        const openRes = await pool.query(openingQuery, [start, end, finalBankArr, finalCoaArr]);
+        const openingBalance = parseFloat(openRes.rows[0].balance);
+
+        // 2. Fetch Detailed Transactions
         const result = await pool.query(query, [start, end, finalBankArr, finalCoaArr]);
-        res.json(result.rows);
+        
+        // Return both for Appsmith math
+        res.json({
+            opening_balance: openingBalance.toFixed(2),
+            transactions: result.rows
+        });
 
     } catch (err) {
         console.error('Source Transaction API Error:', err.message);
