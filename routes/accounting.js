@@ -169,18 +169,23 @@ router.get('/statement', async (req, res) => {
         } else if (group === 'CHEQUE') {
             filterSql = " AND (coa.code IN (1004, 2004)) ";
         } else if (group === 'BANKS') {
-            filterSql = " AND (coa.code IN (1001, 1002)) ";
+            filterSql = " AND (coa.code IN (1001, 1002, 1102, 1103)) ";
         } else if (bank_account_id) {
-            const ids = bank_account_id.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-            filterSql = ` AND (jl.bank_account_id = ANY($${pIdx++}::bigint[])) `;
+            // Bridge: Map bank_account_id to its specific COA ID
+            const coa_map = { 1: 3, 2: 4453, 3: 4454 };
+            const ids = bank_account_id.split(',').map(s => {
+                const bId = parseInt(s.trim());
+                return coa_map[bId] || bId;
+            }).filter(n => !isNaN(n));
+            filterSql = ` AND (jl.account_id = ANY($${pIdx++}::bigint[])) `;
             params.push(ids);
         } else if (coa_id) {
             const ids = coa_id.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
             filterSql = ` AND (jl.account_id = ANY($${pIdx++}::bigint[])) `;
             params.push(ids);
         } else {
-            // Default: "Liquid Assets" (Cash + Banks + Cheques)
-            filterSql = " AND (coa.code IN (1001, 1002, 1003, 1004, 2004)) ";
+            // Default: "Liquid Assets" (Cash + Banks + Cheques + New Forensic Banks)
+            filterSql = " AND (coa.code IN (1001, 1002, 1102, 1103, 1003, 1004, 2004)) ";
         }
 
         // 1. Calculate Opening Balance (Everything before start_date)
