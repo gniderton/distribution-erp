@@ -193,6 +193,7 @@ router.get('/statement', async (req, res) => {
         // --- Consolidated Selection Logic ---
         // Support for 'selection' param (comma separated list like group:CASH,coa:4453,bank:2)
         const combinedCoaIds = new Set();
+        const combinedBankIds = new Set();
         
         const processValue = (val) => {
             if (!val) return;
@@ -201,17 +202,27 @@ router.get('/statement', async (req, res) => {
                 const item = p.trim();
                 if (item.startsWith('group:')) {
                     const g = item.replace('group:', '');
-                    if (g === 'CASH') combinedCoaIds.add(3); // Cash
-                    else if (g === 'CHEQUE') { combinedCoaIds.add(1004); combinedCoaIds.add(2004); }
-                    else if (g === 'BANKS') { combinedCoaIds.add(4453); combinedCoaIds.add(4454); combinedCoaIds.add(2); } // Axis, IDFC, Bank Account
-                    else if (g === 'FINANCIAL' || g === 'ALL') { [3, 4453, 4454, 1004, 2004, 2].forEach(id => combinedCoaIds.add(id)); }
+                    if (g === 'CASH') { 
+                        combinedCoaIds.add(3); 
+                        combinedBankIds.add(1); 
+                    } else if (g === 'CHEQUE') { 
+                        combinedCoaIds.add(1004); 
+                        combinedCoaIds.add(2004); 
+                    } else if (g === 'BANKS') { 
+                        [4453, 4454, 2].forEach(id => combinedCoaIds.add(id)); 
+                        [2, 3].forEach(id => combinedBankIds.add(id)); 
+                    } else if (g === 'FINANCIAL' || g === 'ALL') { 
+                        [3, 4453, 4454, 1004, 2004, 2].forEach(id => combinedCoaIds.add(id)); 
+                        [1, 2, 3].forEach(id => combinedBankIds.add(id)); 
+                    }
                 } else if (item.startsWith('coa:')) {
                     combinedCoaIds.add(parseInt(item.replace('coa:', '')));
                 } else if (item.startsWith('bank:')) {
-                    const coa_map = { 1: 3, 2: 4453, 3: 4454 };
                     const bId = parseInt(item.replace('bank:', ''));
+                    combinedBankIds.add(bId);
+                    // Bridge: Fallback to COA mapping for older entries without bank_account_id
+                    const coa_map = { 1: 3, 2: 4453, 3: 4454 };
                     if (coa_map[bId]) combinedCoaIds.add(coa_map[bId]);
-                    else combinedCoaIds.add(bId);
                 } else {
                     // Raw ID (backwards compatibility)
                     const id = parseInt(item);
@@ -225,12 +236,14 @@ router.get('/statement', async (req, res) => {
         if (coa_id) processValue(coa_id.split(',').map(id => `coa:${id}`).join(','));
         if (bank_account_id) processValue(bank_account_id.split(',').map(id => `bank:${id}`).join(','));
 
-        if (combinedCoaIds.size > 0) {
-            filterSql = ` AND (jl.account_id = ANY($${pIdx++}::bigint[])) `;
-            params.push(Array.from(combinedCoaIds));
+        if (combinedCoaIds.size > 0 || combinedBankIds.size > 0) {
+            const coaArr = Array.from(combinedCoaIds);
+            const bankArr = Array.from(combinedBankIds);
+            filterSql = ` AND (jl.account_id = ANY($${pIdx++}::bigint[]) OR jl.bank_account_id = ANY($${pIdx++}::bigint[])) `;
+            params.push(coaArr, bankArr);
         } else {
             // Default: All Liquid (Cash, Banks, Cheques)
-            filterSql = " AND (coa.code IN (1102, 1103, 1002, 1003, 1004, 2004)) ";
+            filterSql = " AND (coa.code IN (1102, 1103, 1002, 1003, 1004, 2004) OR jl.bank_account_id IN (1, 2, 3)) ";
         }
 
         // 1. Calculate Opening Balance (Everything before start_date)
