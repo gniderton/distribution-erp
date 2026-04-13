@@ -1279,7 +1279,7 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                     const batchesRes = await client.query(`
                         SELECT id, quantity_remaining, purchase_rate, mrp, distributor_rate, wholesale_rate, dealer_rate, retail_rate
                         FROM inventory_batches 
-                        WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
+                        WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true AND status = 'Good'
                         ORDER BY created_at ASC FOR UPDATE
                     `, [pid]);
 
