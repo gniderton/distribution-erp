@@ -99,6 +99,87 @@ router.get('/source-transactions', async (req, res) => {
             return dStr;
         };
 
+        const startDate = normalizeDate(startDateAc);
+        const endDate = normalizeDate(endDateAc);
+        const bankId = req.query.bank_account_id;
+
+        // ... (existing selection logic)
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * [NEW] 1.3 Unified Liquid Ledger (Forensic Engine)
+ * Aggregates 14+ sources from view_unified_liquid_ledger.
+ */
+router.get('/unified-liquid-ledger', async (req, res) => {
+    try {
+        const { start_date, end_date, liquid_account_id } = req.query;
+
+        if (!liquid_account_id) {
+            return res.status(400).json({ error: "liquid_account_id is required" });
+        }
+
+        // 1. Calculate Opening Balance (Sum before start_date)
+        let openingQuery = `
+            SELECT COALESCE(SUM(amount_in - amount_out), 0) as opening_balance 
+            FROM view_unified_liquid_ledger 
+            WHERE liquid_account_id = $1
+        `;
+        const openingParams = [liquid_account_id];
+
+        if (start_date) {
+            openingParams.push(start_date);
+            openingQuery += ` AND trans_date < $2`;
+        }
+
+        const openingRes = await pool.query(openingQuery, openingParams);
+        const openingBalance = parseFloat(openingRes.rows[0].opening_balance);
+
+        // 2. Fetch Transactions within range
+        let query = `
+            SELECT * FROM view_unified_liquid_ledger 
+            WHERE liquid_account_id = $1
+        `;
+        const params = [liquid_account_id];
+
+        if (start_date) {
+            params.push(start_date);
+            query += ` AND trans_date >= $${params.length}`;
+        }
+        if (end_date) {
+            params.push(end_date);
+            query += ` AND trans_date <= $${params.length}`;
+        }
+
+        query += ` ORDER BY trans_date ASC, source_id ASC`;
+
+        const result = await pool.query(query, params);
+
+        // 3. Compute Running Balance
+        let currentBalance = openingBalance;
+        const transactions = result.rows.map(row => {
+            currentBalance += parseFloat(row.amount_in || 0);
+            currentBalance -= parseFloat(row.amount_out || 0);
+            return {
+                ...row,
+                running_balance: currentBalance
+            };
+        });
+
+        res.json({
+            opening_balance: openingBalance,
+            closing_balance: currentBalance,
+            transactions: transactions
+        });
+
+    } catch (err) {
+        console.error('Unified Ledger Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
         const start = normalizeDate(startDateAc) || '1970-01-01';
         const end = normalizeDate(endDateAc) || '2099-12-31';
 
