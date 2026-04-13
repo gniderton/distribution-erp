@@ -212,8 +212,23 @@ router.get('/source-transactions', async (req, res) => {
  */
 router.get('/unified-liquid-ledger', async (req, res) => {
     try {
-        const { start_date, end_date, liquid_account_id, bank_account_id } = req.query;
-        if (!liquid_account_id && !bank_account_id) return res.status(400).json({ error: "liquid_account_id or bank_account_id is required" });
+        let { start_date, end_date, liquid_account_id, bank_account_id, account_filter } = req.query;
+
+        // 🛡️ Universal Filter Mapping (Appsmith Simplified)
+        if (account_filter) {
+            if (account_filter === 'UNIFIED') liquid_account_id = '1002';
+            else if (account_filter === 'CASH') liquid_account_id = '1';
+            else if (account_filter === 'AXIS') bank_account_id = '2';
+            else if (account_filter === 'IDFC') bank_account_id = '3';
+        }
+
+        // 🛡️ Appsmith Resilience: Treat empty strings as undefined
+        if (liquid_account_id === '') liquid_account_id = undefined;
+        if (bank_account_id === '') bank_account_id = undefined;
+
+        if (!liquid_account_id && !bank_account_id) {
+            return res.status(400).json({ error: "liquid_account_id, bank_account_id, or account_filter is required" });
+        }
 
         const targetAccountId = bank_account_id ? 1002 : liquid_account_id;
 
