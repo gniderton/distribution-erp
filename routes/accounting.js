@@ -169,7 +169,7 @@ router.get('/statement', async (req, res) => {
         } else if (group === 'CHEQUE') {
             filterSql = " AND (coa.code IN (1004, 2004)) ";
         } else if (group === 'BANKS') {
-            filterSql = " AND (coa.code = 1002) ";
+            filterSql = " AND (coa.code IN (1001, 1002)) ";
         } else if (bank_account_id) {
             const ids = bank_account_id.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
             filterSql = ` AND (jl.bank_account_id = ANY($${pIdx++}::bigint[])) `;
@@ -180,7 +180,7 @@ router.get('/statement', async (req, res) => {
             params.push(ids);
         } else {
             // Default: "Liquid Assets" (Cash + Banks + Cheques)
-            filterSql = " AND (coa.code IN (1002, 1003, 1004, 2004)) ";
+            filterSql = " AND (coa.code IN (1001, 1002, 1003, 1004, 2004)) ";
         }
 
         // 1. Calculate Opening Balance (Everything before start_date)
