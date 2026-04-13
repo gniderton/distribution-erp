@@ -1,16 +1,17 @@
--- 🛡️ Unified Liquid Ledger Forensic View (v6: Strict Cash Segregation)
--- Removes Cheques from Cash in Hand (handled by Cheque Repository)
+-- 🛡️ Unified Liquid Ledger Forensic View (v7: Structural Force-Correction)
+-- Forces Integrity: Cheques ALWAYS go to 1004, regardless of improper bank_id labels.
 DROP VIEW IF EXISTS view_unified_liquid_ledger;
 
 CREATE VIEW view_unified_liquid_ledger AS
--- 1. Customer Payments (Cash/Online/NEFT Only - No Cheques here)
+-- 1. Customer Payments (Cash/Online/NEFT Only)
 SELECT 
     cp.payment_date as trans_date,
     'CUSTOMER: ' || cp.id as party_name,
     'Collection (' || cp.payment_mode || ')' as description,
     cp.amount as amount_in,
     0 as amount_out,
-    COALESCE(cp.bank_id, 1) as liquid_account_id,
+    -- 🛡️ FORCE INTEGRITY: If it's a cheque, it MUST be 1004. Else, follow bank_id or default to Cash (1).
+    CASE WHEN cp.payment_mode = 'CHEQUE' THEN 1004 ELSE COALESCE(cp.bank_id, 1) END as liquid_account_id,
     cp.bank_id as direct_bank_id,
     'customer_payments' as source_table,
     cp.id as source_id,
@@ -20,7 +21,7 @@ FROM customer_payments cp
 LEFT JOIN journal_entries je ON je.reference_id = cp.id AND je.reference_type = 'CUSTOMER_PAYMENT'
 WHERE cp.is_active = true 
   AND cp.payment_number IS NOT NULL
-  AND cp.payment_mode != 'CHEQUE' -- 🛡️ PURGE: Cheques stay in Cheque Repository
+  AND cp.payment_mode != 'CHEQUE' -- 🛡️ PURGE: Cheques are handled exclusively in the Cheque Repository section
 
 UNION ALL
 
@@ -31,7 +32,8 @@ SELECT
     'Cheque (' || status || '): ' || cheque_number as description,
     CASE WHEN type = 'INCOMING' THEN amount ELSE 0 END as amount_in,
     CASE WHEN type = 'OUTGOING' THEN amount ELSE 0 END as amount_out,
-    bank_account_id as liquid_account_id,
+    -- 🛡️ FORCE INTEGRITY: All items in the Cheque table go to 1004 Ledger
+    1004 as liquid_account_id,
     bank_account_id as direct_bank_id,
     'cheques' as source_table,
     id as source_id,
@@ -42,14 +44,15 @@ WHERE status != 'Cancelled'
 
 UNION ALL
 
--- 3. Vendor Payments (Cash/Online/NEFT Only - No Cheques here)
+-- 3. Vendor Payments (Cash/Online/NEFT Only)
 SELECT 
     vp.payment_date as trans_date,
     'VENDOR: ' || vp.vendor_id as party_name,
     'Payment (' || vp.payment_mode || ')' as description,
     0 as amount_in,
     vp.amount as amount_out,
-    COALESCE(vp.bank_account_id, 1) as liquid_account_id,
+    -- 🛡️ FORCE INTEGRITY: If it's a cheque, it MUST be 1004. Else, follow bank_account_id or default to Cash (1).
+    CASE WHEN vp.payment_mode = 'CHEQUE' THEN 1004 ELSE COALESCE(vp.bank_account_id, 1) END as liquid_account_id,
     vp.bank_account_id as direct_bank_id,
     'vendor_payments' as source_table,
     vp.id as source_id,
@@ -58,7 +61,9 @@ SELECT
 FROM vendor_payments vp
 LEFT JOIN journal_entries je ON je.reference_id = vp.id AND je.reference_type = 'VENDOR_PAYMENT'
 WHERE vp.remarks NOT ILIKE '%Historical Payment Balance Import%'
-  AND vp.payment_mode != 'CHEQUE' -- 🛡️ PURGE: Cheques stay in Cheque Repository
+  -- 🛡️ CRITICAL FILTERS: Axis Migration Correction
+  AND vp.remarks NOT ILIKE '%Migration Entry for Axis Bank%'
+  AND vp.payment_mode != 'CHEQUE'
 
 UNION ALL
 
@@ -240,6 +245,8 @@ FROM journal_entries je
 JOIN journal_lines jl ON je.id = jl.journal_entry_id
 WHERE je.source_table IS NULL 
   AND jl.account_id IN (1, 1002, 1003, 1005)
+  -- 🛡️ PROTECT CASH: Discard Bank/Cheque adjustments from Cash view
+  AND (jl.account_id != 1 OR (je.description NOT ILIKE '%Bank%' AND je.description NOT ILIKE '%Cheque%'))
 
 UNION ALL
 
@@ -250,11 +257,13 @@ SELECT
     description,
     amount as amount_in,
     0 as amount_out,
-    account_id as liquid_account_id,
+    -- 🛡️ STRUCTURAL PURGE: If it's a Bank Opening Balance, it belongs in 1002/Bank, NOT 1/Cash.
+    CASE WHEN description ILIKE '%Bank%' OR description ILIKE '%Cheque%' THEN 1002 ELSE account_id END as liquid_account_id,
     account_id as direct_bank_id,
     'opening_balances' as source_table,
     id as source_id,
     null as bank_statement_entry_id,
     journal_entry_id
 FROM opening_balances
-WHERE is_active = true;
+WHERE is_active = true
+  AND (account_id != 1 OR (description NOT ILIKE '%Bank%' AND description NOT ILIKE '%Cheque%'));
