@@ -383,9 +383,10 @@ router.post('/bulk-update', async (req, res) => {
                                     // 3. Link Payment
                                     await client.query(`
                                         UPDATE customer_payments 
-                                        SET bank_statement_entry_id = $1 
-                                        WHERE id = $2
-                                    `, [bankEntryId, pay.id]);
+                                        SET bank_statement_entry_id = $1,
+                                            bank_id = $2
+                                        WHERE id = $3
+                                    `, [bankEntryId, bEntry.bank_account_id, pay.id]);
 
                                     bankAccountId = bEntry.bank_account_id;
                                 }
