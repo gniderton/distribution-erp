@@ -250,16 +250,16 @@ router.get('/source-transactions', async (req, res) => {
 
                 UNION ALL
 
-                -- 11. Ledger-Based Bank Movements (Cheque Clearances, etc)
+                -- 11. Ledger-Based Bank/Cash Movements (Cheque Clearances, etc)
                 SELECT 
-                    je.id, je.transaction_date as date, 'Cheque Cleared' as type, 'BANK' as mode,
+                    je.id, je.transaction_date as date, 'Cheque Cleared' as type, 'JOURNAL' as mode,
                     je.description as details, 'JE-' || je.id as reference,
-                    jl.bank_account_id as account_id,
+                    CAST(COALESCE(jl.bank_account_id, (CASE WHEN jl.account_id IN (3, 1004) THEN jl.account_id ELSE NULL END)) as bigint) as account_id,
                     jl.debit as inflow, jl.credit as outflow, 'public.journal_lines' as source_table
                 FROM journal_lines jl
                 JOIN journal_entries je ON jl.journal_entry_id = je.id
                 WHERE (je.reference_type = 'CHQ_CLEAR' OR je.reference_type = 'BANK_STMT')
-                AND jl.bank_account_id IS NOT NULL
+                AND (jl.bank_account_id IS NOT NULL OR jl.account_id IN (3, 1004))
             )
             SELECT * FROM all_raw_transactions
             WHERE date >= $1 AND date <= $2
