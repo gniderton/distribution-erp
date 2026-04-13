@@ -158,7 +158,7 @@ router.get('/source-transactions', async (req, res) => {
 
                 -- 4. Other Income
                 SELECT 
-                    id, transaction_date as date, 'Other Income' as type, payment_mode as mode,
+                    id, transaction_date as date, 'Other Income' as type, 'BANK' as mode,
                     description as details, reference_no as reference, destination_account_id as account_id,
                     amount as inflow, 0 as outflow, 'public.other_income' as source_table
                 FROM other_income
