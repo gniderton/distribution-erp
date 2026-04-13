@@ -79,6 +79,196 @@ router.get('/ledger-options', async (req, res) => {
     }
 });
 
+/**
+ * [NEW] 1.2 Consolidated Source Transactions (Operational View bypassing Ledger)
+ * Aggregates data from 10+ operational tables for a direct bank/cash statement.
+ * Optimized for Axis, IDFC, and Cash in Hand reconciliation.
+ */
+router.get('/source-transactions', async (req, res) => {
+    try {
+        const { startDateAc, endDateAc, selection } = req.query;
+
+        // Date Normalizer
+        const normalizeDate = (dStr) => {
+            if (!dStr) return null;
+            if (dStr.includes('-')) {
+                const parts = dStr.split('-');
+                if (parts[0].length === 4) return dStr; // YYYY-MM-DD
+                return `${parts[2]}-${parts[1]}-${parts[0]}`; // DD-MM-YYYY to YYYY-MM-DD
+            }
+            return dStr;
+        };
+
+        const start = normalizeDate(startDateAc) || '1970-01-01';
+        const end = normalizeDate(endDateAc) || '2099-12-31';
+
+        // Filter Logic (Selection Parsing)
+        const combinedBankIds = new Set();
+        const combinedCoaIds = new Set();
+
+        const processValue = (val) => {
+            if (!val) return;
+            const parts = val.split(',');
+            parts.forEach(p => {
+                const [type, id] = p.trim().split(':');
+                if (type === 'bank') combinedBankIds.add(parseInt(id));
+                if (type === 'coa') combinedCoaIds.add(parseInt(id));
+                if (type === 'group') {
+                    if (id === 'CASH') combinedBankIds.add(1);
+                    if (id === 'BANKS' || id === 'BANK') { combinedBankIds.add(2); combinedBankIds.add(3); }
+                    if (id === 'CHEQUE') combinedCoaIds.add(1004); // Cheques in Hand
+                }
+            });
+        };
+
+        processValue(selection);
+
+        // SQL Construction: UNION ALL across operational sources
+        const query = `
+            WITH all_raw_transactions AS (
+                -- 1. Customer Payments
+                SELECT 
+                    id, payment_date as date, 'Customer Payment' as type, payment_mode as mode,
+                    (SELECT full_name FROM customers WHERE id = customer_id) as details,
+                    transaction_ref as reference, bank_id as account_id,
+                    amount as inflow, 0 as outflow, 'public.customer_payments' as source_table
+                FROM customer_payments
+                WHERE is_active = true
+
+                UNION ALL
+
+                -- 2. Vendor Payments
+                SELECT 
+                    id, payment_date as date, 'Vendor Payment' as type, payment_mode as mode,
+                    (SELECT name FROM vendors WHERE id = vendor_id) as details,
+                    transaction_ref as reference, bank_account_id as account_id,
+                    0 as inflow, amount as outflow, 'public.vendor_payments' as source_table
+                FROM vendor_payments
+
+                UNION ALL
+
+                -- 3. Expenses
+                SELECT 
+                    id, expense_date as date, 'Expense' as type, 'BANK' as mode,
+                    description as details, reference_no as reference, payment_source_id as account_id,
+                    0 as inflow, grand_total as outflow, 'public.expenses' as source_table
+                FROM expenses
+
+                UNION ALL
+
+                -- 4. Other Income
+                SELECT 
+                    id, transaction_date as date, 'Other Income' as type, payment_mode as mode,
+                    description as details, reference_no as reference, destination_account_id as account_id,
+                    amount as inflow, 0 as outflow, 'public.other_income' as source_table
+                FROM other_income
+
+                UNION ALL
+
+                -- 5. Internal Transfers (Outflow Line)
+                SELECT 
+                    id, transfer_date as date, 'Transfer (Out)' as type, 'BANK' as mode,
+                    remarks as details, 'TFR-' || id as reference, from_account_id as account_id,
+                    0 as inflow, amount as outflow, 'public.internal_transfers' as source_table
+                FROM internal_transfers
+
+                UNION ALL
+
+                -- 6. Internal Transfers (Inflow Line)
+                SELECT 
+                    id, transfer_date as date, 'Transfer (In)' as type, 'BANK' as mode,
+                    remarks as details, 'TFR-' || id as reference, to_account_id as account_id,
+                    amount as inflow, 0 as outflow, 'public.internal_transfers' as source_table
+                FROM internal_transfers
+
+                UNION ALL
+
+                -- 7. Employee Advances/Salaries
+                SELECT 
+                    id, transaction_date as date, 'Payroll' as type, 'BANK' as mode,
+                    (SELECT full_name FROM employees WHERE id = employee_id) as details,
+                    'PAY-' || id as reference, from_account_id as account_id,
+                    0 as inflow, amount as outflow, 'public.employee_advances' as source_table
+                FROM employee_advances
+
+                UNION ALL
+
+                -- 8. Loan Transactions
+                SELECT 
+                    lt.id, lt.transaction_date as date, 'Loan' as type, lt.payment_mode as mode,
+                    l.party_name || ' (' || lt.transaction_type || ')' as details,
+                    lt.reference_no as reference, 
+                    COALESCE(
+                        (SELECT bank_account_id FROM bank_statement_entries WHERE id = lt.bank_statement_entry_id),
+                        (SELECT id FROM bank_accounts WHERE bank_name ILIKE '%axis%' LIMIT 1),
+                        2
+                    ) as account_id, 
+                    CASE 
+                        WHEN (l.loan_type = 'TAKEN' AND lt.transaction_type = 'DISBURSEMENT') OR (l.loan_type = 'GIVEN' AND lt.transaction_type = 'INSTALLMENT') THEN lt.amount 
+                        ELSE 0 
+                    END as inflow,
+                    CASE 
+                        WHEN (l.loan_type = 'GIVEN' AND lt.transaction_type = 'DISBURSEMENT') OR (l.loan_type = 'TAKEN' AND lt.transaction_type = 'INSTALLMENT') THEN lt.amount 
+                        ELSE 0 
+                    END as outflow,
+                    'public.loan_transactions' as source_table
+                FROM loan_transactions lt
+                JOIN loans l ON lt.loan_id = l.id
+
+                UNION ALL
+
+                -- 9. Asset Transactions (Linked via Journal)
+                SELECT 
+                    at.id, at.transaction_date as date, 'Asset Transaction' as type, 'BANK' as mode,
+                    at.remarks as details, 'AST-' || at.id as reference,
+                    CAST(COALESCE(jl.bank_account_id, (SELECT id FROM chart_of_accounts WHERE id = jl.account_id)) as bigint) as account_id,
+                    CAST(COALESCE(jl.credit, 0) as numeric) as inflow,
+                    CAST(COALESCE(jl.debit, 0) as numeric) as outflow,
+                    'public.asset_transactions' as source_table
+                FROM asset_transactions at
+                JOIN journal_lines jl ON at.journal_entry_id = jl.journal_entry_id
+                WHERE (jl.bank_account_id IS NOT NULL OR jl.account_id IN (1002, 1003, 1004, 1102, 1103))
+
+                UNION ALL
+
+                -- 10. Cheques 
+                -- (Entered -> Account 1004 'Cheques in Hand')
+                -- (Cleared -> Individual Bank Account)
+                SELECT 
+                    id, cheque_date as date, 'Cheque' as type, 'CHEQUE' as mode,
+                    (party_type || ': ' || party_id) as details,
+                    cheque_number as reference,
+                    CASE WHEN status = 'Cleared' THEN bank_account_id ELSE 1004 END as account_id,
+                    CASE WHEN type = 'Received' THEN amount ELSE 0 END as inflow,
+                    CASE WHEN type = 'Issued' THEN amount ELSE 0 END as outflow,
+                    'public.cheques' as source_table
+                FROM cheques
+            )
+            SELECT * FROM all_raw_transactions
+            WHERE date >= $1 AND date <= $2
+            AND (
+                account_id = ANY($3::bigint[]) -- Matches bank_account_id
+                OR (account_id = ANY($4::bigint[]) OR account_id = ANY(SELECT id FROM chart_of_accounts WHERE id = ANY($4::bigint[]))) -- Matches COA ID
+            )
+            ORDER BY date ASC, id ASC
+        `;
+
+        const bankArr = Array.from(combinedBankIds);
+        const coaArr = Array.from(combinedCoaIds);
+
+        // Selection Defaults: If everything is empty, show Liquid (Cash+Banks)
+        const finalBankArr = (bankArr.length === 0 && coaArr.length === 0) ? [1, 2, 3] : bankArr;
+        const finalCoaArr = coaArr.length > 0 ? coaArr : [-1]; // -1 to ensure no phantom matches
+
+        const result = await pool.query(query, [start, end, finalBankArr, finalCoaArr]);
+        res.json(result.rows);
+
+    } catch (err) {
+        console.error('Source Transaction API Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 2. Get Single Journal Entry with Lines
 router.get('/journal-entries/:id', async (req, res) => {
     const { id } = req.params;
