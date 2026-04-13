@@ -130,7 +130,7 @@ router.get('/source-transactions', async (req, res) => {
                 SELECT 
                     id, payment_date as date, 'Customer Payment' as type, payment_mode as mode,
                     (SELECT customer_name FROM customers WHERE id = customer_id) as details,
-                    transaction_ref as reference, bank_id as account_id,
+                    transaction_ref as reference, COALESCE(bank_id, 1) as account_id,
                     amount as inflow, 0 as outflow, 'public.customer_payments' as source_table
                 FROM customer_payments
                 WHERE is_active = true
