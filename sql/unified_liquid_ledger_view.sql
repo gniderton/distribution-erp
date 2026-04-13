@@ -1,34 +1,33 @@
--- 🛡️ Unified Liquid Ledger Forensic View (v4: Dynamic Connectivity)
--- DROP first to allow for schema changes (adding direct_bank_id)
+-- 🛡️ Unified Liquid Ledger Forensic View (v5: Full Accounting Stream)
+-- Includes "In-Transit" items like Issued/Received cheques
 DROP VIEW IF EXISTS view_unified_liquid_ledger;
 
 CREATE VIEW view_unified_liquid_ledger AS
--- 1. Customer Payments
+-- 1. Customer Payments (All Active)
 SELECT 
     cp.payment_date as trans_date,
     'CUSTOMER: ' || cp.id as party_name,
-    'Collection' as description,
+    'Collection (' || cp.payment_mode || ')' as description,
     cp.amount as amount_in,
     0 as amount_out,
     COALESCE(cp.bank_id, 1) as liquid_account_id,
-    cp.bank_id as direct_bank_id, -- [NEW] Explicit Identity
+    cp.bank_id as direct_bank_id,
     'customer_payments' as source_table,
     cp.id as source_id,
     cp.bank_statement_entry_id,
     je.id as journal_entry_id
 FROM customer_payments cp
 LEFT JOIN journal_entries je ON je.reference_id = cp.id AND je.reference_type = 'CUSTOMER_PAYMENT'
-WHERE cp.verification_status = 'Verified' 
+WHERE cp.is_active = true 
   AND cp.payment_number IS NOT NULL
-  AND cp.payment_mode != 'CHEQUE'
 
 UNION ALL
 
--- 2. Cheque Repository
+-- 2. Cheque Repository (Including Issued/Received)
 SELECT 
-    clearance_date as trans_date,
+    cheque_date as trans_date,
     party_type || ': ' || party_id as party_name,
-    'Cheque Cleared: ' || cheque_number as description,
+    'Cheque (' || status || '): ' || cheque_number as description,
     CASE WHEN type = 'INCOMING' THEN amount ELSE 0 END as amount_in,
     CASE WHEN type = 'OUTGOING' THEN amount ELSE 0 END as amount_out,
     bank_account_id as liquid_account_id,
@@ -38,15 +37,15 @@ SELECT
     bank_statement_entry_id,
     null as journal_entry_id
 FROM cheques
-WHERE status = 'Cleared'
+WHERE status != 'Cancelled'
 
 UNION ALL
 
--- 3. Vendor Payments
+-- 3. Vendor Payments (All Active)
 SELECT 
     vp.payment_date as trans_date,
     'VENDOR: ' || vp.vendor_id as party_name,
-    'Payment' as description,
+    'Payment (' || vp.payment_mode || ')' as description,
     0 as amount_in,
     vp.amount as amount_out,
     COALESCE(vp.bank_account_id, 1) as liquid_account_id,
@@ -58,7 +57,6 @@ SELECT
 FROM vendor_payments vp
 LEFT JOIN journal_entries je ON je.reference_id = vp.id AND je.reference_type = 'VENDOR_PAYMENT'
 WHERE vp.remarks NOT ILIKE '%Historical Payment Balance Import%'
-  AND vp.payment_mode != 'CHEQUE'
 
 UNION ALL
 
@@ -86,7 +84,7 @@ SELECT
     'EXPENSE' as party_name,
     description,
     0 as amount_in,
-    grand_total as amount_out,
+    grand_total as outflow,
     CASE WHEN bank_statement_entry_id IS NOT NULL THEN 1002 ELSE payment_source_id END as liquid_account_id,
     payment_source_id as direct_bank_id,
     'expenses' as source_table,
