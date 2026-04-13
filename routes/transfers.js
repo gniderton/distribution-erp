@@ -37,8 +37,8 @@ router.post('/', async (req, res) => {
         const fromAcc = fromAccRes.rows[0];
         const toAcc = toAccRes.rows[0];
 
-        // 2. Determine COA IDs (Axis: 4453, IDFC: 4454, Cash: 3, Default: 2)
-        const coa_map = { 1: 3, 2: 4453, 3: 4454 }; // bank_account_id -> coa_id
+        // 2. Determine COA IDs (Cash: 3, All Banks: 2)
+        const coa_map = { 1: 3, 2: 2, 3: 2 }; // bank_account_id -> coa_id
         const fromCOAId = coa_map[from_account_id] || 2;
         const toCOAId = coa_map[to_account_id] || 2;
 

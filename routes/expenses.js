@@ -116,8 +116,8 @@ router.post('/', async (req, res) => {
         // 1. Get Source Account ID (Cash/Bank/Cheque)
         let resolvedPaymentSourceId = pSourceId;
         let paymentCOAId = 2004; // Defaults to Cheques Issued if Cheque
-        const coa_map = { 1: 3, 2: 4453, 3: 4454 }; // bank_id -> coa_id
-
+        const coa_map = { 1: 3, 2: 2, 3: 2 }; // bank_id -> coa_id
+ 
         if (payment_mode !== 'Cheque') {
             let sourceRes;
             if (!isNaN(pSourceId)) {
