@@ -221,6 +221,8 @@ router.get('/source-transactions', async (req, res) => {
                     'public.loan_transactions' as source_table
                 FROM loan_transactions lt
                 JOIN loans l ON lt.loan_id = l.id
+                WHERE (lt.bank_statement_entry_id IS NOT NULL OR lt.transaction_date >= '2026-04-01')
+                AND lt.payment_mode != 'MIGRATION' -- Explicitly exclude migration entries
 
                 UNION ALL
 
