@@ -109,13 +109,15 @@ app.use('/api/finance/reconciliation', require('./routes/payment_reconciliation'
 const assetsRoutes = require('./routes/assets');
 app.use('/api/assets', assetsRoutes); // [NEW] Asset Management
 app.use('/api/finance/reconciliation/bank', require('./routes/bank_recon'));
-app.use('/api/finance/accounting', require('./routes/accounting'));
+// [NEW] Accounting & Financial Ledger Routes
+app.use('/api/accounting', require('./routes/accounting')); // Standardized path
+app.use('/api/finance/accounting', require('./routes/accounting')); // Backwards compatibility
 app.use('/api/finance/expenses', require('./routes/expenses')); // [NEW] Expenses Portal
 app.use('/api/finance/other-income', require('./routes/other_income')); // [NEW] Non-Operating Income
 app.use('/api/finance/cheques', require('./routes/cheques')); // [NEW] Cheque Management
 app.use('/api/finance/transfers', require('./routes/transfers')); // [NEW] Internal Transfers
 app.use('/api/finance/loans', require('./routes/loans')); // [NEW] Loan Management
-app.use('/api', require('./routes/accounting')); // [NEW] Alias for shorter paths like /api/journal-entries
+app.use('/api', require('./routes/accounting')); // Shorthand for /api/journal-entries
 app.use('/api/backups', require('./routes/backups')); 
 
 // [TEMP] Migration Endpoint to fix Combo Schema
