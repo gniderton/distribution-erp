@@ -169,7 +169,11 @@ router.get('/statement', async (req, res) => {
         } else if (group === 'CHEQUE') {
             filterSql = " AND (coa.code IN (1004, 2004)) ";
         } else if (group === 'BANKS') {
-            filterSql = " AND (coa.code IN (1001, 1002, 1102, 1103)) ";
+            // Banks only (excluding Inventory 1001)
+            filterSql = " AND (coa.code IN (1102, 1103, 1002)) ";
+        } else if (group === 'FINANCIAL') {
+            // Unified view: Cash + IDFC + Axis + Cheques (As requested by user)
+            filterSql = " AND (coa.code IN (1003, 1102, 1103, 1004, 2004)) ";
         } else if (bank_account_id) {
             // Bridge: Map bank_account_id to its specific COA ID
             const coa_map = { 1: 3, 2: 4453, 3: 4454 };
@@ -184,8 +188,8 @@ router.get('/statement', async (req, res) => {
             filterSql = ` AND (jl.account_id = ANY($${pIdx++}::bigint[])) `;
             params.push(ids);
         } else {
-            // Default: "Liquid Assets" (Cash + Banks + Cheques + New Forensic Banks)
-            filterSql = " AND (coa.code IN (1001, 1002, 1102, 1103, 1003, 1004, 2004)) ";
+            // Default: "Liquid Assets" (Cash + Banks + Cheques) - Removed 1001 (Inventory)
+            filterSql = " AND (coa.code IN (1002, 1102, 1103, 1003, 1004, 2004)) ";
         }
 
         // 1. Calculate Opening Balance (Everything before start_date)
