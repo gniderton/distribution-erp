@@ -1,6 +1,5 @@
--- 🛡️ Unified Liquid Ledger Forensic View (v10: Pure Cash Fortress)
--- Ensures 'Cash in Hand' ONLY contains physical 'CASH' transactions. 
--- UPI, ONLINE, and NEFT are forensically forced to the Bank Ledger (1002).
+-- 🛡️ Unified Liquid Ledger Forensic View (v11: Liquid Reality Engine)
+-- Removes Section 13 (Manual Adjustments) entirely to eliminate non-liquid accounting noise (Purchase Returns, COGS, etc.)
 DROP VIEW IF EXISTS view_unified_liquid_ledger;
 
 CREATE VIEW view_unified_liquid_ledger AS
@@ -11,7 +10,6 @@ SELECT
     'Collection (' || cp.payment_mode || ')' as description,
     cp.amount as amount_in,
     0 as amount_out,
-    -- 🛡️ FORTRESS LOGIC: Only 'CASH' stays in 1. Everything else (UPI/ONLINE/NEFT) is forced to Bank (1002).
     CASE 
         WHEN TRIM(cp.payment_mode) ILIKE 'CHEQUE' THEN 1004 
         WHEN TRIM(cp.payment_mode) ILIKE 'CASH' THEN 1
@@ -26,7 +24,6 @@ FROM customer_payments cp
 LEFT JOIN journal_entries je ON je.reference_id = cp.id AND je.reference_type = 'CUSTOMER_PAYMENT'
 WHERE cp.is_active = true 
   AND cp.payment_number IS NOT NULL
-  -- 🛡️ PURGE: Filter Cash view to only show CASH
   AND (
       (cp.payment_mode ILIKE 'CASH')
       OR (cp.payment_mode NOT ILIKE 'CHEQUE' AND cp.bank_id != 1)
@@ -59,7 +56,6 @@ SELECT
     'Payment (' || vp.payment_mode || ')' as description,
     0 as amount_in,
     vp.amount as amount_out,
-    -- 🛡️ FORTRESS LOGIC: Only 'CASH' stays in 1. Everything else (UPI/ONLINE/NEFT) is forced to Bank (1002).
     CASE 
         WHEN TRIM(vp.payment_mode) ILIKE 'CHEQUE' THEN 1004 
         WHEN TRIM(vp.payment_mode) ILIKE 'CASH' THEN 1
@@ -74,7 +70,6 @@ FROM vendor_payments vp
 LEFT JOIN journal_entries je ON je.reference_id = vp.id AND je.reference_type = 'VENDOR_PAYMENT'
 WHERE vp.remarks NOT ILIKE '%Historical Payment Balance Import%'
   AND vp.remarks NOT ILIKE '%Migration Entry for Axis Bank%'
-  -- 🛡️ PURGE: Filter Cash view to only show CASH
   AND (
       (vp.payment_mode ILIKE 'CASH')
       OR (vp.payment_mode NOT ILIKE 'CHEQUE' AND vp.bank_account_id != 1)
@@ -243,35 +238,7 @@ WHERE payment_date IS NOT NULL
 
 UNION ALL
 
--- 13. Manual Adjustments (Strict Liquid Move Filter)
-SELECT 
-    je.transaction_date as trans_date,
-    'JOURNAL ADJUSTMENT' as party_name,
-    je.description as description,
-    CASE WHEN (jl.debit > 0) THEN jl.debit ELSE 0 END as amount_in,
-    CASE WHEN (jl.credit > 0) THEN jl.credit ELSE 0 END as amount_out,
-    jl.account_id as liquid_account_id,
-    jl.bank_account_id as direct_bank_id,
-    'journal_entries' as source_table,
-    je.id as source_id,
-    null as bank_statement_entry_id,
-    je.id as journal_entry_id
-FROM journal_entries je
-JOIN journal_lines jl ON je.id = jl.journal_entry_id
-WHERE je.reference_type != 'SETTLEMENT'
-  AND jl.account_id IN (1, 1002, 1003, 1005, 1004)
-  AND je.description NOT ILIKE '%COGS%'
-  AND je.description NOT ILIKE '%GRN%'
-  AND je.description NOT ILIKE '%Inwarding%'
-  AND je.description NOT ILIKE '%Inventory%'
-  AND je.description NOT ILIKE '%Stock%'
-  AND je.description NOT ILIKE '%Purchase Adjustment%'
-  -- 🛡️ PROTECT CASH: UPI/Bank description items forced to 1002
-  AND (jl.account_id != 1 OR (je.description NOT ILIKE '%UPI%' AND je.description NOT ILIKE '%Bank%' AND je.description NOT ILIKE '%Online%'))
-
-UNION ALL
-
--- 14. Opening Balances
+-- 13. Opening Balances
 SELECT 
     as_of_date as trans_date,
     'OPENING BALANCE' as party_name,
