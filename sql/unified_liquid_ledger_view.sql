@@ -1,9 +1,9 @@
--- 🛡️ Unified Liquid Ledger Forensic View (v5: Full Accounting Stream)
--- Includes "In-Transit" items like Issued/Received cheques
+-- 🛡️ Unified Liquid Ledger Forensic View (v6: Strict Cash Segregation)
+-- Removes Cheques from Cash in Hand (handled by Cheque Repository)
 DROP VIEW IF EXISTS view_unified_liquid_ledger;
 
 CREATE VIEW view_unified_liquid_ledger AS
--- 1. Customer Payments (All Active)
+-- 1. Customer Payments (Cash/Online/NEFT Only - No Cheques here)
 SELECT 
     cp.payment_date as trans_date,
     'CUSTOMER: ' || cp.id as party_name,
@@ -20,10 +20,11 @@ FROM customer_payments cp
 LEFT JOIN journal_entries je ON je.reference_id = cp.id AND je.reference_type = 'CUSTOMER_PAYMENT'
 WHERE cp.is_active = true 
   AND cp.payment_number IS NOT NULL
+  AND cp.payment_mode != 'CHEQUE' -- 🛡️ PURGE: Cheques stay in Cheque Repository
 
 UNION ALL
 
--- 2. Cheque Repository (Including Issued/Received)
+-- 2. Cheque Repository (All Statuses except Cancelled)
 SELECT 
     cheque_date as trans_date,
     party_type || ': ' || party_id as party_name,
@@ -41,7 +42,7 @@ WHERE status != 'Cancelled'
 
 UNION ALL
 
--- 3. Vendor Payments (All Active)
+-- 3. Vendor Payments (Cash/Online/NEFT Only - No Cheques here)
 SELECT 
     vp.payment_date as trans_date,
     'VENDOR: ' || vp.vendor_id as party_name,
@@ -57,6 +58,7 @@ SELECT
 FROM vendor_payments vp
 LEFT JOIN journal_entries je ON je.reference_id = vp.id AND je.reference_type = 'VENDOR_PAYMENT'
 WHERE vp.remarks NOT ILIKE '%Historical Payment Balance Import%'
+  AND vp.payment_mode != 'CHEQUE' -- 🛡️ PURGE: Cheques stay in Cheque Repository
 
 UNION ALL
 
@@ -84,7 +86,7 @@ SELECT
     'EXPENSE' as party_name,
     description,
     0 as amount_in,
-    grand_total as outflow,
+    grand_total as amount_out,
     CASE WHEN bank_statement_entry_id IS NOT NULL THEN 1002 ELSE payment_source_id END as liquid_account_id,
     payment_source_id as direct_bank_id,
     'expenses' as source_table,
