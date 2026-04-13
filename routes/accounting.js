@@ -238,7 +238,7 @@ router.get('/unified-liquid-ledger', async (req, res) => {
             WHERE v.liquid_account_id = $1
         `;
         const openingParams = [targetAccountId];
-        if (bank_account_id) { openingQuery += ` AND bse.bank_account_id = $${openingParams.length + 1}`; openingParams.push(bank_account_id); }
+        if (bank_account_id) { openingQuery += ` AND (bse.bank_account_id = $${openingParams.length + 1} OR v.direct_bank_id = $${openingParams.length + 1})`; openingParams.push(bank_account_id); }
         if (start_date) { openingQuery += ` AND v.trans_date < $${openingParams.length + 1}`; openingParams.push(start_date); }
 
         const openingRes = await pool.query(openingQuery, openingParams);
@@ -249,7 +249,7 @@ router.get('/unified-liquid-ledger', async (req, res) => {
             WHERE v.liquid_account_id = $1
         `;
         const paramsMain = [targetAccountId];
-        if (bank_account_id) { queryMain += ` AND bse.bank_account_id = $2`; paramsMain.push(bank_account_id); }
+        if (bank_account_id) { queryMain += ` AND (bse.bank_account_id = $2 OR v.direct_bank_id = $2)`; paramsMain.push(bank_account_id); }
         if (start_date) { paramsMain.push(start_date); queryMain += ` AND v.trans_date >= $${paramsMain.length}`; }
         if (end_date) { paramsMain.push(end_date); queryMain += ` AND v.trans_date <= $${paramsMain.length}`; }
 
