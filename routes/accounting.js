@@ -115,45 +115,60 @@ router.get('/source-transactions', async (req, res) => {
  */
 router.get('/unified-liquid-ledger', async (req, res) => {
     try {
-        const { start_date, end_date, liquid_account_id } = req.query;
+        const { start_date, end_date, liquid_account_id, bank_account_id } = req.query;
 
-        if (!liquid_account_id) {
-            return res.status(400).json({ error: "liquid_account_id is required" });
+        if (!liquid_account_id && !bank_account_id) {
+            return res.status(400).json({ error: "liquid_account_id or bank_account_id is required" });
         }
 
-        // 1. Calculate Opening Balance (Sum before start_date)
+        // Logic: If bank_account_id is provided, we target the Unified Bank Account (1002) but filter specifically for bank links
+        const targetAccountId = bank_account_id ? 1002 : liquid_account_id;
+
+        // 1. Calculate Opening Balance
         let openingQuery = `
             SELECT COALESCE(SUM(amount_in - amount_out), 0) as opening_balance 
-            FROM view_unified_liquid_ledger 
-            WHERE liquid_account_id = $1
+            FROM view_unified_liquid_ledger v
+            LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id
+            WHERE v.liquid_account_id = $1
         `;
-        const openingParams = [liquid_account_id];
+        const openingParams = [targetAccountId];
+
+        if (bank_account_id) {
+            openingQuery += ` AND bse.bank_account_id = $${openingParams.length + 1}`;
+            openingParams.push(bank_account_id);
+        }
 
         if (start_date) {
+            openingQuery += ` AND v.trans_date < $${openingParams.length + 1}`;
             openingParams.push(start_date);
-            openingQuery += ` AND trans_date < $2`;
         }
 
         const openingRes = await pool.query(openingQuery, openingParams);
         const openingBalance = parseFloat(openingRes.rows[0].opening_balance);
 
-        // 2. Fetch Transactions within range
+        // 2. Fetch Transactions
         let query = `
-            SELECT * FROM view_unified_liquid_ledger 
-            WHERE liquid_account_id = $1
+            SELECT v.* FROM view_unified_liquid_ledger v
+            LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id
+            WHERE v.liquid_account_id = $1
         `;
-        const params = [liquid_account_id];
+        const params = [targetAccountId];
+
+        if (bank_account_id) {
+            query += ` AND bse.bank_account_id = $2`;
+            params.push(bank_account_id);
+        }
 
         if (start_date) {
             params.push(start_date);
-            query += ` AND trans_date >= $${params.length}`;
+            query += ` AND v.trans_date >= $${params.length}`;
         }
         if (end_date) {
             params.push(end_date);
-            query += ` AND trans_date <= $${params.length}`;
+            query += ` AND v.trans_date <= $${params.length}`;
         }
 
-        query += ` ORDER BY trans_date ASC, source_id ASC`;
+        query += ` ORDER BY v.trans_date ASC, v.source_id ASC`;
 
         const result = await pool.query(query, params);
 
