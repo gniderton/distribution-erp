@@ -48,15 +48,29 @@ router.get('/ledger-options', async (req, res) => {
     try {
         const banksRes = await pool.query('SELECT id, bank_name FROM bank_accounts WHERE is_active = true ORDER BY bank_name');
         
+        // Fetch specific COA accounts for Cash/Cheques/Banks
+        const coaRes = await pool.query(`
+            SELECT id, name, code 
+            FROM chart_of_accounts 
+            WHERE code IN (1003, 1004, 2004, 1102, 1103) 
+            ORDER BY (CASE WHEN code = 1003 THEN 1 WHEN code = 1102 THEN 2 WHEN code = 1103 THEN 3 ELSE 4 END)
+        `);
+
         const options = [
+            { label: "💳 Financial Unified (Cash+Banks+Chq)", value: "group:FINANCIAL" },
             { label: "💰 All Liquid Assets", value: "group:ALL" },
             { label: "💵 Cash in Hand", value: "group:CASH" },
             { label: "🏦 All Bank Accounts", value: "group:BANKS" },
             { label: "📝 All Cheques", value: "group:CHEQUE" }
         ];
 
-        banksRes.rows.forEach(b => {
-            options.push({ label: `🏦 ${b.bank_name}`, value: `bank:${b.id}` });
+        // Individual Accounts Section
+        coaRes.rows.forEach(c => {
+            let icon = '📖';
+            if (c.code === 1003) icon = '💵';
+            else if (c.code === 1102 || c.code === 1103) icon = '🏦';
+            else if (c.code === 1004 || c.code === 2004) icon = '📝';
+            options.push({ label: `${icon} ${c.name}`, value: `coa:${c.id}` });
         });
 
         res.json(options);
@@ -153,7 +167,7 @@ router.get('/general-ledger', async (req, res) => {
 // 4. Ledger Style Statement (Detailed with Opening/Running Balance)
 router.get('/statement', async (req, res) => {
     try {
-        const { start_date, end_date, bank_account_id, coa_id, group } = req.query;
+        const { start_date, end_date, bank_account_id, coa_id, group, selection } = req.query;
         
         if (!start_date || !end_date) {
             return res.status(400).json({ error: "start_date and end_date are required" });
@@ -163,33 +177,47 @@ router.get('/statement', async (req, res) => {
         let params = [];
         let pIdx = 1;
 
-        // --- Build Logic for Filters ---
-        if (group === 'CASH') {
-            filterSql = " AND (coa.code = 1003) ";
-        } else if (group === 'CHEQUE') {
-            filterSql = " AND (coa.code IN (1004, 2004)) ";
-        } else if (group === 'BANKS') {
-            // Banks only (excluding Inventory 1001)
-            filterSql = " AND (coa.code IN (1102, 1103, 1002)) ";
-        } else if (group === 'FINANCIAL') {
-            // Unified view: Cash + IDFC + Axis + Cheques (As requested by user)
-            filterSql = " AND (coa.code IN (1003, 1102, 1103, 1004, 2004)) ";
-        } else if (bank_account_id) {
-            // Bridge: Map bank_account_id to its specific COA ID
-            const coa_map = { 1: 3, 2: 4453, 3: 4454 };
-            const ids = bank_account_id.split(',').map(s => {
-                const bId = parseInt(s.trim());
-                return coa_map[bId] || bId;
-            }).filter(n => !isNaN(n));
+        // --- Consolidated Selection Logic ---
+        // Support for 'selection' param (comma separated list like group:CASH,coa:4453,bank:2)
+        const combinedCoaIds = new Set();
+        
+        const processValue = (val) => {
+            if (!val) return;
+            const parts = val.split(',');
+            parts.forEach(p => {
+                const item = p.trim();
+                if (item.startsWith('group:')) {
+                    const g = item.replace('group:', '');
+                    if (g === 'CASH') combinedCoaIds.add(3); // Cash
+                    else if (g === 'CHEQUE') { combinedCoaIds.add(1004); combinedCoaIds.add(2004); }
+                    else if (g === 'BANKS') { combinedCoaIds.add(4453); combinedCoaIds.add(4454); combinedCoaIds.add(2); } // Axis, IDFC, Bank Account
+                    else if (g === 'FINANCIAL' || g === 'ALL') { [3, 4453, 4454, 1004, 2004, 2].forEach(id => combinedCoaIds.add(id)); }
+                } else if (item.startsWith('coa:')) {
+                    combinedCoaIds.add(parseInt(item.replace('coa:', '')));
+                } else if (item.startsWith('bank:')) {
+                    const coa_map = { 1: 3, 2: 4453, 3: 4454 };
+                    const bId = parseInt(item.replace('bank:', ''));
+                    if (coa_map[bId]) combinedCoaIds.add(coa_map[bId]);
+                    else combinedCoaIds.add(bId);
+                } else {
+                    // Raw ID (backwards compatibility)
+                    const id = parseInt(item);
+                    if (!isNaN(id)) combinedCoaIds.add(id);
+                }
+            });
+        };
+
+        if (selection) processValue(selection);
+        if (group) processValue(`group:${group}`);
+        if (coa_id) processValue(coa_id.split(',').map(id => `coa:${id}`).join(','));
+        if (bank_account_id) processValue(bank_account_id.split(',').map(id => `bank:${id}`).join(','));
+
+        if (combinedCoaIds.size > 0) {
             filterSql = ` AND (jl.account_id = ANY($${pIdx++}::bigint[])) `;
-            params.push(ids);
-        } else if (coa_id) {
-            const ids = coa_id.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-            filterSql = ` AND (jl.account_id = ANY($${pIdx++}::bigint[])) `;
-            params.push(ids);
+            params.push(Array.from(combinedCoaIds));
         } else {
-            // Default: "Liquid Assets" (Cash + Banks + Cheques) - Removed 1001 (Inventory)
-            filterSql = " AND (coa.code IN (1002, 1102, 1103, 1003, 1004, 2004)) ";
+            // Default: All Liquid (Cash, Banks, Cheques)
+            filterSql = " AND (coa.code IN (1102, 1103, 1002, 1003, 1004, 2004)) ";
         }
 
         // 1. Calculate Opening Balance (Everything before start_date)
