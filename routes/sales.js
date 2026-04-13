@@ -1592,7 +1592,8 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         SELECT id, quantity_remaining, mrp, purchase_rate,
                                 distributor_rate, wholesale_rate, dealer_rate, retail_rate
                         FROM inventory_batches 
-                        WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true
+                        WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true 
+                        AND status = 'Good' AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
                         ORDER BY created_at ASC FOR UPDATE
                     `, [pid]);
 
@@ -2015,7 +2016,8 @@ router.post('/invoices/regenerate', async (req, res) => {
                 SELECT id, quantity_remaining, mrp, purchase_rate,
                         distributor_rate, wholesale_rate, dealer_rate, retail_rate
                 FROM inventory_batches 
-                WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true AND status = 'Good' AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
+                WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true 
+                AND status = 'Good' AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
                 ORDER BY created_at ASC FOR UPDATE
             `, [pid]);
 
