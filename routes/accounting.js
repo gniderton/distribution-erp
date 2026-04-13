@@ -270,10 +270,19 @@ router.get('/unified-liquid-ledger', async (req, res) => {
         const transactions = result.rows.map(row => {
             currentBalance += parseFloat(row.amount_in || 0);
             currentBalance -= parseFloat(row.amount_out || 0);
-            return { ...row, running_balance: currentBalance };
+            return { 
+                ...row, 
+                amount_in: parseFloat(row.amount_in || 0).toFixed(2),
+                amount_out: parseFloat(row.amount_out || 0).toFixed(2),
+                running_balance: parseFloat(currentBalance.toFixed(2)) 
+            };
         });
 
-        res.json({ opening_balance: openingBalance, closing_balance: currentBalance, transactions: transactions });
+        res.json({ 
+            opening_balance: parseFloat(openingBalance.toFixed(2)), 
+            closing_balance: parseFloat(currentBalance.toFixed(2)), 
+            transactions: transactions 
+        });
     } catch (err) {
         console.error('Unified Ledger Error:', err);
         res.status(500).json({ error: err.message });
