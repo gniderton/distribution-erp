@@ -54,9 +54,9 @@ router.get('/', async (req, res) => {
 // POST /api/vendors - Create new vendor
 router.post('/', async (req, res) => {
     let {
-        vendor_code, vendor_name, contact_person, contact_no, email, gst,
-        pan, address_line1, address_line2, state, district, pin_code,
-        bank_name, bank_account_no, bank_ifsc
+        vendor_code, vendor_name, contact_person = '', contact_no = '', email = '', gst = '',
+        pan = '', address_line1 = '', address_line2 = '', state = '', district = '', pin_code = '',
+        bank_name = '', bank_account_no = '', bank_ifsc = ''
     } = req.body;
 
     if (!vendor_name) {
@@ -126,11 +126,17 @@ router.post('/', async (req, res) => {
         res.status(201).json(vendorRes.rows[0]);
     } catch (err) {
         await pool.query('ROLLBACK');
-        console.error(err);
+        console.error("Vendor Creation Error Detail:", err.message, err.stack);
         if (err.code === '23505') {
-            return res.status(409).json({ error: 'Vendor Code already exists' });
+            return res.status(409).json({ error: 'Vendor Code or GST already exists', detail: err.detail });
         }
-        res.status(500).json({ error: 'Database error creating vendor' });
+        res.status(500).json({ 
+            error: 'Database error creating vendor', 
+            message: err.message,
+            detail: err.detail,
+            hint: err.hint,
+            code: err.code
+        });
     }
 });
 // End of POST logic
