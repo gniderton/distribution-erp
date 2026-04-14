@@ -257,20 +257,18 @@ router.get('/unified-liquid-ledger', async (req, res) => {
         const anchorRes = await pool.query(anchorQuery, anchorParams);
         const seedBalance = parseFloat(anchorRes.rows[0].seed || 0);
 
-        // 🛡️ STAGE 2: THE HISTORICAL INTEGRAL (Sum of movements before start_date)
-        let openingQuery = `
-            SELECT COALESCE(SUM(amount_in - amount_out), 0) as integral 
-            FROM view_unified_liquid_ledger v LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id
-            WHERE ${accountFilterSql}
-        `;
-        const openingParams = [...filterParams];
-        if (start_date) { 
-            openingQuery += ` AND v.trans_date < $${openingParams.length + 1}`; 
-            openingParams.push(start_date); 
+        // 🛡️ STAGE 2: THE HISTORICAL INTEGRAL (Sum of movements strictly BEFORE start_date)
+        let historicalIntegral = 0;
+        if (start_date) {
+            let openingQuery = `
+                SELECT COALESCE(SUM(amount_in - amount_out), 0) as integral 
+                FROM view_unified_liquid_ledger v LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id
+                WHERE ${accountFilterSql} AND v.trans_date::DATE < $${filterParams.length + 1}::DATE
+            `;
+            const openingParams = [...filterParams, start_date];
+            const openingRes = await pool.query(openingQuery, openingParams);
+            historicalIntegral = parseFloat(openingRes.rows[0].integral);
         }
-
-        const openingRes = await pool.query(openingQuery, openingParams);
-        const historicalIntegral = parseFloat(openingRes.rows[0].integral);
         
         // 🛡️ FINAL RESULT: Anchor + Integral
         const openingBalance = seedBalance + historicalIntegral;
@@ -280,8 +278,14 @@ router.get('/unified-liquid-ledger', async (req, res) => {
             WHERE ${accountFilterSql}
         `;
         const paramsMain = [...filterParams];
-        if (start_date) { paramsMain.push(start_date); queryMain += ` AND v.trans_date >= $${paramsMain.length}`; }
-        if (end_date) { paramsMain.push(end_date); queryMain += ` AND v.trans_date <= $${paramsMain.length}`; }
+        if (start_date) { 
+            paramsMain.push(start_date); 
+            queryMain += ` AND v.trans_date::DATE >= $${paramsMain.length}::DATE`; 
+        }
+        if (end_date) { 
+            paramsMain.push(end_date); 
+            queryMain += ` AND v.trans_date::DATE <= $${paramsMain.length}::DATE`; 
+        }
 
         queryMain += ` ORDER BY v.trans_date ASC, v.source_id ASC`;
         const result = await pool.query(queryMain, paramsMain);
