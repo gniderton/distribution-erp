@@ -620,7 +620,7 @@ router.post('/orders/:id/dispatch', async (req, res) => {
 
                 batchGroups[groupKey].qty += take;
                 batchGroups[groupKey].gross += (take * unitRate);
-                batchGroups[groupKey].cogs += (take * Number(batch.purchase_rate || 0));
+                batchGroups[groupKey].cogs += (take * Number(batch.net_purchase_rate || batch.purchase_rate || 0));
 
                 fulfilledTotal += take;
                 qtyToFulfill -= take;
