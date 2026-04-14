@@ -1027,10 +1027,22 @@ router.post('/verify/settle', async (req, res) => {
                 const brandOverride = await client.query(`SELECT ch.price_column FROM customer_brand_pricing cbp JOIN channels ch ON cbp.channel_id = ch.id JOIN products p ON p.brand_id = cbp.brand_id WHERE cbp.customer_id = $1 AND p.id = $2`, [ret.customer_id, ret.product_id]);
                 const priceCol = brandOverride.rows[0]?.price_column || defaultPriceCol;
 
-                // A. Target the specific Batch Rate
-                let rateInfo = await client.query(`SELECT b.${priceCol} as rate, t.tax_percentage FROM inventory_batches b JOIN products p ON b.product_id = p.id LEFT JOIN taxes t ON p.tax_id = t.id WHERE b.id = $1`, [ret.batch_id]);
+                // A. Target the specific Batch Rate (Net Realized Cost Fallback)
+                let rateInfo = await client.query(`
+                    SELECT b.${priceCol} as rate, t.tax_percentage, b.net_purchase_rate, b.purchase_rate
+                    FROM inventory_batches b 
+                    JOIN products p ON b.product_id = p.id 
+                    LEFT JOIN taxes t ON p.tax_id = t.id 
+                    WHERE b.id = $1
+                `, [ret.batch_id]);
+                
                 if (!rateInfo.rows.length) {
-                    rateInfo = await client.query(`SELECT p.${priceCol} as rate, t.tax_percentage FROM products p LEFT JOIN taxes t ON p.tax_id = t.id WHERE p.id = $1`, [ret.product_id]);
+                    rateInfo = await client.query(`
+                        SELECT p.${priceCol} as rate, t.tax_percentage 
+                        FROM products p 
+                        LEFT JOIN taxes t ON p.tax_id = t.id 
+                        WHERE p.id = $1
+                    `, [ret.product_id]);
                 }
                 const baseRate = Number(rateInfo.rows[0]?.rate || 0);
                 const taxPct = Number(rateInfo.rows[0]?.tax_percentage || 0);
@@ -1110,9 +1122,9 @@ router.post('/verify/settle', async (req, res) => {
                         const existing = await client.query("SELECT id FROM inventory_batches WHERE product_id = $1 AND batch_code = $2 AND status = $3", [orig.product_id, orig.batch_code, targetStatus]);
                         if (existing.rows.length) finalBatchId = existing.rows[0].id;
                         else {
-                            const clone = await client.query(`INSERT INTO inventory_batches (product_id, grn_id, batch_code, mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate, quantity_initial, quantity_remaining, expiry_date, is_active, status)
-                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, 0, $10, true, $11) RETURNING id`,
-                                [orig.product_id, orig.grn_id, orig.batch_code, orig.mrp, orig.purchase_rate, orig.distributor_rate, orig.wholesale_rate, orig.dealer_rate, orig.retail_rate, orig.expiry_date, targetStatus]);
+                            const clone = await client.query(`INSERT INTO inventory_batches (product_id, grn_id, batch_code, mrp, purchase_rate, net_purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate, quantity_initial, quantity_remaining, expiry_date, is_active, status)
+                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, 0, $11, true, $12) RETURNING id`,
+                                [orig.product_id, orig.grn_id, orig.batch_code, orig.mrp, orig.purchase_rate, orig.net_purchase_rate, orig.distributor_rate, orig.wholesale_rate, orig.dealer_rate, orig.retail_rate, orig.expiry_date, targetStatus]);
                             finalBatchId = clone.rows[0].id;
                         }
                     }

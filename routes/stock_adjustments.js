@@ -142,8 +142,9 @@ router.post('/', async (req, res) => {
                     const available = Number(batch.quantity_remaining);
                     const deduct = Math.min(available, remainingToDeduct);
 
-                    // COST CALCULATION
-                    const cost = Number(batch.purchase_rate) * deduct;
+                    // COST CALCULATION (Net Realized Cost Fallback)
+                    const costRate = Number(batch.net_purchase_rate || batch.purchase_rate || 0);
+                    const cost = costRate * deduct;
 
                     // 1. Reduce Source Batch
                     await client.query(`
@@ -160,11 +161,12 @@ router.post('/', async (req, res) => {
 
                         await client.query(`
                             INSERT INTO inventory_batches 
-                            (product_id, batch_code, quantity_initial, quantity_remaining, purchase_rate, is_active, status, expiry_date, grn_id)
-                            VALUES ($1, $2, $3, $3, $4, true, $5, $6, $7)
+                            (product_id, batch_code, quantity_initial, quantity_remaining, purchase_rate, net_purchase_rate, is_active, status, expiry_date, grn_id)
+                            VALUES ($1, $2, $3, $3, $4, $5, true, $6, $7, $8)
                         `, [
                             product_id, newBatchCode, deduct,
                             batch.purchase_rate,
+                            batch.net_purchase_rate,
                             reason,
                             batch.expiry_date,
                             batch.grn_id

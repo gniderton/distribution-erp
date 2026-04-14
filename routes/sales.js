@@ -1121,8 +1121,14 @@ router.post('/returns/:id/apply', async (req, res) => {
         let totalCOGS_Reversal = 0;
         for (const line of linesRes.rows) {
             if (line.return_to_stock) {
+                const batchRes = await client.query('SELECT net_purchase_rate, purchase_rate FROM inventory_batches WHERE id = $1', [line.batch_id || -1]);
                 const pRateRes = await client.query('SELECT purchase_rate FROM products WHERE id = $1', [line.product_id]);
-                totalCOGS_Reversal += (Number(pRateRes.rows[0]?.purchase_rate) || 0) * Number(line.qty);
+                
+                const batch = batchRes.rows[0];
+                const productRate = Number(pRateRes.rows[0]?.purchase_rate || 0);
+                const effectiveRate = batch ? Number(batch.net_purchase_rate || batch.purchase_rate || productRate) : productRate;
+                
+                totalCOGS_Reversal += effectiveRate * Number(line.qty);
             }
         }
 
@@ -1316,7 +1322,8 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                         `, [batchId, pid, -take, invId, `Bulk Dispatch for ${invNumber}`]);
 
                         batchGroups[groupKey].qty += take;
-                        batchGroups[groupKey].cogs += (Number(batch.purchase_rate) || 0) * take;
+                        const cogsRate = Number(batch.net_purchase_rate || batch.purchase_rate || 0);
+                        batchGroups[groupKey].cogs += (cogsRate * take);
                         qtyToFulfill -= take;
                     }
 
@@ -1627,7 +1634,8 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                         batchGroups[groupKey].qty += take;
                         batchGroups[groupKey].gross += (take * batchRate);
-                        batchGroups[groupKey].cogs += (Number(batch.purchase_rate) || 0) * take;
+                        const cogsRate = Number(batch.net_purchase_rate || batch.purchase_rate || 0);
+                        batchGroups[groupKey].cogs += (cogsRate * take);
                         qtyToFulfill -= take;
                     }
 
@@ -1676,7 +1684,9 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                         batchGroups[groupKey].qty += take;
                         batchGroups[groupKey].gross += (take * transitRate);
-                        batchGroups[groupKey].cogs += (Number(pMaster.rows[0].purchase_rate) || 0) * take;
+                        // For transit, we might not have a batch yet, so fallback to product master
+                        const transitCogs = Number(pMaster.rows[0].purchase_rate || 0); 
+                        batchGroups[groupKey].cogs += (transitCogs * take);
                         qtyToFulfill -= take;
                     }
 
@@ -2050,7 +2060,8 @@ router.post('/invoices/regenerate', async (req, res) => {
 
                 batchGroups[groupKey].qty += take;
                 batchGroups[groupKey].gross += (take * batchRate);
-                batchGroups[groupKey].cogs += (Number(batch.purchase_rate) || 0) * take;
+                const cogsRate = Number(batch.net_purchase_rate || batch.purchase_rate || 0);
+                batchGroups[groupKey].cogs += (cogsRate * take);
                 qtyToFulfill -= take;
             }
 
