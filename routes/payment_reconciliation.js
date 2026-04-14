@@ -409,46 +409,11 @@ router.post('/bulk-update', async (req, res) => {
                         [pay.payment_date || new Date(), `Customer Payment: ${pay.payment_number}`, 'CUST_PAY', pay.id, JSON.stringify(ledgerLines)]);
                 }
 
-                // REJECTION LOGIC: Reverse Allocations and Post GL Reversal
+                // REJECTION LOGIC: Simply purge pending allocations.
+                // We do NOT update invoices or create journals because Pending payments haven't touched them yet.
                 if (itemAction === 'Rejected') {
-                    // 1. Reverse allocations
-                    const allocRes = await client.query(`
-                        SELECT invoice_id, amount 
-                        FROM customer_payment_allocations 
-                        WHERE payment_id = $1
-                    `, [pay.id]);
-
-                    for (const alloc of allocRes.rows) {
-                        await client.query(`
-                            UPDATE sales_invoices 
-                            SET amount_paid = COALESCE(amount_paid, 0) - $1,
-                                paid_amount = COALESCE(paid_amount, 0) - $1,
-                                    status = CASE 
-                                        WHEN (COALESCE(amount_paid, 0) - $1) <= 1 THEN 'Unpaid'
-                                        WHEN (grand_total - (COALESCE(amount_paid, 0) - $1)) <= 1 THEN 'Paid'
-                                        ELSE 'Partially Paid'
-                                    END
-                            WHERE id = $2
-                        `, [alloc.amount, alloc.invoice_id]);
-                    }
-
-                    // Delete allocations
                     await client.query(`DELETE FROM customer_payment_allocations WHERE payment_id = $1`, [pay.id]);
-
-                    // 2. Post GL Reversal
-                    const acc_ar = 1101;
-                    const acc_bank = 1002;
-                    const acc_cash = 1003;
-                    const targetAcc = (pay.payment_mode === 'Cash') ? acc_cash : acc_bank;
-
-                    // Reversal: Dr AR, Cr Cash/Bank
-                    const ledgerLines = [
-                        { code: acc_ar, debit: Number(pay.amount), credit: 0 },
-                        { code: targetAcc, debit: 0, credit: Number(pay.amount) }
-                    ];
-
-                    await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
-                        [new Date(), `Rejection: ${pay.payment_number}`, 'PAY_REJECT', pay.id, JSON.stringify(ledgerLines)]);
+                    console.log(`[Rejection] Payment ${pay.id} rejected. Pending allocations purged. No GL impact.`);
                 }
 
             } else if (item.type === 'expense') {
