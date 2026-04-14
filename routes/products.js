@@ -58,19 +58,19 @@ router.get('/', async (req, res) => {
 
         -- Valuation (FIFO/Batch-Specific)
         COALESCE((
-            SELECT SUM(ib.quantity_remaining * ib.purchase_rate) 
+            SELECT SUM(ib.quantity_remaining * COALESCE(ib.net_purchase_rate, ib.purchase_rate, 0)) 
             FROM inventory_batches ib 
             WHERE ib.product_id = p.id AND ib.quantity_remaining > 0 AND ib.status = 'Good'
         ), 0) as stock_value_cost,
 
         COALESCE((
-            SELECT SUM(ib.quantity_remaining * ib.purchase_rate * (1 + (COALESCE(t.tax_percentage, 0) / 100.0))) 
+            SELECT SUM(ib.quantity_remaining * COALESCE(ib.net_purchase_rate, ib.purchase_rate, 0) * (1 + (COALESCE(t.tax_percentage, 0) / 100.0))) 
             FROM inventory_batches ib 
             WHERE ib.product_id = p.id AND ib.quantity_remaining > 0 AND ib.status = 'Good'
         ), 0) as stock_value_gross,
 
         COALESCE((
-            SELECT SUM(ib.quantity_initial * ib.purchase_rate) 
+            SELECT SUM(ib.quantity_initial * COALESCE(ib.net_purchase_rate, ib.purchase_rate, 0)) 
             FROM inventory_batches ib 
             WHERE ib.product_id = p.id
         ), 0) as stock_value_total_bought,
@@ -86,7 +86,7 @@ router.get('/', async (req, res) => {
 
         -- 4. Exact COGS for Sold Items
         COALESCE((
-            SELECT SUM(ABS(st.quantity_change) * ib.purchase_rate) 
+            SELECT SUM(ABS(st.quantity_change) * COALESCE(ib.net_purchase_rate, ib.purchase_rate, 0)) 
             FROM stock_traceability st 
             JOIN inventory_batches ib ON ib.id = st.batch_id 
             WHERE st.product_id = p.id AND st.reference_type = 'Sales Invoice' AND st.transaction_type = 'OUT'
@@ -96,7 +96,7 @@ router.get('/', async (req, res) => {
         (
             COALESCE((SELECT SUM(taxable_amount) FROM sales_invoice_lines WHERE product_id = p.id), 0) - 
             COALESCE((
-                SELECT SUM(ABS(st.quantity_change) * ib.purchase_rate) 
+                SELECT SUM(ABS(st.quantity_change) * COALESCE(ib.net_purchase_rate, ib.purchase_rate, 0)) 
                 FROM stock_traceability st 
                 JOIN inventory_batches ib ON ib.id = st.batch_id 
                 WHERE st.product_id = p.id AND st.reference_type = 'Sales Invoice' AND st.transaction_type = 'OUT'
@@ -109,7 +109,7 @@ router.get('/', async (req, res) => {
             THEN ROUND(( 
                 (
                     COALESCE((SELECT SUM(taxable_amount) FROM sales_invoice_lines WHERE product_id = p.id), 0) - 
-                    COALESCE((SELECT SUM(ABS(st.quantity_change) * ib.purchase_rate) FROM stock_traceability st JOIN inventory_batches ib ON ib.id = st.batch_id WHERE st.product_id = p.id AND st.reference_type = 'Sales Invoice' AND st.transaction_type = 'OUT'), 0)
+                    COALESCE((SELECT SUM(ABS(st.quantity_change) * COALESCE(ib.net_purchase_rate, ib.purchase_rate, 0)) FROM stock_traceability st JOIN inventory_batches ib ON ib.id = st.batch_id WHERE st.product_id = p.id AND st.reference_type = 'Sales Invoice' AND st.transaction_type = 'OUT'), 0)
                 ) / COALESCE((SELECT SUM(taxable_amount) FROM sales_invoice_lines WHERE product_id = p.id), 1) 
             ) * 100, 2) 
             ELSE 0 
