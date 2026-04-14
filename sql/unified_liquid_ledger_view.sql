@@ -1,5 +1,6 @@
--- 🛡️ Unified Liquid Ledger Forensic View (v12: Bank-Aware Balance Engine)
--- Implements Keyword Isolation to prevent Axis balances from leaking into IDFC (and vice versa).
+-- 🛡️ Unified Liquid Ledger Forensic View (v13: Stream-Only Engine)
+-- REMOVED Section 13 (Opening Balances) to prevent double-counting in the ledger.
+-- The API now handles the Migration Anchor mathematically.
 DROP VIEW IF EXISTS view_unified_liquid_ledger;
 
 CREATE VIEW view_unified_liquid_ledger AS
@@ -234,31 +235,4 @@ SELECT
     bank_statement_entry_id,
     journal_entry_id
 FROM employee_salaries
-WHERE payment_date IS NOT NULL
-
-UNION ALL
-
--- 13. Opening Balances (Bank-Aware Keyword Routing)
-SELECT 
-    as_of_date as trans_date,
-    'OPENING BALANCE' as party_name,
-    description,
-    amount as amount_in,
-    0 as amount_out,
-    CASE 
-        WHEN description ILIKE '%Bank%' OR description ILIKE '%Cheque%' OR description ILIKE '%UPI%' THEN 1002 
-        ELSE account_id 
-    END as liquid_account_id,
-    -- 🛡️ BANK-AWARE ROUTING: Explicitly separate IDFC from AXIS using keywords
-    CASE 
-        WHEN description ILIKE '%Axis%' THEN 2
-        WHEN description ILIKE '%IDFC%' THEN 3
-        ELSE account_id 
-    END as direct_bank_id,
-    'opening_balances' as source_table,
-    id as source_id,
-    null as bank_statement_entry_id,
-    journal_entry_id
-FROM opening_balances
-WHERE is_active = true
-  AND (account_id != 1 OR (description NOT ILIKE '%Bank%' AND description NOT ILIKE '%Cheque%' AND description NOT ILIKE '%UPI%'));
+WHERE payment_date IS NOT NULL;

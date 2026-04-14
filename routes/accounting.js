@@ -244,16 +244,36 @@ router.get('/unified-liquid-ledger', async (req, res) => {
             filterParams.push(targetAccountId);
         }
 
+        // 🛡️ STAGE 1: THE MIGRATION ANCHOR (Seed)
+        let anchorQuery = "";
+        let anchorParams = [];
+        if (bank_account_id) {
+            anchorQuery = `SELECT SUM(amount) as seed FROM opening_balances WHERE account_id = $1 AND is_active = true`;
+            anchorParams = [bank_account_id];
+        } else {
+            anchorQuery = `SELECT SUM(amount) as seed FROM opening_balances WHERE account_id = $1 AND is_active = true`;
+            anchorParams = [targetAccountId];
+        }
+        const anchorRes = await pool.query(anchorQuery, anchorParams);
+        const seedBalance = parseFloat(anchorRes.rows[0].seed || 0);
+
+        // 🛡️ STAGE 2: THE HISTORICAL INTEGRAL (Sum of movements before start_date)
         let openingQuery = `
-            SELECT COALESCE(SUM(amount_in - amount_out), 0) as opening_balance 
+            SELECT COALESCE(SUM(amount_in - amount_out), 0) as integral 
             FROM view_unified_liquid_ledger v LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id
             WHERE ${accountFilterSql}
         `;
         const openingParams = [...filterParams];
-        if (start_date) { openingQuery += ` AND v.trans_date < $${openingParams.length + 1}`; openingParams.push(start_date); }
+        if (start_date) { 
+            openingQuery += ` AND v.trans_date < $${openingParams.length + 1}`; 
+            openingParams.push(start_date); 
+        }
 
         const openingRes = await pool.query(openingQuery, openingParams);
-        const openingBalance = parseFloat(openingRes.rows[0].opening_balance);
+        const historicalIntegral = parseFloat(openingRes.rows[0].integral);
+        
+        // 🛡️ FINAL RESULT: Anchor + Integral
+        const openingBalance = seedBalance + historicalIntegral;
 
         let queryMain = `
             SELECT v.* FROM view_unified_liquid_ledger v LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id
