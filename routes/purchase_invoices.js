@@ -190,7 +190,16 @@ router.post('/', async (req, res) => {
         // Call the RPC we created
         const result = await pool.query(
             `SELECT create_purchase_invoice(
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+                $1::bigint,
+                $2::bigint,
+                $3::text,
+                $4::date,
+                $5::date,
+                $6::numeric,
+                $7::numeric,
+                $8::numeric,
+                $9::jsonb,
+                $10::bigint
             ) as response`,
             [
                 vendor_id,
