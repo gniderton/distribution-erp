@@ -52,6 +52,18 @@ router.get('/unified', async (req, res) => {
                 si.status as invoice_status,
                 si.delivery_status,
                 
+                -- Delivery Trip Information
+                (SELECT dt.trip_number 
+                 FROM trip_invoices ti 
+                 JOIN delivery_trips dt ON dt.id = ti.trip_id 
+                 WHERE ti.invoice_id = si.id 
+                 ORDER BY ti.delivery_time DESC NULLS LAST, ti.id DESC LIMIT 1) as delivered_in_trip,
+                
+                (SELECT ti.trip_id 
+                 FROM trip_invoices ti 
+                 WHERE ti.invoice_id = si.id 
+                 ORDER BY ti.delivery_time DESC NULLS LAST, ti.id DESC LIMIT 1) as trip_id,
+                
                 -- Customer Geographics
                 c.gstin,
                 r.route_name as route,
@@ -220,6 +232,15 @@ router.get('/unified/:id', async (req, res) => {
                 (SELECT SUM(discount_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_discount_amount,
                 si.status as invoice_status,
                 si.delivery_status,
+                (SELECT dt.trip_number 
+                 FROM trip_invoices ti 
+                 JOIN delivery_trips dt ON dt.id = ti.trip_id 
+                 WHERE ti.invoice_id = si.id 
+                 ORDER BY ti.delivery_time DESC NULLS LAST, ti.id DESC LIMIT 1) as delivered_in_trip,
+                (SELECT ti.trip_id 
+                 FROM trip_invoices ti 
+                 WHERE ti.invoice_id = si.id 
+                 ORDER BY ti.delivery_time DESC NULLS LAST, ti.id DESC LIMIT 1) as trip_id,
                 COALESCE((SELECT delivery_time::DATE FROM trip_invoices WHERE invoice_id = si.id AND delivery_time IS NOT NULL ORDER BY delivery_time DESC LIMIT 1), so.delivery_date) as actual_delivery_date,
                 
                 -- Order lines

@@ -466,6 +466,50 @@ router.get('/trips/:id/manifest', async (req, res) => {
     }
 });
 
+// 6c. Get Invoice Delivery Cycle (Forensic History)
+// "Who took it, when, and what happened?"
+router.get('/invoices/:id/delivery-cycle', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(`
+            SELECT 
+                ti.delivery_status as attempt_status,
+                ti.delivery_time as attempt_time,
+                ti.failure_reason,
+                ti.notes as attempt_notes,
+                dt.trip_number,
+                dt.status as trip_status,
+                e.full_name as driver_name,
+                dt.vehicle_number,
+                dt.start_time as trip_start,
+                dt.end_time as trip_end
+            FROM trip_invoices ti
+            JOIN delivery_trips dt ON ti.trip_id = dt.id
+            LEFT JOIN employees e ON dt.driver_id = e.id
+            WHERE ti.invoice_id = $1
+            ORDER BY ti.id ASC -- Chronological order of attempts
+        `, [id]);
+
+        if (result.rows.length === 0) {
+            // Check if invoice exists but hasn't been assigned to any trip
+            const invCheck = await pool.query('SELECT id FROM sales_invoices WHERE id = $1', [id]);
+            if (invCheck.rows.length === 0) {
+                return res.status(404).json({ error: 'Invoice not found' });
+            }
+            return res.json({ message: 'No delivery attempts found for this invoice', timeline: [] });
+        }
+
+        res.json({
+            invoice_id: id,
+            attempt_count: result.rows.length,
+            timeline: result.rows
+        });
+    } catch (err) {
+        console.error('Delivery Cycle API Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 6b. Get Manifest (Web Dashboard - with Info)
 router.get('/trips/:id/manifest-web', async (req, res) => {
     try {
