@@ -713,4 +713,93 @@ router.post('/:id/convert', async (req, res) => {
     }
 });
 
+// @route   POST /api/debit-notes/:id/reverse
+// @desc    Forensic Reversal of a Debit Note (Undo Financial & Stock impact)
+router.post('/:id/reverse', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const { reversed_by_id } = req.body;
+
+        if (!reversed_by_id) {
+            return res.status(400).json({ error: 'Reversed By ID is required' });
+        }
+
+        await client.query('BEGIN');
+
+        // 1. Fetch & Validate Debit Note
+        const dnRes = await client.query(`SELECT * FROM debit_notes WHERE id = $1 FOR UPDATE`, [id]);
+        if (dnRes.rows.length === 0) return res.status(404).json({ error: 'Debit Note not found' });
+        const dn = dnRes.rows[0];
+
+        if (dn.status === 'Reversed' || dn.status === 'Cancelled') {
+            return res.status(400).json({ error: 'Debit Note is already reversed or cancelled' });
+        }
+
+        // 2. REVERSE ALLOCATIONS
+        // This makes the bills look "Unpaid" again
+        await client.query(`DELETE FROM debit_note_allocations WHERE debit_note_id = $1`, [id]);
+
+        // 3. REVERSE STOCK (If itemized)
+        const linesRes = await client.query(`SELECT * FROM debit_note_lines WHERE debit_note_id = $1`, [id]);
+        for (const line of linesRes.rows) {
+            if (line.qty > 0) {
+                // Restoration Logic: Find the batch and put stock back
+                // We use batch_number and product_id to identify the target batch
+                // If multiple batches exist with same code, we target the one linked to a GRN for better traceability
+                await client.query(`
+                    UPDATE inventory_batches 
+                    SET quantity_remaining = quantity_remaining + $1 
+                    WHERE batch_code = $2 AND product_id = $3
+                    AND (grn_id IS NOT NULL OR is_active = true)
+                `, [line.qty, line.batch_number, line.product_id]);
+            }
+        }
+
+        // 4. REVERSE ACCOUNTING (Ledger)
+        // Find existing journal entry
+        const journalRes = await client.query(`SELECT * FROM journal_entries WHERE reference_id = $1 AND reference_type = 'DN'`, [id]);
+        if (journalRes.rows.length > 0) {
+            const originalJournal = journalRes.rows[0];
+            
+            // Generate Reversal description
+            const revDesc = `REVERSAL: ${originalJournal.description}`;
+            
+            // Flip Debits and Credits
+            const originalLines = originalJournal.ledger_lines || [];
+            const reversedLines = originalLines.map(line => ({
+                code: line.code,
+                debit: line.credit || 0,
+                credit: line.debit || 0
+            }));
+
+            // Create Reversing Journal Entry
+            await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`, [
+                new Date(),
+                revDesc,
+                'DN_REV',
+                id,
+                JSON.stringify(reversedLines)
+            ]);
+        }
+
+        // 5. UPDATE STATUS
+        await client.query(`
+            UPDATE debit_notes 
+            SET status = 'Reversed', reversed_at = NOW(), reversed_by_id = $1 
+            WHERE id = $2
+        `, [reversed_by_id, id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Debit Note Reversed Successfully. Financial and Stock impacts rolled back.' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Debit Note Reversal Error:', err);
+        res.status(500).json({ error: 'Reversal failed: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
