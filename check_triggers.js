@@ -2,21 +2,35 @@ const { pool } = require('./config/db');
 
 async function checkTriggers() {
     try {
-        console.log('--- Triggers on sales_invoice_lines ---');
-        const res = await pool.query(`
-            SELECT event_object_table, trigger_name, event_manipulation, 
-                   action_statement, action_timing
-            FROM information_schema.triggers
-            WHERE event_object_table = 'sales_invoice_lines'
+        // 1. Check live function body for 'invoice_date'
+        const fnRes = await pool.query(`
+            SELECT pg_get_functiondef(p.oid) as def
+            FROM pg_proc p
+            JOIN pg_namespace n ON p.pronamespace = n.oid
+            WHERE n.nspname = 'public' AND p.proname = 'create_purchase_invoice'
         `);
-        console.table(res.rows);
+        
+        const body = fnRes.rows[0]?.def || '';
+        console.log("=== LIVE FUNCTION BODY (contains 'invoice_date'?) ===");
+        console.log(body.includes('invoice_date') ? "❌ YES - old column still referenced!" : "✅ NO - clean");
 
-        console.log('\n--- Functions used in triggers ---');
-        // This is a bit more complex, let's just see if any exist first
+        // 2. Check triggers on purchase_invoice_headers
+        const trgRes = await pool.query(`
+            SELECT trigger_name, event_manipulation, action_statement
+            FROM information_schema.triggers
+            WHERE event_object_table = 'purchase_invoice_headers'
+        `);
+        console.log("\n=== TRIGGERS ON purchase_invoice_headers ===");
+        if (trgRes.rows.length === 0) {
+            console.log("No triggers found.");
+        } else {
+            console.table(trgRes.rows);
+        }
+
     } catch (err) {
-        console.error('Error:', err.message);
+        console.error("Check Error:", err.message);
     } finally {
-        await pool.end();
+        process.exit();
     }
 }
 
