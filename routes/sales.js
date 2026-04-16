@@ -1623,6 +1623,8 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                              const allBatches = await client.query("SELECT id, status, is_active, quantity_remaining, expiry_date FROM inventory_batches WHERE product_id = $1", [Number(pid)]);
                              console.log(`[DEBUG] PID ${pid} ALL RAW batches:`, JSON.stringify(allBatches.rows, null, 2));
                         }
+                    } else if (batchesRes.rows.length === 0 && qtyToFulfill > 0) {
+                        console.log(`[WARN] No batches found for PID ${pid} even though QtyToFulfill is ${qtyToFulfill}`);
                     }
 
                     const batchGroups = {};
