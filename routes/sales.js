@@ -1269,7 +1269,7 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                 productsRes.rows.forEach(p => prodMeta[String(p.id)] = p);
 
                 for (const pid of allPids) {
-                    const line = lines.find(l => String(l.product_id) === pid);
+                    const line = lines.find(l => parseInt(l.product_id) === parseInt(pid));
                     const freeData = freeMap[pid];
                     const freeQty = freeData ? freeData.qty : 0;
                     const paidQty = line ? Number(line.ordered_qty) : 0;
@@ -1588,9 +1588,9 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 productsRes.rows.forEach(p => prodMeta[String(p.id)] = p);
 
                 for (const pid of allPids) {
-                    const line = lines.find(l => String(l.product_id) === pid);
-                    const freeData = freeMap[pid];
-                    const freeQty = freeData ? freeData.qty : 0;
+                    const line = lines.find(l => parseInt(l.product_id) === parseInt(pid));
+                    const freeData = freeMap[spid];
+                    const freeQty = freeData ? Number(freeData.qty) : 0;
                     const paidQty = line ? Number(line.ordered_qty) : 0;
                     let qtyToFulfill = paidQty + freeQty;
 
@@ -2027,7 +2027,7 @@ router.post('/invoices/regenerate', async (req, res) => {
         productsRes.rows.forEach(p => prodMeta[String(p.id)] = p);
 
         for (const pid of allPids) {
-            const line = lines.find(l => String(l.product_id) === pid);
+            const line = lines.find(l => parseInt(l.product_id) === parseInt(pid));
             const freeData = freeMap[pid];
             const freeQty = freeData ? freeData.qty : 0;
             const paidQty = line ? Number(line.ordered_qty) : 0;
