@@ -1588,6 +1588,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 productsRes.rows.forEach(p => prodMeta[String(p.id)] = p);
 
                 for (const pid of allPids) {
+                    const spid = String(pid);
                     const line = lines.find(l => parseInt(l.product_id) === parseInt(pid));
                     const freeData = freeMap[spid];
                     const freeQty = freeData ? Number(freeData.qty) : 0;
