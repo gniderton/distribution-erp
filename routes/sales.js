@@ -1767,13 +1767,18 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     throw new Error("Zero total invoice amount. Please check if schemes (e.g., Price Slabs) are zeroing out the rates.");
                 }
 
-                const roundedTotal = Math.round(invTotal); // Enforce Integer Rounding
-                const roundOff = Number((roundedTotal - invTotal).toFixed(2));
+                const roundedTotal = Math.round(Number(invTotal.toFixed(2))); // Enforce Grand Total as Integer
                 const roundedTax = Number(invTax.toFixed(2));
-                const taxable = Number((invTotal - roundedTax).toFixed(2));
-
                 const cgst = Number((roundedTax / 2).toFixed(2));
                 const sgst = Number((roundedTax - cgst).toFixed(2));
+                
+                // Adjustment needed to reach roundedTotal from components
+                const roundOff = Number((roundedTotal - invTotal).toFixed(2));
+                
+                // CRITICAL: Derive taxable value from the other rounded pillars to ensure zero imbalance
+                // In Ledger: AR (Dr) = Sales (Cr) + Tax (Cr) + Rounding (Cr/Dr)
+                // Therefore: Sales (Cr) = AR (Dr) - Tax (Cr) - Rounding (Cr/Dr)
+                const taxable = Number((roundedTotal - roundedTax - roundOff).toFixed(2));
 
                 await client.query('UPDATE sales_invoices SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4, round_off = $5 WHERE id = $6',
                     [roundedTotal, taxable, cgst, sgst, roundOff, invId]);
