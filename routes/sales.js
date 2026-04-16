@@ -500,7 +500,12 @@ router.post('/orders/:id/dispatch', async (req, res) => {
         // STEP A: STOCK CHECK (Dry Run)
         const shippedMap = {}; // { pid: qty_we_can_fulfill }
         for (const line of lines) {
-            const stockRes = await client.query("SELECT SUM(quantity_remaining) FROM inventory_batches WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true AND status = 'Good' AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)", [line.product_id]);
+            const stockRes = await client.query(`
+                SELECT SUM(quantity_remaining) FROM inventory_batches 
+                WHERE product_id = $1 AND quantity_remaining > 0 
+                AND is_active = true AND status = 'Good' 
+                AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
+            `, [line.product_id]);
             const available = Number(stockRes.rows[0].sum || 0);
             shippedMap[line.product_id] = Math.min(Number(line.ordered_qty), available);
         }
@@ -1285,11 +1290,12 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                     const lineTaxPercent = lineTaxRaw > 0 ? lineTaxRaw : taxPct;
 
                     const batchesRes = await client.query(`
-                        SELECT id, quantity_remaining, purchase_rate, mrp, distributor_rate, wholesale_rate, dealer_rate, retail_rate
+                        SELECT id, quantity_remaining, purchase_rate, mrp, distributor_rate, wholesale_rate, dealer_rate, retail_rate, expiry_date
                         FROM inventory_batches 
-                        WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true AND status = 'Good' AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
+                        WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true 
+                        AND status = 'Good' AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
                         ORDER BY created_at ASC FOR UPDATE
-                    `, [pid]);
+                    `, [Number(pid)]);
 
                     const batchGroups = {};
 
@@ -1480,7 +1486,9 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 const stockRes = await client.query(`
                     SELECT product_id, SUM(quantity_remaining) as total 
                     FROM inventory_batches 
-                    WHERE product_id = ANY($1) AND is_active = true 
+                    WHERE product_id = ANY($1) 
+                    AND is_active = true AND status = 'Good'
+                    AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
                     GROUP BY product_id
                 `, [pids]);
                 const stockMap = {};
@@ -1594,15 +1602,22 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     const lineTaxRaw = line ? Number(line.tax_percent) : 0;
                     const lineTaxPercent = lineTaxRaw > 0 ? lineTaxRaw : taxPct;
 
-                    // A. Check REAL Inventory Batches
                     const batchesRes = await client.query(`
                         SELECT id, quantity_remaining, mrp, purchase_rate,
-                                distributor_rate, wholesale_rate, dealer_rate, retail_rate
+                                distributor_rate, wholesale_rate, dealer_rate, retail_rate, expiry_date
                         FROM inventory_batches 
                         WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true 
                         AND status = 'Good' AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
                         ORDER BY created_at ASC FOR UPDATE
-                    `, [pid]);
+                    `, [Number(pid)]);
+                    
+                    if (pid === "222" || pid === "224") {
+                        console.log(`[DEBUG] PID ${pid} discovery: Found ${batchesRes.rows.length} batches. Requested: ${qtyToFulfill}`);
+                        if (batchesRes.rows.length === 0) {
+                             const allBatches = await client.query("SELECT id, status, is_active, quantity_remaining, expiry_date FROM inventory_batches WHERE product_id = $1", [Number(pid)]);
+                             console.log(`[DEBUG] PID ${pid} ALL batches:`, JSON.stringify(allBatches.rows, null, 2));
+                        }
+                    }
 
                     const batchGroups = {};
                     for (const batch of batchesRes.rows) {
@@ -2024,12 +2039,12 @@ router.post('/invoices/regenerate', async (req, res) => {
 
             const batchesRes = await client.query(`
                 SELECT id, quantity_remaining, mrp, purchase_rate,
-                        distributor_rate, wholesale_rate, dealer_rate, retail_rate
+                        distributor_rate, wholesale_rate, dealer_rate, retail_rate, expiry_date
                 FROM inventory_batches 
                 WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true 
                 AND status = 'Good' AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
                 ORDER BY created_at ASC FOR UPDATE
-            `, [pid]);
+            `, [Number(pid)]);
 
             const batchGroups = {};
             for (const batch of batchesRes.rows) {
