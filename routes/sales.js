@@ -1492,19 +1492,20 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     GROUP BY product_id
                 `, [pids]);
                 const stockMap = {};
-                stockRes.rows.forEach(r => stockMap[r.product_id] = parseFloat(r.total));
-                if (orderId == "LOG_ID" || true) console.log(`[DEBUG] Order ${orderId} StockMap:`, JSON.stringify(stockMap));
+                stockRes.rows.forEach(r => stockMap[String(r.product_id)] = parseFloat(r.total));
+                if (orderId == "LOG_ID" || true) console.log(`[DEBUG] Order ${orderId} StockMap (Keys: ${Object.keys(stockMap).join(',')}):`, JSON.stringify(stockMap));
 
                 // [FIX] 2.5 SCHEME LOGIC (Bulk Admin) - Use Deliverable Qty (Min of Ordered vs Available)
                 // This ensures we ONLY apply schemes for items we can actually ship today.
                 const orderedItems = lines.map(l => {
-                    const availableReal = stockMap[l.product_id] || 0;
-                    const availableTransit = transitMap[l.product_id] ? parseFloat(transitMap[l.product_id].qty) : 0;
+                    const spid = String(l.product_id);
+                    const availableReal = stockMap[spid] || 0;
+                    const availableTransit = transitMap[spid] ? parseFloat(transitMap[spid].qty) : 0;
                     const deliverableQty = Math.min(Number(l.ordered_qty), availableReal + availableTransit);
-                    if (l.product_id == 222 || l.product_id == 224) {
-                        console.log(`[DEBUG] PID ${l.product_id}: Ordered=${l.ordered_qty}, Available=${availableReal}, Deliverable=${deliverableQty}`);
+                    if (spid == "222" || spid == "224") {
+                        console.log(`[DEBUG] PID ${spid}: Ordered=${l.ordered_qty}, Available=${availableReal}, Deliverable=${deliverableQty}`);
                     }
-                    return { product_id: l.product_id, qty: deliverableQty };
+                    return { product_id: Number(spid), qty: deliverableQty };
                 });
                 
                 const { freeItems, priceSlabs } = await calculateFreeItems(orderedItems, so.customer_id, client);
