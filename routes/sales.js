@@ -1488,11 +1488,12 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     FROM inventory_batches 
                     WHERE product_id = ANY($1) 
                     AND is_active = true AND status = 'Good'
-                    AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
+                    AND (expiry_date IS NULL OR expiry_date >= timezone('IST', NOW())::date)
                     GROUP BY product_id
                 `, [pids]);
                 const stockMap = {};
                 stockRes.rows.forEach(r => stockMap[r.product_id] = parseFloat(r.total));
+                if (orderId == "LOG_ID" || true) console.log(`[DEBUG] Order ${orderId} StockMap:`, JSON.stringify(stockMap));
 
                 // [FIX] 2.5 SCHEME LOGIC (Bulk Admin) - Use Deliverable Qty (Min of Ordered vs Available)
                 // This ensures we ONLY apply schemes for items we can actually ship today.
@@ -1500,10 +1501,14 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     const availableReal = stockMap[l.product_id] || 0;
                     const availableTransit = transitMap[l.product_id] ? parseFloat(transitMap[l.product_id].qty) : 0;
                     const deliverableQty = Math.min(Number(l.ordered_qty), availableReal + availableTransit);
+                    if (l.product_id == 222 || l.product_id == 224) {
+                        console.log(`[DEBUG] PID ${l.product_id}: Ordered=${l.ordered_qty}, Available=${availableReal}, Deliverable=${deliverableQty}`);
+                    }
                     return { product_id: l.product_id, qty: deliverableQty };
                 });
                 
                 const { freeItems, priceSlabs } = await calculateFreeItems(orderedItems, so.customer_id, client);
+                if (orderId == "LOG_ID" || true) console.log(`[DEBUG] Order ${orderId} Schemes: FreeCount=${freeItems.length}, SlabCount=${Object.keys(priceSlabs).length}`);
 
                 const freeMap = {};
                 for (const free of freeItems) {
@@ -1607,15 +1612,15 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                                 distributor_rate, wholesale_rate, dealer_rate, retail_rate, expiry_date
                         FROM inventory_batches 
                         WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true 
-                        AND status = 'Good' AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
+                        AND status = 'Good' AND (expiry_date IS NULL OR expiry_date >= timezone('IST', NOW())::date)
                         ORDER BY created_at ASC FOR UPDATE
                     `, [Number(pid)]);
                     
                     if (pid === "222" || pid === "224") {
-                        console.log(`[DEBUG] PID ${pid} discovery: Found ${batchesRes.rows.length} batches. Requested: ${qtyToFulfill}`);
+                        console.log(`[DEBUG] PID ${pid} FIFO discovery: Found ${batchesRes.rows.length} batches. QtyToFulfill: ${qtyToFulfill}`);
                         if (batchesRes.rows.length === 0) {
                              const allBatches = await client.query("SELECT id, status, is_active, quantity_remaining, expiry_date FROM inventory_batches WHERE product_id = $1", [Number(pid)]);
-                             console.log(`[DEBUG] PID ${pid} ALL batches:`, JSON.stringify(allBatches.rows, null, 2));
+                             console.log(`[DEBUG] PID ${pid} ALL RAW batches:`, JSON.stringify(allBatches.rows, null, 2));
                         }
                     }
 
