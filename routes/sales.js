@@ -1290,7 +1290,7 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                     const lineTaxPercent = lineTaxRaw > 0 ? lineTaxRaw : taxPct;
 
                     const batchesRes = await client.query(`
-                        SELECT id, quantity_remaining, purchase_rate, mrp, distributor_rate, wholesale_rate, dealer_rate, retail_rate, expiry_date
+                        SELECT id, quantity_remaining, purchase_rate, net_purchase_rate, mrp, distributor_rate, wholesale_rate, dealer_rate, retail_rate, expiry_date
                         FROM inventory_batches 
                         WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true 
                         AND status = 'Good' AND (expiry_date IS NULL OR expiry_date >= CURRENT_DATE)
@@ -1610,7 +1610,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     const lineTaxPercent = lineTaxRaw > 0 ? lineTaxRaw : taxPct;
 
                     const batchesRes = await client.query(`
-                        SELECT id, quantity_remaining, mrp, purchase_rate,
+                        SELECT id, quantity_remaining, mrp, purchase_rate, net_purchase_rate,
                                 distributor_rate, wholesale_rate, dealer_rate, retail_rate, expiry_date
                         FROM inventory_batches 
                         WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true 
@@ -2052,7 +2052,7 @@ router.post('/invoices/regenerate', async (req, res) => {
             const lineTaxPercent = lineTaxRaw > 0 ? lineTaxRaw : taxPct;
 
             const batchesRes = await client.query(`
-                SELECT id, quantity_remaining, mrp, purchase_rate,
+                SELECT id, quantity_remaining, mrp, purchase_rate, net_purchase_rate,
                         distributor_rate, wholesale_rate, dealer_rate, retail_rate, expiry_date
                 FROM inventory_batches 
                 WHERE product_id = $1 AND quantity_remaining > 0 AND is_active = true 
