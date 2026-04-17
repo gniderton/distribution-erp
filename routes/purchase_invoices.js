@@ -139,6 +139,17 @@ router.post('/', async (req, res) => {
         // --- SERVER SIDE CALCULATION & SANITIZATION (Like PO) ---
         // This ensures all numbers are actual numbers, preventing "NaN" or DB errors.
 
+        // 1.5 Fetch Product Master Rates for Fallback
+        const productIds = [...new Set(lines.map(l => Number(l.product_id)))];
+        const productRatesRes = await pool.query(
+            'SELECT id, distributor_rate, wholesale_rate, dealer_rate, retail_rate FROM products WHERE id = ANY($1)',
+            [productIds]
+        );
+        const productRatesMap = {};
+        productRatesRes.rows.forEach(r => {
+            productRatesMap[r.id] = r;
+        });
+
         const enrichedLines = lines.map(line => {
             // 1. Sanitization: Force Numbers
             const accepted_qty = Number(line.accepted_qty) || 0;
@@ -155,6 +166,16 @@ router.post('/', async (req, res) => {
             // but we MUST ensure it is a valid Number type and rounded correctly.
             const amount = Math.round((Number(line.amount) || 0) * 100) / 100;
 
+            const masterRates = productRatesMap[line.product_id] || {};
+            
+            // Forensic Unit Cost: (Amount - Tax) / Qty
+            let net_purchase_rate = 0;
+            if (accepted_qty > 0) {
+                net_purchase_rate = (amount - tax_amount_line) / accepted_qty;
+            } else {
+                net_purchase_rate = rate; // Fallback to basic rate if qty is zero
+            }
+
             return {
                 ...line,
                 product_id: Number(line.product_id),
@@ -162,18 +183,24 @@ router.post('/', async (req, res) => {
                 accepted_qty: accepted_qty,
                 rejected_qty: Number(line.rejected_qty) || 0,
                 rate: rate,
+                net_purchase_rate: net_purchase_rate,
                 discount_percent: discount_percent,
                 discount_amount: discount_amount,
                 scheme_amount: scheme_amount,
                 tax_amount: tax_amount_line,
                 amount: amount,
                 mrp: Number(line.mrp) || 0,
-                sale_rate: Number(line.sale_rate) || 0,
+                // Fallback to master if frontend doesn't provide these
+                distributor_rate: Number(line.distributor_rate) || Number(masterRates.distributor_rate) || 0,
+                wholesale_rate: Number(line.wholesale_rate) || Number(masterRates.wholesale_rate) || 0,
+                dealer_rate: Number(line.dealer_rate) || Number(masterRates.dealer_rate) || 0,
+                retail_rate: Number(line.retail_rate) || Number(masterRates.retail_rate) || 0,
                 // Dates: Handle empty strings
                 expiry_date: (line.expiry_date === '' || !line.expiry_date) ? null : line.expiry_date,
                 batch_number: line.batch_number || "DEFAULT"
             };
         });
+
 
         // 2. Sanitize Header Totals (Enforce Rounding for Ledger Consistency)
         const safe_total_net = Math.round((Number(req.body.total_net) || 0) * 100) / 100;
