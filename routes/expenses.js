@@ -116,7 +116,10 @@ router.post('/', async (req, res) => {
         // 1. Get Source Account ID (Cash/Bank/Cheque)
         let resolvedPaymentSourceId = pSourceId;
         let paymentCOAId = 2004; // Defaults to Cheques Issued if Cheque
-        const coa_map = { 1: 3, 2: 2, 3: 2 }; // bank_id -> coa_id
+        
+        // Map Bank Account IDs to Chart of Account Codes
+        // Assuming ID 1 is Bank, ID 2 is Cash, ID 3+ are other Banks
+        const coa_map = { 1: 1002, 2: 1003, 3: 1002, 4: 1002, 5: 1002 }; 
  
         if (payment_mode !== 'Cheque') {
             let sourceRes;
@@ -127,7 +130,7 @@ router.post('/', async (req, res) => {
             }
             if (sourceRes.rows.length === 0) throw new Error(`Invalid Payment Source: "${pSourceId}"`);
             resolvedPaymentSourceId = sourceRes.rows[0].id;
-            paymentCOAId = coa_map[resolvedPaymentSourceId] || 2; // Real Bank COA or Generic Bank
+            paymentCOAId = coa_map[resolvedPaymentSourceId] || 1003; // Fallback to Cash if unknown
         }
 
         // 2. Get Expense Category Detail
