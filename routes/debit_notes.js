@@ -498,7 +498,7 @@ router.get('/:id/items', async (req, res) => {
                 p.product_code as "product_code",
                 h.hsn_code as "hsn_code",
                 p.product_name as "Item Name",
-                p.mrp as "MRP",
+                COALESCE((SELECT mrp FROM inventory_batches WHERE batch_code = dnl.batch_number AND product_id = dnl.product_id LIMIT 1), p.mrp) as "MRP",
                 dnl.rate as "Price",
                 dnl.qty as "Qty",
                 0 as "Sch",
