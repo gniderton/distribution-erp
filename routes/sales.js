@@ -872,6 +872,11 @@ router.post('/returns/manual', async (req, res) => {
             grandTotal += lineTotal;
         }
 
+        // --- ROUNDING HARDENING ---
+        totalTaxable = Number(totalTaxable.toFixed(2));
+        totalTax = Number(totalTax.toFixed(2));
+        grandTotal = Number(grandTotal.toFixed(2));
+
         // Update Header with finalized totals
         await client.query(`
             UPDATE sales_returns 
@@ -926,9 +931,14 @@ router.post('/returns/manual', async (req, res) => {
 
         // 6. ACCOUNTING (LEDGER)
         const acc_ar = 1101, acc_returns = 4003, acc_cgst = 2011, acc_sgst = 2012;
+        
+        // Ensure perfect balance: Returns + Tax = AR
+        // We derive Returns from AR - Tax to prevent sub-cent drift
+        const balancingReturns = Number((grandTotal - totalTax).toFixed(2));
+
         const ledgerLines = [
             { code: acc_ar, debit: 0, credit: grandTotal },
-            { code: acc_returns, debit: totalTaxable, credit: 0 }
+            { code: acc_returns, debit: balancingReturns, credit: 0 }
         ];
 
         if (totalTax > 0) {
