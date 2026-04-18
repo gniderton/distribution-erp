@@ -750,15 +750,26 @@ router.get('/reports/integrity-audit', async (req, res) => {
         let totalGaps = 0;
 
         for (const mod of modules) {
-            // 1. Fetch Active Module IDs
-            const tableData = await client.query(`SELECT id::text FROM ${mod.table} WHERE is_active = true`);
+            // 1. Dynamic Active-Status Detector
+            let activeClause = "1=1"; // Default: everything is active
+            
+            // Check for specific status columns based on the module's schema
+            if (['sales_invoices', 'sales_returns', 'customer_payments', 'purchase_invoice_headers', 'debit_notes'].includes(mod.table)) {
+                activeClause = "status NOT IN ('Cancelled', 'Reversed')";
+            } else if (['other_income', 'expenses', 'internal_transfers', 'vendor_payments'].includes(mod.table)) {
+                activeClause = "is_active = true";
+            }
+            // Tables like stock_adjustments, employee_salaries, asset_transactions usually don't have soft-deletes yet
+
+            // 2. Fetch Active Module IDs
+            const tableData = await client.query(`SELECT id::text FROM ${mod.table} WHERE ${activeClause}`);
             const tableIds = new Set(tableData.rows.map(r => r.id));
 
-            // 2. Fetch Ledger Reference IDs
+            // 3. Fetch Ledger Reference IDs
             const ledgerData = await client.query(`SELECT reference_id FROM journal_entries WHERE reference_type = $1 AND reference_id IS NOT NULL`, [mod.type]);
             const ledgerIds = new Set(ledgerData.rows.map(r => r.reference_id));
 
-            // 3. Find Missing & Orphans
+            // 4. Find Missing & Orphans (records in DB but missing from Ledger)
             const missing = [...tableIds].filter(id => !ledgerIds.has(id));
             const orphans = [...ledgerIds].filter(id => id.match(/^[0-9]+$/) && !tableIds.has(id));
 
@@ -767,7 +778,8 @@ router.get('/reports/integrity-audit', async (req, res) => {
             report[mod.name] = {
                 status: missing.length === 0 ? 'Consistent' : 'Gaps Detected',
                 missing_count: missing.length,
-                orphan_count: orphans.length
+                orphan_count: orphans.length,
+                active_filter: activeClause
             };
         }
 
