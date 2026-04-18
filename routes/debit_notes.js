@@ -510,13 +510,12 @@ router.get('/:id/items', async (req, res) => {
                 ROUND((dnl.amount - (dnl.amount / (1 + (COALESCE(t.tax_percentage, 0)/100.0))))::numeric, 2) as "GST $",
                 dnl.amount as "Net $",
                 dnl.batch_number as "Batch No",
-                ib.expiry_date as "Expiry",
+                (SELECT expiry_date FROM inventory_batches WHERE batch_code = dnl.batch_number AND product_id = dnl.product_id LIMIT 1) as "Expiry",
                 dnl.product_id as "_product_id"
             FROM debit_note_lines dnl
             JOIN products p ON dnl.product_id = p.id
             LEFT JOIN taxes t ON p.tax_id = t.id
             LEFT JOIN hsn_codes h ON p.hsn_id = h.id
-            LEFT JOIN inventory_batches ib ON dnl.batch_number = ib.batch_code AND dnl.product_id = ib.product_id
             WHERE dnl.debit_note_id = $1
         `, [id]);
         res.json(result.rows);
