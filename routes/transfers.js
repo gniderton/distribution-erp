@@ -37,10 +37,10 @@ router.post('/', async (req, res) => {
         const fromAcc = fromAccRes.rows[0];
         const toAcc = toAccRes.rows[0];
 
-        // 2. Determine COA IDs (Cash: 3, All Banks: 2)
-        const coa_map = { 1: 3, 2: 2, 3: 2 }; // bank_account_id -> coa_id
-        const fromCOAId = coa_map[from_account_id] || 2;
-        const toCOAId = coa_map[to_account_id] || 2;
+        // 2. Determine COA Codes (Cash: 1003, All Banks: 1002)
+        const coa_map = { 1: 1002, 2: 1003, 3: 1002, 4: 1002, 5: 1002 }; 
+        const fromCOAId = coa_map[from_account_id] || 1003;
+        const toCOAId = coa_map[to_account_id] || 1003;
 
         // 3. Create Journal Entry
         // Debit To-Account, Credit From-Account
