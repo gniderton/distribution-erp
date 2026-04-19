@@ -488,7 +488,7 @@ router.post('/opening-stock', async (req, res) => {
         // --- [ NEW ] AUTOMATED ACCOUNTING SYNC ---
         // 1. Calculate current total value of all Opening Stock
         const valRes = await client.query(`
-            SELECT COALESCE(SUM(quantity_remaining * purchase_rate), 0) as total_value 
+            SELECT COALESCE(SUM(quantity_initial * purchase_rate), 0) as total_value 
             FROM inventory_batches 
             WHERE grn_id IS NULL
         `);
