@@ -956,15 +956,33 @@ router.post('/returns/manual', async (req, res) => {
         }
 
         // 6. ACCOUNTING (LEDGER)
-        const acc_ar = 1101, acc_returns = 4003, acc_cgst = 2011, acc_sgst = 2012, acc_round = 5003;
+        const acc_inv = 1001, acc_ar = 1101, acc_returns = 4003, acc_cgst = 2011, acc_sgst = 2012, acc_round = 5003, acc_cogs = 5001;
         
         // Ensure perfect balance: Returns + Tax + Rounding = AR
         const balancingReturns = Number((roundedGrandTotal - totalTax - roundOff).toFixed(2));
+
+        // Calculate Total Cost of Goods being returned to stock
+        let totalReturnCost = 0;
+        for (const item of items) {
+            if (item.return_to_stock === true && item.batch_id) {
+                const batchRes = await client.query("SELECT purchase_rate FROM inventory_batches WHERE id = $1", [item.batch_id]);
+                if (batchRes.rows.length > 0) {
+                    totalReturnCost += Number(item.Qty || 0) * Number(batchRes.rows[0].purchase_rate);
+                }
+            }
+        }
+        totalReturnCost = Number(totalReturnCost.toFixed(2));
 
         const ledgerLines = [
             { code: acc_ar, debit: 0, credit: roundedGrandTotal },
             { code: acc_returns, debit: balancingReturns, credit: 0 }
         ];
+
+        // [NEW] Inventory Reversal (Stock Restoration)
+        if (totalReturnCost > 0) {
+            ledgerLines.push({ code: acc_inv, debit: totalReturnCost, credit: 0 });
+            ledgerLines.push({ code: acc_cogs, debit: 0, credit: totalReturnCost });
+        }
 
         if (totalTax > 0) {
             const halfTax = Number((totalTax / 2).toFixed(2));
@@ -975,12 +993,8 @@ router.post('/returns/manual', async (req, res) => {
 
         if (roundOff !== 0) {
             if (roundOff > 0) {
-                // Return amount increased due to rounding (e.g. 100.2 -> 101). Cr Rounding (Gain for customer)
-                // Actually for a return, if you round UP, you are giving MORE back to customer.
-                // DR Returns 100.2, DR Rounding 0.8, CR AR 101. (Debit 5003 if it's an expense/loss for company)
                 ledgerLines.push({ code: acc_round, debit: Math.abs(roundOff), credit: 0 });
             } else {
-                // Return amount decreased (e.g. 100.8 -> 100). Cr Rounding 0.8. (Gain for company)
                 ledgerLines.push({ code: acc_round, debit: 0, credit: Math.abs(roundOff) });
             }
         }

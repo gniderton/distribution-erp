@@ -1179,15 +1179,32 @@ router.post('/verify/settle', async (req, res) => {
             }
 
             // 3.6 Post Consolidated Journal Entry
-            // 3.6 Post Consolidated Journal Entry
-            const acc_ar = 1101, acc_sr = 4003, acc_cgst = 2011, acc_sgst = 2012;
+            const acc_inv = 1001, acc_ar = 1101, acc_sr = 4003, acc_cgst = 2011, acc_sgst = 2012, acc_cogs = 5001;
             
+            // Calculate Total Cost of Goods being returned to stock
+            let totalReturnCost = 0;
+            for (const line of lineItems) {
+                if (line.ret.batch_id) {
+                    const batchRes = await client.query("SELECT purchase_rate FROM inventory_batches WHERE id = $1", [line.ret.batch_id]);
+                    if (batchRes.rows.length > 0) {
+                        totalReturnCost += Number(line.ret.qty || 0) * Number(batchRes.rows[0].purchase_rate);
+                    }
+                }
+            }
+            totalReturnCost = Number(totalReturnCost.toFixed(2));
+
             // Split Tax matching sales.js logic
             const balancingReturns = Number((roundedGrandTotal - totalTax).toFixed(2));
             const ledgerLines = [
                 { code: acc_sr, debit: balancingReturns, credit: 0 },
                 { code: acc_ar, debit: 0, credit: Number(roundedGrandTotal) }
             ];
+
+            // [NEW] Inventory Reversal (Stock Restoration)
+            if (totalReturnCost > 0) {
+                ledgerLines.push({ code: acc_inv, debit: totalReturnCost, credit: 0 });
+                ledgerLines.push({ code: acc_cogs, debit: 0, credit: totalReturnCost });
+            }
 
             if (totalTax > 0) {
                 const halfTax = Number((totalTax / 2).toFixed(2));
