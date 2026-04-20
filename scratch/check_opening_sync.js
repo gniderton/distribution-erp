@@ -9,19 +9,14 @@ async function check() {
     console.log("Opening Balances without JE:", res2.rows[0].count);
     console.log("Total Opening Amount:", res3.rows[0].sum);
 
-    const res32 = await pool.query(`
-        SELECT SUM(quantity_remaining * purchase_rate) as missing_value 
-        FROM inventory_batches 
-        WHERE source_type IS NULL OR source_type = ''
+    const resLT = await pool.query(`
+        SELECT lt.*, l.loan_number, l.party_name 
+        FROM loan_transactions lt 
+        JOIN loans l ON lt.loan_id = l.id 
+        ORDER BY lt.transaction_date DESC
     `);
-    console.log("Value of Untagged Batches (Remaining):", res32.rows[0].missing_value);
-    
-    const res33 = await pool.query(`
-        SELECT SUM(quantity_initial * purchase_rate) as initial_missing 
-        FROM inventory_batches 
-        WHERE source_type IS NULL OR source_type = ''
-    `);
-    console.log("Value of Untagged Batches (Initial):", res33.rows[0].initial_missing);
+    console.log("Loan Transactions History:");
+    console.table(resLT.rows);
     
     const res27 = await pool.query(`
         SELECT source_type, SUM(quantity_initial * purchase_rate) as total_initial 
