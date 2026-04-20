@@ -17,8 +17,8 @@ async function rebuildLoanLedger() {
         `);
 
         const accBorrowings = 2101;
-        const accBank = 1201; // Default Bank for disbursements/payments
-        const accCash = 1202;
+        const accBank = 1002; // CORRECTED: Bank Account
+        const accCash = 1003; // CORRECTED: Cash in Hand
         const accMigration = 3999;
 
         for (const tx of txRes.rows) {
