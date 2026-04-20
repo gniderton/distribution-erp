@@ -873,19 +873,21 @@ router.post('/returns/manual', async (req, res) => {
         }
 
         // --- ROUNDING HARDENING ---
+        const roundedGrandTotal = Math.round(grandTotal);
+        const roundOff = Number((roundedGrandTotal - grandTotal).toFixed(2));
+        
         totalTaxable = Number(totalTaxable.toFixed(2));
         totalTax = Number(totalTax.toFixed(2));
-        grandTotal = Number(grandTotal.toFixed(2));
 
         // Update Header with finalized totals
         await client.query(`
             UPDATE sales_returns 
             SET total_taxable = $1, total_tax = $2, grand_total = $3 
             WHERE id = $4
-        `, [totalTaxable, totalTax, grandTotal, returnId]);
+        `, [totalTaxable, totalTax, roundedGrandTotal, returnId]);
 
         // 5. ALLOCATION LOGIC (LIFO)
-        let remainingToAllocate = grandTotal;
+        let remainingToAllocate = roundedGrandTotal;
 
         // A. Priority: Linked Invoice
         if (invoice_id && remainingToAllocate > 0) {
@@ -899,9 +901,21 @@ router.post('/returns/manual', async (req, res) => {
                 const alloc = Math.min(balance, remainingToAllocate);
                 if (alloc > 0) {
                     await client.query(`
-                        INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id)
-                        VALUES ($1, $2, NOW(), $3)
+                        INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
+                        VALUES ($1, $2, NOW(), $3, 'ACTIVE')
                     `, [invoice_id, alloc, returnId]);
+
+                    // [NEW] Sync Invoice Balance and Status
+                    await client.query(`
+                        UPDATE sales_invoices 
+                        SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                            status = CASE 
+                                WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' 
+                                ELSE 'Partially Paid' 
+                            END
+                        WHERE id = $2
+                    `, [alloc, invoice_id]);
+
                     remainingToAllocate -= alloc;
                 }
             }
@@ -922,22 +936,33 @@ router.post('/returns/manual', async (req, res) => {
                 if (remainingToAllocate <= 0.01) break;
                 const alloc = Math.min(Number(inv.balance), remainingToAllocate);
                 await client.query(`
-                    INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id)
-                    VALUES ($1, $2, NOW(), $3)
+                    INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
+                    VALUES ($1, $2, NOW(), $3, 'ACTIVE')
                 `, [inv.id, alloc, returnId]);
+
+                // [NEW] Sync Invoice Balance and Status
+                await client.query(`
+                    UPDATE sales_invoices 
+                    SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                        status = CASE 
+                            WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' 
+                            ELSE 'Partially Paid' 
+                        END
+                    WHERE id = $2
+                `, [alloc, inv.id]);
+
                 remainingToAllocate -= alloc;
             }
         }
 
         // 6. ACCOUNTING (LEDGER)
-        const acc_ar = 1101, acc_returns = 4003, acc_cgst = 2011, acc_sgst = 2012;
+        const acc_ar = 1101, acc_returns = 4003, acc_cgst = 2011, acc_sgst = 2012, acc_round = 5003;
         
-        // Ensure perfect balance: Returns + Tax = AR
-        // We derive Returns from AR - Tax to prevent sub-cent drift
-        const balancingReturns = Number((grandTotal - totalTax).toFixed(2));
+        // Ensure perfect balance: Returns + Tax + Rounding = AR
+        const balancingReturns = Number((roundedGrandTotal - totalTax - roundOff).toFixed(2));
 
         const ledgerLines = [
-            { code: acc_ar, debit: 0, credit: grandTotal },
+            { code: acc_ar, debit: 0, credit: roundedGrandTotal },
             { code: acc_returns, debit: balancingReturns, credit: 0 }
         ];
 
@@ -946,6 +971,18 @@ router.post('/returns/manual', async (req, res) => {
             const otherHalf = Number((totalTax - halfTax).toFixed(2));
             ledgerLines.push({ code: acc_cgst, debit: halfTax, credit: 0 });
             ledgerLines.push({ code: acc_sgst, debit: otherHalf, credit: 0 });
+        }
+
+        if (roundOff !== 0) {
+            if (roundOff > 0) {
+                // Return amount increased due to rounding (e.g. 100.2 -> 101). Cr Rounding (Gain for customer)
+                // Actually for a return, if you round UP, you are giving MORE back to customer.
+                // DR Returns 100.2, DR Rounding 0.8, CR AR 101. (Debit 5003 if it's an expense/loss for company)
+                ledgerLines.push({ code: acc_round, debit: Math.abs(roundOff), credit: 0 });
+            } else {
+                // Return amount decreased (e.g. 100.8 -> 100). Cr Rounding 0.8. (Gain for company)
+                ledgerLines.push({ code: acc_round, debit: 0, credit: Math.abs(roundOff) });
+            }
         }
 
         await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)', [

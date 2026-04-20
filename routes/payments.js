@@ -76,8 +76,17 @@ router.get('/dse-pending-invoices', async (req, res) => {
                 si.invoice_number,
                 si.invoice_date,
                 si.grand_total as bill_amount,
-                COALESCE(si.amount_paid, 0) as paid_amount,
-                (si.grand_total - COALESCE(si.amount_paid, 0)) as balance,
+                (
+                    COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE' AND return_id IS NULL), 0) +
+                    COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0) +
+                    COALESCE((SELECT SUM(grand_total) FROM sales_returns WHERE invoice_id = si.id AND status = 'Applied'), 0)
+                ) as paid_amount,
+                (
+                    si.grand_total - 
+                    COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE' AND return_id IS NULL), 0) -
+                    COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0) -
+                    COALESCE((SELECT SUM(grand_total) FROM sales_returns WHERE invoice_id = si.id AND status = 'Applied'), 0)
+                ) as balance,
                 si.status,
                 c.customer_name,
                 c.id as customer_id,

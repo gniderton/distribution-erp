@@ -45,8 +45,8 @@ router.post('/', async (req, res) => {
         // 3. Create Journal Entry
         // Debit To-Account, Credit From-Account
         const ledgerLines = [
-            { account_id: toCOAId, debit: Number(amount), credit: 0, bank_account_id: to_account_id },
-            { account_id: fromCOAId, debit: 0, credit: Number(amount), bank_account_id: from_account_id }
+            { code: toCOAId, debit: Number(amount), credit: 0, bank_account_id: to_account_id },
+            { code: fromCOAId, debit: 0, credit: Number(amount), bank_account_id: from_account_id }
         ];
 
         const description = `Internal Transfer (${payment_mode}): ${fromAcc.bank_name} -> ${toAcc.bank_name}${reference_no ? ' (Ref: ' + reference_no + ')' : ''}`;

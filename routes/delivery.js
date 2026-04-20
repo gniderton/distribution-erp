@@ -1179,12 +1179,23 @@ router.post('/verify/settle', async (req, res) => {
             }
 
             // 3.6 Post Consolidated Journal Entry
-            const acc_ar = 1101;
-            const acc_sr = 4003;
+            // 3.6 Post Consolidated Journal Entry
+            const acc_ar = 1101, acc_sr = 4003, acc_cgst = 2011, acc_sgst = 2012;
+            
+            // Split Tax matching sales.js logic
+            const balancingReturns = Number((roundedGrandTotal - totalTax).toFixed(2));
             const ledgerLines = [
-                { code: acc_sr, debit: Number(roundedGrandTotal), credit: 0 },
+                { code: acc_sr, debit: balancingReturns, credit: 0 },
                 { code: acc_ar, debit: 0, credit: Number(roundedGrandTotal) }
             ];
+
+            if (totalTax > 0) {
+                const halfTax = Number((totalTax / 2).toFixed(2));
+                const otherHalf = Number((totalTax - halfTax).toFixed(2));
+                ledgerLines.push({ code: acc_cgst, debit: halfTax, credit: 0 });
+                ledgerLines.push({ code: acc_sgst, debit: otherHalf, credit: 0 });
+            }
+
             await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
                 [new Date(), `Grouped Sales Return: ${srNumber}`, 'SALES_RETURN', srId, JSON.stringify(ledgerLines)]);
 
@@ -1200,7 +1211,14 @@ router.post('/verify/settle', async (req, res) => {
                     const balance = Number(invRes.rows[0].balance);
                     const apply = Math.min(creditRemaining, balance);
                     if (apply > 0) {
-                        await client.query(`UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + $1, status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [apply, invId]);
+                        await client.query(`UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + $1, status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [apply, invId]);
+                        
+                        // [NEW] Add Allocation Record for Audit Trail
+                        await client.query(`
+                            INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
+                            VALUES ($1, $2, NOW(), $3, 'ACTIVE')
+                        `, [invId, apply, srId]);
+
                         creditRemaining -= apply;
                     }
                 }
@@ -1222,7 +1240,14 @@ router.post('/verify/settle', async (req, res) => {
                     const balance = Number(inv.balance);
                     const apply = Math.min(creditRemaining, balance);
                     if (apply > 0) {
-                        await client.query(`UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + $1, status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [apply, inv.id]);
+                        await client.query(`UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + $1, status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [apply, inv.id]);
+                        
+                        // [NEW] Add Allocation Record for Audit Trail
+                        await client.query(`
+                            INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
+                            VALUES ($1, $2, NOW(), $3, 'ACTIVE')
+                        `, [inv.id, apply, srId]);
+
                         creditRemaining -= apply;
                     }
                 }
@@ -1242,7 +1267,14 @@ router.post('/verify/settle', async (req, res) => {
                     const balance = Number(inv.balance);
                     const apply = Math.min(creditRemaining, balance);
                     if (apply > 0) {
-                        await client.query(`UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + $1, status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [apply, inv.id]);
+                        await client.query(`UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + $1, status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [apply, inv.id]);
+                        
+                        // [NEW] Add Allocation Record for Audit Trail
+                        await client.query(`
+                            INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
+                            VALUES ($1, $2, NOW(), $3, 'ACTIVE')
+                        `, [inv.id, apply, srId]);
+
                         creditRemaining -= apply;
                     }
                 }
