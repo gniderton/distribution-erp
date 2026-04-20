@@ -2,6 +2,117 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 
+/**
+ * [SMART SYNC] Automated Accounting Reconciliation for Opening Balances
+ * Recalculates the Master Journal Entries for AR, AP, Inventory, and Loans 
+ * based on the current state of operational tables.
+ */
+async function syncMasterOpeningLedger(client) {
+    console.log("Starting Smart Ledger Sync...");
+
+    // 1. Inventory Sync (MIGRATION batches)
+    const invRes = await client.query(`
+        SELECT COALESCE(SUM(quantity_initial * purchase_rate), 0) as total 
+        FROM inventory_batches WHERE source_type = 'MIGRATION'
+    `);
+    const invValue = parseFloat(invRes.rows[0].total);
+
+    // 2. Receivables Sync (Migrated Invoices)
+    const arRes = await client.query(`
+        SELECT COALESCE(SUM(grand_total), 0) as total 
+        FROM sales_invoices WHERE sales_order_id IS NULL AND status != 'Cancelled'
+    `);
+    const arValue = parseFloat(arRes.rows[0].total);
+
+    // 3. Applied Payments Sync (Migrated Payments against Migrated Invoices)
+    const arPayRes = await client.query(`
+        SELECT COALESCE(SUM(amount), 0) as total 
+        FROM customer_payment_allocations 
+        WHERE invoice_id IN (SELECT id FROM sales_invoices WHERE sales_order_id IS NULL)
+          AND payment_id IN (SELECT id FROM customer_payments WHERE transaction_ref = 'MIGRATION')
+    `);
+    const arPayValue = parseFloat(arPayRes.rows[0].total);
+
+    // 4. Payables Sync (Migrated Vendor Bills)
+    const apRes = await client.query(`
+        SELECT COALESCE(SUM(grand_total), 0) as total 
+        FROM purchase_invoice_headers WHERE purchase_order_id IS NULL AND status != 'Cancelled'
+    `);
+    const apValue = parseFloat(apRes.rows[0].total);
+
+    // 5. Applied Vendor Payments Sync
+    const apPayRes = await client.query(`
+        SELECT COALESCE(SUM(amount), 0) as total 
+        FROM payment_allocations 
+        WHERE purchase_invoice_id IN (SELECT id FROM purchase_invoice_headers WHERE purchase_order_id IS NULL)
+          AND payment_id IN (SELECT id FROM vendor_payments WHERE transaction_ref = 'MIGRATION')
+    `);
+    const apPayValue = parseFloat(apPayRes.rows[0].total);
+
+    // 6. Loans Sync
+    const loansPayRes = await client.query(`SELECT COALESCE(SUM(principal_amount), 0) as total FROM loans WHERE loan_type = 'TAKEN' AND id IN (SELECT loan_id FROM loan_transactions WHERE payment_mode = 'MIGRATION')`);
+    const loansRecRes = await client.query(`SELECT COALESCE(SUM(principal_amount), 0) as total FROM loans WHERE loan_type = 'GIVEN' AND id IN (SELECT loan_id FROM loan_transactions WHERE payment_mode = 'MIGRATION')`);
+    
+    const loansPayValue = parseFloat(loansPayRes.rows[0].total);
+    const loansRecValue = parseFloat(loansRecRes.rows[0].total);
+
+    // --- Update Master Journal Entries ---
+    const syncMap = [
+        { desc: 'Opening Migration: Inventory Catch-up', code: 1001, value: invValue, type: 'ASSET' },
+        { desc: 'Opening Migration: Receivables Catch-up', code: 1101, value: arValue, type: 'ASSET' },
+        { desc: 'Opening Migration: Applied Payments Catch-up', code: 1101, value: -arPayValue, type: 'ASSET' },
+        { desc: 'Opening Migration: Payables Catch-up', code: 2001, value: apValue, type: 'LIABILITY' },
+        { desc: 'Opening Migration: Migrated Vendor Payments Catch-up', code: 2001, value: -apPayValue, type: 'LIABILITY' },
+        { desc: 'Opening Migration: Advances Given Catch-up', code: 1105, value: loansRecValue, type: 'ASSET' },
+        { desc: 'Opening Migration: Borrowings Catch-up', code: 2101, value: loansPayValue, type: 'LIABILITY' }
+    ];
+
+    const accRes = await client.query("SELECT id, code FROM chart_of_accounts WHERE code IN (1001, 1101, 1105, 2001, 2101, 3999)");
+    const coaMap = {};
+    accRes.rows.forEach(r => coaMap[r.code] = r.id);
+
+    for (const item of syncMap) {
+        if (item.value === 0) continue;
+
+        let jeRes = await client.query("SELECT id FROM journal_entries WHERE description = $1", [item.desc]);
+        let jeId;
+        if (jeRes.rows.length > 0) {
+            jeId = jeRes.rows[0].id;
+        } else {
+            const newJe = await client.query(
+                "INSERT INTO journal_entries (transaction_date, description, reference_type) VALUES ('2026-03-31', $1, 'MIGRATION') RETURNING id",
+                [item.desc]
+            );
+            jeId = newJe.rows[0].id;
+        }
+
+        await client.query("DELETE FROM journal_lines WHERE journal_entry_id = $1", [jeId]);
+        
+        const mainAccountId = coaMap[item.code];
+        const offsetAccountId = coaMap[3999];
+
+        if (item.type === 'ASSET') {
+            // Asset: Debit account, Credit Offset
+            const debit = item.value > 0 ? item.value : 0;
+            const credit = item.value < 0 ? -item.value : 0;
+            
+            // If negative value (like applied payments), we credit the AR account
+            if (item.value > 0) {
+                await client.query(`INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0), ($1, $4, 0, $3)`, [jeId, mainAccountId, item.value, offsetAccountId]);
+            } else {
+                await client.query(`INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3), ($1, $4, $3, 0)`, [jeId, mainAccountId, -item.value, offsetAccountId]);
+            }
+        } else {
+            // Liability: Credit account, Debit Offset
+            if (item.value > 0) {
+                await client.query(`INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3), ($1, $4, $3, 0)`, [jeId, mainAccountId, item.value, offsetAccountId]);
+            } else {
+                await client.query(`INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0), ($1, $4, 0, $3)`, [jeId, mainAccountId, -item.value, offsetAccountId]);
+            }
+        }
+    }
+}
+
 // Helper to validate numeric inputs from Excel/CSV (throws descriptive error on "#N/A")
 const validateInt = (val, fieldName, recordName) => {
     if (val === null || val === undefined || val === '') return null;
@@ -111,6 +222,8 @@ router.post('/loans', async (req, res) => {
 
             importedCount++;
         }
+
+        await syncMasterOpeningLedger(client);
 
         await client.query('COMMIT');
         res.status(200).json({ success: true, count: importedCount, message: `Successfully imported ${importedCount} loans.` });
@@ -330,8 +443,9 @@ router.post('/outstanding-invoices', async (req, res) => {
 
             importedCount++;
         }
+        await syncMasterOpeningLedger(client);
         await client.query('COMMIT');
-        res.json({ success: true, count: importedCount, message: `Imported ${importedCount} invoices.` });
+        res.json({ success: true, count: importedCount, message: `Imported ${importedCount} invoices. Ledger synchronized.` });
     } catch (err) {
         await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
@@ -384,8 +498,9 @@ router.post('/outstanding-bills', async (req, res) => {
 
             importedCount++;
         }
+        await syncMasterOpeningLedger(client);
         await client.query('COMMIT');
-        res.json({ success: true, count: importedCount, message: `Imported ${importedCount} vendor bills.` });
+        res.json({ success: true, count: importedCount, message: `Imported ${importedCount} vendor bills. Ledger synchronized.` });
     } catch (err) {
         await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
@@ -467,8 +582,8 @@ router.post('/opening-stock', async (req, res) => {
                     product_id, batch_code, expiry_date, 
                     quantity_initial, quantity_remaining, 
                     mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate,
-                    status, created_at
-                ) VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+                    status, created_at, source_type
+                ) VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), 'MIGRATION')
             `, [
                 validateInt(row.product_id, 'product_id', `Product Batch ${row.batch_code}`), 
                 row.batch_code || 'OPENING-BATCH', 
@@ -485,56 +600,31 @@ router.post('/opening-stock', async (req, res) => {
             importedCount++;
         }
 
-        // --- [ NEW ] AUTOMATED ACCOUNTING SYNC ---
-        // 1. Calculate current total value of all Opening Stock
-        const valRes = await client.query(`
-            SELECT COALESCE(SUM(quantity_initial * purchase_rate), 0) as total_value 
-            FROM inventory_batches 
-            WHERE grn_id IS NULL
-        `);
-        const totalValue = parseFloat(valRes.rows[0].total_value);
-
-        // 2. Identify or Create the Master Opening Journal Entry
-        // We look for JE #1303 or any entry with the specific migration description
-        const masterDesc = 'Opening Migration: Inventory Catch-up';
-        let jeRes = await client.query("SELECT id FROM journal_entries WHERE description = $1", [masterDesc]);
-        
-        let journalEntryId;
-        if (jeRes.rows.length > 0) {
-            journalEntryId = jeRes.rows[0].id;
-        } else {
-            const newJe = await client.query(
-                "INSERT INTO journal_entries (transaction_date, description, reference_type) VALUES (NOW(), $1, 'MIGRATION') RETURNING id",
-                [masterDesc]
-            );
-            journalEntryId = newJe.rows[0].id;
-        }
-
-        // 3. Resolve Account IDs (Dynamic lookup for robustness)
-        const accRes = await client.query("SELECT id, code FROM chart_of_accounts WHERE code IN (1001, 3999)");
-        const invAccId = accRes.rows.find(a => a.code == 1001)?.id;
-        const offsetAccId = accRes.rows.find(a => a.code == 3999)?.id;
-
-        if (invAccId && offsetAccId) {
-            // Delete old lines and insert fresh ones for this entry
-            await client.query("DELETE FROM journal_lines WHERE journal_entry_id = $1", [journalEntryId]);
-            
-            await client.query(`
-                INSERT INTO journal_lines (journal_entry_id, account_id, debit, credit)
-                VALUES ($1, $2, $3, 0), ($1, $4, 0, $3)
-            `, [journalEntryId, invAccId, totalValue, offsetAccId]);
-        }
+        await syncMasterOpeningLedger(client);
 
         await client.query('COMMIT');
         res.json({ 
             success: true, 
             count: importedCount, 
-            inventory_value: totalValue,
-            message: `Imported ${importedCount} batches. Ledger updated to ₹${totalValue.toLocaleString()}.` 
+            message: `Imported ${importedCount} batches. Ledger synchronized.` 
         });
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Opening Stock Import Error:', err);
+        res.status(500).json({ error: err.message });
+    } finally { client.release(); }
+});
+
+// GET /api/migration/recalculate-all
+router.get('/recalculate-all', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        await syncMasterOpeningLedger(client);
+        await client.query('COMMIT');
+        res.json({ success: true, message: "All opening migration ledger entries recalculated successfully." });
+    } catch (err) {
+        await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
     } finally { client.release(); }
 });

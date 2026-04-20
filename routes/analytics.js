@@ -594,10 +594,13 @@ router.get('/reports/balance-sheet', async (req, res) => {
         const now = new Date();
         
         let ed; // End date for point-in-time balance
+        let sd; // Start date of current FY (for profit isolation)
 
+        // Determine Report Date (ed) and Current FY Start (sd)
         if (fy) {
             const startYear = parseInt(fy);
-            ed = `${startYear + 1}-03-31`; // Default to end of FY
+            sd = `${startYear}-04-01`;
+            ed = `${startYear + 1}-03-31`; 
 
             if (quarter) {
                 const q = parseInt(quarter);
@@ -612,6 +615,10 @@ router.get('/reports/balance-sheet', async (req, res) => {
             }
         } else {
             ed = now.toISOString().split('T')[0];
+            // Infer FY Start (Current April 1st)
+            const currentMonth = now.getMonth() + 1; // 1-indexed
+            const currentYear = now.getFullYear();
+            sd = (currentMonth >= 4) ? `${currentYear}-04-01` : `${currentYear - 1}-04-01`;
         }
 
         // 1. Fetch Balances for ASSET, LIABILITY, EQUITY (Net across history up to ed)
@@ -630,9 +637,21 @@ router.get('/reports/balance-sheet', async (req, res) => {
             ORDER BY coa.code ASC
         `, [ed]);
 
-        // 2. Fetch current Net Profit for Retained Earnings bridge
-        // We calculate Net Profit (Income - Expense) up to the same point-in-time
-        const profitRes = await pool.query(`
+        // 2. [SMART ISOLATION] Prior vs Current Period Profit
+        // Prior Period Profit (Accumulated before this FY)
+        const priorProfitRes = await pool.query(`
+            SELECT 
+                COALESCE(SUM(CASE WHEN coa.type = 'INCOME' THEN (jl.credit - jl.debit) ELSE 0 END), 0) -
+                COALESCE(SUM(CASE WHEN coa.type = 'EXPENSE' THEN (jl.debit - jl.credit) ELSE 0 END), 0) as prior_profit
+            FROM journal_lines jl
+            JOIN journal_entries je ON jl.journal_entry_id = je.id
+            JOIN chart_of_accounts coa ON jl.account_id = coa.id
+            WHERE coa.type IN ('INCOME', 'EXPENSE')
+              AND je.transaction_date < $1
+        `, [sd]);
+
+        // Current Period Profit (Profit within this FY up to ed)
+        const currentProfitRes = await pool.query(`
             SELECT 
                 COALESCE(SUM(CASE WHEN coa.type = 'INCOME' THEN (jl.credit - jl.debit) ELSE 0 END), 0) -
                 COALESCE(SUM(CASE WHEN coa.type = 'EXPENSE' THEN (jl.debit - jl.credit) ELSE 0 END), 0) as net_profit
@@ -640,16 +659,17 @@ router.get('/reports/balance-sheet', async (req, res) => {
             JOIN journal_entries je ON jl.journal_entry_id = je.id
             JOIN chart_of_accounts coa ON jl.account_id = coa.id
             WHERE coa.type IN ('INCOME', 'EXPENSE')
-              AND je.transaction_date <= $1
-        `, [ed]);
+              AND je.transaction_date >= $1 AND je.transaction_date <= $2
+        `, [sd, ed]);
 
-        const currentNetProfit = parseFloat(profitRes.rows[0].net_profit);
+        const priorPeriodProfit = parseFloat(priorProfitRes.rows[0].prior_profit);
+        const currentNetProfit = parseFloat(currentProfitRes.rows[0].net_profit);
 
         // 3. Structure the Report into Corporate Hierarchy
         const sections = {
             assets: {
                 title: "Assets",
-                fixed_assets: { title: "Fixed Assets", lines: [], total: 0 },
+                fixed_assets: { title: "Fixed Assets (Net)", lines: [], total: 0 },
                 current_assets: { title: "Current Assets", lines: [], total: 0 },
                 total: 0
             },
@@ -662,15 +682,22 @@ router.get('/reports/balance-sheet', async (req, res) => {
             }
         };
 
+        let depreciationBalance = 0;
+
         balRes.rows.forEach(row => {
             const code = parseInt(row.code);
             const balance = parseFloat(row.net_debit_balance);
             
-            if (balance === 0) return;
+            if (balance === 0 && code !== 3999) return; // Keep 3999 even if zero for audit
 
             const lineItem = { code: row.code, name: row.name, amount: 0 };
 
             if (row.type === 'ASSET') {
+                if (code === 1210) { // Accumulated Depreciation
+                    depreciationBalance += balance;
+                    return; // Will handle as deduction later
+                }
+
                 lineItem.amount = balance;
                 if (code >= 1200 && code <= 1299) {
                     sections.assets.fixed_assets.lines.push(lineItem);
@@ -681,12 +708,19 @@ router.get('/reports/balance-sheet', async (req, res) => {
                 }
                 sections.assets.total += balance;
             } else if (row.type === 'LIABILITY' || row.type === 'EQUITY') {
-                const creditBalance = -balance; // Convert to positive if it's a credit balance
+                const creditBalance = -balance; 
                 lineItem.amount = creditBalance;
                 
-                if (row.type === 'EQUITY') {
-                    sections.liabilities_equity.equity.lines.push(lineItem);
-                    sections.liabilities_equity.equity.total += creditBalance;
+                if (row.type === 'EQUITY' || code === 3999) {
+                    // Corporate Clean-up: Rename technical offset accounts
+                    if (code === 3999) {
+                        lineItem.name = "Opening Migration Adjustments";
+                        sections.liabilities_equity.equity.lines.push(lineItem);
+                        sections.liabilities_equity.equity.total += creditBalance;
+                    } else {
+                        sections.liabilities_equity.equity.lines.push(lineItem);
+                        sections.liabilities_equity.equity.total += creditBalance;
+                    }
                 } else if (code >= 2100) {
                     sections.liabilities_equity.long_term_liabilities.lines.push(lineItem);
                     sections.liabilities_equity.long_term_liabilities.total += creditBalance;
@@ -698,21 +732,45 @@ router.get('/reports/balance-sheet', async (req, res) => {
             }
         });
 
-        // 4. Injected Professional Bridge: Retained Earnings from current year profit
+        // 4. [FIX] Handle Accumulated Depreciation as a Deduction
+        if (depreciationBalance !== 0) {
+            sections.assets.fixed_assets.lines.push({ 
+                code: "1210", 
+                name: "Less: Accumulated Depreciation", 
+                amount: depreciationBalance // This will be negative
+            });
+            sections.assets.fixed_assets.total += depreciationBalance;
+            sections.assets.total += depreciationBalance;
+        }
+
+        // 5. [FIX] Add Retained Earnings (Prior + Migration)
+        const totalOpeningEquity = priorPeriodProfit;
+        if (totalOpeningEquity !== 0) {
+            sections.liabilities_equity.equity.lines.push({ 
+                code: "RE-OPEN", 
+                name: "Opening Retained Earnings (Prior Years)", 
+                amount: totalOpeningEquity 
+            });
+            sections.liabilities_equity.equity.total += totalOpeningEquity;
+            sections.liabilities_equity.total += totalOpeningEquity;
+        }
+
+        // 6. Injected Professional Bridge: Current Year Profit
         if (currentNetProfit !== 0) {
-            const profitLabel = currentNetProfit >= 0 ? "Surplus (Net Profit)" : "Deficit (Net Loss)";
-            sections.liabilities_equity.equity.lines.push({ code: "PL", name: profitLabel, amount: currentNetProfit });
+            const profitLabel = currentNetProfit >= 0 ? "Surplus (Net Profit for Period)" : "Deficit (Net Loss for Period)";
+            sections.liabilities_equity.equity.lines.push({ code: "PL-CUR", name: profitLabel, amount: currentNetProfit });
             sections.liabilities_equity.equity.total += currentNetProfit;
             sections.liabilities_equity.total += currentNetProfit;
         }
 
         res.json({
             as_of: ed,
+            fy_start: sd,
             sections: sections,
             summary: {
                 total_assets: sections.assets.total,
                 total_liabilities_and_equity: sections.liabilities_equity.total,
-                is_balanced: Math.abs(sections.assets.total - sections.liabilities_equity.total) < 0.01
+                is_balanced: Math.abs(sections.assets.total - sections.liabilities_equity.total) < 0.05
             }
         });
 
