@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const XLSX = require('xlsx');
 
 // --- DASHBOARD SUMMARY ---
 router.get('/dashboard/summary', async (req, res) => {
@@ -582,6 +583,96 @@ router.get('/reports/sales-lines', async (req, res) => {
         });
     } catch (err) {
         console.error('Sales Line Report Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- 8. SALES LINE EXPORT (EXCEL) ---
+router.get('/reports/sales-lines/export', async (req, res) => {
+    try {
+        const { start_date, end_date, customer_id, product_id } = req.query;
+        
+        const normalizeDate = (d) => {
+            if (!d) return null;
+            if (typeof d === 'string' && d.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                const [day, month, year] = d.split('/');
+                return `${year}-${month}-${day}`;
+            }
+            return d;
+        };
+
+        const now = new Date();
+        const fyStart = `${now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1}-04-01`;
+        const sd = normalizeDate(start_date) || fyStart;
+        const ed = normalizeDate(end_date) || now.toISOString().split('T')[0];
+
+        let query = `
+            SELECT 
+                si.invoice_date as "Date",
+                si.invoice_number as "Invoice No",
+                c.customer_name as "Customer",
+                p.product_name as "Product",
+                p.product_code as "SKU",
+                b.brand_name as "Brand",
+                cat.category_name as "Category",
+                sil.shipped_qty as "Qty",
+                sil.rate as "Unit Rate",
+                sil.tax_amount as "GST",
+                sil.taxable_amount as "Taxable",
+                sil.amount as "Total Amount",
+                si.status as "Status"
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN products p ON sil.product_id = p.id
+            JOIN customers c ON si.customer_id = c.id
+            JOIN brands b ON p.brand_id = b.id
+            JOIN categories cat ON p.category_id = cat.id
+            WHERE si.invoice_date >= $1 AND si.invoice_date <= $2
+              AND si.status != 'Cancelled'
+        `;
+
+        const params = [sd, ed];
+        if (customer_id) {
+            params.push(customer_id);
+            query += ` AND si.customer_id = $${params.length}`;
+        }
+        if (product_id) {
+            params.push(product_id);
+            query += ` AND sil.product_id = $${params.length}`;
+        }
+
+        query += ` ORDER BY si.invoice_date DESC, si.invoice_number DESC`;
+
+        const result = await pool.query(query, params);
+
+        // Convert data types for Excel
+        const rows = result.rows.map(r => ({
+            ...r,
+            Date: new Date(r.Date).toLocaleDateString('en-IN'),
+            Qty: parseFloat(r.Qty),
+            "Unit Rate": parseFloat(r["Unit Rate"]),
+            GST: parseFloat(r.GST),
+            Taxable: parseFloat(r.Taxable),
+            "Total Amount": parseFloat(r["Total Amount"])
+        }));
+
+        // Create Workbook
+        const worksheet = XLSX.utils.json_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Lines");
+
+        // Generate Buffer
+        const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+        // Set Headers
+        const filename = `Sales_Lines_${sd}_to_${ed}.xlsx`;
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        
+        res.send(buf);
+
+    } catch (err) {
+        console.error('Excel Export Error:', err);
         res.status(500).json({ error: err.message });
     }
 });
