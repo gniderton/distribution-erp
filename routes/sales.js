@@ -1207,6 +1207,71 @@ router.post('/returns/:id/apply', async (req, res) => {
                 [new Date(), `Stock Reversal for Return: ${ret.return_number}`, 'COGS_REV', id, JSON.stringify(stockInLines)]);
         }
 
+        // --- [NEW] ALLOCATION LOGIC (Deduction from Invoice) ---
+        let creditRemaining = total;
+        // Priority: Linked Invoice
+        if (ret.invoice_id && creditRemaining > 0) {
+            const invRes = await client.query(`
+                SELECT id, grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0) as balance
+                FROM sales_invoices WHERE id = $1
+            `, [ret.invoice_id]);
+            if (invRes.rows.length > 0) {
+                const balance = Number(invRes.rows[0].balance);
+                const apply = Math.min(creditRemaining, balance);
+                if (apply > 0.01) {
+                    await client.query(`
+                        INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
+                        VALUES ($1, $2, NOW(), $3, 'ACTIVE')
+                    `, [ret.invoice_id, apply, id]);
+
+                    await client.query(`
+                        UPDATE sales_invoices 
+                        SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                            status = CASE 
+                                WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' 
+                                ELSE 'Partially Paid' 
+                            END
+                        WHERE id = $2
+                    `, [apply, ret.invoice_id]);
+                    creditRemaining -= apply;
+                }
+            }
+        }
+
+        // Spillover: LIFO
+        if (creditRemaining > 0.49) {
+            const pendingRes = await client.query(`
+                SELECT id, (grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0)) as balance
+                FROM sales_invoices
+                WHERE customer_id = $1 AND status != 'Cancelled'
+                AND (grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0)) > 0
+                AND id != $2
+                ORDER BY invoice_date DESC, created_at DESC
+            `, [ret.customer_id, ret.invoice_id || -1]);
+
+            for (const inv of pendingRes.rows) {
+                if (creditRemaining <= 0.49) break;
+                const apply = Math.min(Number(inv.balance), creditRemaining);
+                if (apply > 0.01) {
+                    await client.query(`
+                        INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
+                        VALUES ($1, $2, NOW(), $3, 'ACTIVE')
+                    `, [inv.id, apply, id]);
+
+                    await client.query(`
+                        UPDATE sales_invoices 
+                        SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                            status = CASE 
+                                WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' 
+                                ELSE 'Partially Paid' 
+                            END
+                        WHERE id = $2
+                    `, [apply, inv.id]);
+                    creditRemaining -= apply;
+                }
+            }
+        }
+
         await client.query('COMMIT');
         res.json({ success: true, message: 'Return Applied. Stock and Ledger updated.' });
 

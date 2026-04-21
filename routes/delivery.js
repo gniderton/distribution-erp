@@ -1243,7 +1243,10 @@ router.post('/verify/settle', async (req, res) => {
             const specificInvoices = [...new Set(items.map(i => i.invoice_id).filter(id => id))];
             for (const invId of specificInvoices) {
                 if (creditRemaining <= 0.49) break;
-                const invRes = await client.query(`SELECT (grand_total - COALESCE(amount_paid, 0)) as balance FROM sales_invoices WHERE id = $1`, [invId]);
+                const invRes = await client.query(`
+                    SELECT (grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0)) as balance 
+                    FROM sales_invoices WHERE id = $1
+                `, [invId]);
                 if (invRes.rows.length > 0) {
                     const balance = Number(invRes.rows[0].balance);
                     const apply = Math.min(creditRemaining, balance);
@@ -1264,7 +1267,7 @@ router.post('/verify/settle', async (req, res) => {
             // LAYER 2: Target invoices on the CURRENT TRIP for this customer
             if (creditRemaining > 0.49) {
                 const tripInvoices = await client.query(`
-                    SELECT si.id, (si.grand_total - COALESCE(si.amount_paid, 0)) as balance
+                    SELECT si.id, (si.grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id), 0)) as balance
                     FROM sales_invoices si
                     JOIN trip_invoices ti ON ti.invoice_id = si.id
                     JOIN sync_logs sl ON sl.trip_id = ti.trip_id
@@ -1293,7 +1296,7 @@ router.post('/verify/settle', async (req, res) => {
             // LAYER 3: Standard LIFO (Newest First) for any other unpaid invoices
             if (creditRemaining > 0.49) {
                 const otherInvoices = await client.query(`
-                    SELECT id, (grand_total - COALESCE(amount_paid, 0)) as balance 
+                    SELECT id, (grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0)) as balance 
                     FROM sales_invoices 
                     WHERE customer_id = $1 AND status != 'Paid'
                     ORDER BY invoice_date DESC, id DESC
