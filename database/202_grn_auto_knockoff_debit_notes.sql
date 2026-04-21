@@ -41,6 +41,7 @@ DECLARE
     v_total_debit numeric := 0;
     v_total_credit numeric := 0;
     v_diff numeric := 0;
+    v_batch_id bigint;
 
     -- GST Logic
     v_vendor_gst text;
@@ -157,7 +158,17 @@ BEGIN
             (v_line->>'accepted_qty')::numeric, (v_line->>'accepted_qty')::numeric,
             (v_line->>'expiry_date')::date, true
         FROM products p
-        WHERE p.id = (v_line->>'product_id')::bigint;
+        WHERE p.id = (v_line->>'product_id')::bigint
+        RETURNING id INTO v_batch_id;
+
+        -- [NEW] Stock Traceability Log
+        INSERT INTO stock_traceability (
+            batch_id, product_id, quantity_change, transaction_type, 
+            reference_id, reference_type, notes
+        ) VALUES (
+            v_batch_id, (v_line->>'product_id')::bigint, (v_line->>'accepted_qty')::numeric, 
+            'IN', v_header_id, 'Purchase Invoice', 'GRN Inwarding'
+        );
     END LOOP;
 
     -- 4. Create Accounting Journal Entry

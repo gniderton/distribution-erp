@@ -81,6 +81,7 @@ app.use('/api/sales', require('./routes/sales'));
 app.use('/api/sales', require('./routes/unified_sales')); // Unified orders + invoices view
 
 app.use('/api/stock/adjust', require('./routes/stock_adjustments'));
+app.use('/api/inventory/ledger', require('./routes/inventory_ledger'));
 
 // [NEW] Sales Module Routes
 app.use('/api/customers', require('./routes/customers'));

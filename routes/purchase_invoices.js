@@ -325,8 +325,26 @@ router.post('/:id/reverse', async (req, res) => {
             WHERE id = $1
         `, [id, reversed_by_id]);
 
-        // 5. Void Batches (Remove Stock)
-        // Fix: Use correct columns (quantity_remaining, purchase_invoice_line_id)
+        // 5. Void Batches (Remove Stock) & Traceability
+        const batchesToVoid = await client.query(`
+            SELECT id, product_id, quantity_remaining 
+            FROM inventory_batches 
+            WHERE purchase_invoice_line_id IN (
+                SELECT id FROM purchase_invoice_lines WHERE purchase_invoice_header_id = $1
+            )
+        `, [id]);
+
+        for (const b of batchesToVoid.rows) {
+            if (Number(b.quantity_remaining) > 0) {
+                await client.query(`
+                    INSERT INTO stock_traceability (
+                        batch_id, product_id, quantity_change, transaction_type, 
+                        reference_id, reference_type, notes
+                    ) VALUES ($1, $2, $3, 'OUT', $4, 'Purchase Invoice Reversal', $5)
+                `, [b.id, b.product_id, -Number(b.quantity_remaining), id, `GRN Reversal: ${invoice.invoice_number}`]);
+            }
+        }
+
         await client.query(`
             UPDATE inventory_batches 
             SET quantity_remaining = 0, is_active = false 

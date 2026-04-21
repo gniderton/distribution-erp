@@ -242,6 +242,14 @@ router.post('/', async (req, res) => {
                             WHERE id = $2
                         `, [deduct, batch.id]);
 
+                        // [NEW] Stock Traceability Log
+                        await client.query(`
+                            INSERT INTO stock_traceability (
+                                batch_id, product_id, quantity_change, transaction_type, 
+                                reference_id, reference_type, notes
+                            ) VALUES ($1, $2, $3, 'OUT', $4, $5, $6)
+                        `, [batch.id, line.product_id, -deduct, newId, note_type, `Purchase Return via ${dnNumber}`]);
+
                         remainingReturnQty -= deduct;
                     }
 
@@ -744,14 +752,23 @@ router.post('/:id/reverse', async (req, res) => {
         for (const line of linesRes.rows) {
             if (line.qty > 0) {
                 // Restoration Logic: Find the batch and put stock back
-                // We use batch_number and product_id to identify the target batch
-                // If multiple batches exist with same code, we target the one linked to a GRN for better traceability
-                await client.query(`
+                const restoreRes = await client.query(`
                     UPDATE inventory_batches 
                     SET quantity_remaining = quantity_remaining + $1 
                     WHERE batch_code = $2 AND product_id = $3
                     AND (grn_id IS NOT NULL OR is_active = true)
+                    RETURNING id
                 `, [line.qty, line.batch_number, line.product_id]);
+
+                if (restoreRes.rows.length > 0) {
+                    const batchId = restoreRes.rows[0].id;
+                    await client.query(`
+                        INSERT INTO stock_traceability (
+                            batch_id, product_id, quantity_change, transaction_type, 
+                            reference_id, reference_type, notes
+                        ) VALUES ($1, $2, $3, 'IN', $4, 'Debit Note Reversal', $5)
+                    `, [batchId, line.product_id, line.qty, id, `Reversal of DN: ${dn.debit_note_number}`]);
+                }
             }
         }
 
