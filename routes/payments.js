@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const XLSX = require('xlsx');
 
 // GET /api/payments - List Payments (Filtered)
 router.get('/', async (req, res) => {
@@ -830,12 +831,84 @@ router.get('/allocations', async (req, res) => {
 
         if (where.length > 0) query += ` WHERE ${where.join(' AND ')}`;
 
-        query += ` ORDER BY pa.allocated_at DESC LIMIT $${pIdx} OFFSET $${pIdx + 1}`;
-        params.push(limit, offset);
-
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/payments/allocations/export - Export all payment allocations to Excel
+router.get('/allocations/export', async (req, res) => {
+    try {
+        const { customer_id, start_date, end_date } = req.query;
+        
+        let query = `
+            SELECT 
+                pa.allocated_at as "Allocation Date",
+                c.customer_name as "Customer",
+                cp.payment_number as "Payment No",
+                cp.payment_date as "Payment Date",
+                cp.payment_mode as "Mode",
+                pa.amount as "Allocated Amount",
+                si.invoice_number as "Invoice No",
+                si.invoice_date as "Invoice Date",
+                si.grand_total as "Invoice Amount",
+                pa.status as "Status"
+            FROM customer_payment_allocations pa
+            JOIN customer_payments cp ON pa.payment_id = cp.id
+            JOIN sales_invoices si ON pa.invoice_id = si.id
+            JOIN customers c ON cp.customer_id = c.id
+        `;
+        
+        const params = [];
+        const where = [];
+        let pIdx = 1;
+
+        if (customer_id) {
+            where.push(`cp.customer_id = $${pIdx}`);
+            params.push(customer_id);
+            pIdx++;
+        }
+        if (start_date) {
+            where.push(`pa.allocated_at >= $${pIdx}`);
+            params.push(start_date);
+            pIdx++;
+        }
+        if (end_date) {
+            where.push(`pa.allocated_at <= $${pIdx}`);
+            params.push(end_date);
+            pIdx++;
+        }
+
+        if (where.length > 0) query += ` WHERE ${where.join(' AND ')}`;
+        query += ` ORDER BY pa.allocated_at DESC`;
+
+        const result = await pool.query(query, params);
+
+        // Data Formatting
+        const rows = result.rows.map(r => ({
+            ...r,
+            "Allocation Date": new Date(r["Allocation Date"]).toLocaleDateString('en-IN'),
+            "Payment Date": new Date(r["Payment Date"]).toLocaleDateString('en-IN'),
+            "Invoice Date": new Date(r["Invoice Date"]).toLocaleDateString('en-IN'),
+            "Allocated Amount": parseFloat(r["Allocated Amount"]),
+            "Invoice Amount": parseFloat(r["Invoice Amount"])
+        }));
+
+        // Excel Generation
+        const worksheet = XLSX.utils.json_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Allocations");
+        const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+        const filename = `Payment_Allocations_${new Date().toISOString().split('T')[0]}.xlsx`;
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(buf);
+
+    } catch (err) {
+        console.error('Allocation Export Error:', err);
         res.status(500).json({ error: err.message });
     }
 });
