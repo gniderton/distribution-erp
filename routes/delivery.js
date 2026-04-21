@@ -1110,11 +1110,11 @@ router.post('/verify/settle', async (req, res) => {
 
                 const qtyNum = Number(ret.qty);
                 const unitScheme = Math.max(0, baseRate - netValuation);
-                const grossAmount = qtyNum * baseRate;
-                const schemeAmount = qtyNum * unitScheme;
-                const taxableAmount = grossAmount - schemeAmount;
-                const taxAmount = taxableAmount * (taxPct / 100);
-                const itemTotal = taxableAmount + taxAmount;
+                const grossAmount = Number((qtyNum * baseRate).toFixed(2));
+                const schemeAmount = Number((qtyNum * unitScheme).toFixed(2));
+                const taxableAmount = Number((grossAmount - schemeAmount).toFixed(2));
+                const taxAmount = Number((taxableAmount * (taxPct / 100)).toFixed(2));
+                const itemTotal = Number((taxableAmount + taxAmount).toFixed(2));
 
                 lineItems.push({
                     ret,
@@ -1127,12 +1127,13 @@ router.post('/verify/settle', async (req, res) => {
                     itemTotal
                 });
 
-                totalTaxable += taxableAmount;
-                totalTax += taxAmount;
-                totalGrand += itemTotal;
+                totalTaxable = Number((totalTaxable + taxableAmount).toFixed(2));
+                totalTax = Number((totalTax + taxAmount).toFixed(2));
+                totalGrand = Number((totalGrand + itemTotal).toFixed(2));
             }
 
             const roundedGrandTotal = Math.round(totalGrand);
+            const roundOff = Number((roundedGrandTotal - totalGrand).toFixed(2));
             const sourceInvoiceId = items[0]?.invoice_id || null;
 
             // 3.4 Create Consolidate Header
@@ -1166,9 +1167,20 @@ router.post('/verify/settle', async (req, res) => {
                         const existing = await client.query("SELECT id FROM inventory_batches WHERE product_id = $1 AND batch_code = $2 AND status = $3", [orig.product_id, orig.batch_code, targetStatus]);
                         if (existing.rows.length) finalBatchId = existing.rows[0].id;
                         else {
-                            const clone = await client.query(`INSERT INTO inventory_batches (product_id, grn_id, batch_code, mrp, purchase_rate, net_purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate, quantity_initial, quantity_remaining, expiry_date, is_active, status)
-                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, 0, $11, true, $12) RETURNING id`,
-                                [orig.product_id, orig.grn_id, orig.batch_code, orig.mrp, orig.purchase_rate, orig.net_purchase_rate, orig.distributor_rate, orig.wholesale_rate, orig.dealer_rate, orig.retail_rate, orig.expiry_date, targetStatus]);
+                            const clone = await client.query(`
+                                INSERT INTO inventory_batches (
+                                    product_id, grn_id, batch_code, mrp, purchase_rate, net_purchase_rate, 
+                                    distributor_rate, wholesale_rate, dealer_rate, retail_rate, 
+                                    quantity_initial, quantity_remaining, expiry_date, is_active, status
+                                )
+                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, 0, $11, true, $12) 
+                                RETURNING id
+                            `, [
+                                orig.product_id, orig.grn_id, orig.batch_code, orig.mrp, 
+                                orig.purchase_rate, orig.net_purchase_rate, orig.distributor_rate, 
+                                orig.wholesale_rate, orig.dealer_rate, orig.retail_rate, 
+                                orig.expiry_date, targetStatus
+                            ]);
                             finalBatchId = clone.rows[0].id;
                         }
                     }
@@ -1179,7 +1191,7 @@ router.post('/verify/settle', async (req, res) => {
             }
 
             // 3.6 Post Consolidated Journal Entry
-            const acc_inv = 1001, acc_ar = 1101, acc_sr = 4003, acc_cgst = 2011, acc_sgst = 2012, acc_cogs = 5001;
+            const acc_inv = 1001, acc_ar = 1101, acc_sr = 4003, acc_cgst = 2011, acc_sgst = 2012, acc_cogs = 5001, acc_round = 5003;
             
             // Calculate Total Cost of Goods being returned to stock
             let totalReturnCost = 0;
@@ -1193,8 +1205,8 @@ router.post('/verify/settle', async (req, res) => {
             }
             totalReturnCost = Number(totalReturnCost.toFixed(2));
 
-            // Split Tax matching sales.js logic
-            const balancingReturns = Number((roundedGrandTotal - totalTax).toFixed(2));
+            // Ensure perfect balance: Returns + Tax + Rounding = AR
+            const balancingReturns = Number((roundedGrandTotal - totalTax - roundOff).toFixed(2));
             const ledgerLines = [
                 { code: acc_sr, debit: balancingReturns, credit: 0 },
                 { code: acc_ar, debit: 0, credit: Number(roundedGrandTotal) }
@@ -1211,6 +1223,14 @@ router.post('/verify/settle', async (req, res) => {
                 const otherHalf = Number((totalTax - halfTax).toFixed(2));
                 ledgerLines.push({ code: acc_cgst, debit: halfTax, credit: 0 });
                 ledgerLines.push({ code: acc_sgst, debit: otherHalf, credit: 0 });
+            }
+
+            if (roundOff !== 0) {
+                if (roundOff > 0) {
+                    ledgerLines.push({ code: acc_round, debit: Math.abs(roundOff), credit: 0 });
+                } else {
+                    ledgerLines.push({ code: acc_round, debit: 0, credit: Math.abs(roundOff) });
+                }
             }
 
             await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
