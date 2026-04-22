@@ -27,11 +27,13 @@ router.post('/', async (req, res) => {
             state,
             district,
             pincode,
-            bank_account_id,
+            bank_account_id: raw_bank_account_id,
             account_no,
             ifsc_code,
             opening_balance
         } = req.body;
+
+        const bank_account_id = raw_bank_account_id && raw_bank_account_id !== '' ? raw_bank_account_id : null;
 
         await client.query('BEGIN');
 
@@ -74,6 +76,10 @@ router.put('/:id', async (req, res) => {
         delete fields.entity_code;
         delete fields.created_at;
         delete fields.updated_at;
+        
+        if (fields.hasOwnProperty('bank_account_id')) {
+            fields.bank_account_id = fields.bank_account_id && fields.bank_account_id !== '' ? fields.bank_account_id : null;
+        }
 
         const keys = Object.keys(fields);
         if (keys.length === 0) return res.status(400).json({ error: "No fields to update" });
