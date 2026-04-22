@@ -763,6 +763,7 @@ router.post('/returns/manual', async (req, res) => {
         let totalTaxable = 0;
         let totalTax = 0;
         let grandTotal = 0;
+        let totalReturnCost = 0;
 
         // 3. Insert Header
         const headRes = await client.query(`
@@ -865,6 +866,9 @@ router.post('/returns/manual', async (req, res) => {
                         reference_id, reference_type, notes
                     ) VALUES ($1, $2, $3, 'IN', $4, 'Sales Return', $5)
                 `, [finalBatchId, productId, qty, returnId, `Manual Return - Routed to ${inventoryStatus} bucket`]);
+
+                // Accumulate cost for inventory reversal
+                totalReturnCost += Number(qty) * Number(orig.purchase_rate || 0);
             }
 
             totalTaxable += taxableAmount;
@@ -961,16 +965,6 @@ router.post('/returns/manual', async (req, res) => {
         // Ensure perfect balance: Returns + Tax + Rounding = AR
         const balancingReturns = Number((roundedGrandTotal - totalTax - roundOff).toFixed(2));
 
-        // Calculate Total Cost of Goods being returned to stock
-        let totalReturnCost = 0;
-        for (const item of items) {
-            if (item.return_to_stock === true && item.batch_id) {
-                const batchRes = await client.query("SELECT purchase_rate FROM inventory_batches WHERE id = $1", [item.batch_id]);
-                if (batchRes.rows.length > 0) {
-                    totalReturnCost += Number(item.Qty || 0) * Number(batchRes.rows[0].purchase_rate);
-                }
-            }
-        }
         totalReturnCost = Number(totalReturnCost.toFixed(2));
 
         const ledgerLines = [
