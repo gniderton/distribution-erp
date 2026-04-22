@@ -5,7 +5,12 @@ const { pool } = require('../config/db');
 // 1. List all entities
 router.get('/', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM asset_entities ORDER BY entity_name ASC');
+        const result = await pool.query(`
+            SELECT ae.*, mb.bank_name 
+            FROM asset_entities ae
+            LEFT JOIN master_banks mb ON ae.bank_account_id = mb.id
+            ORDER BY ae.entity_name ASC
+        `);
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
