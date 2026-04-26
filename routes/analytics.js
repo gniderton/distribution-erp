@@ -224,13 +224,14 @@ router.get('/employees/:id/dashboard', async (req, res) => {
                 WHERE customer_id = ANY($1) AND ${dateFilter} AND status != 'Cancelled'
             `, params);
 
+            const creditParams = endDate ? [customerIds, startDate, endDate] : [customerIds, startDate];
             const creditRes = await pool.query(`
                 SELECT COALESCE(AVG(p.payment_date - sih.invoice_date), 0) as avg_days
                 FROM customer_payment_allocations cpa
                 JOIN sales_invoices sih ON cpa.invoice_id = sih.id
                 JOIN customer_payments p ON cpa.payment_id = p.id
-                WHERE sih.customer_id = ANY($1) AND sih.invoice_date >= $2 ${endDate ? 'AND sih.invoice_date <= $4' : ''} AND cpa.status = 'ACTIVE'
-            `, params);
+                WHERE sih.customer_id = ANY($1) AND sih.invoice_date >= $2 ${endDate ? 'AND sih.invoice_date <= $3' : ''} AND cpa.status = 'ACTIVE'
+            `, creditParams);
 
             const s = stats.rows[0];
             return {
