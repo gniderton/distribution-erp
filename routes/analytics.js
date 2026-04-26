@@ -22,14 +22,14 @@ router.get('/dashboard/summary', async (req, res) => {
         const collectionRes = await pool.query(`
             SELECT coalesce(SUM(amount), 0) as total_collected 
             FROM customer_payments 
-            WHERE status = 'Verified'
+            WHERE verification_status = 'Verified'
         `);
 
         const totalOutstanding = Number(outstandingRes.rows[0].total_invoiced) - Number(collectionRes.rows[0].total_collected);
 
         // 3. Pending Verification (Orders & Payments)
         const pendingOrders = await pool.query("SELECT COUNT(*) FROM sales_orders WHERE status = 'Confirmed'");
-        const pendingPayments = await pool.query("SELECT COUNT(*) FROM customer_payments WHERE status = 'Pending'");
+        const pendingPayments = await pool.query("SELECT COUNT(*) FROM customer_payments WHERE verification_status = 'Pending'");
 
         res.json({
             sales_30d: salesRes.rows[0].total_sales,
@@ -202,7 +202,7 @@ router.get('/employees/:id/dashboard', async (req, res) => {
                 SELECT 
                     COALESCE(SUM(total_taxable), 0) as gross_sales,
                     (SELECT COALESCE(SUM(total_taxable), 0) FROM sales_returns WHERE customer_id = ANY($1) AND return_date >= $2 AND status = 'Applied') as returns,
-                    (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE collected_by = $3 AND payment_date >= $2 AND status = 'Verified') as collection
+                    (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE collected_by = $3 AND payment_date >= $2 AND verification_status = 'Verified') as collection
                 FROM sales_invoices 
                 WHERE customer_id = ANY($1) AND invoice_date >= $2 AND status != 'Cancelled'
             `, [customerIds, startDate, id]);
