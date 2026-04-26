@@ -183,10 +183,18 @@ router.get('/employees/:id/dashboard', async (req, res) => {
         if (isNaN(id) || isNaN(parseInt(id))) {
             return res.status(400).json({ error: "Invalid Employee ID" });
         }
+
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
+        
         const monthStart = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
+        
+        // Previous Month Range
+        const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const prevMonthStart = `${prevMonthDate.getFullYear()}-${(prevMonthDate.getMonth() + 1).toString().padStart(2, '0')}-01`;
+        const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+
         let fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
         const fyStart = `${fyStartYear}-04-01`;
 
@@ -194,26 +202,35 @@ router.get('/employees/:id/dashboard', async (req, res) => {
         const customerIds = custRes.rows.map(r => r.id);
 
         if (customerIds.length === 0) {
-            return res.json({ message: "No customers assigned", metrics: { month: {}, fy: {} } });
+            return res.json({ 
+                message: "No customers assigned", 
+                metrics: { month: {}, prev_month: {}, fy: {} },
+                productivity: { active_customers: 0, new_customers: 0 },
+                visit_efficiency: { total_visits: 0, conversion_rate: 0 }
+            });
         }
 
-        const getPeriodMetrics = async (startDate) => {
+        const getPeriodMetrics = async (startDate, endDate = null) => {
+            const dateFilter = endDate ? 'invoice_date >= $2 AND invoice_date <= $4' : 'invoice_date >= $2';
+            const params = endDate ? [customerIds, startDate, id, endDate] : [customerIds, startDate, id];
+            
             const stats = await pool.query(`
                 SELECT 
                     COALESCE(SUM(total_taxable), 0) as gross_sales,
-                    (SELECT COALESCE(SUM(total_taxable), 0) FROM sales_returns WHERE customer_id = ANY($1) AND return_date >= $2 AND status = 'Applied') as returns,
-                    (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE collected_by = $3 AND payment_date >= $2 AND verification_status = 'Verified') as collection
+                    (SELECT COALESCE(SUM(total_taxable), 0) FROM sales_returns WHERE customer_id = ANY($1) AND return_date >= $2 ${endDate ? 'AND return_date <= $4' : ''} AND status = 'Applied') as returns,
+                    (SELECT COALESCE(SUM(amount), 0) FROM customer_payments WHERE collected_by = $3 AND payment_date >= $2 ${endDate ? 'AND payment_date <= $4' : ''} AND verification_status = 'Verified') as collection,
+                    (SELECT COUNT(*) FROM sales_orders WHERE created_by = $3 AND order_date >= $2 ${endDate ? 'AND order_date <= $4' : ''} AND status != 'Cancelled') as order_count
                 FROM sales_invoices 
-                WHERE customer_id = ANY($1) AND invoice_date >= $2 AND status != 'Cancelled'
-            `, [customerIds, startDate, id]);
+                WHERE customer_id = ANY($1) AND ${dateFilter} AND status != 'Cancelled'
+            `, params);
 
             const creditRes = await pool.query(`
                 SELECT COALESCE(AVG(p.payment_date - sih.invoice_date), 0) as avg_days
                 FROM customer_payment_allocations cpa
                 JOIN sales_invoices sih ON cpa.invoice_id = sih.id
                 JOIN customer_payments p ON cpa.payment_id = p.id
-                WHERE sih.customer_id = ANY($1) AND sih.invoice_date >= $2 AND cpa.status = 'ACTIVE'
-            `, [customerIds, startDate]);
+                WHERE sih.customer_id = ANY($1) AND sih.invoice_date >= $2 ${endDate ? 'AND sih.invoice_date <= $4' : ''} AND cpa.status = 'ACTIVE'
+            `, params);
 
             const s = stats.rows[0];
             return {
@@ -221,12 +238,30 @@ router.get('/employees/:id/dashboard', async (req, res) => {
                 returns_taxable: parseFloat(s.returns),
                 net_sales_taxable: parseFloat(s.gross_sales) - parseFloat(s.returns),
                 collection: parseFloat(s.collection),
+                order_count: parseInt(s.order_count),
                 avg_credit_days: Math.round(parseFloat(creditRes.rows[0].avg_days))
             };
         };
 
         const monthMetrics = await getPeriodMetrics(monthStart);
+        const prevMonthMetrics = await getPeriodMetrics(prevMonthStart, prevMonthEnd);
         const fyMetrics = await getPeriodMetrics(fyStart);
+
+        // Productivity & visits
+        const productivityRes = await pool.query(`
+            SELECT 
+                (SELECT COUNT(DISTINCT customer_id) FROM sales_invoices WHERE customer_id = ANY($1) AND invoice_date >= $2 AND status != 'Cancelled') as active_customers,
+                (SELECT COUNT(*) FROM customers WHERE dse_id = $3 AND created_at >= $2) as new_customers,
+                (SELECT COUNT(*) FROM customer_visits WHERE dse_id = $3 AND visit_date >= $2) as total_visits
+        `, [customerIds, monthStart, id]);
+
+        const p = productivityRes.rows[0];
+        const visitEfficiency = {
+            total_visits: parseInt(p.total_visits),
+            active_customers_covered: parseInt(p.active_customers),
+            conversion_rate: p.total_visits > 0 ? ((monthMetrics.order_count / p.total_visits) * 100).toFixed(1) : 0,
+            avg_order_value: monthMetrics.order_count > 0 ? (monthMetrics.gross_sales_taxable / monthMetrics.order_count).toFixed(2) : 0
+        };
 
         const topCustomers = await pool.query(`
             SELECT c.customer_name, COALESCE(SUM(si.total_taxable), 0) as taxable_sales
@@ -249,6 +284,17 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             ORDER BY taxable_sales DESC
         `, [customerIds, monthStart]);
 
+        const categorySales = await pool.query(`
+            SELECT cat.category_name, COALESCE(SUM(sil.rate * sil.shipped_qty), 0) as taxable_sales
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN products p ON sil.product_id = p.id
+            JOIN categories cat ON p.category_id = cat.id
+            WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.status != 'Cancelled'
+            GROUP BY cat.id, cat.category_name
+            ORDER BY taxable_sales DESC
+        `, [customerIds, monthStart]);
+
         const ageingRes = await pool.query(`
             SELECT 
                 CASE 
@@ -265,6 +311,19 @@ router.get('/employees/:id/dashboard', async (req, res) => {
         const ageingMap = { '0-30 Days': 0, '31-60 Days': 0, '61+ Days': 0 };
         ageingRes.rows.forEach(r => ageingMap[r.bucket] = parseFloat(r.outstanding));
 
+        // Focus Area: Top 5 Overdue Customers (Specific Focus)
+        const overdueFocus = await pool.query(`
+            SELECT c.customer_name, COALESCE(SUM(si.grand_total - si.paid_amount), 0) as overdue_amount,
+                   MAX(CURRENT_DATE - si.invoice_date) as oldest_invoice_days
+            FROM customers c
+            JOIN sales_invoices si ON c.id = si.customer_id
+            WHERE c.dse_id = $1 AND si.status != 'Paid' AND si.status != 'Cancelled'
+              AND (CURRENT_DATE - si.invoice_date) > 30
+            GROUP BY c.id, c.customer_name
+            ORDER BY overdue_amount DESC
+            LIMIT 5
+        `, [id]);
+
         const targetRes = await pool.query(`
             SELECT t.*, p.name as plan_name,
                 COALESCE((SELECT SUM(points) FROM performance_points_history WHERE employee_id = $1 AND EXTRACT(MONTH FROM date) = $2 AND EXTRACT(YEAR FROM date) = $3), 0) as total_points
@@ -273,12 +332,43 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             WHERE t.employee_id = $1 AND t.month = $2 AND t.year = $3
         `, [id, currentMonth, currentYear]);
 
+        // Daily Trend (Last 30 Days)
+        const dailyTrend = await pool.query(`
+            WITH RECURSIVE days AS (
+                SELECT CURRENT_DATE - INTERVAL '29 days' as day_date
+                UNION ALL
+                SELECT day_date + INTERVAL '1 day' FROM days WHERE day_date < CURRENT_DATE
+            )
+            SELECT 
+                TO_CHAR(d.day_date, 'DD Mon') as label,
+                COALESCE((SELECT SUM(total_taxable) FROM sales_invoices WHERE customer_id = ANY($1) AND invoice_date = d.day_date AND status != 'Cancelled'), 0) as sales,
+                COALESCE((SELECT SUM(amount) FROM customer_payments WHERE collected_by = $2 AND payment_date = d.day_date AND verification_status = 'Verified'), 0) as collections
+            FROM days d
+            ORDER BY d.day_date ASC
+        `, [customerIds, id]);
+
         res.json({
-            metrics: { month: monthMetrics, fy: fyMetrics },
+            metrics: { 
+                month: monthMetrics, 
+                prev_month: prevMonthMetrics, 
+                fy: fyMetrics,
+                growth_sales_pct: prevMonthMetrics.net_sales_taxable > 0 ? (((monthMetrics.net_sales_taxable - prevMonthMetrics.net_sales_taxable) / prevMonthMetrics.net_sales_taxable) * 100).toFixed(1) : 0,
+                growth_collection_pct: prevMonthMetrics.collection > 0 ? (((monthMetrics.collection - prevMonthMetrics.collection) / prevMonthMetrics.collection) * 100).toFixed(1) : 0
+            },
+            productivity: {
+                active_customers: parseInt(p.active_customers),
+                total_assigned_customers: customerIds.length,
+                market_coverage_pct: ((parseInt(p.active_customers) / customerIds.length) * 100).toFixed(1),
+                new_customers_this_month: parseInt(p.new_customers)
+            },
+            visit_efficiency: visitEfficiency,
             top_customers: topCustomers.rows,
             brand_sales: brandSales.rows,
+            category_sales: categorySales.rows,
             ageing: ageingMap,
-            performance: targetRes.rows[0] || { total_points: 0, plan_name: 'No Plan Assigned' }
+            overdue_focus: overdueFocus.rows,
+            performance: targetRes.rows[0] || { total_points: 0, plan_name: 'No Plan Assigned' },
+            daily_trend: dailyTrend.rows
         });
 
     } catch (err) {
