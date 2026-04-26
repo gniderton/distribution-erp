@@ -344,13 +344,13 @@ router.get('/employees/:id/dashboard', async (req, res) => {
                 COALESCE((SELECT SUM(total_taxable) FROM sales_invoices WHERE customer_id = ANY($1) AND invoice_date = d.day_date AND status != 'Cancelled'), 0) as sales,
                 COALESCE((SELECT SUM(amount) FROM customer_payments WHERE collected_by = $2 AND payment_date = d.day_date AND verification_status = 'Verified'), 0) as collections,
                 COALESCE((
-                    SELECT SUM(si.grand_total - si.paid_amount) 
-                    FROM sales_invoices si
-                    JOIN customers c ON si.customer_id = c.id
+                    SELECT SUM(vl.debit_amount - vl.credit_amount) 
+                    FROM view_customer_ledger vl
+                    JOIN customers c ON vl.customer_id = c.id
                     JOIN routes r ON c.route_id = r.id
                     WHERE c.dse_id = $2 
                       AND r.route_name ILIKE TRIM(TO_CHAR(d.day_date, 'Day'))
-                      AND si.status NOT IN ('Paid', 'Cancelled')
+                      AND vl.date <= d.day_date
                 ), 0) as route_receivables
             FROM days d
             ORDER BY d.day_date ASC
