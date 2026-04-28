@@ -56,18 +56,41 @@ router.get('/products/:id/profile', async (req, res) => {
             LIMIT 10
         `, [id]);
 
-        // 5. Margin & Performance Analytics (Current Month)
+        // 5. Margin & Performance Analytics (Current & Previous Month)
         const performance = await pool.query(`
-            SELECT 
-                COALESCE(SUM(sil.shipped_qty), 0) as monthly_qty,
-                COALESCE(SUM(sil.taxable_amount), 0) as monthly_taxable,
-                COALESCE(AVG(sil.rate), 0) as avg_sales_rate,
-                (SELECT AVG(rate) FROM purchase_invoice_lines WHERE product_id = $1 AND created_at >= date_trunc('month', CURRENT_DATE)) as avg_purchase_rate
-            FROM sales_invoice_lines sil
-            JOIN sales_invoices si ON sil.invoice_id = si.id
-            WHERE sil.product_id = $1 
-              AND si.invoice_date >= date_trunc('month', CURRENT_DATE)
-              AND si.status != 'Cancelled'
+            WITH current_month AS (
+                SELECT 
+                    COALESCE(SUM(sil.shipped_qty), 0) as qty,
+                    COALESCE(SUM(sil.taxable_amount), 0) as taxable,
+                    COALESCE(AVG(sil.rate), 0) as avg_rate,
+                    COALESCE(MAX(sil.rate), 0) as max_rate,
+                    COALESCE(MIN(sil.rate), 0) as min_rate,
+                    MAX(si.invoice_date) as last_sale_date
+                FROM sales_invoice_lines sil
+                JOIN sales_invoices si ON sil.invoice_id = si.id
+                WHERE sil.product_id = $1 
+                  AND si.invoice_date >= date_trunc('month', CURRENT_DATE)
+                  AND si.status != 'Cancelled'
+            ),
+            prev_month AS (
+                SELECT 
+                    COALESCE(SUM(sil.shipped_qty), 0) as qty
+                FROM sales_invoice_lines sil
+                JOIN sales_invoices si ON sil.invoice_id = si.id
+                WHERE sil.product_id = $1 
+                  AND si.invoice_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month')
+                  AND si.invoice_date < date_trunc('month', CURRENT_DATE)
+                  AND si.status != 'Cancelled'
+            ),
+            returns_agg AS (
+                SELECT COALESCE(SUM(qty), 0) as return_qty
+                FROM sales_return_lines srl
+                JOIN sales_returns sr ON srl.return_id = sr.id
+                WHERE srl.product_id = $1 AND sr.status = 'Applied'
+                  AND sr.return_date >= date_trunc('month', CURRENT_DATE)
+            )
+            SELECT c.*, p.qty as prev_month_qty, r.return_qty
+            FROM current_month c, prev_month p, returns_agg r
         `, [id]);
 
         // 6. Top Customers for this Product
@@ -93,32 +116,56 @@ router.get('/products/:id/profile', async (req, res) => {
             ORDER BY date_trunc('month', si.invoice_date) ASC
         `, [id]);
 
-        // 8. Batch Breakdown
+        // 8. Batch Breakdown & Valuation
         const batches = await pool.query(`
-            SELECT batch_code, quantity_remaining, purchase_rate, mrp, expiry_date, status
+            SELECT 
+                batch_code, quantity_remaining, purchase_rate, mrp, expiry_date, status,
+                (quantity_remaining * purchase_rate) as batch_value,
+                CASE WHEN expiry_date <= CURRENT_DATE + INTERVAL '90 days' THEN true ELSE false END as is_near_expiry
             FROM inventory_batches
             WHERE product_id = $1 AND quantity_remaining > 0
             ORDER BY expiry_date ASC
         `, [id]);
 
-        const perf = performance.rows[0];
-        const avgSales = parseFloat(perf.avg_sales_rate || 0);
-        const avgPurch = parseFloat(perf.avg_purchase_rate || productInfo.rows[0].purchase_rate || 0);
-        const margin = avgSales > 0 ? ((avgSales - avgPurch) / avgSales * 100).toFixed(2) : 0;
+        const cur = performance.rows[0];
+        const avgSalesRate = parseFloat(cur.avg_rate || 0);
+        const avgPurchaseRate = parseFloat(productInfo.rows[0].purchase_rate || 0);
+        
+        // Advanced Calcs
+        const totalStock = parseFloat(productInfo.rows[0].total_stock || 0);
+        const monthlyQty = parseFloat(cur.qty || 0);
+        const dailyBurnRate = monthlyQty / 30;
+        const weeksOfCover = dailyBurnRate > 0 ? (totalStock / dailyBurnRate / 7).toFixed(1) : '99+';
+        
+        const momGrowth = cur.prev_month_qty > 0 ? (((cur.qty - cur.prev_month_qty) / cur.prev_month_qty) * 100).toFixed(1) : 0;
+        const returnRate = cur.qty > 0 ? ((cur.return_qty / cur.qty) * 100).toFixed(1) : 0;
+        
+        const totalValuation = batches.rows.reduce((acc, b) => acc + parseFloat(b.batch_value), 0);
+        const nearExpiryQty = batches.rows.filter(b => b.is_near_expiry).reduce((acc, b) => acc + parseFloat(b.quantity_remaining), 0);
+
+        const lastSaleDate = cur.last_sale_date ? new Date(cur.last_sale_date) : null;
+        const daysSinceLastSale = lastSaleDate ? Math.floor((new Date() - lastSaleDate) / (1000 * 60 * 60 * 24)) : 'N/A';
 
         res.json({
             product: productInfo.rows[0],
             analytics: {
-                monthly_qty: parseFloat(perf.monthly_qty),
-                monthly_value: parseFloat(perf.monthly_taxable),
-                avg_sales_rate: avgSales.toFixed(2),
-                avg_purchase_rate: avgPurch.toFixed(2),
-                margin_pct: margin,
+                monthly_qty: monthlyQty,
+                monthly_value: parseFloat(cur.taxable),
+                avg_sales_rate: avgSalesRate.toFixed(2),
+                avg_purchase_rate: avgPurchaseRate.toFixed(2),
+                margin_pct: avgSalesRate > 0 ? (((avgSalesRate - avgPurchaseRate) / avgSalesRate) * 100).toFixed(2) : 0,
+                price_range: { max: parseFloat(cur.max_rate), min: parseFloat(cur.min_rate) },
+                growth: { mom_pct: momGrowth },
+                return_rate_pct: returnRate,
+                days_since_last_sale: daysSinceLastSale,
                 trend: trend.rows,
                 top_customers: topCustomers.rows
             },
             inventory: {
-                total_stock: parseFloat(productInfo.rows[0].total_stock),
+                total_stock: totalStock,
+                weeks_of_cover: weeksOfCover,
+                valuation: totalValuation.toFixed(2),
+                near_expiry_qty: nearExpiryQty,
                 batch_count: parseInt(productInfo.rows[0].batch_count),
                 batches: batches.rows
             },
