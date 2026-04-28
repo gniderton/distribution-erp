@@ -4,6 +4,138 @@ const { pool } = require('../config/db');
 const XLSX = require('xlsx');
 
 // --- DASHBOARD SUMMARY ---
+router.get('/products/:id/profile', async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (isNaN(id)) return res.status(400).json({ error: "Invalid Product ID" });
+
+        // 1. Basic Product Info & Inventory Summary
+        const productInfo = await pool.query(`
+            SELECT p.*, b.brand_name, cat.category_name, t.tax_percentage,
+                   COALESCE((SELECT SUM(quantity_remaining) FROM inventory_batches WHERE product_id = p.id AND is_active = true), 0) as total_stock,
+                   COALESCE((SELECT COUNT(*) FROM inventory_batches WHERE product_id = p.id AND quantity_remaining > 0), 0) as batch_count
+            FROM products p
+            LEFT JOIN brands b ON p.brand_id = b.id
+            LEFT JOIN categories cat ON p.category_id = cat.id
+            LEFT JOIN taxes t ON p.tax_id = t.id
+            WHERE p.id = $1
+        `, [id]);
+
+        if (productInfo.rows.length === 0) return res.status(404).json({ error: "Product not found" });
+
+        // 2. Recent Purchase History
+        const purchaseHistory = await pool.query(`
+            SELECT pih.invoice_date, v.vendor_name, pil.shipped_qty as qty, pil.rate
+            FROM purchase_invoice_lines pil
+            JOIN purchase_invoice_headers pih ON pil.purchase_invoice_id = pih.id
+            JOIN vendors v ON pih.vendor_id = v.id
+            WHERE pil.product_id = $1
+            ORDER BY pih.invoice_date DESC
+            LIMIT 10
+        `, [id]);
+
+        // 3. Recent Sales History
+        const salesHistory = await pool.query(`
+            SELECT si.invoice_date, c.customer_name, sil.shipped_qty as qty, sil.rate
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN customers c ON si.customer_id = c.id
+            WHERE sil.product_id = $1 AND si.status != 'Cancelled'
+            ORDER BY si.invoice_date DESC
+            LIMIT 10
+        `, [id]);
+
+        // 4. Return History
+        const returnHistory = await pool.query(`
+            SELECT sr.return_date, c.customer_name, srl.qty, srl.reason
+            FROM sales_return_lines srl
+            JOIN sales_returns sr ON srl.return_id = sr.id
+            JOIN customers c ON sr.customer_id = c.id
+            WHERE srl.product_id = $1 AND sr.status = 'Applied'
+            ORDER BY sr.return_date DESC
+            LIMIT 10
+        `, [id]);
+
+        // 5. Margin & Performance Analytics (Current Month)
+        const performance = await pool.query(`
+            SELECT 
+                COALESCE(SUM(sil.shipped_qty), 0) as monthly_qty,
+                COALESCE(SUM(sil.taxable_amount), 0) as monthly_taxable,
+                COALESCE(AVG(sil.rate), 0) as avg_sales_rate,
+                (SELECT AVG(rate) FROM purchase_invoice_lines WHERE product_id = $1 AND created_at >= date_trunc('month', CURRENT_DATE)) as avg_purchase_rate
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            WHERE sil.product_id = $1 
+              AND si.invoice_date >= date_trunc('month', CURRENT_DATE)
+              AND si.status != 'Cancelled'
+        `, [id]);
+
+        // 6. Top Customers for this Product
+        const topCustomers = await pool.query(`
+            SELECT c.customer_name, SUM(sil.shipped_qty) as total_qty, SUM(sil.taxable_amount) as total_value
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN customers c ON si.customer_id = c.id
+            WHERE sil.product_id = $1 AND si.status != 'Cancelled'
+            GROUP BY c.id, c.customer_name
+            ORDER BY total_qty DESC
+            LIMIT 5
+        `, [id]);
+
+        // 7. Monthly Sales Trend (Last 6 Months)
+        const trend = await pool.query(`
+            SELECT TO_CHAR(si.invoice_date, 'Mon YYYY') as month, SUM(sil.shipped_qty) as qty
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            WHERE sil.product_id = $1 AND si.status != 'Cancelled'
+              AND si.invoice_date >= CURRENT_DATE - INTERVAL '6 months'
+            GROUP BY date_trunc('month', si.invoice_date), TO_CHAR(si.invoice_date, 'Mon YYYY')
+            ORDER BY date_trunc('month', si.invoice_date) ASC
+        `, [id]);
+
+        // 8. Batch Breakdown
+        const batches = await pool.query(`
+            SELECT batch_code, quantity_remaining, purchase_rate, mrp, expiry_date, status
+            FROM inventory_batches
+            WHERE product_id = $1 AND quantity_remaining > 0
+            ORDER BY expiry_date ASC
+        `, [id]);
+
+        const perf = performance.rows[0];
+        const avgSales = parseFloat(perf.avg_sales_rate || 0);
+        const avgPurch = parseFloat(perf.avg_purchase_rate || productInfo.rows[0].purchase_rate || 0);
+        const margin = avgSales > 0 ? ((avgSales - avgPurch) / avgSales * 100).toFixed(2) : 0;
+
+        res.json({
+            product: productInfo.rows[0],
+            analytics: {
+                monthly_qty: parseFloat(perf.monthly_qty),
+                monthly_value: parseFloat(perf.monthly_taxable),
+                avg_sales_rate: avgSales.toFixed(2),
+                avg_purchase_rate: avgPurch.toFixed(2),
+                margin_pct: margin,
+                trend: trend.rows,
+                top_customers: topCustomers.rows
+            },
+            inventory: {
+                total_stock: parseFloat(productInfo.rows[0].total_stock),
+                batch_count: parseInt(productInfo.rows[0].batch_count),
+                batches: batches.rows
+            },
+            history: {
+                purchases: purchaseHistory.rows,
+                sales: salesHistory.rows,
+                returns: returnHistory.rows
+            }
+        });
+
+    } catch (err) {
+        console.error('Product profile error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- DASHBOARD SUMMARY ---
 router.get('/dashboard/summary', async (req, res) => {
     try {
         // 1. Total Sales (Last 30 Days)
