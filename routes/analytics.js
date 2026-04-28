@@ -613,6 +613,8 @@ router.get('/reports/sales-lines', async (req, res) => {
             JOIN customers c ON si.customer_id = c.id
             JOIN brands b ON p.brand_id = b.id
             JOIN categories cat ON p.category_id = cat.id
+            LEFT JOIN employees dse ON c.dse_id = dse.id
+            LEFT JOIN routes r ON c.route_id = r.id
             WHERE si.invoice_date >= $1 AND si.invoice_date <= $2
               AND si.status != 'Cancelled'
         `;
@@ -650,6 +652,8 @@ router.get('/reports/sales-lines', async (req, res) => {
                 si.invoice_date as date,
                 si.invoice_number as invoice_no,
                 c.customer_name as customer,
+                dse.full_name as dse_name,
+                r.route_name as route_name,
                 p.product_name as product,
                 p.product_code as sku,
                 b.brand_name as brand,
@@ -716,6 +720,8 @@ router.get('/reports/sales-lines/export', async (req, res) => {
                 si.invoice_date as "Date",
                 si.invoice_number as "Invoice No",
                 c.customer_name as "Customer",
+                dse.full_name as "DSE",
+                r.route_name as "Route",
                 p.product_name as "Product",
                 p.product_code as "SKU",
                 b.brand_name as "Brand",
@@ -732,6 +738,8 @@ router.get('/reports/sales-lines/export', async (req, res) => {
             JOIN customers c ON si.customer_id = c.id
             JOIN brands b ON p.brand_id = b.id
             JOIN categories cat ON p.category_id = cat.id
+            LEFT JOIN employees dse ON c.dse_id = dse.id
+            LEFT JOIN routes r ON c.route_id = r.id
             WHERE si.invoice_date >= $1 AND si.invoice_date <= $2
               AND si.status != 'Cancelled'
         `;
@@ -747,6 +755,126 @@ router.get('/reports/sales-lines/export', async (req, res) => {
         }
 
         query += ` ORDER BY si.invoice_date DESC, si.invoice_number DESC`;
+
+        const result = await pool.query(query, params);
+
+        // Convert data types for Excel
+        const rows = result.rows.map(r => ({
+            ...r,
+            Date: new Date(r.Date).toLocaleDateString('en-IN'),
+            Qty: parseFloat(r.Qty),
+            "Unit Rate": parseFloat(r["Unit Rate"]),
+            GST: parseFloat(r.GST),
+            Taxable: parseFloat(r.Taxable),
+            "Total Amount": parseFloat(r["Total Amount"])
+        }));
+
+        // Create Workbook
+        const worksheet = XLSX.utils.json_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Lines");
+
+        // Generate Buffer
+        const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+        // Set Headers
+        const filename = `Sales_Lines_${sd}_to_${ed}.xlsx`;
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        
+        res.send(buf);
+
+    } catch (err) {
+        console.error('Excel Export Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- 9. DETAILED SALES SUMMARY REPORT ---
+router.get('/reports/sales-summary-detailed', async (req, res) => {
+    try {
+        const { start_date, end_date, customer_id, product_id } = req.query;
+        
+        const normalizeDate = (d) => {
+            if (!d) return null;
+            if (typeof d === 'string' && d.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                const [day, month, year] = d.split('/');
+                return `${year}-${month}-${day}`;
+            }
+            return d;
+        };
+
+        const now = new Date();
+        const fyStart = `${now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1}-04-01`;
+        
+        const sd = normalizeDate(start_date) || fyStart;
+        const ed = normalizeDate(end_date) || now.toISOString().split('T')[0];
+
+        let baseQuery = `
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN products p ON sil.product_id = p.id
+            JOIN customers c ON si.customer_id = c.id
+            JOIN brands b ON p.brand_id = b.id
+            JOIN categories cat ON p.category_id = cat.id
+            LEFT JOIN employees dse ON c.dse_id = dse.id
+            LEFT JOIN routes r ON c.route_id = r.id
+            WHERE si.invoice_date >= $1 AND si.invoice_date <= $2
+              AND si.status != 'Cancelled'
+        `;
+
+        const params = [sd, ed];
+        if (customer_id) {
+            params.push(customer_id);
+            baseQuery += ` AND si.customer_id = $${params.length}`;
+        }
+        if (product_id) {
+            params.push(product_id);
+            baseQuery += ` AND sil.product_id = $${params.length}`;
+        }
+
+        // Summary queries
+        const queries = [
+            pool.query(`SELECT COUNT(*) as lines, SUM(sil.shipped_qty) as qty, SUM(sil.taxable_amount) as taxable, SUM(sil.tax_amount) as tax, SUM(sil.amount) as amount ${baseQuery}`, params),
+            pool.query(`SELECT p.product_name, p.product_code, SUM(sil.shipped_qty) as qty, SUM(sil.taxable_amount) as taxable, SUM(sil.tax_amount) as tax, SUM(sil.amount) as amount ${baseQuery} GROUP BY p.id, p.product_name, p.product_code ORDER BY amount DESC LIMIT 10`, params),
+            pool.query(`SELECT c.customer_name, SUM(sil.shipped_qty) as qty, SUM(sil.taxable_amount) as taxable, SUM(sil.tax_amount) as tax, SUM(sil.amount) as amount ${baseQuery} GROUP BY c.id, c.customer_name ORDER BY amount DESC LIMIT 10`, params),
+            pool.query(`SELECT COALESCE(dse.full_name, 'Unassigned') as dse_name, SUM(sil.shipped_qty) as qty, SUM(sil.taxable_amount) as taxable, SUM(sil.tax_amount) as tax, SUM(sil.amount) as amount ${baseQuery} GROUP BY dse.id, dse.full_name ORDER BY amount DESC`, params),
+            pool.query(`SELECT b.brand_name, SUM(sil.shipped_qty) as qty, SUM(sil.taxable_amount) as taxable, SUM(sil.tax_amount) as tax, SUM(sil.amount) as amount ${baseQuery} GROUP BY b.id, b.brand_name ORDER BY amount DESC`, params),
+            pool.query(`SELECT cat.category_name, SUM(sil.shipped_qty) as qty, SUM(sil.taxable_amount) as taxable, SUM(sil.tax_amount) as tax, SUM(sil.amount) as amount ${baseQuery} GROUP BY cat.id, cat.category_name ORDER BY amount DESC`, params),
+            pool.query(`SELECT COALESCE(r.route_name, 'Unassigned') as route_name, SUM(sil.shipped_qty) as qty, SUM(sil.taxable_amount) as taxable, SUM(sil.tax_amount) as tax, SUM(sil.amount) as amount ${baseQuery} GROUP BY r.id, r.route_name ORDER BY amount DESC`, params)
+        ];
+
+        const [overall, products, customers, dses, brands, categories, routes] = await Promise.all(queries);
+
+        const formatData = (rows) => rows.map(r => ({
+            ...r,
+            qty: parseFloat(r.qty || 0),
+            taxable: parseFloat(r.taxable || 0),
+            tax: parseFloat(r.tax || 0),
+            amount: parseFloat(r.amount || 0)
+        }));
+
+        res.json({
+            period: { start: sd, end: ed },
+            overall: {
+                total_lines: parseInt(overall.rows[0].lines || 0),
+                total_qty: parseFloat(overall.rows[0].qty || 0),
+                total_taxable: parseFloat(overall.rows[0].taxable || 0),
+                total_tax: parseFloat(overall.rows[0].tax || 0),
+                total_amount: parseFloat(overall.rows[0].amount || 0)
+            },
+            by_product: formatData(products.rows),
+            by_customer: formatData(customers.rows),
+            by_dse: formatData(dses.rows),
+            by_brand: formatData(brands.rows),
+            by_category: formatData(categories.rows),
+            by_route: formatData(routes.rows)
+        });
+    } catch (err) {
+        console.error('Sales Summary Detailed Report Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
         const result = await pool.query(query, params);
 
