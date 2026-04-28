@@ -285,6 +285,63 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             ORDER BY taxable_sales DESC
         `, [customerIds, monthStart]);
 
+        // [NEW] Top 10 Fast Moving Products
+        const topProducts = await pool.query(`
+            SELECT p.product_name, COALESCE(SUM(sil.rate * sil.shipped_qty), 0) as taxable_sales, SUM(sil.shipped_qty) as total_qty
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN products p ON sil.product_id = p.id
+            WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.status != 'Cancelled'
+            GROUP BY p.id, p.product_name
+            ORDER BY taxable_sales DESC
+            LIMIT 10
+        `, [customerIds, monthStart]);
+
+        // [NEW] Dormant Customers (Assigned but no orders in 30 days)
+        const dormantCustomers = await pool.query(`
+            SELECT c.id, c.customer_name
+            FROM customers c
+            WHERE c.dse_id = $1 AND c.id NOT IN (
+                SELECT DISTINCT customer_id FROM sales_invoices 
+                WHERE invoice_date >= CURRENT_DATE - INTERVAL '30 days' AND status != 'Cancelled'
+            )
+        `, [id]);
+
+        // [NEW] Payment Mode Split
+        const paymentSplit = await pool.query(`
+            SELECT payment_mode, COALESCE(SUM(amount), 0) as total_amount
+            FROM customer_payments
+            WHERE collected_by = $1 AND payment_date >= $2 AND verification_status != 'Rejected'
+            GROUP BY payment_mode
+        `, [id, monthStart]);
+
+        // [NEW] Return Reasons
+        const returnReasons = await pool.query(`
+            SELECT COALESCE(reason, 'Not Specified') as reason, COALESCE(SUM(total_taxable), 0) as amount
+            FROM sales_returns
+            WHERE customer_id = ANY($1) AND return_date >= $2 AND status = 'Applied'
+            GROUP BY reason
+            ORDER BY amount DESC
+        `, [customerIds, monthStart]);
+
+        // [NEW] Route Performance
+        const routePerformance = await pool.query(`
+            SELECT r.route_name, COALESCE(SUM(si.total_taxable), 0) as taxable_sales
+            FROM routes r
+            JOIN customers c ON c.route_id = r.id
+            JOIN sales_invoices si ON si.customer_id = c.id
+            WHERE c.dse_id = $1 AND si.invoice_date >= $2 AND si.status != 'Cancelled'
+            GROUP BY r.id, r.route_name
+            ORDER BY taxable_sales DESC
+        `, [id, monthStart]);
+
+        // [NEW] Pending Orders Summary
+        const pendingOrders = await pool.query(`
+            SELECT COUNT(*) as count, COALESCE(SUM(total_amount), 0) as total_value
+            FROM sales_orders
+            WHERE created_by = $1 AND status = 'Pending'
+        `, [id]);
+
         const categorySales = await pool.query(`
             SELECT cat.category_name, COALESCE(SUM(sil.rate * sil.shipped_qty), 0) as taxable_sales
             FROM sales_invoice_lines sil
@@ -373,6 +430,7 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             },
             visit_efficiency: visitEfficiency,
             top_customers: topCustomers.rows,
+            top_products: topProducts.rows,
             brand_sales: brandSales.rows,
             category_sales: categorySales.rows,
             ageing: ageingMap,
@@ -383,7 +441,15 @@ router.get('/employees/:id/dashboard', async (req, res) => {
                 sales: parseFloat(r.sales),
                 collections: parseFloat(r.collections),
                 route_receivables: parseFloat(r.route_receivables)
-            }))
+            })),
+            dormant_customers: {
+                count: dormantCustomers.rowCount,
+                list: dormantCustomers.rows.slice(0, 10) // Limit list to top 10 dormant
+            },
+            payment_split: paymentSplit.rows,
+            return_reasons: returnReasons.rows,
+            route_performance: routePerformance.rows,
+            pending_orders_summary: pendingOrders.rows[0]
         });
 
     } catch (err) {
