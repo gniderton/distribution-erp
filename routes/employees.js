@@ -852,4 +852,22 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+// @route   POST /api/employees/:id/resign
+router.post('/:id/resign', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { resignation_date } = req.body;
+        
+        await pool.query(
+            "UPDATE employees SET employment_status = 'Resigned', resignation_date = $1, updated_at = NOW() WHERE id = $2",
+            [resignation_date || new Date(), id]
+        );
+        
+        res.json({ success: true, message: 'Employee marked as resigned successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
