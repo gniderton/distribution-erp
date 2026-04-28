@@ -317,10 +317,11 @@ router.get('/employees/:id/dashboard', async (req, res) => {
 
         // [NEW] Return Reasons
         const returnReasons = await pool.query(`
-            SELECT COALESCE(reason, 'Not Specified') as reason, COALESCE(SUM(total_taxable), 0) as amount
-            FROM sales_returns
-            WHERE customer_id = ANY($1) AND return_date >= $2 AND status = 'Applied'
-            GROUP BY reason
+            SELECT COALESCE(srl.reason, 'Not Specified') as reason, COALESCE(SUM(srl.taxable_amount), 0) as amount
+            FROM sales_return_lines srl
+            JOIN sales_returns sr ON srl.return_id = sr.id
+            WHERE sr.customer_id = ANY($1) AND sr.return_date >= $2 AND sr.status = 'Applied'
+            GROUP BY srl.reason
             ORDER BY amount DESC
         `, [customerIds, monthStart]);
 
