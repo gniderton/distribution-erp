@@ -873,7 +873,12 @@ router.get('/reports/sales-summary-detailed', async (req, res) => {
         }));
 
         res.json({
-            period: { start: sd, end: ed },
+            period: { 
+                start: sd, 
+                end: ed,
+                fy: fy ? parseInt(fy) : null,
+                month: month ? parseInt(month) : null
+            },
             overall: {
                 total_lines: parseInt(overall.rows[0].lines || 0),
                 total_qty: parseFloat(overall.rows[0].qty || 0),
