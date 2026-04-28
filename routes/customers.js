@@ -593,6 +593,9 @@ router.post('/bulk-edit', async (req, res) => {
         let pIdx = 1;
 
         for (const [key, value] of Object.entries(updates)) {
+            if (value === "" || value === null || value === undefined) {
+                continue; // Skip empty updates so we don't overwrite with blanks or crash
+            }
             if (allowedFields.includes(key)) {
                 setClauses.push(`${key} = $${pIdx}`);
                 values.push(value);
