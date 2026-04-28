@@ -25,7 +25,7 @@ router.get('/products/:id/profile', async (req, res) => {
 
         // 2. Recent Purchase History
         const purchaseHistory = await pool.query(`
-            SELECT pih.vendor_invoice_date as invoice_date, v.vendor_name, pil.shipped_qty as qty, pil.rate
+            SELECT pih.vendor_invoice_date as invoice_date, v.vendor_name, pil.accepted_qty as qty, pil.rate
             FROM purchase_invoice_lines pil
             JOIN purchase_invoice_headers pih ON pil.purchase_invoice_header_id = pih.id
             JOIN vendors v ON pih.vendor_id = v.id
