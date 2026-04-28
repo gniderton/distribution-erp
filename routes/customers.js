@@ -568,4 +568,64 @@ router.delete('/:id/pricing/:brand_id', async (req, res) => {
     }
 });
 
+// POST /api/customers/bulk-edit - Bulk edit multiple customers
+router.post('/bulk-edit', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { customer_ids, updates } = req.body;
+
+        if (!Array.isArray(customer_ids) || customer_ids.length === 0) {
+            return res.status(400).json({ error: "customer_ids array is required and cannot be empty" });
+        }
+
+        if (!updates || Object.keys(updates).length === 0) {
+            return res.status(400).json({ error: "updates object is required" });
+        }
+
+        // Allowed fields to bulk update
+        const allowedFields = [
+            'dse_id', 'route_id', 'channel_id', 'route_type_id', 
+            'credit_limit', 'credit_days', 'is_active', 'route_sequence'
+        ];
+
+        const setClauses = [];
+        const values = [];
+        let pIdx = 1;
+
+        for (const [key, value] of Object.entries(updates)) {
+            if (allowedFields.includes(key)) {
+                setClauses.push(`${key} = $${pIdx}`);
+                values.push(value);
+                pIdx++;
+            }
+        }
+
+        if (setClauses.length === 0) {
+            return res.status(400).json({ error: "No valid fields provided for update" });
+        }
+
+        const placeholders = customer_ids.map((_, i) => `$${pIdx + i}`).join(', ');
+        values.push(...customer_ids);
+
+        const query = `
+            UPDATE customers 
+            SET ${setClauses.join(', ')} 
+            WHERE id IN (${placeholders})
+        `;
+
+        await client.query('BEGIN');
+        const result = await client.query(query, values);
+        await client.query('COMMIT');
+
+        res.json({ success: true, count: result.rowCount, message: 'Customers updated successfully' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Bulk Edit Customers Error:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
