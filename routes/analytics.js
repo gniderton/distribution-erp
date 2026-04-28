@@ -876,39 +876,6 @@ router.get('/reports/sales-summary-detailed', async (req, res) => {
     }
 });
 
-        const result = await pool.query(query, params);
-
-        // Convert data types for Excel
-        const rows = result.rows.map(r => ({
-            ...r,
-            Date: new Date(r.Date).toLocaleDateString('en-IN'),
-            Qty: parseFloat(r.Qty),
-            "Unit Rate": parseFloat(r["Unit Rate"]),
-            GST: parseFloat(r.GST),
-            Taxable: parseFloat(r.Taxable),
-            "Total Amount": parseFloat(r["Total Amount"])
-        }));
-
-        // Create Workbook
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Lines");
-
-        // Generate Buffer
-        const buf = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-
-        // Set Headers
-        const filename = `Sales_Lines_${sd}_to_${ed}.xlsx`;
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        
-        res.send(buf);
-
-    } catch (err) {
-        console.error('Excel Export Error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // --- 5. BALANCE SHEET (ULTRA PROFESSIONAL / CORPORATE GRADE) ---
 // Note: Balance Sheet is point-in-time. We show data up to the 'end_date' of the period.
