@@ -793,22 +793,40 @@ router.get('/reports/sales-lines/export', async (req, res) => {
 // --- 9. DETAILED SALES SUMMARY REPORT ---
 router.get('/reports/sales-summary-detailed', async (req, res) => {
     try {
-        const { start_date, end_date, customer_id, product_id } = req.query;
+        const { start_date, end_date, customer_id, product_id, fy, month } = req.query;
         
         const normalizeDate = (d) => {
             if (!d) return null;
             if (typeof d === 'string' && d.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-                const [day, month, year] = d.split('/');
-                return `${year}-${month}-${day}`;
+                const [day, m, year] = d.split('/');
+                return `${year}-${m}-${day}`;
             }
             return d;
         };
 
         const now = new Date();
-        const fyStart = `${now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1}-04-01`;
-        
-        const sd = normalizeDate(start_date) || fyStart;
-        const ed = normalizeDate(end_date) || now.toISOString().split('T')[0];
+        let sd, ed;
+
+        if (fy) {
+            const startYear = parseInt(fy);
+            sd = `${startYear}-04-01`;
+            ed = `${startYear + 1}-03-31`;
+
+            if (month) {
+                const m = parseInt(month);
+                let calYear = startYear;
+                if (m >= 1 && m <= 3) {
+                    calYear = startYear + 1;
+                }
+                sd = `${calYear}-${m.toString().padStart(2, '0')}-01`;
+                ed = new Date(calYear, m, 0).toISOString().split('T')[0];
+            }
+        } else {
+            const fyStartYear = now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+            const fyStart = `${fyStartYear}-04-01`;
+            sd = normalizeDate(start_date) || fyStart;
+            ed = normalizeDate(end_date) || now.toISOString().split('T')[0];
+        }
 
         let baseQuery = `
             FROM sales_invoice_lines sil
