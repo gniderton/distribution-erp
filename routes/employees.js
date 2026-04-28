@@ -859,7 +859,7 @@ router.post('/:id/resign', async (req, res) => {
         const { resignation_date } = req.body;
         
         await pool.query(
-            "UPDATE employees SET employment_status = 'Resigned', resignation_date = $1, updated_at = NOW() WHERE id = $2",
+            "UPDATE employees SET employment_status = 'Resigned', resignation_date = $1 WHERE id = $2",
             [resignation_date || new Date(), id]
         );
         
