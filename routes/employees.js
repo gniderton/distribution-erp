@@ -679,8 +679,8 @@ router.get('/salary-preview', async (req, res) => {
             const midMonthDeduction = (daysMissedAtStart + daysMissedAtEnd) * perDay;
             const adjustedBaseSalary = Math.max(0, salary - midMonthDeduction);
 
-            const deductibleAbsent = Number(r.absent_days);
-            const deductibleHalf = Number(r.half_days);
+            const deductibleAbsent = Math.max(0, Number(r.absent_days) - 1);
+            const deductibleHalf = Math.max(0, Number(r.half_days) - 1);
 
             let leaveEncashment = 0;
             const isMarch = Number(month) === 3;
