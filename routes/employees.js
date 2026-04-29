@@ -391,16 +391,16 @@ router.get('/:id/attendance', async (req, res) => {
 // @route   POST /api/employees/liabilities - Record Employee Liability
 router.post('/liabilities', async (req, res) => {
     try {
-        const { employee_id, amount, description, type, user_id } = req.body;
+        const { employee_id, amount, description, type, invoice_id, user_id } = req.body;
         if (!employee_id || !amount || !description || !type) {
             return res.status(400).json({ error: "Missing required fields: employee_id, amount, description, type" });
         }
 
         const result = await pool.query(`
-            INSERT INTO employee_liabilities (employee_id, amount, description, type, created_by)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO employee_liabilities (employee_id, amount, description, type, invoice_id, created_by)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id
-        `, [employee_id, amount, description, type, user_id]);
+        `, [employee_id, amount, description, type, invoice_id || null, user_id]);
 
         res.status(201).json({ success: true, id: result.rows[0].id });
     } catch (err) {
@@ -413,9 +413,11 @@ router.get('/:id/liabilities', async (req, res) => {
     try {
         const { id } = req.params;
         const result = await pool.query(`
-            SELECT * FROM employee_liabilities 
-            WHERE employee_id = $1 AND status = 'PENDING'
-            ORDER BY created_at DESC
+            SELECT el.*, si.invoice_number 
+            FROM employee_liabilities el
+            LEFT JOIN sales_invoices si ON el.invoice_id = si.id
+            WHERE el.employee_id = $1 AND el.status = 'PENDING'
+            ORDER BY el.created_at DESC
         `, [id]);
         res.json(result.rows);
     } catch (err) {
