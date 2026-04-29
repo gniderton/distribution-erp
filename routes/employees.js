@@ -888,11 +888,15 @@ router.post('/bulk-salary-payment', async (req, res) => {
                     journalLines.push({ code: creditAccountCode, debit: 0, credit: payoutAmount });
                 }
 
+                // Check if this is a final settlement (if they have a resignation date)
+                const empInfo = await client.query('SELECT resignation_date FROM employees WHERE id = $1', [finalEmpId]);
+                const isFinal = empInfo.rows[0]?.resignation_date !== null;
+
                 const journalRes = await client.query(`
                     SELECT create_journal_entry($1, $2, $3, $4, $5) as entry_id
                 `, [
                     new Date(),
-                    `Monthly Salary - Emp ID: ${finalEmpId} (${month}/${year})`,
+                    `${isFinal ? 'Final Settlement' : 'Monthly Salary'} - Emp ID: ${finalEmpId} (${month}/${year})`,
                     'SALARY_PAYMENT',
                     salaryId,
                     JSON.stringify(journalLines)
@@ -907,6 +911,11 @@ router.post('/bulk-salary-payment', async (req, res) => {
                     SET is_settled = TRUE, salary_payment_id = $1 
                     WHERE employee_id = $2 AND is_settled = FALSE
                 `, [salaryId, employee_id]);
+
+                // If final settlement, mark employee as officially 'Resigned'
+                if (isFinal) {
+                    await client.query(`UPDATE employees SET employment_status = 'Resigned' WHERE id = $1`, [finalEmpId]);
+                }
             }
 
             // 5. Update Bank Statement (per-line Consumption)
