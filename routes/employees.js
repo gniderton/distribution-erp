@@ -658,8 +658,9 @@ router.get('/salary-preview', async (req, res) => {
 
         const detailedPreview = await Promise.all(rows.map(async r => {
             const salary = Number(r.base_salary);
-            const perDay = salary / 30;
-            const perHalfDay = salary / 60;
+            const daysInMonth = new Date(year, month, 0).getDate();
+            const perDay = salary / daysInMonth;
+            const perHalfDay = perDay / 2;
 
             // Pro-rating Logic for Mid-month Joiners/Resigners
             const mStart = new Date(startDate);
@@ -672,22 +673,19 @@ router.get('/salary-preview', async (req, res) => {
             const effEnd = resDate < mEnd ? resDate : mEnd;
 
             // Days missed at start and end
-            const daysMissedAtStart = Math.floor((effStart - mStart) / (1000 * 60 * 60 * 24));
-            const daysMissedAtEnd = Math.floor((mEnd - effEnd) / (1000 * 60 * 60 * 24));
+            const daysMissedAtStart = Math.max(0, Math.floor((effStart - mStart) / (1000 * 60 * 60 * 24)));
+            const daysMissedAtEnd = Math.max(0, Math.floor((mEnd - effEnd) / (1000 * 60 * 60 * 24)));
             
             const midMonthDeduction = (daysMissedAtStart + daysMissedAtEnd) * perDay;
             const adjustedBaseSalary = Math.max(0, salary - midMonthDeduction);
 
-            const deductibleAbsent = Math.max(0, r.absent_days - 1);
-            const deductibleHalf = Math.max(0, r.half_days - 1);
+            const deductibleAbsent = Number(r.absent_days);
+            const deductibleHalf = Number(r.half_days);
 
             let leaveEncashment = 0;
             const isMarch = Number(month) === 3;
 
             if (isMarch) {
-                // Calculate Leave Encashment for the whole fiscal year (April to March)
-                // We'll search for all months from April (month=4, year=prev) to March (month=3, year=current)
-                const startFiscal = new Date(year, 3, 1); // April 1st of SAME year? No, if it's March 2026, we check from April 2025.
                 const fiscalYearStart = Number(month) >= 4 ? Number(year) : Number(year) - 1;
                 const dateFrom = `${fiscalYearStart}-04-01`;
                 const dateTo = `${year}-03-31`;
@@ -702,18 +700,10 @@ router.get('/salary-preview', async (req, res) => {
                     GROUP BY 1
                 `, [r.id, dateFrom, dateTo]);
 
-                // Total eligible per month: 1 Full, 0.5 Half
-                // We'll sum up (1 - min(1, absent)) and (0.5 - min(1, half)*0.5) for every month they were active
-                // (Assuming they were active for 12 months for now, or we can check salary history months)
                 let unusedFull = 0;
                 let unusedHalf = 0;
 
-                // Simple loop for 12 months
                 for (let m = 1; m <= 12; m++) {
-                    // Check if they had salary in that month (to see if they were active)
-                    // (Simplified: just check if attendance exists or if they were hired by then)
-                    const mStats = attHistory.rows.find(h => Number(h.month) === (m > 9 ? m - 9 : m + 3)); // Map fiscal? No, month is 1-12.
-                    // Let's just use 1-12 directly.
                     const h = attHistory.rows.find(h => Number(h.month) === m);
                     const abs = h ? Number(h.absent_days) : 0;
                     const hlf = h ? Number(h.half_days) : 0;
@@ -721,7 +711,7 @@ router.get('/salary-preview', async (req, res) => {
                     unusedFull += Math.max(0, 1 - Math.min(1, abs));
                     unusedHalf += Math.max(0, 0.5 - (Math.min(1, hlf) * 0.5));
                 }
-                leaveEncashment = (unusedFull * perDay) + (unusedHalf * perDay); // 1 unused half day is 0.5 full day, so 0.5 * perDay
+                leaveEncashment = (unusedFull * perDay) + (unusedHalf * perDay);
             }
 
             const leaveDeduction = (perDay * deductibleAbsent) + (perHalfDay * deductibleHalf);
@@ -731,9 +721,12 @@ router.get('/salary-preview', async (req, res) => {
 
             return {
                 ...r,
+                adjusted_base_salary: adjustedBaseSalary.toFixed(2),
                 leave_deduction: leaveDeduction.toFixed(2),
                 bonus_addition: Number(r.bonus_addition).toFixed(2),
                 leave_encashment: leaveEncashment.toFixed(2),
+                total_deductions: totalDeductions.toFixed(2),
+                total_additions: totalAdditions.toFixed(2),
                 net_salary: netSalary.toFixed(2)
             };
         }));
