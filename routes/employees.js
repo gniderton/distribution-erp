@@ -588,7 +588,7 @@ router.get('/salary-preview', async (req, res) => {
                     COUNT(*) FILTER (WHERE status = 'Absent')::int as absent_days,
                     COUNT(*) FILTER (WHERE status = 'Half-Day')::int as half_days
                 FROM employee_attendance
-                WHERE attendance_date::date >= $1::date AND attendance_date::date <= $2::date
+                WHERE attendance_date::date BETWEEN $1::date AND $2::date
                 GROUP BY employee_id
             ),
             AdvanceStats AS (
@@ -610,14 +610,11 @@ router.get('/salary-preview', async (req, res) => {
             LoanStats AS (
                 SELECT 
                     le.reference_id as employee_id,
-                    SUM(l.emi_amount) as total_emi,
-                    SUM(ROUND(l.balance_principal * (l.interest_rate_pa / 100.0) / 12.0, 2)) as total_interest,
-                    SUM(l.emi_amount - ROUND(l.balance_principal * (l.interest_rate_pa / 100.0) / 12.0, 2)) as total_principal
+                    SUM(l.emi_amount) as total_emi
                 FROM loans l
                 JOIN loan_entities le ON l.party_id = le.id
                 WHERE l.party_type = 'EMPLOYEE' 
                   AND l.status = 'Active'
-                  AND le.entity_type = 'Employee'
                 GROUP BY le.reference_id
             ),
             LiabilityStats AS (
@@ -640,9 +637,7 @@ router.get('/salary-preview', async (req, res) => {
                 COALESCE(att.half_days, 0) as half_days,
                 COALESCE(adv.total_advances, 0) as advance_deduction,
                 COALESCE(bs.total_bonuses, 0) as bonus_addition,
-                (COALESCE(ls.total_emi, 0)) as loan_deduction,
-                (COALESCE(ls.total_principal, 0)) as loan_principal,
-                (COALESCE(ls.total_interest, 0)) as loan_interest,
+                COALESCE(ls.total_emi, 0) as loan_deduction,
                 COALESCE(liab.total_liabilities, 0) as misc_liabilities
             FROM employees e
             LEFT JOIN CurrentSalary cs ON e.id = cs.employee_id
@@ -661,37 +656,31 @@ router.get('/salary-preview', async (req, res) => {
             const salary = Number(r.base_salary);
             const daysInMonth = new Date(year, month, 0).getDate();
             const perDay = salary / daysInMonth;
-            const perHalfDay = perDay / 2;
 
-            // Pro-rating Logic - Use UTC-safe date strings for comparison
-            const mStartStr = startDate;
-            const mEndStr = endDate;
-            const jDateStr = r.joining_date ? new Date(r.joining_date).toISOString().split('T')[0] : mStartStr;
-            const resDateStr = r.resignation_date ? new Date(r.resignation_date).toISOString().split('T')[0] : mEndStr;
+            // Pro-rating logic (Simple & Clean)
+            const mStart = new Date(startDate);
+            const mEnd = new Date(endDate);
+            const jDate = r.joining_date ? new Date(r.joining_date) : mStart;
+            const resDate = r.resignation_date ? new Date(r.resignation_date) : mEnd;
 
-            const effStartStr = jDateStr > mStartStr ? jDateStr : mStartStr;
-            const effEndStr = resDateStr < mEndStr ? resDateStr : mEndStr;
+            // Normalize to month boundaries
+            const effStart = jDate > mStart ? jDate : mStart;
+            const effEnd = resDate < mEnd ? resDate : mEnd;
 
-            // Calculate missed days by comparing date strings
-            const d1 = new Date(mStartStr);
-            const d2 = new Date(effStartStr);
-            const d3 = new Date(effEndStr);
-            const d4 = new Date(mEndStr);
-
-            const daysMissedAtStart = Math.max(0, Math.round((d2 - d1) / (1000 * 60 * 60 * 24)));
-            const daysMissedAtEnd = Math.max(0, Math.round((d4 - d3) / (1000 * 60 * 60 * 24)));
+            // Calculate worked days
+            const workedTime = Math.max(0, effEnd.getTime() - effStart.getTime());
+            const workedDays = Math.round(workedTime / (1000 * 60 * 60 * 24)) + 1;
             
-            const midMonthDeduction = (daysMissedAtStart + daysMissedAtEnd) * perDay;
-            const adjustedBaseSalary = Math.max(0, salary - midMonthDeduction);
+            // If they were active the whole month, workedDays should equal daysInMonth
+            // We use this to calculate adjusted salary
+            const adjustedBaseSalary = (workedDays >= daysInMonth) ? salary : (workedDays * perDay);
 
-            const deductibleAbsent = Math.max(0, Number(r.absent_days) - 1);
-            const deductibleHalf = Math.max(0, Number(r.half_days) - 1);
+            const deductibleAbsent = Math.max(0, r.absent_days - 1);
+            const deductibleHalf = Math.max(0, r.half_days - 1);
 
             let leaveEncashment = 0;
-            const isMarch = Number(month) === 3;
-
-            if (isMarch) {
-                const fiscalYearStart = Number(month) >= 4 ? Number(year) : Number(year) - 1;
+            if (Number(month) === 3) { // March logic
+                const fiscalYearStart = Number(year) - 1;
                 const dateFrom = `${fiscalYearStart}-04-01`;
                 const dateTo = `${year}-03-31`;
 
@@ -707,19 +696,17 @@ router.get('/salary-preview', async (req, res) => {
 
                 let unusedFull = 0;
                 let unusedHalf = 0;
-
                 for (let m = 1; m <= 12; m++) {
                     const h = attHistory.rows.find(h => Number(h.month) === m);
                     const abs = h ? Number(h.absent_days) : 0;
                     const hlf = h ? Number(h.half_days) : 0;
-
                     unusedFull += Math.max(0, 1 - Math.min(1, abs));
                     unusedHalf += Math.max(0, 0.5 - (Math.min(1, hlf) * 0.5));
                 }
                 leaveEncashment = (unusedFull * perDay) + (unusedHalf * perDay);
             }
 
-            const leaveDeduction = (perDay * deductibleAbsent) + (perHalfDay * deductibleHalf);
+            const leaveDeduction = (perDay * deductibleAbsent) + ((perDay / 2) * deductibleHalf);
             const totalDeductions = leaveDeduction + Number(r.advance_deduction) + Number(r.loan_deduction) + Number(r.misc_liabilities);
             const totalAdditions = Number(r.bonus_addition) + leaveEncashment;
             const netSalary = Math.max(0, adjustedBaseSalary - totalDeductions + totalAdditions);
@@ -742,6 +729,7 @@ router.get('/salary-preview', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // @route   POST /api/employees/bulk-salary-payment
 router.post('/bulk-salary-payment', async (req, res) => {
