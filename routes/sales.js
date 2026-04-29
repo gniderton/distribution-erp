@@ -84,6 +84,34 @@ router.get('/invoices', async (req, res) => {
     }
 });
 
+// GET /api/sales/invoices/lookup - Simple lookup for dropdowns
+router.get('/invoices/lookup', async (req, res) => {
+    try {
+        const { search } = req.query;
+        let query = `
+            SELECT 
+                si.id, 
+                si.invoice_number, 
+                c.customer_name,
+                si.grand_total,
+                si.invoice_date
+            FROM sales_invoices si
+            JOIN customers c ON si.customer_id = c.id
+            WHERE si.status != 'Cancelled'
+        `;
+        const params = [];
+        if (search) {
+            query += ` AND (si.invoice_number ILIKE $1 OR c.customer_name ILIKE $1)`;
+            params.push(`%${search}%`);
+        }
+        query += ` ORDER BY si.created_at DESC LIMIT 50`;
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/sales/invoices/lines-bulk - Get lines for multiple invoices
 router.get('/invoices/lines-bulk', async (req, res) => {
     try {
