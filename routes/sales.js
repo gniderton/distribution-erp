@@ -87,7 +87,7 @@ router.get('/invoices', async (req, res) => {
 // GET /api/sales/invoices/lookup - Simple lookup for dropdowns
 router.get('/invoices/lookup', async (req, res) => {
     try {
-        const { search } = req.query;
+        const { search, limit = 50, offset = 0 } = req.query;
         let query = `
             SELECT 
                 si.id, 
@@ -100,11 +100,17 @@ router.get('/invoices/lookup', async (req, res) => {
             WHERE si.status != 'Cancelled'
         `;
         const params = [];
+        let pIdx = 1;
+
         if (search) {
-            query += ` AND (si.invoice_number ILIKE $1 OR c.customer_name ILIKE $1)`;
+            query += ` AND (si.invoice_number ILIKE $${pIdx} OR c.customer_name ILIKE $${pIdx})`;
             params.push(`%${search}%`);
+            pIdx++;
         }
-        query += ` ORDER BY si.created_at DESC LIMIT 50`;
+        
+        query += ` ORDER BY si.created_at DESC LIMIT $${pIdx} OFFSET $${pIdx + 1}`;
+        params.push(parseInt(limit), parseInt(offset));
+
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
