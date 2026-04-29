@@ -390,21 +390,74 @@ router.get('/:id/attendance', async (req, res) => {
 
 // @route   POST /api/employees/liabilities - Record Employee Liability
 router.post('/liabilities', async (req, res) => {
+    const client = await pool.connect();
     try {
         const { employee_id, amount, description, type, invoice_id, user_id } = req.body;
         if (!employee_id || !amount || !description || !type) {
             return res.status(400).json({ error: "Missing required fields: employee_id, amount, description, type" });
         }
 
-        const result = await pool.query(`
+        await client.query('BEGIN');
+
+        // 1. Record the liability
+        const result = await client.query(`
             INSERT INTO employee_liabilities (employee_id, amount, description, type, invoice_id, created_by)
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id
         `, [employee_id, amount, description, type, invoice_id || null, user_id]);
+        const liabilityId = result.rows[0].id;
 
-        res.status(201).json({ success: true, id: result.rows[0].id });
+        // 2. If Invoice ID provided, do immediate adjustment to customer ledger
+        if (invoice_id) {
+            // A. Get Customer Info
+            const invRes = await client.query('SELECT customer_id, invoice_number FROM sales_invoices WHERE id = $1', [invoice_id]);
+            if (invRes.rows.length === 0) throw new Error("Invoice not found");
+            const { customer_id, invoice_number } = invRes.rows[0];
+
+            // B. Create Customer Payment (Internal Adjustment)
+            const payRes = await client.query(`
+                INSERT INTO customer_payments (
+                    customer_id, amount, payment_mode, transaction_ref, 
+                    verification_status, payment_date, collected_by, remarks
+                ) VALUES ($1, $2, 'EMPLOYEE_ADJUSTMENT', $3, 'Verified', NOW(), $4, $5)
+                RETURNING id
+            `, [customer_id, amount, `EMP-LIAB-${liabilityId}`, user_id, `Employee Liability Recovery - ${description}`]);
+            const paymentId = payRes.rows[0].id;
+
+            // C. Create Allocation
+            await client.query(`
+                INSERT INTO customer_payment_allocations (payment_id, invoice_id, amount, status)
+                VALUES ($1, $2, $3, 'ACTIVE')
+            `, [paymentId, invoice_id, amount]);
+
+            // D. Update Invoice Balance/Status
+            await client.query(`
+                UPDATE sales_invoices 
+                SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                    status = CASE 
+                        WHEN (grand_total - (COALESCE(amount_paid, 0) + $1)) <= 1 THEN 'Paid'
+                        ELSE 'Partially Paid' 
+                    END
+                WHERE id = $2
+            `, [amount, invoice_id]);
+
+            // E. Journal Entry: Dr 1020 (Emp Advance/Liab), Cr 1101 (Accounts Receivable)
+            const lines = [
+                { code: 1020, debit: amount, credit: 0 },
+                { code: 1101, debit: 0, credit: amount }
+            ];
+            await client.query(`
+                SELECT create_journal_entry($1, $2, $3, $4, $5)
+            `, [new Date(), `Emp Liab Adjustment: ${invoice_number} (Ref: ${liabilityId})`, 'EMP_LIAB_ADJ', liabilityId, JSON.stringify(lines)]);
+        }
+
+        await client.query('COMMIT');
+        res.status(201).json({ success: true, id: liabilityId });
     } catch (err) {
+        await client.query('ROLLBACK');
         res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
 
@@ -752,14 +805,27 @@ router.post('/bulk-salary-payment', async (req, res) => {
             }
             // 2.5 Settle Miscellaneous Liabilities
             if (Number(p.misc_liabilities) > 0) {
+                // Fetch liabilities to determine if they are invoice-linked (1020) or general (4103)
+                const liabRes = await client.query(`
+                    SELECT amount, invoice_id FROM employee_liabilities 
+                    WHERE employee_id = $1 AND status = 'PENDING'
+                `, [finalEmpId]);
+
+                for (const l of liabRes.rows) {
+                    if (l.invoice_id) {
+                        // Linked to invoice: Clear from 1020 (Emp Receivable)
+                        journalLines.push({ code: 1020, debit: 0, credit: Number(l.amount) });
+                    } else {
+                        // Not linked (Damage/Shortage): Credit Income 4103
+                        journalLines.push({ code: 4103, debit: 0, credit: Number(l.amount) });
+                    }
+                }
+
                 await client.query(`
                     UPDATE employee_liabilities 
                     SET status = 'SETTLED', salary_payment_id = $1 
                     WHERE employee_id = $2 AND status = 'PENDING'
                 `, [salaryId, finalEmpId]);
-                
-                // Add to journal lines as a recovery (Misc Income - 4103)
-                journalLines.push({ code: 4103, debit: 0, credit: Number(p.misc_liabilities) });
             }
 
             // 3. Record Loan Installment (Split Principal vs Interest)
