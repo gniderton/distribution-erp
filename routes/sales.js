@@ -102,7 +102,7 @@ router.get('/invoices/lookup', async (req, res) => {
         const params = [];
         let pIdx = 1;
 
-        if (search) {
+        if (search && search !== 'undefined' && search.trim() !== '') {
             query += ` AND (si.invoice_number ILIKE $${pIdx} OR c.customer_name ILIKE $${pIdx})`;
             params.push(`%${search}%`);
             pIdx++;
