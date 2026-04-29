@@ -108,7 +108,7 @@ router.get('/invoices/lookup', async (req, res) => {
             pIdx++;
         }
         
-        query += ` ORDER BY si.created_at DESC LIMIT 500`; // Safety limit to prevent memory issues
+        query += ` ORDER BY si.created_at DESC LIMIT 2000`; // Increased safety limit for large datasets
 
         const result = await pool.query(query, params);
         res.json(result.rows);
