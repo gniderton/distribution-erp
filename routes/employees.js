@@ -61,12 +61,19 @@ router.post('/bulk-bonus', async (req, res) => {
 // @route   GET /api/employees - List Employees
 router.get('/', async (req, res) => {
     try {
-        const { role, limit = 50, offset = 0 } = req.query;
+        const { role, employment_status, limit = 50, offset = 0 } = req.query;
 
-        let query = 'SELECT * FROM view_employee_details WHERE employment_status = \'Active\'';
+        let query = 'SELECT * FROM view_employee_details WHERE 1=1';
         const params = [];
         let pIdx = 1;
 
+        // 1. Employment Status Filter (Default to Active)
+        const status = employment_status || 'Active';
+        query += ` AND employment_status = $${pIdx}`;
+        params.push(status);
+        pIdx++;
+
+        // 2. Role Filter
         if (role) {
             if (role.toUpperCase() === 'DSE') {
                 query += ` AND designation_id IN (11, 14)`;
