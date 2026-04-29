@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DSE Performance Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-main: #0a0c10;
+            --bg-card: #161b22;
+            --bg-card-hover: #1c2128;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --accent-sales: #3fb950;
+            --accent-collections: #2188ff;
+            --accent-warning: #d29922;
+            --accent-danger: #f85149;
+            --border: #30363d;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .dashboard-header { margin-bottom: 24px; }
+        .header-left h1 { font-size: 22px; font-weight: 600; color: #fff; margin-bottom: 4px; }
+        .header-left p { color: var(--text-secondary); font-size: 13px; }
+
+        .grid-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.2s ease;
+        }
+
+        .card:hover { transform: translateY(-2px); border-color: #444; }
+
+        .card-label { color: var(--text-secondary); font-size: 12px; font-weight: 500; text-transform: uppercase; margin-bottom: 8px; }
+        .card-value { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+        .card-delta { font-size: 11px; display: flex; align-items: center; gap: 4px; }
+        .delta-up { color: var(--accent-sales); }
+
+        .grid-main {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 1000px) { .grid-main { grid-template-columns: 1fr; } }
+
+        .chart-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            height: 350px;
+        }
+
+        .section-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: #fff; }
+
+        .scroll-list { max-height: 250px; overflow-y: auto; padding-right: 4px; }
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+        .list-item:last-child { border-bottom: none; }
+        .item-info p { font-size: 13px; font-weight: 500; }
+        .item-info span { font-size: 11px; color: var(--text-secondary); }
+        .item-value { font-size: 13px; font-weight: 600; }
+
+        .ageing-bar-wrapper { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--border); margin: 12px 0; }
+        .ageing-segment { height: 100%; }
+        .seg-0-30 { background: var(--accent-sales); }
+        .seg-31-60 { background: var(--accent-warning); }
+        .seg-61 { background: var(--accent-danger); }
+
+        .ageing-legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .legend-item { font-size: 10px; color: var(--text-secondary); text-align: center; }
+        .legend-item p { color: #fff; font-size: 12px; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard-header">
+        <div class="header-left">
+            <h1>Sales Executive Performance</h1>
+            <p id="date-range">Live Performance Insights</p>
+        </div>
+    </div>
+
+    <div class="grid-overview" id="overview-cards">
+        <div class="card" style="text-align: center; color: var(--text-secondary);">Waiting for data...</div>
+    </div>
+
+    <div class="grid-main">
+        <div class="chart-container">
+            <div class="section-title">30-Day Revenue & Collection Trend</div>
+            <canvas id="trendChart"></canvas>
+        </div>
+
+        <div class="card">
+            <div class="section-title">Focus Area: Overdue Recovery</div>
+            <div class="scroll-list" id="overdue-list"></div>
+        </div>
+    </div>
+
+    <div class="grid-main" style="grid-template-columns: 1fr 1.5fr 1fr;">
+        <div class="card">
+            <div class="section-title">Category Distribution</div>
+            <div style="height: 200px;"><canvas id="categoryChart"></canvas></div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">Brand Performance</div>
+            <div style="height: 250px;"><canvas id="brandChart"></canvas></div>
+        </div>
+
+        <div class="card">
+            <div class="section-title">Receivables Ageing</div>
+            <div class="ageing-bar-wrapper" id="ageing-bar"></div>
+            <div class="ageing-legend" id="ageing-legend"></div>
+            
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border);">
+                <div class="card-label">Market Coverage</div>
+                <div style="display: flex; align-items: flex-end; gap: 8px;">
+                    <div id="coverage-val" style="font-size: 20px; font-weight: 700;">--</div>
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 2px;">of assigned customers</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-main" style="grid-template-columns: 1fr 1fr;">
+        <div class="card">
+            <div class="section-title">Top 10 High-Value Customers</div>
+            <div class="scroll-list" id="top-customers"></div>
+        </div>
+        <div class="card">
+            <div class="section-title">Returns Performance</div>
+            <div style="text-align: center; padding: 30px 0;">
+                <div style="font-size: 22px; font-weight: 700; color: #fff;" id="returns-val">₹0</div>
+                <p style="color: var(--text-secondary); font-size: 12px;">Monthly Return Volume</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let trendChart, categoryChart, brandChart;
+
+        function formatCurrency(val) {
+            return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
+        }
+
+        function updateDashboard(data) {
+            if (!data || !data.metrics) return;
+            
+            const m = data.metrics.month;
+            const p = data.productivity;
+
+            document.getElementById('overview-cards').innerHTML = `
+                <div class="card"><div class="card-label">Net Sales</div><div class="card-value">${formatCurrency(m.net_sales_taxable)}</div><div class="card-delta delta-up">↑ ${data.metrics.growth_sales_pct}% MoM</div></div>
+                <div class="card"><div class="card-label">Collection</div><div class="card-value">${formatCurrency(m.collection)}</div><div class="card-delta delta-up">↑ ${data.metrics.growth_collection_pct}% MoM</div></div>
+                <div class="card"><div class="card-label">Active Customers</div><div class="card-value">${p.active_customers}</div><div class="card-delta">Coverage: ${p.market_coverage_pct}%</div></div>
+                <div class="card"><div class="card-label">Avg Credit Days</div><div class="card-value">${m.avg_credit_days}</div><div class="card-delta delta-up">Healthy</div></div>
+            `;
+
+            document.getElementById('overdue-list').innerHTML = (data.overdue_focus || []).map(item => `
+                <div class="list-item">
+                    <div class="item-info"><p>${item.customer_name}</p><span>${item.oldest_invoice_days} days overdue</span></div>
+                    <div class="item-value" style="color: var(--accent-danger)">${formatCurrency(item.overdue_amount)}</div>
+                </div>
+            `).join('');
+
+            document.getElementById('top-customers').innerHTML = (data.top_customers || []).map((item, idx) => `
+                <div class="list-item">
+                    <div class="item-info"><p>${idx + 1}. ${item.customer_name}</p></div>
+                    <div class="item-value">${formatCurrency(item.taxable_sales)}</div>
+                </div>
+            `).join('');
+
+            document.getElementById('returns-val').innerText = formatCurrency(m.returns_taxable);
+            document.getElementById('coverage-val').innerText = p.market_coverage_pct + '%';
+
+            const a = data.ageing;
+            const totalAgeing = (a["0-30 Days"] || 0) + (a["31-60 Days"] || 0) + (a["61+ Days"] || 0);
+            if (totalAgeing > 0) {
+                document.getElementById('ageing-bar').innerHTML = `
+                    <div class="ageing-segment seg-0-30" style="width: ${(a["0-30 Days"]/totalAgeing*100)}%"></div>
+                    <div class="ageing-segment seg-31-60" style="width: ${(a["31-60 Days"]/totalAgeing*100)}%"></div>
+                    <div class="ageing-segment seg-61" style="width: ${(a["61+ Days"]/totalAgeing*100)}%"></div>
+                `;
+            }
+            document.getElementById('ageing-legend').innerHTML = `
+                <div class="legend-item">0-30d<p>${formatCurrency(a["0-30 Days"] || 0)}</p></div>
+                <div class="legend-item">31-60d<p>${formatCurrency(a["31-60 Days"] || 0)}</p></div>
+                <div class="legend-item">61d+<p>${formatCurrency(a["61+ Days"] || 0)}</p></div>
+            `;
+
+            if (trendChart) trendChart.destroy();
+            trendChart = new Chart(document.getElementById('trendChart'), {
+                type: 'line',
+                data: {
+                    labels: (data.daily_trend || []).map(d => d.label),
+                    datasets: [
+                        { label: 'Sales', data: data.daily_trend.map(d => d.sales), borderColor: '#3fb950', backgroundColor: 'rgba(63, 185, 80, 0.1)', fill: true, tension: 0.4 },
+                        { label: 'Collections', data: data.daily_trend.map(d => d.collections), borderColor: '#2188ff', tension: 0.4 },
+                        { label: 'Route Debt', data: data.daily_trend.map(d => d.route_receivables), borderColor: '#8b949e', borderDash: [5, 5], tension: 0 }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8b949e', font: { size: 10 } } } }, scales: { y: { ticks: { color: '#8b949e', callback: v => '₹' + (v/1000) + 'k' } }, x: { ticks: { color: '#8b949e' } } } }
+            });
+
+            if (categoryChart) categoryChart.destroy();
+            categoryChart = new Chart(document.getElementById('categoryChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: (data.category_sales || []).map(c => c.category_name),
+                    datasets: [{ data: data.category_sales.map(c => c.taxable_sales), backgroundColor: ['#3fb950', '#2188ff', '#d29922', '#f85149', '#8b949e'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } }
+            });
+
+            if (brandChart) brandChart.destroy();
+            brandChart = new Chart(document.getElementById('brandChart'), {
+                type: 'bar',
+                data: {
+                    labels: (data.brand_sales || []).map(b => b.brand_name),
+                    datasets: [{ label: 'Sales', data: data.brand_sales.map(b => b.taxable_sales), backgroundColor: '#2188ff', borderRadius: 4 }]
+                },
+                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#8b949e' } }, y: { ticks: { color: '#fff' } } } }
+            });
+        }
+
+        if (typeof appsmith !== 'undefined') {
+            appsmith.onReady(() => {
+                if (appsmith.model.metrics) updateDashboard(appsmith.model);
+            });
+            window.addEventListener('message', (event) => {
+                if (event.data.type === 'UPDATE_MODEL') updateDashboard(appsmith.model);
+            });
+        }
+    </script>
+</body>
+</html>

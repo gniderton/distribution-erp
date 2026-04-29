@@ -388,6 +388,52 @@ router.get('/:id/attendance', async (req, res) => {
     }
 });
 
+// @route   POST /api/employees/liabilities - Record Employee Liability
+router.post('/liabilities', async (req, res) => {
+    try {
+        const { employee_id, amount, description, type, user_id } = req.body;
+        if (!employee_id || !amount || !description || !type) {
+            return res.status(400).json({ error: "Missing required fields: employee_id, amount, description, type" });
+        }
+
+        const result = await pool.query(`
+            INSERT INTO employee_liabilities (employee_id, amount, description, type, created_by)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+        `, [employee_id, amount, description, type, user_id]);
+
+        res.status(201).json({ success: true, id: result.rows[0].id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   GET /api/employees/:id/liabilities - List PENDING Liabilities
+router.get('/:id/liabilities', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(`
+            SELECT * FROM employee_liabilities 
+            WHERE employee_id = $1 AND status = 'PENDING'
+            ORDER BY created_at DESC
+        `, [id]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   DELETE /api/employees/liabilities/:id - Cancel/Remove Liability
+router.delete('/liabilities/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await pool.query("UPDATE employee_liabilities SET status = 'CANCELLED' WHERE id = $1", [id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // @route   POST /api/employees/bulk-salary-advance
 router.post('/bulk-salary-advance', async (req, res) => {
     const client = await pool.connect();
@@ -519,6 +565,14 @@ router.get('/salary-preview', async (req, res) => {
                   AND le.entity_type = 'Employee'
                 GROUP BY le.reference_id
             ),
+            LiabilityStats AS (
+                SELECT 
+                    employee_id,
+                    SUM(amount) as total_liabilities
+                FROM employee_liabilities
+                WHERE status = 'PENDING'
+                GROUP BY employee_id
+            ),
             CurrentSalary AS (
                 SELECT DISTINCT ON (employee_id) employee_id, new_salary 
                 FROM employee_salary_history 
@@ -532,14 +586,16 @@ router.get('/salary-preview', async (req, res) => {
                 COALESCE(adv.total_advances, 0) as advance_deduction,
                 COALESCE(bs.total_bonuses, 0) as bonus_addition,
                 (COALESCE(ls.total_emi, 0)) as loan_deduction,
-            (COALESCE(ls.total_principal, 0)) as loan_principal,
-            (COALESCE(ls.total_interest, 0)) as loan_interest
+                (COALESCE(ls.total_principal, 0)) as loan_principal,
+                (COALESCE(ls.total_interest, 0)) as loan_interest,
+                COALESCE(liab.total_liabilities, 0) as misc_liabilities
             FROM employees e
             LEFT JOIN CurrentSalary cs ON e.id = cs.employee_id
             LEFT JOIN AttendanceStats att ON e.id = att.employee_id
             LEFT JOIN AdvanceStats adv ON e.id = adv.employee_id
             LEFT JOIN BonusStats bs ON e.id = bs.employee_id
             LEFT JOIN LoanStats ls ON e.id = ls.employee_id
+            LEFT JOIN LiabilityStats liab ON e.id = liab.employee_id
             WHERE (e.joining_date <= $2) AND (e.resignation_date IS NULL OR e.resignation_date >= $1)
         `;
 
@@ -614,7 +670,7 @@ router.get('/salary-preview', async (req, res) => {
             }
 
             const leaveDeduction = (perDay * deductibleAbsent) + (perHalfDay * deductibleHalf);
-            const totalDeductions = leaveDeduction + Number(r.advance_deduction) + Number(r.loan_deduction);
+            const totalDeductions = leaveDeduction + Number(r.advance_deduction) + Number(r.loan_deduction) + Number(r.misc_liabilities);
             const totalAdditions = Number(r.bonus_addition) + leaveEncashment;
             const netSalary = Math.max(0, adjustedBaseSalary - totalDeductions + totalAdditions);
 
@@ -691,6 +747,16 @@ router.post('/bulk-salary-payment', async (req, res) => {
                     SET is_settled = TRUE, salary_payment_id = $1 
                     WHERE employee_id = $2 AND is_settled = FALSE
                 `, [salaryId, employee_id]);
+            // 2.5 Settle Miscellaneous Liabilities
+            if (Number(p.misc_liabilities) > 0) {
+                await client.query(`
+                    UPDATE employee_liabilities 
+                    SET status = 'SETTLED', salary_payment_id = $1 
+                    WHERE employee_id = $2 AND status = 'PENDING'
+                `, [salaryId, finalEmpId]);
+                
+                // Add to journal lines as a recovery (Misc Income - 4103)
+                journalLines.push({ code: 4103, debit: 0, credit: Number(p.misc_liabilities) });
             }
 
             // 3. Record Loan Installment (Split Principal vs Interest)
