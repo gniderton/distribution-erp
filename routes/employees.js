@@ -585,10 +585,10 @@ router.get('/salary-preview', async (req, res) => {
             WITH AttendanceStats AS (
                 SELECT 
                     employee_id,
-                    COUNT(*) FILTER (WHERE status = 'Absent') as absent_days,
-                    COUNT(*) FILTER (WHERE status = 'Half-Day') as half_days
+                    COUNT(*) FILTER (WHERE status = 'Absent')::int as absent_days,
+                    COUNT(*) FILTER (WHERE status = 'Half-Day')::int as half_days
                 FROM employee_attendance
-                WHERE attendance_date BETWEEN $1 AND $2
+                WHERE attendance_date::date >= $1::date AND attendance_date::date <= $2::date
                 GROUP BY employee_id
             ),
             AdvanceStats AS (
@@ -634,7 +634,7 @@ router.get('/salary-preview', async (req, res) => {
                 ORDER BY employee_id, effective_date DESC, created_at DESC
             )
             SELECT 
-                e.id, e.full_name, e.employee_code, e.joining_date, e.resignation_date, 
+                e.id, e.full_name, e.employee_code, e.joining_date, e.resignation_date, e.employment_status,
                 COALESCE(cs.new_salary, 0) as base_salary,
                 COALESCE(att.absent_days, 0) as absent_days,
                 COALESCE(att.half_days, 0) as half_days,
@@ -651,7 +651,8 @@ router.get('/salary-preview', async (req, res) => {
             LEFT JOIN BonusStats bs ON e.id = bs.employee_id
             LEFT JOIN LoanStats ls ON e.id = ls.employee_id
             LEFT JOIN LiabilityStats liab ON e.id = liab.employee_id
-            WHERE (e.joining_date <= $2) AND (e.resignation_date IS NULL OR e.resignation_date >= $1)
+            WHERE (e.joining_date::date <= $2::date) 
+              AND (e.resignation_date IS NULL OR e.resignation_date::date >= $1::date)
         `;
 
         const { rows } = await pool.query(query, [startDate, endDate]);
@@ -662,19 +663,23 @@ router.get('/salary-preview', async (req, res) => {
             const perDay = salary / daysInMonth;
             const perHalfDay = perDay / 2;
 
-            // Pro-rating Logic for Mid-month Joiners/Resigners
-            const mStart = new Date(startDate);
-            const mEnd = new Date(endDate);
-            const jDate = r.joining_date ? new Date(r.joining_date) : mStart;
-            const resDate = r.resignation_date ? new Date(r.resignation_date) : mEnd;
+            // Pro-rating Logic - Use UTC-safe date strings for comparison
+            const mStartStr = startDate;
+            const mEndStr = endDate;
+            const jDateStr = r.joining_date ? new Date(r.joining_date).toISOString().split('T')[0] : mStartStr;
+            const resDateStr = r.resignation_date ? new Date(r.resignation_date).toISOString().split('T')[0] : mEndStr;
 
-            // Effective start/end within THIS month
-            const effStart = jDate > mStart ? jDate : mStart;
-            const effEnd = resDate < mEnd ? resDate : mEnd;
+            const effStartStr = jDateStr > mStartStr ? jDateStr : mStartStr;
+            const effEndStr = resDateStr < mEndStr ? resDateStr : mEndStr;
 
-            // Days missed at start and end
-            const daysMissedAtStart = Math.max(0, Math.floor((effStart - mStart) / (1000 * 60 * 60 * 24)));
-            const daysMissedAtEnd = Math.max(0, Math.floor((mEnd - effEnd) / (1000 * 60 * 60 * 24)));
+            // Calculate missed days by comparing date strings
+            const d1 = new Date(mStartStr);
+            const d2 = new Date(effStartStr);
+            const d3 = new Date(effEndStr);
+            const d4 = new Date(mEndStr);
+
+            const daysMissedAtStart = Math.max(0, Math.round((d2 - d1) / (1000 * 60 * 60 * 24)));
+            const daysMissedAtEnd = Math.max(0, Math.round((d4 - d3) / (1000 * 60 * 60 * 24)));
             
             const midMonthDeduction = (daysMissedAtStart + daysMissedAtEnd) * perDay;
             const adjustedBaseSalary = Math.max(0, salary - midMonthDeduction);
@@ -693,10 +698,10 @@ router.get('/salary-preview', async (req, res) => {
                 const attHistory = await pool.query(`
                     SELECT 
                         EXTRACT(MONTH FROM attendance_date) as month,
-                        COUNT(*) FILTER (WHERE status = 'Absent') as absent_days,
-                        COUNT(*) FILTER (WHERE status = 'Half-Day') as half_days
+                        COUNT(*) FILTER (WHERE status = 'Absent')::int as absent_days,
+                        COUNT(*) FILTER (WHERE status = 'Half-Day')::int as half_days
                     FROM employee_attendance
-                    WHERE employee_id = $1 AND attendance_date BETWEEN $2 AND $3
+                    WHERE employee_id = $1 AND attendance_date::date BETWEEN $2::date AND $3::date
                     GROUP BY 1
                 `, [r.id, dateFrom, dateTo]);
 
