@@ -68,9 +68,14 @@ router.get('/', async (req, res) => {
         let pIdx = 1;
 
         // 1. Employment Status Filter (Default to Active)
-        const status = employment_status || 'Active';
-        query += ` AND employment_status = $${pIdx}`;
-        params.push(status);
+        let statusList = ['Active'];
+        if (employment_status) {
+            // Handle both array-like strings from Appsmith and comma-separated lists
+            statusList = employment_status.toString().replace(/[\[\]"]/g, '').split(',').map(s => s.trim());
+        }
+        
+        query += ` AND employment_status = ANY($${pIdx})`;
+        params.push(statusList);
         pIdx++;
 
         // 2. Role Filter
