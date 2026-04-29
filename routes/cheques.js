@@ -490,4 +490,61 @@ router.post('/:id/bounce', async (req, res) => {
     }
 });
 
+// 4. Reverse Cheque Clearance (Un-clear)
+router.post('/:id/unclear', async (req, res) => {
+    const { id } = req.params;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Get Cheque Info
+        const chqRes = await client.query('SELECT * FROM cheques WHERE id = $1', [id]);
+        if (chqRes.rows.length === 0) throw new Error('Cheque not found');
+        const chq = chqRes.rows[0];
+
+        if (chq.status !== 'CLEARED') {
+            throw new Error(`Only CLEARED cheques can be un-cleared. Current status: ${chq.status}`);
+        }
+
+        // 2. Reverse Bank Statement Entry Consumption
+        if (chq.bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = GREATEST(0, consumed_amount - $1),
+                    status = CASE 
+                        WHEN (consumed_amount - $1) <= 0.01 THEN 'Available'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [chq.amount, chq.bank_statement_entry_id]);
+        }
+
+        // 3. Delete Journal Entry (Accounting Reversal)
+        await client.query(`
+            DELETE FROM journal_entries 
+            WHERE reference_type = 'CHQ_CLEAR' AND reference_id = $1
+        `, [id]);
+
+        // 4. Reset Cheque Status to PENDING
+        await client.query(`
+            UPDATE cheques 
+            SET status = 'PENDING',
+                clearance_date = NULL,
+                bank_account_id = NULL,
+                bank_statement_entry_id = NULL,
+                updated_at = NOW()
+            WHERE id = $1
+        `, [id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Cheque clearance reversed successfully' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Unclear Error:', err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
