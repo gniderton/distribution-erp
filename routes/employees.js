@@ -1047,11 +1047,11 @@ router.get('/salary-payment-details/:id', async (req, res) => {
                 e.employee_code, 
                 e.joining_date,
                 ba.bank_name as source_account,
-                u.full_name as processed_by
+                admin.full_name as processed_by
             FROM employee_salaries es
             JOIN employees e ON es.employee_id = e.id
             LEFT JOIN bank_accounts ba ON es.from_account_id = ba.id
-            LEFT JOIN users u ON es.created_by = u.id
+            LEFT JOIN employees admin ON es.created_by = admin.id
             WHERE es.id = $1
         `, [id]);
 
