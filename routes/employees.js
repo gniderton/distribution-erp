@@ -769,14 +769,14 @@ router.post('/bulk-salary-payment', async (req, res) => {
             const salRes = await client.query(`
                 INSERT INTO employee_salaries (
                     employee_id, month, year, base_salary, absent_days, half_days,
-                    leave_deduction, advance_deduction, loan_deduction, net_salary,
+                    leave_deduction, advance_deduction, loan_deduction, misc_liabilities, net_salary,
                     payment_mode, from_account_id, bank_statement_entry_id, created_by
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                 RETURNING id
             `, [
                 finalEmpId, month, year, finalBaseAmount, absent_days, half_days,
-                leave_deduction, advance_deduction, loan_deduction, net_salary,
+                leave_deduction, advance_deduction, loan_deduction, p.misc_liabilities || 0, net_salary,
                 finalMode, finalAccount, finalBankEntry || null, user_id
             ]);
 
@@ -934,6 +934,28 @@ router.post('/bulk-salary-payment', async (req, res) => {
         res.status(500).json({ error: err.message });
     } finally {
         client.release();
+    }
+});
+
+// @route   GET /api/employees/salary-batch-summary
+router.get('/salary-batch-summary', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                month, 
+                year,
+                COUNT(id)::int as total_employees,
+                SUM(net_salary)::numeric(12,2) as total_net_payout,
+                SUM(leave_deduction + advance_deduction + loan_deduction + COALESCE(misc_liabilities, 0))::numeric(12,2) as total_recoveries,
+                MAX(created_at) as processed_at
+            FROM employee_salaries
+            GROUP BY month, year
+            ORDER BY year DESC, month DESC
+        `;
+        const { rows } = await pool.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
