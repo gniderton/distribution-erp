@@ -864,22 +864,14 @@ router.post('/bulk-salary-payment', async (req, res) => {
                 if (Number(leave_deduction) > 0) journalLines.push({ code: 5015, debit: 0, credit: Number(leave_deduction) });
                 if (Number(advance_deduction) > 0) journalLines.push({ code: 1020, debit: 0, credit: Number(advance_deduction) });
                 
-                // Manual Bonus & Encashment logic
-                const bonusRes = await client.query(`
-                    SELECT amount, id FROM employee_bonuses 
-                    WHERE employee_id = $1 AND is_settled = FALSE
-                `, [employee_id]);
-                
-                let totalBonusAmt = 0;
-                for (const b of bonusRes.rows) {
-                    totalBonusAmt += Number(b.amount);
-                    journalLines.push({ code: 5016, debit: Number(b.amount), credit: 0 }); // Dr Bonus Expense
+                // Record Bonus Addition as Expense
+                if (Number(p.bonus_addition) > 0) {
+                    journalLines.push({ code: 5016, debit: Number(p.bonus_addition), credit: 0 }); // Dr Bonus Expense
                 }
 
-                // Leave Encashment (provided from frontend as part of row)
-                if (Number(req.body.payments.find(p => (p.employee_id === employee_id || p.id === employee_id))?.leave_encashment) > 0) {
-                   const encAmt = Number(req.body.payments.find(p => (p.employee_id === employee_id || p.id === employee_id)).leave_encashment);
-                   journalLines.push({ code: 5017, debit: encAmt, credit: 0 }); // Dr Encashment Expense
+                // Record Leave Encashment as Expense
+                if (Number(p.leave_encashment) > 0) {
+                    journalLines.push({ code: 5017, debit: Number(p.leave_encashment), credit: 0 }); // Dr Encashment Expense
                 }
 
                 // Loan lines (1105 and 4101) were pushed dynamically in Step 3
@@ -911,7 +903,7 @@ router.post('/bulk-salary-payment', async (req, res) => {
                     UPDATE employee_bonuses 
                     SET is_settled = TRUE, salary_payment_id = $1 
                     WHERE employee_id = $2 AND is_settled = FALSE
-                `, [salaryId, employee_id]);
+                `, [salaryId, finalEmpId]);
 
                 // If final settlement, mark employee as officially 'Resigned'
                 if (isFinal) {
