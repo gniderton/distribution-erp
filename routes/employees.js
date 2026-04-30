@@ -972,6 +972,76 @@ router.get('/salaries', async (req, res) => {
     }
 });
 
+// @route   GET /api/employees/salary-batch-summary
+router.get('/salary-batch-summary', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                month, 
+                year,
+                COUNT(id)::int as total_employees,
+                SUM(net_salary)::numeric(12,2) as total_net_payout,
+                MAX(created_at) as processed_at
+            FROM employee_salaries
+            GROUP BY month, year
+            ORDER BY year DESC, month DESC
+        `;
+        const { rows } = await pool.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   GET /api/employees/salary-details/:id
+router.get('/salary-details/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const salaryQuery = `
+            SELECT 
+                es.*, 
+                e.full_name, e.employee_code, e.joining_date, e.designation, e.department,
+                je.entry_number as journal_no
+            FROM employee_salaries es
+            JOIN employees e ON es.employee_id = e.id
+            LEFT JOIN journal_entries je ON es.journal_entry_id = je.id
+            WHERE es.id = $1
+        `;
+        const salaryRes = await pool.query(salaryQuery, [id]);
+        if (salaryRes.rows.length === 0) return res.status(404).json({ error: "Salary record not found" });
+
+        const salary = salaryRes.rows[0];
+
+        // Fetch breakdown of settled items
+        const liabilities = await pool.query(`
+            SELECT amount, type, description, invoice_id 
+            FROM employee_liabilities WHERE salary_payment_id = $1
+        `, [id]);
+
+        const advances = await pool.query(`
+            SELECT amount, description, created_at as date 
+            FROM employee_advances WHERE salary_payment_id = $1
+        `, [id]);
+
+        const loans = await pool.query(`
+            SELECT amount, principal_portion, interest_portion, transaction_date 
+            FROM loan_transactions WHERE remarks LIKE $1
+        `, [`%Salary Deduction - ${salary.month}/${salary.year}%`]);
+
+        res.json({
+            ...salary,
+            breakdown: {
+                liabilities: liabilities.rows,
+                advances: advances.rows,
+                loans: loans.rows
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // @route   GET /api/employees/salaries/:id
 router.get('/salaries/:id', async (req, res) => {
     try {
