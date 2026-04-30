@@ -1001,11 +1001,9 @@ router.get('/salary-details/:id', async (req, res) => {
         const salaryQuery = `
             SELECT 
                 es.*, 
-                e.full_name, e.employee_code, e.joining_date,
-                je.entry_number as journal_no
+                e.full_name, e.employee_code, e.joining_date
             FROM employee_salaries es
             JOIN employees e ON es.employee_id = e.id
-            LEFT JOIN journal_entries je ON es.journal_entry_id = je.id
             WHERE es.id = $1
         `;
         const salaryRes = await pool.query(salaryQuery, [id]);
