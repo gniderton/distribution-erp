@@ -1072,8 +1072,10 @@ router.get('/salary-payment-details/:id', async (req, res) => {
 
         // 4. Deduction Breakdown (Liabilities)
         const liabilities = await pool.query(`
-            SELECT amount, type, description, invoice_id 
-            FROM employee_liabilities WHERE salary_payment_id = $1
+            SELECT el.amount, el.type, el.description, el.invoice_id, si.invoice_number 
+            FROM employee_liabilities el
+            LEFT JOIN sales_invoices si ON el.invoice_id = si.id
+            WHERE el.salary_payment_id = $1
         `, [id]);
 
         // 5. Deduction Breakdown (Loans)
