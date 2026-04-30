@@ -1,6 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const moment = require('moment');
+
+// Auto-migration: Ensure history table captures misc_liabilities
+(async () => {
+    try {
+        await pool.query('ALTER TABLE employee_salaries ADD COLUMN IF NOT EXISTS misc_liabilities NUMERIC(12,2) DEFAULT 0');
+    } catch (e) {
+        console.error("Payroll Auto-migration Error:", e.message);
+    }
+})();
 
 // @route   GET /api/employees/designations - List Master Designations
 router.get('/designations', async (req, res) => {
