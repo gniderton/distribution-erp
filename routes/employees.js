@@ -743,7 +743,7 @@ router.post('/bulk-salary-payment', async (req, res) => {
 
         for (const p of payments) {
             const { 
-                employee_id, id, base_salary, absent_days, half_days, 
+                employee_id, id, base_salary, adjusted_base_salary, absent_days, half_days, 
                 leave_deduction, advance_deduction, loan_deduction, net_salary,
                 payment_mode: p_mode, from_account_id: p_account, bank_statement_entry_id: p_bank_entry
             } = p;
@@ -759,9 +759,10 @@ router.post('/bulk-salary-payment', async (req, res) => {
             const finalBankEntry = p_bank_entry || bank_statement_entry_id;
 
             // Initialize Journal Lines early (needed for both deductions and final entry)
-            // 5014: Salary Expense
+            // 5014: Salary Expense (Use Adjusted Salary for pro-rated joiners/resigners)
+            const finalBaseAmount = Number(adjusted_base_salary || base_salary);
             const journalLines = [
-                { code: 5014, debit: Number(base_salary), credit: 0 } 
+                { code: 5014, debit: finalBaseAmount, credit: 0 } 
             ];
 
             // 1. Insert Salary Record
@@ -774,7 +775,7 @@ router.post('/bulk-salary-payment', async (req, res) => {
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                 RETURNING id
             `, [
-                finalEmpId, month, year, base_salary, absent_days, half_days,
+                finalEmpId, month, year, finalBaseAmount, absent_days, half_days,
                 leave_deduction, advance_deduction, loan_deduction, net_salary,
                 finalMode, finalAccount, finalBankEntry || null, user_id
             ]);
