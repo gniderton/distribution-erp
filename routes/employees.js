@@ -792,7 +792,7 @@ router.post('/bulk-salary-payment', async (req, res) => {
                     UPDATE employee_advances 
                     SET is_settled = TRUE, salary_payment_id = $1 
                     WHERE employee_id = $2 AND is_settled = FALSE
-                `, [salaryId, employee_id]);
+                `, [salaryId, finalEmpId]);
             }
             // 2.5 Settle Miscellaneous Liabilities
             if (Number(p.misc_liabilities) > 0) {
