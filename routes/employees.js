@@ -768,15 +768,19 @@ router.post('/bulk-salary-payment', async (req, res) => {
             // 1. Insert Salary Record
             const salRes = await client.query(`
                 INSERT INTO employee_salaries (
-                    employee_id, month, year, base_salary, absent_days, half_days,
-                    leave_deduction, advance_deduction, loan_deduction, net_salary,
+                    employee_id, month, year, base_salary, adjusted_base_salary, 
+                    absent_days, half_days, leave_deduction, advance_deduction, 
+                    loan_deduction, misc_liabilities, bonus_addition, leave_encashment,
+                    total_deductions, total_additions, net_salary,
                     payment_mode, from_account_id, bank_statement_entry_id, created_by
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
                 RETURNING id
             `, [
-                finalEmpId, month, year, finalBaseAmount, absent_days, half_days,
-                leave_deduction, advance_deduction, loan_deduction, net_salary,
+                finalEmpId, month, year, base_salary, adjusted_base_salary || base_salary,
+                absent_days, half_days, leave_deduction, advance_deduction, 
+                loan_deduction, p.misc_liabilities || 0, p.bonus_addition || 0, p.leave_encashment || 0,
+                p.total_deductions || 0, p.total_additions || 0, net_salary,
                 finalMode, finalAccount, finalBankEntry || null, user_id
             ]);
 
@@ -993,60 +997,119 @@ router.get('/salary-batch-summary', async (req, res) => {
     }
 });
 
-// @route   GET /api/employees/salary-details/:id
-router.get('/salary-details/:id', async (req, res) => {
+// @route   GET /api/employees/salary-payment-headers
+router.get('/salary-payment-headers', async (req, res) => {
+    try {
+        const { month, year, employee_id } = req.query;
+        let query = `
+            SELECT 
+                es.id, 
+                es.employee_id, 
+                e.full_name, 
+                e.employee_code, 
+                es.month, 
+                es.year, 
+                es.net_salary, 
+                es.payment_mode, 
+                es.payment_date,
+                es.created_at as processed_at,
+                ba.bank_name as source_account
+            FROM employee_salaries es
+            JOIN employees e ON es.employee_id = e.id
+            LEFT JOIN bank_accounts ba ON es.from_account_id = ba.id
+            WHERE 1=1
+        `;
+        const params = [];
+
+        if (month) { params.push(month); query += ` AND es.month = $${params.length}`; }
+        if (year) { params.push(year); query += ` AND es.year = $${params.length}`; }
+        if (employee_id) { params.push(employee_id); query += ` AND es.employee_id = $${params.length}`; }
+
+        query += ` ORDER BY es.created_at DESC`;
+
+        const { rows } = await pool.query(query, params);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   GET /api/employees/salary-payment-details/:id
+router.get('/salary-payment-details/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { employee_id, month, year } = req.query;
 
-        let salaryRes;
-        if (id && id !== "0") {
-            // Find by specific Salary Record ID
-            salaryRes = await pool.query(`
-                SELECT es.*, e.full_name, e.employee_code, e.joining_date
-                FROM employee_salaries es
-                JOIN employees e ON es.employee_id = e.id
-                WHERE es.id = $1
-            `, [id]);
-        } else if (employee_id && month && year) {
-            // Find by Employee + Date context (Useful for Payslips)
-            salaryRes = await pool.query(`
-                SELECT es.*, e.full_name, e.employee_code, e.joining_date
-                FROM employee_salaries es
-                JOIN employees e ON es.employee_id = e.id
-                WHERE es.employee_id = $1 AND es.month = $2 AND es.year = $3
-                ORDER BY es.created_at DESC LIMIT 1
-            `, [employee_id, month, year]);
-        } else {
-            return res.status(400).json({ error: "Provide either Salary ID or Employee/Month/Year context" });
-        }
+        // 1. Main Header Info
+        const salaryRes = await pool.query(`
+            SELECT 
+                es.*, 
+                e.full_name, 
+                e.employee_code, 
+                e.joining_date,
+                ba.bank_name as source_account,
+                u.full_name as processed_by
+            FROM employee_salaries es
+            JOIN employees e ON es.employee_id = e.id
+            LEFT JOIN bank_accounts ba ON es.from_account_id = ba.id
+            LEFT JOIN users u ON es.created_by = u.id
+            WHERE es.id = $1
+        `, [id]);
 
         if (salaryRes.rows.length === 0) return res.status(404).json({ error: "Salary record not found" });
         const salary = salaryRes.rows[0];
-        const salaryId = salary.id;
 
-        // Fetch breakdown of settled items
+        // 2. Addition Breakdown (Bonuses)
+        const bonuses = await pool.query(`
+            SELECT amount, bonus_type, remarks, created_at 
+            FROM employee_bonuses WHERE salary_payment_id = $1
+        `, [id]);
+
+        // 3. Deduction Breakdown (Advances)
+        const advances = await pool.query(`
+            SELECT amount, remarks, advance_date as date 
+            FROM employee_advances WHERE salary_payment_id = $1
+        `, [id]);
+
+        // 4. Deduction Breakdown (Liabilities)
         const liabilities = await pool.query(`
             SELECT amount, type, description, invoice_id 
             FROM employee_liabilities WHERE salary_payment_id = $1
-        `, [salaryId]);
+        `, [id]);
 
-        const advances = await pool.query(`
-            SELECT amount, description, created_at as date 
-            FROM employee_advances WHERE salary_payment_id = $1
-        `, [salaryId]);
-
+        // 5. Deduction Breakdown (Loans)
         const loans = await pool.query(`
-            SELECT amount, principal_portion, interest_portion, transaction_date 
-            FROM loan_transactions WHERE remarks LIKE $1
+            SELECT lt.amount, lt.principal_portion, lt.interest_portion, lt.transaction_date, l.id as loan_id
+            FROM loan_transactions lt
+            JOIN loans l ON lt.loan_id = l.id
+            WHERE lt.remarks LIKE $1
         `, [`%Salary Deduction - ${salary.month}/${salary.year}%`]);
 
         res.json({
-            ...salary,
+            header: salary,
             breakdown: {
-                liabilities: liabilities.rows,
-                advances: advances.rows,
-                loans: loans.rows
+                base_salary: {
+                    original: salary.base_salary,
+                    adjusted: salary.adjusted_base_salary
+                },
+                additions: {
+                    bonuses: bonuses.rows,
+                    leave_encashment: salary.leave_encashment,
+                    total: salary.total_additions
+                },
+                deductions: {
+                    leave: {
+                        absent_days: salary.absent_days,
+                        half_days: salary.half_days,
+                        amount: salary.leave_deduction
+                    },
+                    advances: advances.rows,
+                    liabilities: liabilities.rows,
+                    loans: loans.rows,
+                    total: salary.total_deductions
+                },
+                summary: {
+                    net_salary: salary.net_salary
+                }
             }
         });
     } catch (err) {
