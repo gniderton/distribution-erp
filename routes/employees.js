@@ -997,30 +997,44 @@ router.get('/salary-batch-summary', async (req, res) => {
 router.get('/salary-details/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        const { employee_id, month, year } = req.query;
 
-        const salaryQuery = `
-            SELECT 
-                es.*, 
-                e.full_name, e.employee_code, e.joining_date
-            FROM employee_salaries es
-            JOIN employees e ON es.employee_id = e.id
-            WHERE es.id = $1
-        `;
-        const salaryRes = await pool.query(salaryQuery, [id]);
+        let salaryRes;
+        if (id && id !== "0") {
+            // Find by specific Salary Record ID
+            salaryRes = await pool.query(`
+                SELECT es.*, e.full_name, e.employee_code, e.joining_date
+                FROM employee_salaries es
+                JOIN employees e ON es.employee_id = e.id
+                WHERE es.id = $1
+            `, [id]);
+        } else if (employee_id && month && year) {
+            // Find by Employee + Date context (Useful for Payslips)
+            salaryRes = await pool.query(`
+                SELECT es.*, e.full_name, e.employee_code, e.joining_date
+                FROM employee_salaries es
+                JOIN employees e ON es.employee_id = e.id
+                WHERE es.employee_id = $1 AND es.month = $2 AND es.year = $3
+                ORDER BY es.created_at DESC LIMIT 1
+            `, [employee_id, month, year]);
+        } else {
+            return res.status(400).json({ error: "Provide either Salary ID or Employee/Month/Year context" });
+        }
+
         if (salaryRes.rows.length === 0) return res.status(404).json({ error: "Salary record not found" });
-
         const salary = salaryRes.rows[0];
+        const salaryId = salary.id;
 
         // Fetch breakdown of settled items
         const liabilities = await pool.query(`
             SELECT amount, type, description, invoice_id 
             FROM employee_liabilities WHERE salary_payment_id = $1
-        `, [id]);
+        `, [salaryId]);
 
         const advances = await pool.query(`
             SELECT amount, description, created_at as date 
             FROM employee_advances WHERE salary_payment_id = $1
-        `, [id]);
+        `, [salaryId]);
 
         const loans = await pool.query(`
             SELECT amount, principal_portion, interest_portion, transaction_date 
