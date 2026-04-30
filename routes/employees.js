@@ -1001,7 +1001,7 @@ router.get('/salary-details/:id', async (req, res) => {
         const salaryQuery = `
             SELECT 
                 es.*, 
-                e.full_name, e.employee_code, e.joining_date, e.designation, e.department,
+                e.full_name, e.employee_code, e.joining_date,
                 je.entry_number as journal_no
             FROM employee_salaries es
             JOIN employees e ON es.employee_id = e.id
