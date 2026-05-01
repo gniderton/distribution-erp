@@ -1238,16 +1238,6 @@ router.get('/salaries/:id', async (req, res) => {
     }
 });
 
-// @route   GET /api/employees/:id - Get Details (Generic fallback)
-router.get('/:id', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM view_employee_details WHERE id = $1', [req.params.id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: "Not found" });
-        res.json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // @route   POST /api/employees/:id/resign
 router.post('/:id/resign', async (req, res) => {
@@ -1263,6 +1253,17 @@ router.post('/:id/resign', async (req, res) => {
         res.json({ success: true, message: 'Employee marked as resigned successfully' });
     } catch (err) {
         console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   GET /api/employees/:id - Get Details (Generic fallback)
+router.get('/:id', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM view_employee_details WHERE id = $1', [req.params.id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: "Not found" });
+        res.json(result.rows[0]);
+    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
