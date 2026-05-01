@@ -488,8 +488,9 @@ router.post('/liabilities', async (req, res) => {
             await client.query(`
                 UPDATE sales_invoices 
                 SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                    paid_amount = COALESCE(paid_amount, 0) + $1,
                     status = CASE 
-                        WHEN (grand_total - (COALESCE(amount_paid, 0) + $1)) <= 1 THEN 'Paid'
+                        WHEN (grand_total - (COALESCE(paid_amount, 0) + $1)) <= 1 THEN 'Paid'
                         ELSE 'Partially Paid' 
                     END
                 WHERE id = $2
