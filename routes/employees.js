@@ -39,7 +39,7 @@ router.get('/profile/:id', async (req, res) => {
             
             // 4. Financials: Active Loans
             pool.query(`
-                SELECT id, loan_type, balance_principal, emi_amount, status 
+                SELECT l.id, l.loan_type, l.balance_principal, l.emi_amount, l.status 
                 FROM loans l
                 JOIN loan_entities le ON l.party_id = le.id
                 WHERE le.reference_id = $1 AND le.entity_type = 'Employee' AND l.status = 'Active'
