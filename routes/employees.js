@@ -12,7 +12,80 @@ router.get('/designations', async (req, res) => {
     }
 });
 
-// @route   GET /api/employees/profile/:id - Full Forensic Profile
+// @route   GET /api/employees/profile - Flexible Profile (Email or ID query)
+router.get('/profile', async (req, res) => {
+    try {
+        const { email, id: queryId } = req.query;
+        let id = queryId;
+
+        if (email) {
+            const empRes = await pool.query('SELECT id FROM employees WHERE email = $1', [email]);
+            if (empRes.rows.length === 0) return res.status(404).json({ error: 'Employee with this email not found' });
+            id = empRes.rows[0].id;
+        }
+
+        if (!id) return res.status(400).json({ error: 'Employee ID or Email is required' });
+
+        // Execute all queries in parallel
+        const [
+            profileRes,
+            advanceRes,
+            liabilityRes,
+            loanRes,
+            salaryHistoryRes,
+            paymentHistoryRes,
+            attendanceRes
+        ] = await Promise.all([
+            pool.query('SELECT * FROM view_employee_details WHERE id = $1', [id]),
+            pool.query('SELECT COALESCE(SUM(amount), 0) as total FROM employee_advances WHERE employee_id = $1 AND is_settled = FALSE', [id]),
+            pool.query('SELECT COALESCE(SUM(amount), 0) as total FROM employee_liabilities WHERE employee_id = $1 AND status = \'PENDING\'', [id]),
+            pool.query(`
+                SELECT l.id, l.loan_type, l.balance_principal, l.emi_amount, l.status 
+                FROM loans l
+                JOIN loan_entities le ON l.party_id = le.id
+                WHERE le.reference_id = $1 AND le.entity_type = 'Employee' AND l.status = 'Active'
+            `, [id]),
+            pool.query('SELECT * FROM employee_salary_history WHERE employee_id = $1 ORDER BY effective_date DESC', [id]),
+            pool.query('SELECT * FROM employee_salaries WHERE employee_id = $1 ORDER BY year DESC, month DESC LIMIT 6', [id]),
+            pool.query(`
+                SELECT 
+                    COUNT(*) FILTER (WHERE status = 'Present') as present_days,
+                    COUNT(*) FILTER (WHERE status = 'Absent') as absent_days,
+                    COUNT(*) FILTER (WHERE status = 'Half-Day') as half_days
+                FROM employee_attendance 
+                WHERE employee_id = $1 AND attendance_date > CURRENT_DATE - INTERVAL '30 days'
+            `, [id])
+        ]);
+
+        if (profileRes.rows.length === 0) return res.status(404).json({ error: 'Employee not found' });
+
+        const baseProfile = profileRes.rows[0];
+
+        // Combine for compatibility: Top level has flat profile fields, plus forensic objects
+        res.json({
+            ...baseProfile, // Legacy compatibility (getMe.data.id works)
+            profile: baseProfile, // New dashboard structure
+            financials: {
+                outstanding_advance: advanceRes.rows[0].total,
+                outstanding_liability: liabilityRes.rows[0].total,
+                active_loans: loanRes.rows,
+                total_loan_balance: loanRes.rows.reduce((sum, l) => sum + Number(l.balance_principal), 0)
+            },
+            career: {
+                salary_progression: salaryHistoryRes.rows,
+                recent_payments: paymentHistoryRes.rows
+            },
+            performance: {
+                attendance_30d: attendanceRes.rows[0]
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   GET /api/employees/profile/:id - Full Forensic Profile (URL Param)
 router.get('/profile/:id', async (req, res) => {
     try {
         const { id } = req.params;
