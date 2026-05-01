@@ -12,22 +12,76 @@ router.get('/designations', async (req, res) => {
     }
 });
 
-// @route   GET /api/employees/profile - Filter by Email (for Retool)
-router.get('/profile', async (req, res) => {
+// @route   GET /api/employees/profile/:id - Full Forensic Profile
+router.get('/profile/:id', async (req, res) => {
     try {
-        const { email } = req.query;
-        if (!email) return res.status(400).json({ error: 'Email is required' });
+        const { id } = req.params;
+        if (!id) return res.status(400).json({ error: 'Employee ID is required' });
 
-        const result = await pool.query(
-            'SELECT * FROM view_employee_details WHERE email = $1 LIMIT 1',
-            [email]
-        );
+        // Execute all queries in parallel for maximum performance
+        const [
+            profileRes,
+            advanceRes,
+            liabilityRes,
+            loanRes,
+            salaryHistoryRes,
+            paymentHistoryRes,
+            attendanceRes
+        ] = await Promise.all([
+            // 1. Basic Profile
+            pool.query('SELECT * FROM view_employee_details WHERE id = $1', [id]),
+            
+            // 2. Financials: Advances
+            pool.query('SELECT COALESCE(SUM(amount), 0) as total FROM employee_advances WHERE employee_id = $1 AND is_settled = FALSE', [id]),
+            
+            // 3. Financials: Liabilities
+            pool.query('SELECT COALESCE(SUM(amount), 0) as total FROM employee_liabilities WHERE employee_id = $1 AND status = \'PENDING\'', [id]),
+            
+            // 4. Financials: Active Loans
+            pool.query(`
+                SELECT id, loan_type, balance_principal, emi_amount, status 
+                FROM loans l
+                JOIN loan_entities le ON l.party_id = le.id
+                WHERE le.reference_id = $1 AND le.entity_type = 'Employee' AND l.status = 'Active'
+            `, [id]),
 
-        if (result.rows.length === 0) {
+            // 5. Career: Salary History
+            pool.query('SELECT * FROM employee_salary_history WHERE employee_id = $1 ORDER BY effective_date DESC', [id]),
+
+            // 6. History: Last 6 Payments
+            pool.query('SELECT * FROM employee_salaries WHERE employee_id = $1 ORDER BY year DESC, month DESC LIMIT 6', [id]),
+
+            // 7. Attendance: Last 30 Days Summary
+            pool.query(`
+                SELECT 
+                    COUNT(*) FILTER (WHERE status = 'Present') as present_days,
+                    COUNT(*) FILTER (WHERE status = 'Absent') as absent_days,
+                    COUNT(*) FILTER (WHERE status = 'Half-Day') as half_days
+                FROM employee_attendance 
+                WHERE employee_id = $1 AND attendance_date > CURRENT_DATE - INTERVAL '30 days'
+            `, [id])
+        ]);
+
+        if (profileRes.rows.length === 0) {
             return res.status(404).json({ error: 'Employee not found' });
         }
 
-        res.json(result.rows[0]);
+        res.json({
+            profile: profileRes.rows[0],
+            financials: {
+                outstanding_advance: advanceRes.rows[0].total,
+                outstanding_liability: liabilityRes.rows[0].total,
+                active_loans: loanRes.rows,
+                total_loan_balance: loanRes.rows.reduce((sum, l) => sum + Number(l.balance_principal), 0)
+            },
+            career: {
+                salary_progression: salaryHistoryRes.rows,
+                recent_payments: paymentHistoryRes.rows
+            },
+            performance: {
+                attendance_30d: attendanceRes.rows[0]
+            }
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: err.message });
