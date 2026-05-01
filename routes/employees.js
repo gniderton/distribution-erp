@@ -472,8 +472,8 @@ router.post('/liabilities', async (req, res) => {
             const payRes = await client.query(`
                 INSERT INTO customer_payments (
                     customer_id, amount, payment_mode, transaction_ref, 
-                    status, payment_date, collected_by, remarks
-                ) VALUES ($1, $2, 'EMPLOYEE_ADJUSTMENT', $3, 'Verified', NOW(), $4, $5)
+                    status, verification_status, payment_date, collected_by, remarks
+                ) VALUES ($1, $2, 'EMPLOYEE_ADJUSTMENT', $3, 'Verified', 'Verified', NOW(), $4, $5)
                 RETURNING id
             `, [customer_id, amount, `EMP-LIAB-${liabilityId}`, user_id, `Employee Liability Recovery - ${description}`]);
             const paymentId = payRes.rows[0].id;
@@ -878,8 +878,8 @@ router.post('/bulk-salary-payment', async (req, res) => {
                                 const payRes = await client.query(`
                                     INSERT INTO customer_payments (
                                         customer_id, amount, payment_mode, transaction_ref, 
-                                        status, payment_date, remarks
-                                    ) VALUES ($1, $2, 'SALARY_DEDUCTION', $3, 'Verified', NOW(), $4)
+                                        status, verification_status, payment_date, remarks
+                                    ) VALUES ($1, $2, 'SALARY_DEDUCTION', $3, 'Verified', 'Verified', NOW(), $4)
                                     RETURNING id
                                 `, [customerId, l.amount, `EMP-LIAB-${l.id}`, `Settled via Salary Payment - ${p.month}/${p.year}`]);
                                 const paymentId = payRes.rows[0].id;
