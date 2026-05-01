@@ -858,32 +858,51 @@ router.post('/bulk-salary-payment', async (req, res) => {
 
                 for (const l of liabRes.rows) {
                     if (l.invoice_id) {
-                        // Linked to invoice: Clear from 1020 (Emp Receivable)
+                        // 1. Accounting: Clear from 1020 (Emp Receivable)
                         journalLines.push({ code: 1020, debit: 0, credit: Number(l.amount) });
 
-                        // [FIX] Operational Settlement: Update the Sales Invoice balance and status
-                        await client.query(`
-                            UPDATE sales_invoices 
-                            SET 
-                                paid_amount = COALESCE(paid_amount, 0) + $1,
-                                balance_amount = CASE 
-                                    WHEN balance_amount IS NULL THEN grand_total - $1
-                                    ELSE balance_amount - $1
-                                END,
-                                status = CASE 
-                                    WHEN (COALESCE(balance_amount, grand_total) - $1) <= 1 THEN 'Paid'
-                                    ELSE 'Partially Paid'
-                                END
-                            WHERE id = $2
-                        `, [Number(l.amount), l.invoice_id]);
+                        // 2. Operational Check: Has this invoice already been adjusted via /api/employees/liabilities?
+                        // We check if a payment already exists with this liability reference
+                        const checkPay = await client.query(`
+                            SELECT id FROM customer_payments WHERE transaction_ref = $1
+                        `, [`EMP-LIAB-${l.id}`]);
 
-                        // Optional: Create a traceability note in the invoice description or a payment log
-                        await client.query(`
-                            UPDATE sales_invoices 
-                            SET description = COALESCE(description, '') || '\n[Salary Settlement: ' || CURRENT_DATE || ' Amount: ' || $1 || ']'
-                            WHERE id = $2
-                        `, [Number(l.amount), l.invoice_id]);
+                        if (checkPay.rows.length === 0) {
+                            // If NO payment exists, create it now (the "Right Way")
+                            const invRes = await client.query('SELECT customer_id FROM sales_invoices WHERE id = $1', [l.invoice_id]);
+                            if (invRes.rows.length > 0) {
+                                const customerId = invRes.rows[0].customer_id;
+                                
+                                // A. Create Payment
+                                const payRes = await client.query(`
+                                    INSERT INTO customer_payments (
+                                        customer_id, amount, payment_mode, transaction_ref, 
+                                        status, payment_date, remarks
+                                    ) VALUES ($1, $2, 'SALARY_DEDUCTION', $3, 'Verified', NOW(), $4)
+                                    RETURNING id
+                                `, [customerId, l.amount, `EMP-LIAB-${l.id}`, `Settled via Salary Payment - ${p.month}/${p.year}`]);
+                                const paymentId = payRes.rows[0].id;
 
+                                // B. Create Allocation
+                                await client.query(`
+                                    INSERT INTO customer_payment_allocations (payment_id, invoice_id, amount, status)
+                                    VALUES ($1, $2, $3, 'ACTIVE')
+                                `, [paymentId, l.invoice_id, l.amount]);
+
+                                // C. Update Invoice Balance & Status
+                                await client.query(`
+                                    UPDATE sales_invoices 
+                                    SET 
+                                        paid_amount = COALESCE(paid_amount, 0) + $1,
+                                        balance_amount = COALESCE(balance_amount, grand_total) - $1,
+                                        status = CASE 
+                                            WHEN (COALESCE(balance_amount, grand_total) - $1) <= 1 THEN 'Paid'
+                                            ELSE 'Partially Paid'
+                                        END
+                                    WHERE id = $2
+                                `, [Number(l.amount), l.invoice_id]);
+                            }
+                        }
                     } else {
                         // Not linked (Damage/Shortage): Credit Income 4103
                         journalLines.push({ code: 4103, debit: 0, credit: Number(l.amount) });
