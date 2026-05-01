@@ -163,10 +163,32 @@ router.post('/', async (req, res) => {
                 // Round Line Amount
                 const lineAmount = Math.round(Number(line.amount));
 
+                // [FIX] Fetch Tax Info if not provided to ensure proper Ledger split
+                let lineTaxPct = line.tax_percentage;
+                let lineTaxAmt = line.tax_amount;
+
+                if (lineTaxPct === undefined) {
+                    const taxRes = await client.query(`
+                        SELECT t.tax_percentage 
+                        FROM products p 
+                        LEFT JOIN taxes t ON p.tax_id = t.id 
+                        WHERE p.id = $1
+                    `, [line.product_id]);
+                    lineTaxPct = taxRes.rows.length > 0 ? Number(taxRes.rows[0].tax_percentage) : 0;
+                    line.tax_percentage = lineTaxPct;
+                }
+
+                if (lineTaxAmt === undefined) {
+                    // Reverse calculate tax from Gross Amount
+                    const taxable = lineAmount / (1 + (lineTaxPct / 100));
+                    lineTaxAmt = lineAmount - taxable;
+                    line.tax_amount = lineTaxAmt;
+                }
+
                 await client.query(`
                     INSERT INTO debit_note_lines 
-                    (debit_note_id, product_id, qty, rate, amount, batch_number, return_type)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    (debit_note_id, product_id, qty, rate, amount, batch_number, return_type, tax_percentage, tax_amount)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 `, [
                     newId,
                     line.product_id,
@@ -174,7 +196,9 @@ router.post('/', async (req, res) => {
                     line.rate,
                     lineAmount,
                     line.batch_number,
-                    line.return_type || 'Damage'
+                    line.return_type || 'Damage',
+                    lineTaxPct,
+                    lineTaxAmt
                 ]);
 
                 // --- STOCK DEDUCTION LOGIC (FIFO) ---
@@ -591,6 +615,60 @@ router.post('/:id/convert', async (req, res) => {
                 status = 'Approved'
             WHERE id = $3
         `, [dnNumber, oldRSNumber, id]);
+
+        // [FIX] Update tax values in header from lines if they are 0
+        // This ensures the Ledger entry below has the correct CGST/SGST/IGST breakdown
+        const taxTotalsRes = await client.query(`
+            SELECT 
+                SUM(tax_amount) as total_tax,
+                SUM(amount - tax_amount) as total_taxable
+            FROM debit_note_lines 
+            WHERE debit_note_id = $1
+        `, [id]);
+        
+        const totals = taxTotalsRes.rows[0];
+        if (Number(totals.total_tax) > 0) {
+            // Re-fetch vendor info to determine GST type
+            const vendRes = await client.query('SELECT gst FROM vendors WHERE id = $1', [rs.vendor_id]);
+            const vGst = vendRes.rows.length > 0 ? vendRes.rows[0].gst : '';
+            
+            const settingsRes = await client.query('SELECT state_code FROM company_settings LIMIT 1');
+            const cmpState = (settingsRes.rows.length > 0) ? Number(settingsRes.rows[0].state_code) : 32;
+
+            let isIntra = false;
+            let posVal = '32';
+            if (vGst && vGst.length >= 2) {
+                posVal = vGst.substring(0, 2);
+                if (parseInt(posVal) === cmpState) isIntra = true;
+            }
+
+            let cgst = 0, sgst = 0, igst = 0;
+            const tTax = Number(totals.total_tax);
+            if (isIntra) {
+                cgst = Number((tTax / 2).toFixed(2));
+                sgst = Number((tTax - cgst).toFixed(2));
+            } else {
+                igst = tTax;
+            }
+
+            await client.query(`
+                UPDATE debit_notes SET
+                    taxable_amount = $1,
+                    tax_amount = $2,
+                    cgst_amount = $3,
+                    sgst_amount = $4,
+                    igst_amount = $5,
+                    place_of_supply = $6
+                WHERE id = $7
+            `, [totals.total_taxable, tTax, cgst, sgst, igst, posVal, id]);
+            
+            // Update the rs object so the ledger logic below uses the fresh values
+            rs.cgst_amount = cgst;
+            rs.sgst_amount = sgst;
+            rs.igst_amount = igst;
+            rs.tax_amount = tTax;
+            rs.taxable_amount = totals.total_taxable;
+        }
 
         // 4. FINANCIAL LOGIC (Allocation)
         const amount = Number(rs.amount);
