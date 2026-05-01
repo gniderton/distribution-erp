@@ -860,6 +860,30 @@ router.post('/bulk-salary-payment', async (req, res) => {
                     if (l.invoice_id) {
                         // Linked to invoice: Clear from 1020 (Emp Receivable)
                         journalLines.push({ code: 1020, debit: 0, credit: Number(l.amount) });
+
+                        // [FIX] Operational Settlement: Update the Sales Invoice balance and status
+                        await client.query(`
+                            UPDATE sales_invoices 
+                            SET 
+                                paid_amount = COALESCE(paid_amount, 0) + $1,
+                                balance_amount = CASE 
+                                    WHEN balance_amount IS NULL THEN grand_total - $1
+                                    ELSE balance_amount - $1
+                                END,
+                                status = CASE 
+                                    WHEN (COALESCE(balance_amount, grand_total) - $1) <= 1 THEN 'Paid'
+                                    ELSE 'Partially Paid'
+                                END
+                            WHERE id = $2
+                        `, [Number(l.amount), l.invoice_id]);
+
+                        // Optional: Create a traceability note in the invoice description or a payment log
+                        await client.query(`
+                            UPDATE sales_invoices 
+                            SET description = COALESCE(description, '') || '\n[Salary Settlement: ' || CURRENT_DATE || ' Amount: ' || $1 || ']'
+                            WHERE id = $2
+                        `, [Number(l.amount), l.invoice_id]);
+
                     } else {
                         // Not linked (Damage/Shortage): Credit Income 4103
                         journalLines.push({ code: 4103, debit: 0, credit: Number(l.amount) });
