@@ -676,22 +676,22 @@ router.get('/reports/p-and-l', async (req, res) => {
             sd = `${startYear}-04-01`;
             ed = `${startYear + 1}-03-31`;
 
-            if (quarter) {
+            // Month takes precedence as it is the most specific
+            if (month) {
+                const m = parseInt(month); // 1 = Jan, 12 = Dec
+                let calYear = (m >= 1 && m <= 3) ? startYear + 1 : startYear;
+                sd = `${calYear}-${m.toString().padStart(2, '0')}-01`;
+                ed = new Date(calYear, m, 0).toISOString().split('T')[0];
+            } 
+            else if (quarter) {
                 const q = parseInt(quarter);
                 if (q === 1) { sd = `${startYear}-04-01`; ed = `${startYear}-06-30`; }
                 else if (q === 2) { sd = `${startYear}-07-01`; ed = `${startYear}-09-30`; }
                 else if (q === 3) { sd = `${startYear}-10-01`; ed = `${startYear}-12-31`; }
                 else if (q === 4) { sd = `${startYear + 1}-01-01`; ed = `${startYear + 1}-03-31`; }
-            } else if (month) {
-                const m = parseInt(month); // 1 = Jan, 12 = Dec
-                let calYear = startYear;
-                if (m >= 1 && m <= 3) {
-                    calYear = startYear + 1; // Jan-Mar belong to the next calendar year in this FY
-                }
-                sd = `${calYear}-${m.toString().padStart(2, '0')}-01`;
-                ed = new Date(calYear, m, 0).toISOString().split('T')[0];
             }
-        } else {
+        }
+ else {
             // Fallback to existing logic if no FY is provided
             const fyStartYear = now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
             const fyStart = `${fyStartYear}-04-01`;
@@ -753,8 +753,14 @@ router.get('/reports/p-and-l', async (req, res) => {
             }
         });
 
-        const grossProfit = sections.revenue.total - sections.cogs.total;
-        const netProfit = grossProfit - sections.operating_expenses.total + sections.other_income.total;
+        const grossProfit = Number((sections.revenue.total - sections.cogs.total).toFixed(2));
+        const netProfit = Number((grossProfit - sections.operating_expenses.total + sections.other_income.total).toFixed(2));
+
+        // Final cleanup of section totals
+        sections.revenue.total = Number(sections.revenue.total.toFixed(2));
+        sections.cogs.total = Number(sections.cogs.total.toFixed(2));
+        sections.operating_expenses.total = Number(sections.operating_expenses.total.toFixed(2));
+        sections.other_income.total = Number(sections.other_income.total.toFixed(2));
 
         res.json({
             period: { start: sd, end: ed },
