@@ -266,23 +266,44 @@ router.get('/:payment_id/slip-details', async (req, res) => {
         // Reference logic: Prefer stmt_ref, fallback to manual_ref
         header.final_ref = header.stmt_ref || header.manual_ref || '-';
 
-        // 2. Fetch Allocations
+        // 2. Fetch Allocations with Full Invoice History
         const allocRes = await pool.query(`
             SELECT 
+                pih.id as invoice_id,
                 pih.received_date as invoice_date,
                 pih.vendor_invoice_number as bill_no_vendor,
                 pih.invoice_number as our_series,
                 pih.grand_total as bill_amount,
-                pa.amount as amount_paid
+                pa.amount as amount_paid,
+                -- Summary Stats for this Invoice
+                (SELECT COALESCE(SUM(amount), 0) FROM payment_allocations WHERE purchase_invoice_id = pih.id) as total_paid_to_date,
+                -- Nested History: All other payments for this invoice
+                (
+                    SELECT json_agg(json_build_object(
+                        'payment_number', vp2.payment_number,
+                        'payment_date', vp2.payment_date,
+                        'amount', pa2.amount,
+                        'mode', vp2.payment_mode
+                    ))
+                    FROM payment_allocations pa2
+                    JOIN vendor_payments vp2 ON pa2.payment_id = vp2.id
+                    WHERE pa2.purchase_invoice_id = pih.id
+                    AND pa2.payment_id != $1 -- Exclude the current payment from history to avoid redundancy
+                ) as other_payment_history
             FROM payment_allocations pa
             JOIN purchase_invoice_headers pih ON pa.purchase_invoice_id = pih.id
             WHERE pa.payment_id = $1
             ORDER BY pih.received_date ASC
         `, [payment_id]);
 
+        const allocations = allocRes.rows.map(row => ({
+            ...row,
+            balance_remaining: (Number(row.bill_amount) - Number(row.total_paid_to_date)).toFixed(2)
+        }));
+
         res.json({
             header: header,
-            allocations: allocRes.rows
+            allocations: allocations
         });
 
     } catch (err) {
