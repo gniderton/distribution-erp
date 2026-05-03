@@ -266,7 +266,7 @@ router.get('/:payment_id/slip-details', async (req, res) => {
         // Reference logic: Prefer stmt_ref, fallback to manual_ref
         header.final_ref = header.stmt_ref || header.manual_ref || '-';
 
-        // 2. Fetch Allocations with Full Invoice History
+        // 2. Fetch Allocations with Full Invoice History (Payments + Debit Notes)
         const allocRes = await pool.query(`
             SELECT 
                 pih.id as invoice_id,
@@ -275,20 +275,40 @@ router.get('/:payment_id/slip-details', async (req, res) => {
                 pih.invoice_number as our_series,
                 pih.grand_total as bill_amount,
                 pa.amount as amount_paid,
-                -- Summary Stats for this Invoice
-                (SELECT COALESCE(SUM(amount), 0) FROM payment_allocations WHERE purchase_invoice_id = pih.id) as total_paid_to_date,
-                -- Nested History: All other payments for this invoice
+                -- Summary Stats: Sum of both Payments and Debit Notes
                 (
-                    SELECT json_agg(json_build_object(
-                        'payment_number', vp2.payment_number,
-                        'payment_date', vp2.payment_date,
-                        'amount', pa2.amount,
-                        'mode', vp2.payment_mode
-                    ))
-                    FROM payment_allocations pa2
-                    JOIN vendor_payments vp2 ON pa2.payment_id = vp2.id
-                    WHERE pa2.purchase_invoice_id = pih.id
-                    AND pa2.payment_id != $1 -- Exclude the current payment from history to avoid redundancy
+                    SELECT COALESCE(SUM(amount), 0) 
+                    FROM (
+                        SELECT amount FROM payment_allocations WHERE purchase_invoice_id = pih.id
+                        UNION ALL
+                        SELECT amount FROM debit_note_allocations WHERE purchase_invoice_id = pih.id
+                    ) t
+                ) as total_paid_to_date,
+                -- Unified History: All other payments & adjustments for this invoice
+                (
+                    SELECT json_agg(t ORDER BY t.date ASC) FROM (
+                        -- Other Payments
+                        SELECT 
+                            vp2.payment_number as ref_no,
+                            vp2.payment_date as date,
+                            pa2.amount,
+                            vp2.payment_mode as type
+                        FROM payment_allocations pa2
+                        JOIN vendor_payments vp2 ON pa2.payment_id = vp2.id
+                        WHERE pa2.purchase_invoice_id = pih.id AND pa2.payment_id != $1
+                        
+                        UNION ALL
+                        
+                        -- Debit Notes (Adjustments/Returns)
+                        SELECT 
+                            dn.debit_note_number as ref_no,
+                            dn.debit_note_date as date,
+                            dna.amount,
+                            'Debit Note' as type
+                        FROM debit_note_allocations dna
+                        JOIN debit_notes dn ON dna.debit_note_id = dn.id
+                        WHERE dna.purchase_invoice_id = pih.id
+                    ) t
                 ) as other_payment_history
             FROM payment_allocations pa
             JOIN purchase_invoice_headers pih ON pa.purchase_invoice_id = pih.id
