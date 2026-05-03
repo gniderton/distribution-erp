@@ -266,15 +266,26 @@ router.get('/:payment_id/slip-details', async (req, res) => {
         // Reference logic: Prefer stmt_ref, fallback to manual_ref
         header.final_ref = header.stmt_ref || header.manual_ref || '-';
 
-        // 2. Fetch Allocations with Full Invoice History (Payments + Debit Notes)
-        const allocRes = await pool.query(`
+        // 2. Fetch the "Simple" Allocations (Body of the Voucher)
+        const simpleAllocRes = await pool.query(`
             SELECT 
-                pih.id as invoice_id,
                 pih.received_date as invoice_date,
                 pih.vendor_invoice_number as bill_no_vendor,
                 pih.invoice_number as our_series,
                 pih.grand_total as bill_amount,
-                pa.amount as amount_paid,
+                pa.amount as amount_paid
+            FROM payment_allocations pa
+            JOIN purchase_invoice_headers pih ON pa.purchase_invoice_id = pih.id
+            WHERE pa.payment_id = $1
+            ORDER BY pih.received_date ASC
+        `, [payment_id]);
+
+        // 3. Fetch the "Forensic" Details for each Invoice involved
+        const reconRes = await pool.query(`
+            SELECT 
+                pih.id as invoice_id,
+                pih.vendor_invoice_number as bill_no_vendor,
+                pih.grand_total as bill_amount,
                 -- Summary Stats: Sum of both Payments and Debit Notes
                 (
                     SELECT COALESCE(SUM(amount), 0) 
@@ -284,10 +295,9 @@ router.get('/:payment_id/slip-details', async (req, res) => {
                         SELECT amount FROM debit_note_allocations WHERE purchase_invoice_id = pih.id
                     ) t
                 ) as total_paid_to_date,
-                -- Unified History: All other payments & adjustments for this invoice
+                -- Unified History: All payments & adjustments
                 (
                     SELECT json_agg(t ORDER BY t.date ASC) FROM (
-                        -- Other Payments
                         SELECT 
                             vp2.payment_number as ref_no,
                             vp2.payment_date as date,
@@ -295,11 +305,10 @@ router.get('/:payment_id/slip-details', async (req, res) => {
                             vp2.payment_mode as type
                         FROM payment_allocations pa2
                         JOIN vendor_payments vp2 ON pa2.payment_id = vp2.id
-                        WHERE pa2.purchase_invoice_id = pih.id AND pa2.payment_id != $1
+                        WHERE pa2.purchase_invoice_id = pih.id
                         
                         UNION ALL
                         
-                        -- Debit Notes (Adjustments/Returns)
                         SELECT 
                             dn.debit_note_number as ref_no,
                             dn.debit_note_date as date,
@@ -309,21 +318,20 @@ router.get('/:payment_id/slip-details', async (req, res) => {
                         JOIN debit_notes dn ON dna.debit_note_id = dn.id
                         WHERE dna.purchase_invoice_id = pih.id
                     ) t
-                ) as other_payment_history
-            FROM payment_allocations pa
-            JOIN purchase_invoice_headers pih ON pa.purchase_invoice_id = pih.id
-            WHERE pa.payment_id = $1
-            ORDER BY pih.received_date ASC
+                ) as full_history
+            FROM purchase_invoice_headers pih
+            WHERE pih.id IN (SELECT purchase_invoice_id FROM payment_allocations WHERE payment_id = $1)
         `, [payment_id]);
 
-        const allocations = allocRes.rows.map(row => ({
+        const invoice_reconciliation = reconRes.rows.map(row => ({
             ...row,
             balance_remaining: (Number(row.bill_amount) - Number(row.total_paid_to_date)).toFixed(2)
         }));
 
         res.json({
             header: header,
-            allocations: allocations
+            allocations: simpleAllocRes.rows,
+            invoice_reconciliation: invoice_reconciliation
         });
 
     } catch (err) {
