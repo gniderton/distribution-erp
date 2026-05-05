@@ -87,17 +87,17 @@ router.get('/gstr3b', async (req, res) => {
         const query = `
             -- 1. Purchases
             SELECT 
-                ph.invoice_no as document_no,
-                ph.invoice_date as document_date,
+                ph.invoice_number as document_no,
+                ph.vendor_invoice_date as document_date,
                 v.vendor_name as party_name,
                 v.gst as party_gstin,
                 'Purchase' as type,
-                ph.total_taxable as taxable_value,
+                ph.taxable_amount as taxable_value,
                 ph.tax_amount as total_tax,
                 ph.grand_total as total_value
             FROM purchase_invoice_headers ph
             JOIN vendors v ON ph.vendor_id = v.id
-            WHERE ph.invoice_date BETWEEN $1 AND $2
+            WHERE ph.vendor_invoice_date BETWEEN $1 AND $2
 
             UNION ALL
 
