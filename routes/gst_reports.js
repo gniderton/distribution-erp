@@ -1,128 +1,133 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../config/db');
+const { Pool } = require('pg');
 
-// @route   GET /api/finance/gst/gstr1
-// @desc    Get Consolidated GSTR-1 Data (Sales + Asset Sales + Credit Notes)
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres.vmqfldogpilxwgaukdbh:Anti%2FVirus%408463@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?sslmode=disable'
+});
+
+// GSTR-1: Sales and Returns with Line-Item Accuracy
 router.get('/gstr1', async (req, res) => {
-    try {
-        const { start_date, end_date } = req.query;
-        if (!start_date || !end_date) {
-            return res.status(400).json({ error: 'Please provide start_date and end_date' });
-        }
+    const { start_date, end_date } = req.query;
+    
+    if (!start_date || !end_date || start_date === 'null') {
+        return res.status(400).json({ error: "Please provide valid start_date and end_date" });
+    }
 
+    try {
         const query = `
-            -- 1. Standard Sales Invoices
+            -- 1. Sales Invoices (Broken down by Tax Rate)
             SELECT 
-                si.invoice_number as document_no,
+                si.invoice_no as document_no,
                 si.invoice_date as document_date,
                 c.customer_name as party_name,
                 c.gstin as party_gstin,
                 'Sales' as type,
-                si.total_taxable as taxable_value,
-                (COALESCE(si.total_cgst, 0) + COALESCE(si.total_sgst, 0) + COALESCE(si.total_igst, 0)) as total_tax,
-                si.grand_total as total_value,
-                CASE 
-                    WHEN c.gstin IS NOT NULL AND c.gstin != '' THEN 'B2B'
-                    ELSE 'B2C'
-                END as category
+                SUM(sl.taxable_amount) as taxable_value,
+                SUM(sl.tax_amount) as total_tax,
+                -- We estimate total value for this rate slice
+                SUM(sl.taxable_amount + sl.tax_amount) as total_value,
+                sl.tax_percent as tax_rate,
+                'Sales' as category
             FROM sales_invoices si
             JOIN customers c ON si.customer_id = c.id
+            JOIN sales_invoice_lines sl ON si.id = sl.invoice_id
             WHERE si.invoice_date BETWEEN $1 AND $2 AND si.status != 'CANCELLED'
+            GROUP BY si.invoice_no, si.invoice_date, c.customer_name, c.gstin, sl.tax_percent
 
             UNION ALL
 
-            -- 2. Asset Sales
+            -- 2. Asset Sales (Usually single rate, kept from header for now)
             SELECT 
-                a.sale_invoice_no as document_no,
-                a.purchase_date as document_date, -- Note: Usually use sale_date if available
-                a.sale_buyer_name as party_name,
-                a.sale_buyer_gst as party_gstin,
+                asset_name as document_no,
+                sale_date as document_date,
+                sale_to as party_name,
+                NULL as party_gstin,
                 'Asset Sale' as type,
-                a.sale_taxable_amount as taxable_value,
-                a.sale_tax_amount as total_tax,
-                a.sale_total_amount as total_value,
+                sale_value - sale_tax_amount as taxable_value,
+                sale_tax_amount as total_tax,
+                sale_value as total_value,
+                ROUND((sale_tax_amount / NULLIF(sale_value - sale_tax_amount, 0)) * 100) as tax_rate,
                 'Asset' as category
-            FROM assets a
-            WHERE a.status = 'Sold' AND a.purchase_date BETWEEN $1 AND $2 -- Simplified date check
+            FROM assets
+            WHERE sale_is_gst = true AND sale_date BETWEEN $1 AND $2
 
             UNION ALL
 
-            -- 3. Sales Returns (Credit Notes)
+            -- 3. Sales Returns (Credit Notes - Broken down by Tax Rate)
             SELECT 
                 sr.return_number as document_no,
                 sr.return_date as document_date,
                 c.customer_name as party_name,
                 c.gstin as party_gstin,
                 'Credit Note' as type,
-                -sr.total_taxable as taxable_value,
-                -sr.total_tax as total_tax,
-                -sr.grand_total as total_value,
+                -SUM(srl.taxable_amount) as taxable_value,
+                -SUM(srl.tax_amount) as total_tax,
+                -SUM(srl.taxable_amount + srl.tax_amount) as total_value,
+                srl.tax_percent as tax_rate,
                 'Return' as category
             FROM sales_returns sr
             JOIN customers c ON sr.customer_id = c.id
+            JOIN sales_return_lines srl ON sr.id = srl.return_id
             WHERE sr.return_date BETWEEN $1 AND $2 AND sr.status = 'Applied'
+            GROUP BY sr.return_number, sr.return_date, c.customer_name, c.gstin, srl.tax_percent
             
             ORDER BY document_date DESC
         `;
-
         const result = await pool.query(query, [start_date, end_date]);
         res.json(result.rows);
-
     } catch (err) {
-        console.error('GST Report Error:', err.message);
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// @route   GET /api/finance/gst/gstr3b
-// @desc    Get Consolidated GSTR-3B Data (Purchases + Debit Notes)
+// GSTR-3B: Purchases and Debit Notes
 router.get('/gstr3b', async (req, res) => {
+    const { start_date, end_date } = req.query;
+    if (!start_date || !end_date || start_date === 'null') {
+        return res.status(400).json({ error: "Please provide valid start_date and end_date" });
+    }
     try {
-        const { start_date, end_date } = req.query;
-        if (!start_date || !end_date) {
-            return res.status(400).json({ error: 'Please provide start_date and end_date' });
-        }
-
         const query = `
             -- 1. Purchases
             SELECT 
                 ph.invoice_number as document_no,
                 ph.vendor_invoice_date as document_date,
                 v.vendor_name as party_name,
-                v.gst as party_gstin,
+                v.gstin as party_gstin,
                 'Purchase' as type,
                 ph.taxable_amount as taxable_value,
-                ph.tax_amount as total_tax,
-                ph.grand_total as total_value
+                (ph.total_amount - ph.taxable_amount) as total_tax,
+                ph.total_amount as total_value,
+                'Purchase' as category
             FROM purchase_invoice_headers ph
             JOIN vendors v ON ph.vendor_id = v.id
             WHERE ph.vendor_invoice_date BETWEEN $1 AND $2
 
             UNION ALL
 
-            -- 2. Debit Notes
+            -- 2. Debit Notes (Purchase Returns)
             SELECT 
-                dn.debit_note_number as document_no,
-                dn.debit_note_date as document_date,
+                pr.return_number as document_no,
+                pr.return_date as document_date,
                 v.vendor_name as party_name,
-                v.gst as party_gstin,
+                v.gstin as party_gstin,
                 'Debit Note' as type,
-                -dn.taxable_amount as taxable_value,
-                -dn.tax_amount as total_tax,
-                -dn.amount as total_value
-            FROM debit_notes dn
-            JOIN vendors v ON dn.vendor_id = v.id
-            WHERE dn.debit_note_date BETWEEN $1 AND $2 AND dn.status != 'REVERSED'
-
+                -pr.total_taxable as taxable_value,
+                -pr.total_tax as total_tax,
+                -pr.grand_total as total_value,
+                'Return' as category
+            FROM purchase_returns pr
+            JOIN vendors v ON pr.vendor_id = v.id
+            WHERE pr.return_date BETWEEN $1 AND $2
+            
             ORDER BY document_date DESC
         `;
-
         const result = await pool.query(query, [start_date, end_date]);
         res.json(result.rows);
-
     } catch (err) {
-        console.error('GSTR-3B Report Error:', err.message);
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
