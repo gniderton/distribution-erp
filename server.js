@@ -119,6 +119,7 @@ app.use('/api/finance/cheques', require('./routes/cheques')); // [NEW] Cheque Ma
 app.use('/api/finance/transfers', require('./routes/transfers')); // [NEW] Internal Transfers
 app.use('/api/finance/loans', require('./routes/loans')); // [NEW] Loan Management
 app.use('/api', require('./routes/accounting')); // Shorthand for /api/journal-entries
+app.use('/api/finance/gst', require('./routes/gst_reports'));
 app.use('/api/backups', require('./routes/backups')); 
 
 // [TEMP] Migration Endpoint to fix Combo Schema
