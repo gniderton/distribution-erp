@@ -37,20 +37,23 @@ router.get('/gstr1', async (req, res) => {
 
             UNION ALL
 
-            -- 2. Asset Sales (Usually single rate, kept from header for now)
+            -- 2. Asset Sales (Joined with transactions for the date)
             SELECT 
-                asset_name as document_no,
-                sale_date as document_date,
-                sale_to as party_name,
-                NULL as party_gstin,
+                a.asset_name as document_no,
+                at.transaction_date as document_date,
+                a.sale_buyer_name as party_name,
+                a.sale_buyer_gst as party_gstin,
                 'Asset Sale' as type,
-                sale_value - sale_tax_amount as taxable_value,
-                sale_tax_amount as total_tax,
-                sale_value as total_value,
-                ROUND((sale_tax_amount / NULLIF(sale_value - sale_tax_amount, 0)) * 100) as tax_rate,
+                a.sale_taxable_amount as taxable_value,
+                a.sale_tax_amount as total_tax,
+                a.sale_total_amount as total_value,
+                ROUND((a.sale_tax_amount / NULLIF(a.sale_taxable_amount, 0)) * 100) as tax_rate,
                 'Asset' as category
-            FROM assets
-            WHERE sale_is_gst = true AND sale_date BETWEEN $1 AND $2
+            FROM assets a
+            JOIN asset_transactions at ON a.id = at.asset_id
+            WHERE a.sale_is_gst = true 
+              AND at.transaction_type = 'SALE'
+              AND at.transaction_date BETWEEN $1 AND $2
 
             UNION ALL
 
