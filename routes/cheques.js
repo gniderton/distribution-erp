@@ -249,6 +249,31 @@ router.post('/:id/bounce', async (req, res) => {
             WHERE id = $3
         `, [bounce_reason, bounce_date || new Date(), id]);
 
+        // 2.2 Handle Bank Statement Reconciliation (Wash-out entries)
+        const { deposit_entry_id, bounce_entry_id } = req.body;
+        
+        if (deposit_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = amount, 
+                    status = 'Exhausted',
+                    remarks = COALESCE(remarks, '') || ' (Reconciled via Cheque Bounce #' || $1 || ')'
+                WHERE id = $2
+            `, [id, deposit_entry_id]);
+            
+            await client.query(`UPDATE cheques SET bank_statement_entry_id = $1 WHERE id = $2 AND bank_statement_entry_id IS NULL`, [deposit_entry_id, id]);
+        }
+
+        if (bounce_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = amount, 
+                    status = 'Exhausted',
+                    remarks = COALESCE(remarks, '') || ' (Bounce Reversal for Cheque #' || $1 || ')'
+                WHERE id = $2
+            `, [id, bounce_entry_id]);
+        }
+
         // 2.5 REVERT PAYMENT ALLOCATIONS (If linked to a Customer Payment)
         if (chq.reference_type === 'CUSTOMER_PAYMENT' && chq.reference_id) {
             const paymentId = chq.reference_id;
