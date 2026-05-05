@@ -151,7 +151,7 @@ router.get('/hsn-summary', async (req, res) => {
                 -- Sales Lines
                 SELECT 
                     hc.hsn_code,
-                    hc.hsn_description as desc,
+                    hc.hsn_description as hsn_desc,
                     p.uom,
                     sl.shipped_qty as qty,
                     sl.taxable_amount as txval,
@@ -168,7 +168,7 @@ router.get('/hsn-summary', async (req, res) => {
                 -- Sales Return Lines (Subtracting)
                 SELECT 
                     hc.hsn_code,
-                    hc.hsn_description as desc,
+                    hc.hsn_description as hsn_desc,
                     p.uom,
                     -srl.qty as qty,
                     -srl.taxable_amount as txval,
@@ -182,7 +182,7 @@ router.get('/hsn-summary', async (req, res) => {
             )
             SELECT 
                 hsn_code as hsn_sc,
-                desc,
+                hsn_desc as desc,
                 COALESCE(uom, 'OTH') as uqc,
                 SUM(qty) as qty,
                 SUM(txval + total_tax) as val,
@@ -193,7 +193,7 @@ router.get('/hsn-summary', async (req, res) => {
                 0 as csamt,
                 rt
             FROM combined_lines
-            GROUP BY hsn_code, desc, uom, rt
+            GROUP BY hsn_code, hsn_desc, uom, rt
         `;
         const result = await pool.query(query, [start_date, end_date]);
         res.json(result.rows);
