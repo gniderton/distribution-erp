@@ -139,7 +139,7 @@ router.get('/gstr3b', async (req, res) => {
     }
 });
 
-// GSTR-1: HSN Summary
+// GSTR-1: HSN Summary (Bifurcated for v4.1)
 router.get('/hsn-summary', async (req, res) => {
     const { start_date, end_date } = req.query;
     if (!start_date || !end_date || start_date === 'null') {
@@ -157,16 +157,18 @@ router.get('/hsn-summary', async (req, res) => {
                     sl.shipped_qty as qty,
                     sl.taxable_amount as txval,
                     sl.tax_amount as total_tax,
-                    sl.tax_percent as rt
+                    sl.tax_percent as rt,
+                    CASE WHEN c.gstin IS NOT NULL AND LENGTH(c.gstin) = 15 THEN 'B2B' ELSE 'B2C' END as ctype
                 FROM sales_invoices si
                 JOIN sales_invoice_lines sl ON si.id = sl.invoice_id
                 JOIN products p ON sl.product_id = p.id
                 JOIN hsn_codes hc ON p.hsn_id = hc.id
+                JOIN customers c ON si.customer_id = c.id
                 WHERE si.invoice_date BETWEEN $1 AND $2 AND si.status != 'CANCELLED'
 
                 UNION ALL
 
-                -- Sales Return Lines (Subtracting)
+                -- Sales Return Lines
                 SELECT 
                     hc.hsn_code,
                     hc.hsn_description as hsn_desc,
@@ -174,15 +176,17 @@ router.get('/hsn-summary', async (req, res) => {
                     -srl.qty as qty,
                     -srl.taxable_amount as txval,
                     -srl.tax_amount as total_tax,
-                    srl.tax_percent as rt
+                    srl.tax_percent as rt,
+                    CASE WHEN c.gstin IS NOT NULL AND LENGTH(c.gstin) = 15 THEN 'B2B' ELSE 'B2C' END as ctype
                 FROM sales_returns sr
                 JOIN sales_return_lines srl ON sr.id = srl.return_id
                 JOIN products p ON srl.product_id = p.id
                 JOIN hsn_codes hc ON p.hsn_id = hc.id
+                JOIN customers c ON sr.customer_id = c.id
                 WHERE sr.return_date BETWEEN $1 AND $2 AND sr.status = 'Applied'
             )
             SELECT 
-                hsn_code as hsn_sc,
+                hsn_code as hsn_cd,
                 hsn_desc as desc,
                 COALESCE(uom, 'OTH') as uqc,
                 SUM(qty) as qty,
@@ -192,9 +196,10 @@ router.get('/hsn-summary', async (req, res) => {
                 SUM(total_tax) / 2 as samt,
                 0 as iamt,
                 0 as csamt,
-                rt
+                rt,
+                ctype
             FROM combined_lines
-            GROUP BY hsn_code, hsn_desc, uom, rt
+            GROUP BY hsn_code, hsn_desc, uom, rt, ctype
         `;
         const result = await pool.query(query, [start_date, end_date]);
         res.json(result.rows);
