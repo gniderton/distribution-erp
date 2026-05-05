@@ -110,20 +110,23 @@ router.get('/gstr3b', async (req, res) => {
 
             UNION ALL
 
-            -- 2. Debit Notes (Purchase Returns)
+            -- 2. Debit Notes (Purchase Returns - Broken down by Tax Rate)
             SELECT 
                 dn.debit_note_number as document_no,
                 dn.debit_note_date as document_date,
                 v.vendor_name as party_name,
                 v.gst as party_gstin,
                 'Debit Note' as type,
-                -dn.taxable_amount as taxable_value,
-                -dn.tax_amount as total_tax,
-                -dn.amount as total_value,
+                -SUM(dnl.amount - dnl.tax_amount) as taxable_value,
+                -SUM(dnl.tax_amount) as total_tax,
+                -SUM(dnl.amount) as total_value,
+                dnl.tax_percentage as tax_rate,
                 'Return' as category
             FROM debit_notes dn
             JOIN vendors v ON dn.vendor_id = v.id
+            JOIN debit_note_lines dnl ON dn.id = dnl.debit_note_id
             WHERE dn.debit_note_date BETWEEN $1 AND $2
+            GROUP BY dn.debit_note_number, dn.debit_note_date, v.vendor_name, v.gst, dnl.tax_percentage
             
             ORDER BY document_date DESC
         `;
