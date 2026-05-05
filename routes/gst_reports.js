@@ -18,7 +18,7 @@ router.get('/gstr1', async (req, res) => {
         const query = `
             -- 1. Sales Invoices (Broken down by Tax Rate)
             SELECT 
-                si.invoice_no as document_no,
+                si.invoice_number as document_no,
                 si.invoice_date as document_date,
                 c.customer_name as party_name,
                 c.gstin as party_gstin,
@@ -33,7 +33,7 @@ router.get('/gstr1', async (req, res) => {
             JOIN customers c ON si.customer_id = c.id
             JOIN sales_invoice_lines sl ON si.id = sl.invoice_id
             WHERE si.invoice_date BETWEEN $1 AND $2 AND si.status != 'CANCELLED'
-            GROUP BY si.invoice_no, si.invoice_date, c.customer_name, c.gstin, sl.tax_percent
+            GROUP BY si.invoice_number, si.invoice_date, c.customer_name, c.gstin, sl.tax_percent
 
             UNION ALL
 
