@@ -101,8 +101,8 @@ router.get('/gstr3b', async (req, res) => {
                 v.gst as party_gstin,
                 'Purchase' as type,
                 ph.taxable_amount as taxable_value,
-                (ph.total_amount - ph.taxable_amount) as total_tax,
-                ph.total_amount as total_value,
+                ph.tax_amount as total_tax,
+                ph.grand_total as total_value,
                 'Purchase' as category
             FROM purchase_invoice_headers ph
             JOIN vendors v ON ph.vendor_id = v.id
