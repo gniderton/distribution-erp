@@ -135,4 +135,69 @@ router.get('/gstr3b', async (req, res) => {
     }
 });
 
+// GSTR-1: HSN Summary
+router.get('/hsn-summary', async (req, res) => {
+    const { start_date, end_date } = req.query;
+    if (!start_date || !end_date || start_date === 'null') {
+        return res.status(400).json({ error: "Please provide valid start_date and end_date" });
+    }
+
+    try {
+        const query = `
+            WITH combined_lines AS (
+                -- Sales Lines
+                SELECT 
+                    hc.hsn_code,
+                    hc.hsn_description as desc,
+                    p.uom,
+                    sl.shipped_qty as qty,
+                    sl.taxable_amount as txval,
+                    sl.tax_amount as total_tax,
+                    sl.tax_percent as rt
+                FROM sales_invoices si
+                JOIN sales_invoice_lines sl ON si.id = sl.invoice_id
+                JOIN products p ON sl.product_id = p.id
+                JOIN hsn_codes hc ON p.hsn_id = hc.id
+                WHERE si.invoice_date BETWEEN $1 AND $2 AND si.status != 'CANCELLED'
+
+                UNION ALL
+
+                -- Sales Return Lines (Subtracting)
+                SELECT 
+                    hc.hsn_code,
+                    hc.hsn_description as desc,
+                    p.uom,
+                    -srl.qty as qty,
+                    -srl.taxable_amount as txval,
+                    -srl.tax_amount as total_tax,
+                    srl.tax_percent as rt
+                FROM sales_returns sr
+                JOIN sales_return_lines srl ON sr.id = srl.return_id
+                JOIN products p ON srl.product_id = p.id
+                JOIN hsn_codes hc ON p.hsn_id = hc.id
+                WHERE sr.return_date BETWEEN $1 AND $2 AND sr.status = 'Applied'
+            )
+            SELECT 
+                hsn_code as hsn_sc,
+                desc,
+                COALESCE(uom, 'OTH') as uqc,
+                SUM(qty) as qty,
+                SUM(txval + total_tax) as val,
+                SUM(txval) as txval,
+                SUM(total_tax) / 2 as camt,
+                SUM(total_tax) / 2 as samt,
+                0 as iamt,
+                0 as csamt,
+                rt
+            FROM combined_lines
+            GROUP BY hsn_code, desc, uom, rt
+        `;
+        const result = await pool.query(query, [start_date, end_date]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
