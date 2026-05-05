@@ -112,18 +112,18 @@ router.get('/gstr3b', async (req, res) => {
 
             -- 2. Debit Notes (Purchase Returns)
             SELECT 
-                pr.return_number as document_no,
-                pr.return_date as document_date,
+                dn.debit_note_number as document_no,
+                dn.debit_note_date as document_date,
                 v.vendor_name as party_name,
                 v.gst as party_gstin,
                 'Debit Note' as type,
-                -pr.total_taxable as taxable_value,
-                -pr.total_tax as total_tax,
-                -pr.grand_total as total_value,
+                -dn.taxable_amount as taxable_value,
+                -dn.tax_amount as total_tax,
+                -dn.amount as total_value,
                 'Return' as category
-            FROM purchase_returns pr
-            JOIN vendors v ON pr.vendor_id = v.id
-            WHERE pr.return_date BETWEEN $1 AND $2
+            FROM debit_notes dn
+            JOIN vendors v ON dn.vendor_id = v.id
+            WHERE dn.debit_note_date BETWEEN $1 AND $2
             
             ORDER BY document_date DESC
         `;
