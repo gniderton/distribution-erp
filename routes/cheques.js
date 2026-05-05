@@ -257,7 +257,7 @@ router.post('/:id/bounce', async (req, res) => {
                 UPDATE bank_statement_entries 
                 SET consumed_amount = amount, 
                     status = 'Exhausted',
-                    remarks = COALESCE(remarks, '') || ' (Reconciled via Cheque Bounce #' || $1 || ')'
+                    particulars = COALESCE(particulars, '') || ' (Reconciled via Cheque Bounce #' || $1 || ')'
                 WHERE id = $2
             `, [id, deposit_entry_id]);
             
@@ -269,7 +269,7 @@ router.post('/:id/bounce', async (req, res) => {
                 UPDATE bank_statement_entries 
                 SET consumed_amount = amount, 
                     status = 'Exhausted',
-                    remarks = COALESCE(remarks, '') || ' (Bounce Reversal for Cheque #' || $1 || ')'
+                    particulars = COALESCE(particulars, '') || ' (Bounce Reversal for Cheque #' || $1 || ')'
                 WHERE id = $2
             `, [id, bounce_entry_id]);
         }
