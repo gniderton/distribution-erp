@@ -20,7 +20,7 @@ router.get('/gstr1', async (req, res) => {
                 c.gstin as party_gstin,
                 'Sales' as type,
                 si.total_taxable as taxable_value,
-                si.tax_amount as total_tax,
+                si.total_tax as total_tax,
                 si.grand_total as total_value,
                 CASE 
                     WHEN c.gstin IS NOT NULL AND c.gstin != '' THEN 'B2B'
