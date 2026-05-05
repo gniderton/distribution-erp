@@ -61,7 +61,7 @@ router.get('/gstr1', async (req, res) => {
                 'Return' as category
             FROM sales_returns sr
             JOIN customers c ON sr.customer_id = c.id
-            WHERE sr.return_date BETWEEN $1 AND $2 AND sr.status = 'COMPLETED'
+            WHERE sr.return_date BETWEEN $1 AND $2 AND sr.status = 'Applied'
             
             ORDER BY document_date DESC
         `;
