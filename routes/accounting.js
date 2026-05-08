@@ -124,63 +124,65 @@ router.get('/source-transactions', async (req, res) => {
 
         const query = `
             WITH all_raw_transactions AS (
-                SELECT id, payment_date as date, 'Customer Payment' as type, payment_mode as mode,
-                    (SELECT customer_name FROM customers WHERE id = customer_id) as details,
-                    transaction_ref as reference, CASE WHEN payment_mode = 'Cheque' THEN 1004 ELSE COALESCE(bank_id, 1) END as account_id,
-                    amount as inflow, 0 as outflow, 'public.customer_payments' as source_table
-                FROM customer_payments WHERE is_active = true AND (bank_statement_entry_id IS NOT NULL OR payment_date >= '2026-04-01')
-                UNION ALL
-                SELECT id, payment_date as date, 'Vendor Payment' as type, payment_mode as mode,
-                    (SELECT vendor_name FROM vendors WHERE id = vendor_id) as details,
-                    transaction_ref as reference, bank_account_id as account_id, 0 as inflow, amount as outflow, 'public.vendor_payments' as source_table
-                FROM vendor_payments WHERE bank_statement_entry_id IS NOT NULL OR payment_date >= '2026-04-01'
-                UNION ALL
-                SELECT id, expense_date as date, 'Expense' as type, 'BANK' as mode,
-                    description as details, reference_no as reference, payment_source_id as account_id, 0 as inflow, grand_total as outflow, 'public.expenses' as source_table
-                FROM expenses WHERE bank_statement_entry_id IS NOT NULL OR expense_date >= '2026-04-01'
-                UNION ALL
-                SELECT id, transaction_date as date, 'Other Income' as type, 'BANK' as mode,
-                    description as details, reference_no as reference, destination_account_id as account_id, amount as inflow, 0 as outflow, 'public.other_income' as source_table
-                FROM other_income
-                UNION ALL
-                SELECT id, transfer_date as date, 'Transfer (Out)' as type, 'BANK' as mode,
-                    remarks as details, 'TFR-' || id as reference, from_account_id as account_id, 0 as inflow, amount as outflow, 'public.internal_transfers' as source_table
-                FROM internal_transfers
-                UNION ALL
-                SELECT id, transfer_date as date, 'Transfer (In)' as type, 'BANK' as mode,
-                    remarks as details, 'TFR-' || id as reference, to_account_id as account_id, amount as inflow, 0 as outflow, 'public.internal_transfers' as source_table
-                FROM internal_transfers
-                UNION ALL
-                SELECT id, advance_date as date, 'Payroll' as type, 'BANK' as mode,
-                    (SELECT full_name FROM employees WHERE id = employee_id) as details,
-                    'PAY-' || id as reference, from_account_id as account_id, 0 as inflow, amount as outflow, 'public.employee_advances' as source_table
-                FROM employee_advances
-                UNION ALL
-                SELECT lt.id, lt.transaction_date as date, 'Loan' as type, lt.payment_mode as mode,
-                    l.party_name || ' (' || lt.transaction_type || ')' as details,
-                    lt.reference_no as reference, COALESCE((SELECT bank_account_id FROM bank_statement_entries WHERE id = lt.bank_statement_entry_id), 2) as account_id, 
-                    CASE WHEN (l.loan_type = 'TAKEN' AND lt.transaction_type = 'DISBURSEMENT') OR (l.loan_type = 'GIVEN' AND lt.transaction_type = 'INSTALLMENT') THEN lt.amount ELSE 0 END as inflow,
-                    CASE WHEN (l.loan_type = 'GIVEN' AND lt.transaction_type = 'DISBURSEMENT') OR (l.loan_type = 'TAKEN' AND lt.transaction_type = 'INSTALLMENT') THEN lt.amount ELSE 0 END as outflow,
-                    'public.loan_transactions' as source_table
-                FROM loan_transactions lt JOIN loans l ON lt.loan_id = l.id WHERE lt.bank_statement_entry_id IS NOT NULL AND lt.payment_mode != 'MIGRATION'
-                UNION ALL
-                SELECT at.id, at.transaction_date as date, 'Asset Transaction' as type, 'BANK' as mode,
-                    at.remarks as details, 'AST-' || at.id as reference, CAST(COALESCE(jl.bank_account_id, (SELECT id FROM chart_of_accounts WHERE id = jl.account_id)) as bigint) as account_id,
-                    CAST(COALESCE(jl.credit, 0) as numeric) as inflow, CAST(COALESCE(jl.debit, 0) as numeric) as outflow, 'public.asset_transactions' as source_table
-                FROM asset_transactions at JOIN journal_lines jl ON at.journal_entry_id = jl.journal_entry_id
-                WHERE (jl.bank_account_id IS NOT NULL OR jl.account_id IN (1002, 1003, 1004, 1102, 1103))
-                UNION ALL
-                SELECT id, cheque_date as date, 'Cheque' as type, 'CHEQUE' as mode,
-                    (party_type || ': ' || party_id) as details, cheque_number as reference,
-                    CASE WHEN status = 'Cleared' THEN bank_account_id ELSE 1004 END as account_id,
-                    CASE WHEN type = 'Received' THEN amount ELSE 0 END as inflow, CASE WHEN type = 'Issued' THEN amount ELSE 0 END as outflow,'public.cheques' as source_table
-                FROM cheques
-                UNION ALL
-                SELECT je.id, je.transaction_date as date, 'Cheque Cleared' as type, 'JOURNAL' as mode,
-                    je.description as details, 'JE-' || je.id as reference, CAST(COALESCE(jl.bank_account_id, (CASE WHEN jl.account_id IN (3, 1004) THEN jl.account_id ELSE NULL END)) as bigint) as account_id,
-                    jl.debit as inflow, jl.credit as outflow, 'public.journal_lines' as source_table
-                FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id
-                WHERE (je.reference_type = 'CHQ_CLEAR' OR je.reference_type = 'BANK_STMT') AND (jl.bank_account_id IS NOT NULL OR jl.account_id IN (3, 1004))
+                SELECT id, date, type, mode, details, reference, account_id, inflow, outflow, source_table FROM (
+                    SELECT id, payment_date as date, 'Customer Payment' as type, payment_mode as mode,
+                        (SELECT customer_name FROM customers WHERE id = customer_id) as details,
+                        transaction_ref as reference, CASE WHEN payment_mode = 'Cheque' THEN 1004 ELSE COALESCE(bank_id, 1) END as account_id,
+                        amount as inflow, 0 as outflow, 'public.customer_payments' as source_table
+                    FROM customer_payments WHERE is_active = true AND (bank_statement_entry_id IS NOT NULL OR payment_date >= '2026-04-01')
+                    UNION ALL
+                    SELECT id, payment_date as date, 'Vendor Payment' as type, payment_mode as mode,
+                        (SELECT vendor_name FROM vendors WHERE id = vendor_id) as details,
+                        transaction_ref as reference, bank_account_id as account_id, 0 as inflow, amount as outflow, 'public.vendor_payments' as source_table
+                    FROM vendor_payments WHERE bank_statement_entry_id IS NOT NULL OR payment_date >= '2026-04-01'
+                    UNION ALL
+                    SELECT id, expense_date as date, 'Expense' as type, 'BANK' as mode,
+                        description as details, reference_no as reference, payment_source_id as account_id, 0 as inflow, grand_total as outflow, 'public.expenses' as source_table
+                    FROM expenses WHERE bank_statement_entry_id IS NOT NULL OR expense_date >= '2026-04-01'
+                    UNION ALL
+                    SELECT id, transaction_date as date, 'Other Income' as type, 'BANK' as mode,
+                        description as details, reference_no as reference, destination_account_id as account_id, amount as inflow, 0 as outflow, 'public.other_income' as source_table
+                    FROM other_income
+                    UNION ALL
+                    SELECT id, transfer_date as date, 'Transfer (Out)' as type, 'BANK' as mode,
+                        remarks as details, 'TFR-' || id as reference, from_account_id as account_id, 0 as inflow, amount as outflow, 'public.internal_transfers' as source_table
+                    FROM internal_transfers
+                    UNION ALL
+                    SELECT id, transfer_date as date, 'Transfer (In)' as type, 'BANK' as mode,
+                        remarks as details, 'TFR-' || id as reference, to_account_id as account_id, amount as inflow, 0 as outflow, 'public.internal_transfers' as source_table
+                    FROM internal_transfers
+                    UNION ALL
+                    SELECT id, advance_date as date, 'Payroll' as type, 'BANK' as mode,
+                        (SELECT full_name FROM employees WHERE id = employee_id) as details,
+                        'PAY-' || id as reference, from_account_id as account_id, 0 as inflow, amount as outflow, 'public.employee_advances' as source_table
+                    FROM employee_advances
+                    UNION ALL
+                    SELECT lt.id, lt.transaction_date as date, 'Loan' as type, lt.payment_mode as mode,
+                        l.party_name || ' (' || lt.transaction_type || ')' as details,
+                        lt.reference_no as reference, COALESCE((SELECT bank_account_id FROM bank_statement_entries WHERE id = lt.bank_statement_entry_id), 2) as account_id, 
+                        CASE WHEN (l.loan_type = 'TAKEN' AND lt.transaction_type = 'DISBURSEMENT') OR (l.loan_type = 'GIVEN' AND lt.transaction_type = 'INSTALLMENT') THEN lt.amount ELSE 0 END as inflow,
+                        CASE WHEN (l.loan_type = 'GIVEN' AND lt.transaction_type = 'DISBURSEMENT') OR (l.loan_type = 'TAKEN' AND lt.transaction_type = 'INSTALLMENT') THEN lt.amount ELSE 0 END as outflow,
+                        'public.loan_transactions' as source_table
+                    FROM loan_transactions lt JOIN loans l ON lt.loan_id = l.id WHERE lt.bank_statement_entry_id IS NOT NULL AND lt.payment_mode != 'MIGRATION'
+                    UNION ALL
+                    SELECT at.id, at.transaction_date as date, 'Asset Transaction' as type, 'BANK' as mode,
+                        at.remarks as details, 'AST-' || at.id as reference, CAST(COALESCE(jl.bank_account_id, (SELECT id FROM chart_of_accounts WHERE id = jl.account_id)) as bigint) as account_id,
+                        CAST(COALESCE(jl.credit, 0) as numeric) as inflow, CAST(COALESCE(jl.debit, 0) as numeric) as outflow, 'public.asset_transactions' as source_table
+                    FROM asset_transactions at JOIN journal_lines jl ON at.journal_entry_id = jl.journal_entry_id
+                    WHERE (jl.bank_account_id IS NOT NULL OR jl.account_id IN (1002, 1003, 1004, 1102, 1103))
+                    UNION ALL
+                    SELECT id, cheque_date as date, 'Cheque' as type, 'CHEQUE' as mode,
+                        (party_type || ': ' || party_id) as details, cheque_number as reference,
+                        CASE WHEN status = 'Cleared' THEN bank_account_id ELSE 1004 END as account_id,
+                        CASE WHEN type = 'Received' THEN amount ELSE 0 END as inflow, CASE WHEN type = 'Issued' THEN amount ELSE 0 END as outflow,'public.cheques' as source_table
+                    FROM cheques
+                    UNION ALL
+                    SELECT je.id, je.transaction_date as date, 'Cheque Cleared' as type, 'JOURNAL' as mode,
+                        je.description as details, 'JE-' || je.id as reference, CAST(COALESCE(jl.bank_account_id, (CASE WHEN jl.account_id IN (3, 1004) THEN jl.account_id ELSE NULL END)) as bigint) as account_id,
+                        jl.debit as inflow, jl.credit as outflow, 'public.journal_lines' as source_table
+                    FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id
+                    WHERE (je.reference_type = 'CHQ_CLEAR' OR je.reference_type = 'BANK_STMT') AND (jl.bank_account_id IS NOT NULL OR jl.account_id IN (3, 1004))
+                ) sub
             )
             SELECT * FROM all_raw_transactions WHERE date >= $1 AND date <= $2
             AND (account_id = ANY($3::bigint[]) OR (account_id = ANY($4::bigint[]) OR account_id = ANY(SELECT id FROM chart_of_accounts WHERE id = ANY($4::bigint[]))))
@@ -406,31 +408,26 @@ router.get('/statement', async (req, res) => {
     }
 });
 
-
 /**
  * [NEW] 5. Forensic Financial Summary (The "Brain" API)
- * Aggregates all databases: Expenses, Income, Salaries, Advances, Bonuses, Receivables, Payables, Loans, Assets, Stock.
+ * Aggregates all databases with granular breakdowns and transaction streams.
  */
 router.get('/forensic-snapshot', async (req, res) => {
     try {
-        // 🛡️ Forensic Balance Calculation Helper (Exact match for unified-liquid-ledger)
+        // 🛡️ Forensic Balance Calculation Helper
         const getForensicBalance = async (accountId, isBank = false) => {
             let filterSql = isBank ? `(v.direct_bank_id = $1 OR bse.bank_account_id = $1)` : `v.liquid_account_id = $1`;
-            
             const seedRes = await pool.query(`SELECT COALESCE(SUM(amount), 0) as seed FROM opening_balances WHERE account_id = $1 AND is_active = true`, [accountId]);
             const seed = parseFloat(seedRes.rows[0].seed);
-            
             const movementRes = await pool.query(`
                 SELECT COALESCE(SUM(amount_in - amount_out), 0) as integral 
                 FROM view_unified_liquid_ledger v LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id
                 WHERE ${filterSql}
             `, [accountId]);
-            const integral = parseFloat(movementRes.rows[0].integral);
-            
-            return parseFloat((seed + integral).toFixed(2));
+            return parseFloat((seed + parseFloat(movementRes.rows[0].integral)).toFixed(2));
         };
 
-        // 1. LIQUIDITY & ACCOUNTS (Forensic Database)
+        // 1. LIQUIDITY & ACCOUNTS
         const accountResults = [
             { category: 'Bank', name: 'Axis Bank (Thiruvannur)', id: 2, isBank: true },
             { category: 'Bank', name: 'IDFC First Bank (Calicut)', id: 3, isBank: true },
@@ -442,148 +439,95 @@ router.get('/forensic-snapshot', async (req, res) => {
         for (const acc of accountResults) {
             let balance = 0;
             if (acc.id === 1004) {
-                // 🛡️ SPECIAL CASE: Cheques in Hand (Get directly from DB status per user request)
                 const chqRes = await pool.query("SELECT COALESCE(SUM(amount), 0) as balance FROM cheques WHERE status = 'PENDING' AND type = 'INCOMING'");
                 balance = parseFloat(chqRes.rows[0].balance);
             } else {
                 balance = await getForensicBalance(acc.id, acc.isBank);
             }
-            
-            accounts.push({
-                category: acc.category,
-                name: acc.name,
-                balance: balance.toFixed(2),
-                type: 'ASSET'
-            });
+            accounts.push({ category: acc.category, name: acc.name, balance: balance.toFixed(2), type: 'ASSET' });
         }
 
         const queries = {
-            // 2. RECEIVABLES (Logic from dse-pending-invoices)
+            // 2. RECEIVABLES
             receivables: `
-                SELECT 
-                    c.customer_name as party,
-                    COUNT(si.id) as pending_bills,
+                SELECT c.customer_name as party, COUNT(si.id) as pending_bills,
                     SUM(si.grand_total - 
                         COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) -
                         COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
                     ) as balance
-                FROM sales_invoices si
-                JOIN customers c ON si.customer_id = c.id
-                WHERE si.status NOT IN ('Paid', 'Cancelled')
-                GROUP BY c.customer_name
+                FROM sales_invoices si JOIN customers c ON si.customer_id = c.id
+                WHERE si.status NOT IN ('Paid', 'Cancelled') GROUP BY c.customer_name
                 HAVING SUM(si.grand_total - 
                     COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) -
                     COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
-                ) > 0
+                ) > 0 ORDER BY balance DESC
             `,
-
-            // 3. PAYABLES (Vendor Ledger logic)
+            // 3. PAYABLES
             payables: `
-                SELECT 
-                    v.vendor_name as party,
-                    SUM(vl.credit_amount - vl.debit_amount) as balance
-                FROM view_vendor_ledger vl
-                JOIN vendors v ON vl.vendor_id = v.id
-                GROUP BY v.vendor_name
-                HAVING SUM(vl.credit_amount - vl.debit_amount) > 0
+                SELECT v.vendor_name as party, SUM(vl.credit_amount - vl.debit_amount) as balance
+                FROM view_vendor_ledger vl JOIN vendors v ON vl.vendor_id = v.id
+                GROUP BY v.vendor_name HAVING SUM(vl.credit_amount - vl.debit_amount) > 0 ORDER BY balance DESC
             `,
-
-            // 4. EXPENSES (By Category)
-            expenses: `
-                SELECT coa.name as category, SUM(e.grand_total) as amount
-                FROM expenses e
-                JOIN chart_of_accounts coa ON e.category_account_id = coa.id
-                WHERE e.is_active = true
-                GROUP BY coa.name
-            `,
-
-            // 5. OTHER INCOME
-            income: `
-                SELECT coa.name as category, SUM(oi.amount) as amount
-                FROM other_income oi
-                JOIN chart_of_accounts coa ON oi.category_account_id = coa.id
-                WHERE oi.is_active = true
-                GROUP BY coa.name
-            `,
-
-            // 6. PAYROLL (Salaries + Advances + Bonuses)
+            // 4. EXPENSES & INCOME (Categorized)
+            expenses: `SELECT coa.name as category, SUM(e.grand_total) as amount FROM expenses e JOIN chart_of_accounts coa ON e.category_account_id = coa.id WHERE e.is_active = true GROUP BY coa.name`,
+            income: `SELECT coa.name as category, SUM(oi.amount) as amount FROM other_income oi JOIN chart_of_accounts coa ON oi.category_account_id = coa.id WHERE oi.is_active = true GROUP BY coa.name`,
+            // 5. PAYROLL
             payroll: `
-                SELECT 
-                    'Salaries Paid' as type, SUM(net_salary) as amount FROM employee_salaries
-                UNION ALL
-                SELECT 
-                    'Advances Outstanding' as type, SUM(amount) FROM employee_advances WHERE is_settled = false
-                UNION ALL
-                SELECT 
-                    'Incentives/Bonuses' as type, SUM(points * 1) as amount FROM performance_points_history -- Assuming 1 pt = 1 unit for now
+                SELECT 'Salaries Paid' as type, SUM(net_salary) as amount FROM employee_salaries
+                UNION ALL SELECT 'Advances Outstanding' as type, SUM(amount) FROM employee_advances WHERE is_settled = false
+                UNION ALL SELECT 'Incentives' as type, SUM(points) FROM performance_points_history
             `,
-
-            // 7. LOANS
-            loans: `
-                SELECT party_name, loan_type, balance_principal as balance, status
-                FROM loans WHERE status != 'Closed'
-            `,
-
-            // 8. ASSETS
-            assets: `
-                SELECT asset_name, category, purchase_cost, status
-                FROM assets WHERE status = 'Active'
-            `,
-
-            // 9. STOCK VALUATION
+            // 6. LOANS (Bifurcated)
+            loans_given: `SELECT party_name, balance_principal as balance, status, created_at FROM loans WHERE status != 'Closed' AND loan_type = 'GIVEN' ORDER BY created_at DESC`,
+            loans_taken: `SELECT party_name, balance_principal as balance, status, created_at FROM loans WHERE status != 'Closed' AND loan_type = 'TAKEN' ORDER BY created_at DESC`,
+            // 7. ASSETS & STOCK
+            assets_list: `SELECT asset_name, category, purchase_cost, status, purchase_date FROM assets WHERE status = 'Active' ORDER BY purchase_date DESC`,
             stock: `
-                SELECT 
-                    p.product_name,
-                    SUM(ib.quantity_remaining) as stock_qty,
-                    SUM(ib.quantity_remaining * ib.purchase_rate) as valuation
-                FROM inventory_batches ib
-                JOIN products p ON ib.product_id = p.id
-                WHERE ib.quantity_remaining > 0
-                GROUP BY p.product_name
-            `
+                SELECT p.product_name, SUM(ib.quantity_remaining) as stock_qty, SUM(ib.quantity_remaining * ib.purchase_rate) as valuation
+                FROM inventory_batches ib JOIN products p ON ib.product_id = p.id
+                WHERE ib.quantity_remaining > 0 GROUP BY p.product_name ORDER BY valuation DESC
+            `,
+            // 8. CHEQUES INVENTORY
+            cheques_list: `SELECT cheque_number, cheque_date, bank_name, amount, party_name, status FROM cheques WHERE status = 'PENDING' AND type = 'INCOMING' ORDER BY cheque_date ASC`
         };
 
-        const results = { accounts };
-        const queryKeys = Object.keys(queries);
-
-        for (const key of queryKeys) {
-            const res = await pool.query(queries[key]);
+        const results = { timestamp: new Date(), accounts, account_streams: {} };
+        for (const [key, sql] of Object.entries(queries)) {
+            const res = await pool.query(sql);
             results[key] = res.rows;
         }
 
-        // Summary Calculations
-        const totalReceivables = results.receivables.reduce((sum, r) => sum + parseFloat(r.balance || 0), 0);
-        const totalPayables = results.payables.reduce((sum, p) => sum + parseFloat(p.balance || 0), 0);
-        const totalCashBank = accounts.reduce((sum, a) => sum + parseFloat(a.balance || 0), 0);
-        const totalStock = results.stock.reduce((sum, s) => sum + parseFloat(s.valuation || 0), 0);
-        const totalAssets = results.assets.reduce((sum, a) => sum + parseFloat(a.purchase_cost || 0), 0);
-        const totalLoansGiven = results.loans.filter(l => l.loan_type === 'GIVEN').reduce((sum, l) => sum + parseFloat(l.balance || 0), 0);
-        const totalLoansTaken = results.loans.filter(l => l.loan_type === 'TAKEN').reduce((sum, l) => sum + parseFloat(l.balance || 0), 0);
+        // 🚀 Forensic Account Streams (Last 10 Movements)
+        for (const acc of accountResults) {
+            let fSql = acc.isBank ? `(v.direct_bank_id = $1 OR bse.bank_account_id = $1)` : `v.liquid_account_id = $1`;
+            const stmRes = await pool.query(`SELECT v.trans_date, v.description, v.amount_in, v.amount_out, v.ref_type FROM view_unified_liquid_ledger v LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id WHERE ${fSql} ORDER BY v.trans_date DESC, v.id DESC LIMIT 10`, [acc.id]);
+            results.account_streams[acc.name] = stmRes.rows;
+        }
+
+        // Final Calculations
+        const tRec = results.receivables.reduce((s, r) => s + parseFloat(r.balance || 0), 0);
+        const tPay = results.payables.reduce((s, p) => s + parseFloat(p.balance || 0), 0);
+        const tCB = accounts.reduce((s, a) => s + parseFloat(a.balance || 0), 0);
+        const tStk = results.stock.reduce((s, t) => s + parseFloat(t.valuation || 0), 0);
+        const tAst = results.assets_list.reduce((s, a) => s + parseFloat(a.purchase_cost || 0), 0);
+        const tLG = results.loans_given.reduce((s, l) => s + parseFloat(l.balance || 0), 0);
+        const tLT = results.loans_taken.reduce((s, l) => s + parseFloat(l.balance || 0), 0);
+
+        const gAssets = tCB + tRec + tStk + tAst + tLG;
+        const gLiabs = tPay + tLT;
 
         results.summary = {
-            total_assets: (totalCashBank + totalReceivables + totalStock + totalAssets + totalLoansGiven).toFixed(2),
-            total_liabilities: (totalPayables + totalLoansTaken).toFixed(2),
-            net_capital: (
-                (totalCashBank + totalReceivables + totalStock + totalAssets + totalLoansGiven) - 
-                (totalPayables + totalLoansTaken)
-            ).toFixed(2),
-            breakdown: {
-                cash_bank: totalCashBank.toFixed(2),
-                receivables: totalReceivables.toFixed(2),
-                stock_value: totalStock.toFixed(2),
-                fixed_assets: totalAssets.toFixed(2),
-                payables: totalPayables.toFixed(2),
-                loans_taken: totalLoansTaken.toFixed(2),
-                loans_given: totalLoansGiven.toFixed(2)
-            }
+            total_assets: gAssets.toFixed(2),
+            total_liabilities: gLiabs.toFixed(2),
+            net_capital: (gAssets - gLiabs).toFixed(2),
+            breakdown: { cash_bank: tCB.toFixed(2), receivables: tRec.toFixed(2), stock_value: tStk.toFixed(2), fixed_assets: tAst.toFixed(2), payables: tPay.toFixed(2), loans_taken: tLT.toFixed(2), loans_given: tLG.toFixed(2) }
         };
 
         res.json(results);
     } catch (err) {
-        console.error('Forensic Snapshot Error:', err);
+        console.error('Forensic Error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
 module.exports = router;
-
