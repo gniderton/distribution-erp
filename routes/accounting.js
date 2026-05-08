@@ -406,4 +406,149 @@ router.get('/statement', async (req, res) => {
     }
 });
 
+
+/**
+ * [NEW] 5. Forensic Financial Summary (The "Brain" API)
+ * Aggregates all databases: Expenses, Income, Salaries, Advances, Bonuses, Receivables, Payables, Loans, Assets, Stock.
+ */
+router.get('/forensic-snapshot', async (req, res) => {
+    try {
+        const queries = {
+            // 1. LIQUIDITY & ACCOUNTS
+            accounts: `
+                SELECT 'Bank/Cash' as category, bank_name as name, current_balance as balance, 'ASSET' as type
+                FROM bank_accounts WHERE is_active = true
+                UNION ALL
+                SELECT 'Cheques' as category, 'Cheques in Hand' as name, COALESCE(SUM(amount), 0) as balance, 'ASSET' as type
+                FROM cheques WHERE status IN ('Received', 'PDC')
+            `,
+
+            // 2. RECEIVABLES (Logic from dse-pending-invoices)
+            receivables: `
+                SELECT 
+                    c.customer_name as party,
+                    COUNT(si.id) as pending_bills,
+                    SUM(si.grand_total - 
+                        COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) -
+                        COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
+                    ) as balance
+                FROM sales_invoices si
+                JOIN customers c ON si.customer_id = c.id
+                WHERE si.status NOT IN ('Paid', 'Cancelled')
+                GROUP BY c.customer_name
+                HAVING SUM(si.grand_total - 
+                    COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) -
+                    COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
+                ) > 0
+            `,
+
+            // 3. PAYABLES (Vendor Ledger logic)
+            payables: `
+                SELECT 
+                    v.vendor_name as party,
+                    SUM(vl.credit_amount - vl.debit_amount) as balance
+                FROM view_vendor_ledger vl
+                JOIN vendors v ON vl.vendor_id = v.id
+                GROUP BY v.vendor_name
+                HAVING SUM(vl.credit_amount - vl.debit_amount) > 0
+            `,
+
+            // 4. EXPENSES (By Category)
+            expenses: `
+                SELECT coa.name as category, SUM(e.grand_total) as amount
+                FROM expenses e
+                JOIN chart_of_accounts coa ON e.category_account_id = coa.id
+                WHERE e.is_active = true
+                GROUP BY coa.name
+            `,
+
+            // 5. OTHER INCOME
+            income: `
+                SELECT coa.name as category, SUM(oi.amount) as amount
+                FROM other_income oi
+                JOIN chart_of_accounts coa ON oi.category_account_id = coa.id
+                WHERE oi.is_active = true
+                GROUP BY coa.name
+            `,
+
+            // 6. PAYROLL (Salaries + Advances + Bonuses)
+            payroll: `
+                SELECT 
+                    'Salaries Paid' as type, SUM(net_salary) as amount FROM employee_salaries
+                UNION ALL
+                SELECT 
+                    'Advances Outstanding' as type, SUM(amount) FROM employee_advances WHERE is_settled = false
+                UNION ALL
+                SELECT 
+                    'Incentives/Bonuses' as type, SUM(points * 1) as amount FROM performance_points_history -- Assuming 1 pt = 1 unit for now
+            `,
+
+            // 7. LOANS
+            loans: `
+                SELECT party_name, loan_type, balance_principal as balance, status
+                FROM loans WHERE status != 'Closed'
+            `,
+
+            // 8. ASSETS
+            assets: `
+                SELECT asset_name, category, purchase_cost, status
+                FROM assets WHERE status = 'Active'
+            `,
+
+            // 9. STOCK VALUATION
+            stock: `
+                SELECT 
+                    p.product_name,
+                    SUM(ib.quantity_remaining) as stock_qty,
+                    SUM(ib.quantity_remaining * ib.purchase_rate) as valuation
+                FROM inventory_batches ib
+                JOIN products p ON ib.product_id = p.id
+                WHERE ib.quantity_remaining > 0
+                GROUP BY p.product_name
+            `
+        };
+
+        const results = {};
+        const queryKeys = Object.keys(queries);
+
+        for (const key of queryKeys) {
+            const res = await pool.query(queries[key]);
+            results[key] = res.rows;
+        }
+
+        // Summary Calculations
+        const totalReceivables = results.receivables.reduce((sum, r) => sum + parseFloat(r.balance || 0), 0);
+        const totalPayables = results.payables.reduce((sum, p) => sum + parseFloat(p.balance || 0), 0);
+        const totalCashBank = results.accounts.reduce((sum, a) => sum + parseFloat(a.balance || 0), 0);
+        const totalStock = results.stock.reduce((sum, s) => sum + parseFloat(s.valuation || 0), 0);
+        const totalAssets = results.assets.reduce((sum, a) => sum + parseFloat(a.purchase_cost || 0), 0);
+        const totalLoansGiven = results.loans.filter(l => l.loan_type === 'GIVEN').reduce((sum, l) => sum + parseFloat(l.balance || 0), 0);
+        const totalLoansTaken = results.loans.filter(l => l.loan_type === 'TAKEN').reduce((sum, l) => sum + parseFloat(l.balance || 0), 0);
+
+        results.summary = {
+            total_assets: (totalCashBank + totalReceivables + totalStock + totalAssets + totalLoansGiven).toFixed(2),
+            total_liabilities: (totalPayables + totalLoansTaken).toFixed(2),
+            net_capital: (
+                (totalCashBank + totalReceivables + totalStock + totalAssets + totalLoansGiven) - 
+                (totalPayables + totalLoansTaken)
+            ).toFixed(2),
+            breakdown: {
+                cash_bank: totalCashBank.toFixed(2),
+                receivables: totalReceivables.toFixed(2),
+                stock_value: totalStock.toFixed(2),
+                fixed_assets: totalAssets.toFixed(2),
+                payables: totalPayables.toFixed(2),
+                loans_taken: totalLoansTaken.toFixed(2),
+                loans_given: totalLoansGiven.toFixed(2)
+            }
+        };
+
+        res.json(results);
+    } catch (err) {
+        console.error('Forensic Snapshot Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
+
