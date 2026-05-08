@@ -414,13 +414,48 @@ router.get('/statement', async (req, res) => {
 router.get('/forensic-snapshot', async (req, res) => {
     try {
         const queries = {
-            // 1. LIQUIDITY & ACCOUNTS
+            // 1. LIQUIDITY & ACCOUNTS (Forensic Accuracy)
             accounts: `
-                SELECT 'Bank/Cash' as category, bank_name as name, current_balance as balance, 'ASSET' as type
-                FROM bank_accounts WHERE is_active = true
+                WITH account_seeds AS (
+                    SELECT account_id, SUM(amount) as seed
+                    FROM opening_balances
+                    WHERE is_active = true
+                    GROUP BY account_id
+                ),
+                account_movements AS (
+                    SELECT 
+                        CASE 
+                            WHEN source_table = 'cheques' THEN 1004
+                            WHEN direct_bank_id IS NOT NULL THEN direct_bank_id
+                            ELSE liquid_account_id
+                        END as acc_id,
+                        SUM(amount_in - amount_out) as movement
+                    FROM view_unified_liquid_ledger
+                    GROUP BY 1
+                )
+                SELECT 
+                    'Bank/Cash' as category, 
+                    b.bank_name as name, 
+                    (COALESCE(s.seed, 0) + COALESCE(m.movement, 0)) as balance, 
+                    'ASSET' as type
+                FROM bank_accounts b
+                LEFT JOIN account_seeds s ON s.account_id = b.id
+                LEFT JOIN account_movements m ON m.acc_id = b.id
+                WHERE b.is_active = true
                 UNION ALL
-                SELECT 'Cheques' as category, 'Cheques in Hand' as name, COALESCE(SUM(amount), 0) as balance, 'ASSET' as type
-                FROM cheques WHERE status IN ('Received', 'PDC')
+                SELECT 
+                    'Cheques' as category, 
+                    'Cheques in Hand' as name, 
+                    (COALESCE((SELECT seed FROM account_seeds WHERE account_id = 1004), 0) + 
+                     COALESCE((SELECT movement FROM account_movements WHERE acc_id = 1004), 0)) as balance, 
+                    'ASSET' as type
+                UNION ALL
+                SELECT 
+                    'Cash' as category, 
+                    'Cash in Hand' as name, 
+                    (COALESCE((SELECT seed FROM account_seeds WHERE account_id = 1), 0) + 
+                     COALESCE((SELECT movement FROM account_movements WHERE acc_id = 1), 0)) as balance, 
+                    'ASSET' as type
             `,
 
             // 2. RECEIVABLES (Logic from dse-pending-invoices)
