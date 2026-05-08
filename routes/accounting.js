@@ -440,7 +440,15 @@ router.get('/forensic-snapshot', async (req, res) => {
 
         const accounts = [];
         for (const acc of accountResults) {
-            const balance = await getForensicBalance(acc.id, acc.isBank);
+            let balance = 0;
+            if (acc.id === 1004) {
+                // 🛡️ SPECIAL CASE: Cheques in Hand (Get directly from DB status per user request)
+                const chqRes = await pool.query("SELECT COALESCE(SUM(amount), 0) as balance FROM cheques WHERE status = 'PENDING' AND type = 'INCOMING'");
+                balance = parseFloat(chqRes.rows[0].balance);
+            } else {
+                balance = await getForensicBalance(acc.id, acc.isBank);
+            }
+            
             accounts.push({
                 category: acc.category,
                 name: acc.name,
