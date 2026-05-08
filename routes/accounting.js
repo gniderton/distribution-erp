@@ -488,7 +488,22 @@ router.get('/forensic-snapshot', async (req, res) => {
                 WHERE ib.quantity_remaining > 0 GROUP BY p.product_name ORDER BY valuation DESC
             `,
             // 8. CHEQUES INVENTORY
-            cheques_list: `SELECT cheque_number, cheque_date, bank_name, amount, party_name, status FROM cheques WHERE status = 'PENDING' AND type = 'INCOMING' ORDER BY cheque_date ASC`
+            cheques_list: `
+                SELECT 
+                    cheque_number, 
+                    cheque_date, 
+                    bank_name, 
+                    amount, 
+                    COALESCE(
+                        (SELECT customer_name FROM customers WHERE id = CAST(c.party_id AS BIGINT) AND c.party_type = 'CUSTOMER'),
+                        (SELECT vendor_name FROM vendors WHERE id = CAST(c.party_id AS BIGINT) AND c.party_type = 'VENDOR'),
+                        'Other: ' || party_type
+                    ) as party_name,
+                    status
+                FROM cheques c
+                WHERE status = 'PENDING' AND type = 'INCOMING'
+                ORDER BY cheque_date ASC
+            `
         };
 
         const results = { timestamp: new Date(), accounts, account_streams: {} };
