@@ -413,51 +413,43 @@ router.get('/statement', async (req, res) => {
  */
 router.get('/forensic-snapshot', async (req, res) => {
     try {
-        const queries = {
-            // 1. LIQUIDITY & ACCOUNTS (Forensic Accuracy)
-            accounts: `
-                WITH account_seeds AS (
-                    SELECT account_id, SUM(amount) as seed
-                    FROM opening_balances
-                    WHERE is_active = true
-                    GROUP BY account_id
-                ),
-                account_movements AS (
-                    SELECT 
-                        CASE 
-                            WHEN source_table = 'cheques' THEN 1004
-                            WHEN direct_bank_id IS NOT NULL THEN direct_bank_id
-                            ELSE liquid_account_id
-                        END as acc_id,
-                        SUM(amount_in - amount_out) as movement
-                    FROM view_unified_liquid_ledger
-                    GROUP BY 1
-                )
-                SELECT 
-                    'Bank/Cash' as category, 
-                    b.bank_name as name, 
-                    (COALESCE(s.seed, 0) + COALESCE(m.movement, 0)) as balance, 
-                    'ASSET' as type
-                FROM bank_accounts b
-                LEFT JOIN account_seeds s ON s.account_id = b.id
-                LEFT JOIN account_movements m ON m.acc_id = b.id
-                WHERE b.is_active = true
-                UNION ALL
-                SELECT 
-                    'Cheques' as category, 
-                    'Cheques in Hand' as name, 
-                    (COALESCE((SELECT seed FROM account_seeds WHERE account_id = 1004), 0) + 
-                     COALESCE((SELECT movement FROM account_movements WHERE acc_id = 1004), 0)) as balance, 
-                    'ASSET' as type
-                UNION ALL
-                SELECT 
-                    'Cash' as category, 
-                    'Cash in Hand' as name, 
-                    (COALESCE((SELECT seed FROM account_seeds WHERE account_id = 1), 0) + 
-                     COALESCE((SELECT movement FROM account_movements WHERE acc_id = 1), 0)) as balance, 
-                    'ASSET' as type
-            `,
+        // 🛡️ Forensic Balance Calculation Helper (Exact match for unified-liquid-ledger)
+        const getForensicBalance = async (accountId, isBank = false) => {
+            let filterSql = isBank ? `(v.direct_bank_id = $1 OR bse.bank_account_id = $1)` : `v.liquid_account_id = $1`;
+            
+            const seedRes = await pool.query(`SELECT COALESCE(SUM(amount), 0) as seed FROM opening_balances WHERE account_id = $1 AND is_active = true`, [accountId]);
+            const seed = parseFloat(seedRes.rows[0].seed);
+            
+            const movementRes = await pool.query(`
+                SELECT COALESCE(SUM(amount_in - amount_out), 0) as integral 
+                FROM view_unified_liquid_ledger v LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id
+                WHERE ${filterSql}
+            `, [accountId]);
+            const integral = parseFloat(movementRes.rows[0].integral);
+            
+            return parseFloat((seed + integral).toFixed(2));
+        };
 
+        // 1. LIQUIDITY & ACCOUNTS (Forensic Database)
+        const accountResults = [
+            { category: 'Bank', name: 'Axis Bank (Thiruvannur)', id: 2, isBank: true },
+            { category: 'Bank', name: 'IDFC First Bank (Calicut)', id: 3, isBank: true },
+            { category: 'Cash', name: 'Cash in Hand', id: 1, isBank: false },
+            { category: 'Cheques', name: 'Cheques in Hand', id: 1004, isBank: false }
+        ];
+
+        const accounts = [];
+        for (const acc of accountResults) {
+            const balance = await getForensicBalance(acc.id, acc.isBank);
+            accounts.push({
+                category: acc.category,
+                name: acc.name,
+                balance: balance.toFixed(2),
+                type: 'ASSET'
+            });
+        }
+
+        const queries = {
             // 2. RECEIVABLES (Logic from dse-pending-invoices)
             receivables: `
                 SELECT 
@@ -543,7 +535,7 @@ router.get('/forensic-snapshot', async (req, res) => {
             `
         };
 
-        const results = {};
+        const results = { accounts };
         const queryKeys = Object.keys(queries);
 
         for (const key of queryKeys) {
@@ -554,7 +546,7 @@ router.get('/forensic-snapshot', async (req, res) => {
         // Summary Calculations
         const totalReceivables = results.receivables.reduce((sum, r) => sum + parseFloat(r.balance || 0), 0);
         const totalPayables = results.payables.reduce((sum, p) => sum + parseFloat(p.balance || 0), 0);
-        const totalCashBank = results.accounts.reduce((sum, a) => sum + parseFloat(a.balance || 0), 0);
+        const totalCashBank = accounts.reduce((sum, a) => sum + parseFloat(a.balance || 0), 0);
         const totalStock = results.stock.reduce((sum, s) => sum + parseFloat(s.valuation || 0), 0);
         const totalAssets = results.assets.reduce((sum, a) => sum + parseFloat(a.purchase_cost || 0), 0);
         const totalLoansGiven = results.loans.filter(l => l.loan_type === 'GIVEN').reduce((sum, l) => sum + parseFloat(l.balance || 0), 0);
