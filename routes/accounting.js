@@ -515,7 +515,7 @@ router.get('/forensic-snapshot', async (req, res) => {
         // 🚀 Forensic Account Streams (Last 10 Movements)
         for (const acc of accountResults) {
             let fSql = acc.isBank ? `(v.direct_bank_id = $1 OR bse.bank_account_id = $1)` : `v.liquid_account_id = $1`;
-            const stmRes = await pool.query(`SELECT v.trans_date, v.description, v.amount_in, v.amount_out, v.ref_type FROM view_unified_liquid_ledger v LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id WHERE ${fSql} ORDER BY v.trans_date DESC, v.id DESC LIMIT 10`, [acc.id]);
+            const stmRes = await pool.query(`SELECT v.trans_date, v.description, v.amount_in, v.amount_out, v.source_table FROM view_unified_liquid_ledger v LEFT JOIN bank_statement_entries bse ON v.bank_statement_entry_id = bse.id WHERE ${fSql} ORDER BY v.trans_date DESC, v.id DESC LIMIT 10`, [acc.id]);
             results.account_streams[acc.name] = stmRes.rows;
         }
 
