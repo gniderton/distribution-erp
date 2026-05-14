@@ -11,6 +11,7 @@ router.get('/', async (req, res) => {
         let query = `
             SELECT 
                 s.*,
+                (SELECT json_agg(customer_id) FROM scheme_targeted_customers WHERE scheme_id = s.id) as targeted_customer_ids,
                 (
                     SELECT json_agg(
                         json_build_object(
@@ -24,6 +25,7 @@ router.get('/', async (req, res) => {
                             'tier_level', sr.tier_level,
                             'channel_tier', sr.channel_tier,
                             'is_recursive', sr.is_recursive,
+                            'targeted_product_ids', (SELECT json_agg(product_id) FROM scheme_targeted_products WHERE scheme_rule_id = sr.id),
                             'trigger_name', CASE 
                                 WHEN sr.scheme_type = 'COMBO' THEN 'Combo Group'
                                 WHEN sr.trigger_type = 'Product' THEN (SELECT product_name FROM products WHERE id = sr.trigger_id)
@@ -117,7 +119,8 @@ router.get('/:id', async (req, res) => {
                 p_trigger.product_name as trigger_product_name,
                 p_reward.product_name as reward_product_name,
                 b.brand_name as trigger_brand_name,
-                c.category_name as trigger_category_name
+                c.category_name as trigger_category_name,
+                (SELECT json_agg(product_id) FROM scheme_targeted_products WHERE scheme_rule_id = sr.id) as targeted_product_ids
             FROM scheme_rules sr
             LEFT JOIN products p_trigger ON sr.trigger_type = 'Product' AND sr.trigger_id = p_trigger.id
             LEFT JOIN products p_reward ON sr.reward_product_id = p_reward.id
@@ -126,6 +129,12 @@ router.get('/:id', async (req, res) => {
             WHERE sr.scheme_id = $1
             ORDER BY sr.tier_level, sr.min_qty
         `, [id]);
+
+        // Get targeted customers for the scheme
+        const targetedCustomersRes = await pool.query(`
+            SELECT customer_id FROM scheme_targeted_customers WHERE scheme_id = $1
+        `, [id]);
+        scheme.targeted_customer_ids = targetedCustomersRes.rows.map(r => r.customer_id);
 
         // Get combo products for each rule
         for (const rule of rulesRes.rows) {
@@ -153,7 +162,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     const client = await pool.connect();
     try {
-        const { scheme_name, description, start_date, end_date, is_active, rules } = req.body;
+        const { scheme_name, description, start_date, end_date, is_active, rules, targeted_customer_ids } = req.body;
 
         await client.query('BEGIN');
 
@@ -163,6 +172,16 @@ router.post('/', async (req, res) => {
             VALUES ($1, $2, $3, $4, $5) RETURNING id
         `, [scheme_name, description, start_date || new Date(), end_date, is_active !== false]);
         const schemeId = resHead.rows[0].id;
+
+        // Insert targeted customers
+        if (targeted_customer_ids && targeted_customer_ids.length > 0) {
+            for (const custId of targeted_customer_ids) {
+                await client.query(`
+                    INSERT INTO scheme_targeted_customers (scheme_id, customer_id)
+                    VALUES ($1, $2)
+                `, [schemeId, custId]);
+            }
+        }
 
         // Insert rules
         if (rules && rules.length > 0) {
@@ -189,6 +208,16 @@ router.post('/', async (req, res) => {
                 ]);
 
                 const ruleId = ruleRes.rows[0].id;
+
+                // Insert targeted products
+                if (r.targeted_product_ids && r.targeted_product_ids.length > 0) {
+                    for (const prodId of r.targeted_product_ids) {
+                        await client.query(`
+                            INSERT INTO scheme_targeted_products (scheme_rule_id, product_id)
+                            VALUES ($1, $2)
+                        `, [ruleId, prodId]);
+                    }
+                }
 
                 // Insert combo products if COMBO type
                 if (r.scheme_type === 'COMBO' && r.combo_products && r.combo_products.length > 0) {
@@ -228,7 +257,7 @@ router.put('/:id', async (req, res) => {
     const client = await pool.connect();
     try {
         const { id } = req.params;
-        const { scheme_name, description, start_date, end_date, is_active, rules } = req.body;
+        const { scheme_name, description, start_date, end_date, is_active, rules, targeted_customer_ids } = req.body;
 
         await client.query('BEGIN');
 
@@ -239,7 +268,18 @@ router.put('/:id', async (req, res) => {
             WHERE id = $6
         `, [scheme_name, description, start_date, end_date, is_active, id]);
 
-        // Delete existing rules and combo products (cascade will handle combo products)
+        // Update targeted customers
+        await client.query('DELETE FROM scheme_targeted_customers WHERE scheme_id = $1', [id]);
+        if (targeted_customer_ids && targeted_customer_ids.length > 0) {
+            for (const custId of targeted_customer_ids) {
+                await client.query(`
+                    INSERT INTO scheme_targeted_customers (scheme_id, customer_id)
+                    VALUES ($1, $2)
+                `, [id, custId]);
+            }
+        }
+
+        // Delete existing rules (cascade will handle targets and combos)
         await client.query('DELETE FROM scheme_rules WHERE scheme_id = $1', [id]);
 
         // Insert new rules
@@ -267,6 +307,16 @@ router.put('/:id', async (req, res) => {
                 ]);
 
                 const ruleId = ruleRes.rows[0].id;
+
+                // Insert targeted products
+                if (r.targeted_product_ids && r.targeted_product_ids.length > 0) {
+                    for (const prodId of r.targeted_product_ids) {
+                        await client.query(`
+                            INSERT INTO scheme_targeted_products (scheme_rule_id, product_id)
+                            VALUES ($1, $2)
+                        `, [ruleId, prodId]);
+                    }
+                }
 
                 // Insert combo products if COMBO type
                 if (r.scheme_type === 'COMBO' && r.combo_products && r.combo_products.length > 0) {

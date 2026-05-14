@@ -645,11 +645,19 @@ router.post('/orders/:id/dispatch', async (req, res) => {
                     console.log(`[DEBUG] Created batch group: ${groupKey}, batch_id: ${batchId}`);
                 }
 
-                // Price Slab Deduction Calculation
+                // Price Slab or Flat MRP Discount Calculation
                 if (priceSlabs[pid]) {
-                    const targetNet = Number(priceSlabs[pid].special_price);
-                    const targetExcl = targetNet / (1 + (taxPct / 100));
-                    const unitDeduction = Math.max(0, unitRate - targetExcl);
+                    let unitDeduction = 0;
+                    if (priceSlabs[pid].special_price) {
+                        const targetNet = Number(priceSlabs[pid].special_price);
+                        const targetExcl = targetNet / (1 + (taxPct / 100));
+                        unitDeduction = Math.max(0, unitRate - targetExcl);
+                    } else if (priceSlabs[pid].discount_percentage) {
+                        const discountPct = Number(priceSlabs[pid].discount_percentage);
+                        const targetNet = batchMrp * (1 - (discountPct / 100));
+                        const targetExcl = targetNet / (1 + (taxPct / 100));
+                        unitDeduction = Math.max(0, unitRate - targetExcl);
+                    }
                     batchGroups[groupKey].slabDeduction += (take * unitDeduction);
                 }
 
@@ -1467,11 +1475,19 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                             batchGroups[groupKey] = { batch_id: batchId, qty: 0, cogs: 0, slabDeduction: 0, rate: batchRate, mrp: batchMrp };
                         }
 
-                        // Price Slab Deduction Calculation
+                        // Price Slab or Flat MRP Discount Calculation
                         if (priceSlabs[pid]) {
-                            const targetNet = Number(priceSlabs[pid].special_price);
-                            const targetExcl = targetNet / (1 + (lineTaxPercent / 100));
-                            const unitDeduction = Math.max(0, batchRate - targetExcl);
+                            let unitDeduction = 0;
+                            if (priceSlabs[pid].special_price) {
+                                const targetNet = Number(priceSlabs[pid].special_price);
+                                const targetExcl = targetNet / (1 + (lineTaxPercent / 100));
+                                unitDeduction = Math.max(0, batchRate - targetExcl);
+                            } else if (priceSlabs[pid].discount_percentage) {
+                                const discountPct = Number(priceSlabs[pid].discount_percentage);
+                                const targetNet = batchMrp * (1 - (discountPct / 100));
+                                const targetExcl = targetNet / (1 + (lineTaxPercent / 100));
+                                unitDeduction = Math.max(0, batchRate - targetExcl);
+                            }
                             batchGroups[groupKey].slabDeduction += (take * unitDeduction);
                         }
 
@@ -1796,11 +1812,19 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                             batchGroups[groupKey] = { batch_id: batchId, qty: 0, gross: 0, cogs: 0, slabDeduction: 0, rate: batchRate, mrp: batchMrp };
                         }
 
-                        // Price Slab Deduction Calculation
+                        // Price Slab or Flat MRP Discount Calculation
                         if (priceSlabs[pid]) {
-                            const targetNet = Number(priceSlabs[pid].special_price);
-                            const targetExcl = targetNet / (1 + (taxPct / 100));
-                            const unitDeduction = Math.max(0, batchRate - targetExcl);
+                            let unitDeduction = 0;
+                            if (priceSlabs[pid].special_price) {
+                                const targetNet = Number(priceSlabs[pid].special_price);
+                                const targetExcl = targetNet / (1 + (taxPct / 100));
+                                unitDeduction = Math.max(0, batchRate - targetExcl);
+                            } else if (priceSlabs[pid].discount_percentage) {
+                                const discountPct = Number(priceSlabs[pid].discount_percentage);
+                                const targetNet = batchMrp * (1 - (discountPct / 100));
+                                const targetExcl = targetNet / (1 + (taxPct / 100));
+                                unitDeduction = Math.max(0, batchRate - targetExcl);
+                            }
                             batchGroups[groupKey].slabDeduction += (take * unitDeduction);
                         }
 
@@ -1847,10 +1871,19 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         }
 
                         // Price Slab Deduction Calculation (Transit)
+                        // Price Slab or Flat MRP Discount Calculation (Transit)
                         if (priceSlabs[pid]) {
-                            const targetNet = Number(priceSlabs[pid].special_price);
-                            const targetExcl = targetNet / (1 + (taxPct / 100));
-                            const unitDeduction = Math.max(0, transitRate - targetExcl);
+                            let unitDeduction = 0;
+                            if (priceSlabs[pid].special_price) {
+                                const targetNet = Number(priceSlabs[pid].special_price);
+                                const targetExcl = targetNet / (1 + (taxPct / 100));
+                                unitDeduction = Math.max(0, transitRate - targetExcl);
+                            } else if (priceSlabs[pid].discount_percentage) {
+                                const discountPct = Number(priceSlabs[pid].discount_percentage);
+                                const targetNet = transitMrp * (1 - (discountPct / 100));
+                                const targetExcl = targetNet / (1 + (taxPct / 100));
+                                unitDeduction = Math.max(0, transitRate - targetExcl);
+                            }
                             batchGroups[groupKey].slabDeduction += (take * unitDeduction);
                         }
 
@@ -2227,10 +2260,19 @@ router.post('/invoices/regenerate', async (req, res) => {
                     batchGroups[groupKey] = { batch_id: batchId, qty: 0, gross: 0, cogs: 0, slabDeduction: 0, rate: batchRate, mrp: batchMrp };
                 }
 
+                // Price Slab or Flat MRP Discount Calculation
                 if (priceSlabs[pid]) {
-                    const targetNet = Number(priceSlabs[pid].special_price);
-                    const targetExcl = targetNet / (1 + (taxPct / 100));
-                    const unitDeduction = Math.max(0, batchRate - targetExcl);
+                    let unitDeduction = 0;
+                    if (priceSlabs[pid].special_price) {
+                        const targetNet = Number(priceSlabs[pid].special_price);
+                        const targetExcl = targetNet / (1 + (taxPct / 100));
+                        unitDeduction = Math.max(0, batchRate - targetExcl);
+                    } else if (priceSlabs[pid].discount_percentage) {
+                        const discountPct = Number(priceSlabs[pid].discount_percentage);
+                        const targetNet = batchMrp * (1 - (discountPct / 100));
+                        const targetExcl = targetNet / (1 + (taxPct / 100));
+                        unitDeduction = Math.max(0, batchRate - targetExcl);
+                    }
                     batchGroups[groupKey].slabDeduction += (take * unitDeduction);
                 }
 

@@ -12,6 +12,26 @@ async function calculateFreeItems(items, customerId = null, client = null) {
     const productIds = Object.keys(qtyMap).map(Number);
 
     // ---------------------------------------------------------
+    // STEP 0: FETCH TARGETING INFO
+    // ---------------------------------------------------------
+    // Fetch schemes that target this customer (or target NO specific customers)
+    const targetedSchemeIdsRes = await db.query(`
+        SELECT DISTINCT s.id
+        FROM schemes s
+        LEFT JOIN scheme_targeted_customers stc ON s.id = stc.scheme_id
+        WHERE s.is_active = true
+          AND (s.end_date IS NULL OR s.end_date >= CURRENT_DATE)
+          AND s.start_date <= CURRENT_DATE
+          AND (
+            NOT EXISTS (SELECT 1 FROM scheme_targeted_customers WHERE scheme_id = s.id)
+            OR stc.customer_id = $1
+          )
+    `, [customerId]);
+    const validSchemeIds = targetedSchemeIdsRes.rows.map(r => r.id);
+
+    if (validSchemeIds.length === 0) return { freeItems: [], priceSlabs: {} };
+
+    // ---------------------------------------------------------
     // STEP 1: SMART LOOKUP (Filter Inputs)
     // ---------------------------------------------------------
     // Identify which products are involved in Single or Combo schemes
@@ -19,12 +39,9 @@ async function calculateFreeItems(items, customerId = null, client = null) {
         -- Check Single Rules
         SELECT sr.trigger_id as product_id, 'SINGLE' as type
         FROM scheme_rules sr
-        JOIN schemes s ON sr.scheme_id = s.id
-        WHERE s.is_active = true 
-          AND (s.end_date IS NULL OR s.end_date >= CURRENT_DATE)
-          AND s.start_date <= CURRENT_DATE
+        WHERE sr.scheme_id = ANY($1::int[])
           AND sr.trigger_type = 'Product'
-          AND sr.trigger_id = ANY($1::int[])
+          AND sr.trigger_id = ANY($2::int[])
 
         UNION
 
@@ -32,12 +49,9 @@ async function calculateFreeItems(items, customerId = null, client = null) {
         SELECT scp.product_id, 'COMBO' as type
         FROM scheme_combo_products scp
         JOIN scheme_rules sr ON scp.scheme_rule_id = sr.id
-        JOIN schemes s ON sr.scheme_id = s.id
-        WHERE s.is_active = true
-          AND (s.end_date IS NULL OR s.end_date >= CURRENT_DATE)
-          AND s.start_date <= CURRENT_DATE
-          AND scp.product_id = ANY($1::int[])
-    `, [productIds]);
+        WHERE sr.scheme_id = ANY($1::int[])
+          AND scp.product_id = ANY($2::int[])
+    `, [validSchemeIds, productIds]);
 
     const activeTypes = {}; // { 101: ['SINGLE', 'COMBO'] }
     statusRes.rows.forEach(r => {
@@ -93,17 +107,15 @@ async function calculateFreeItems(items, customerId = null, client = null) {
             SELECT sr.*, s.scheme_name, s.id as scheme_id
             FROM scheme_rules sr
             JOIN schemes s ON sr.scheme_id = s.id
-            WHERE s.is_active = true 
+            WHERE s.id = ANY($1::int[])
               AND sr.scheme_type = 'BUY_GET_FREE' 
-              AND (s.end_date IS NULL OR s.end_date >= CURRENT_DATE)
-              AND s.start_date <= CURRENT_DATE
               AND (
-                (sr.trigger_type = 'Product' AND sr.trigger_id = ANY($1::int[])) OR
+                (sr.trigger_type = 'Product' AND sr.trigger_id = ANY($2::int[])) OR
                 (sr.trigger_type = 'Brand') OR
                 (sr.trigger_type = 'Category')
               )
             ORDER BY sr.tier_level DESC, sr.min_qty DESC
-        `, [singleCandidates]);
+        `, [validSchemeIds, singleCandidates]);
 
         const rules = rulesRes.rows;
 
@@ -165,7 +177,6 @@ async function calculateFreeItems(items, customerId = null, client = null) {
     // STEP 3: COMBO LOGIC (Basket/Bucket Sum) - PRIORITY 2
     // ---------------------------------------------------------
     // A. Fetch All Active Combo Definitions involving these products
-    // Correct Schema: schemes -> scheme_rules (defines type) -> scheme_combo_products (defines bucket)
     const comboDefRes = await db.query(`
         SELECT 
             s.id as scheme_id, s.scheme_name,
@@ -176,11 +187,9 @@ async function calculateFreeItems(items, customerId = null, client = null) {
         FROM schemes s
         JOIN scheme_rules sr ON s.id = sr.scheme_id 
         JOIN scheme_combo_products scp ON sr.id = scp.scheme_rule_id
-        WHERE s.is_active = true 
+        WHERE s.id = ANY($1::int[])
           AND sr.scheme_type = 'COMBO'
-          AND (s.end_date IS NULL OR s.end_date >= CURRENT_DATE)
-          AND s.start_date <= CURRENT_DATE
-    `);
+    `, [validSchemeIds]);
 
     // Group by Scheme Rule ID (Combos are per-rule)
     const combos = {};
@@ -212,26 +221,21 @@ async function calculateFreeItems(items, customerId = null, client = null) {
         }
 
         // 2. Determine Multiplier
-        // Logic: Floor(Total / Requirement)
         const multiplier = Math.floor(basketTotal / combo.basket_req);
 
         // 3. Award & Consume
         if (multiplier > 0) {
-            // Add Free Item
             freeItems.push({
                 product_id: combo.reward_pid || Array.from(combo.components)[0],
                 qty: multiplier * combo.reward_qty,
                 reason: `${combo.name} [ID:${combo.scheme_id}] (Basket Total ${basketTotal}, Req ${combo.basket_req})`
             });
 
-            // Consume Stock (Deduct from used pools)
             let toDeduct = multiplier * combo.basket_req;
-
             for (const pid of involvedPids) {
                 if (toDeduct <= 0) break;
                 const available = qtyMap[pid];
                 const deduct = Math.min(available, toDeduct);
-
                 qtyMap[pid] -= deduct;
                 toDeduct -= deduct;
             }
@@ -239,46 +243,63 @@ async function calculateFreeItems(items, customerId = null, client = null) {
     }
 
     // ---------------------------------------------------------
-    // STEP 4: PRICE SLABS (Rate Overrides)
+    // STEP 4: PRICE SLABS (Rate Overrides) & FLAT MRP DISCOUNT
     // ---------------------------------------------------------
-    const priceSlabs = {}; // { [pid]: { special_price, reason } }
+    const priceSlabs = {}; // { [pid]: { special_price, discount_percentage, reason } }
 
-    // Fetch rules for products that still have quantity (or all involved)
-    // Price Slabs usually apply to the whole quantity of a product line.
     const slabRes = await db.query(`
-        SELECT sr.trigger_id as product_id, sr.min_qty, sr.special_price, s.scheme_name, sr.channel_tier, s.id as scheme_id
+        SELECT 
+            sr.id as rule_id, sr.trigger_id as product_id, sr.trigger_type,
+            sr.min_qty, sr.special_price, sr.scheme_type,
+            s.scheme_name, sr.channel_tier, s.id as scheme_id,
+            (SELECT json_agg(product_id) FROM scheme_targeted_products WHERE scheme_rule_id = sr.id) as targeted_products
         FROM scheme_rules sr
         JOIN schemes s ON sr.scheme_id = s.id
-        WHERE s.is_active = true 
-          AND sr.scheme_type = 'PRICE_SLAB'
-          AND sr.trigger_type = 'Product'
+        WHERE s.id = ANY($1::int[])
+          AND sr.scheme_type IN ('PRICE_SLAB', 'FLAT_MRP_DISCOUNT')
           AND sr.special_price IS NOT NULL
-          AND (s.end_date IS NULL OR s.end_date >= CURRENT_DATE)
-          AND s.start_date <= CURRENT_DATE
-          AND sr.trigger_id = ANY($1::int[])
-        ORDER BY sr.min_qty DESC -- Most aggressive slab first
-    `, [productIds]);
+        ORDER BY sr.min_qty DESC
+    `, [validSchemeIds]);
 
     slabRes.rows.forEach(r => {
-        const pid = r.product_id;
-        const meta = productMeta[pid];
-        if (!meta) return;
-
-        const effectiveTier = (brandOverrides[meta.brand_id] || defaultTier || '').trim().toLowerCase();
-        const ruleTier = (r.channel_tier || '').trim().toLowerCase();
-        
-        // Tier Match: If rule has a tier, it must match effectiveTier. If null, applies to all.
-        if (ruleTier && ruleTier !== effectiveTier) return;
-
-        // Check if original quantity meets the slab
-        const originalQty = items.find(i => i.product_id == pid)?.qty || 0;
-
-        if (!priceSlabs[pid] && originalQty >= r.min_qty) {
-            priceSlabs[pid] = {
-                special_price: Number(r.special_price),
-                reason: `${r.scheme_name} [ID:${r.scheme_id}] (Slab >= ${r.min_qty})`
-            };
+        const pidsToEvaluate = [];
+        if (r.trigger_type === 'Product') {
+            pidsToEvaluate.push(r.product_id);
+        } else if (r.trigger_type === 'Brand') {
+            // All products of this brand (from inputs)
+            productIds.forEach(pid => {
+                if (productMeta[pid]?.brand_id == r.product_id) {
+                    // Check if rule has specific targeted products
+                    if (!r.targeted_products || r.targeted_products.includes(pid)) {
+                        pidsToEvaluate.push(pid);
+                    }
+                }
+            });
         }
+
+        pidsToEvaluate.forEach(pid => {
+            if (priceSlabs[pid]) return; // Best slab already applied
+
+            const meta = productMeta[pid];
+            const effectiveTier = (brandOverrides[meta?.brand_id] || defaultTier || '').trim().toLowerCase();
+            const ruleTier = (r.channel_tier || '').trim().toLowerCase();
+            if (ruleTier && ruleTier !== effectiveTier) return;
+
+            const originalQty = items.find(i => i.product_id == pid)?.qty || 0;
+            if (originalQty >= r.min_qty) {
+                if (r.scheme_type === 'PRICE_SLAB') {
+                    priceSlabs[pid] = {
+                        special_price: Number(r.special_price),
+                        reason: `${r.scheme_name} [ID:${r.scheme_id}] (Slab >= ${r.min_qty})`
+                    };
+                } else if (r.scheme_type === 'FLAT_MRP_DISCOUNT') {
+                    priceSlabs[pid] = {
+                        discount_percentage: Number(r.special_price),
+                        reason: `${r.scheme_name} [ID:${r.scheme_id}] (${r.special_price}% MRP Discount)`
+                    };
+                }
+            }
+        });
     });
 
 
