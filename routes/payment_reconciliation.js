@@ -225,7 +225,7 @@ router.post('/bulk-update', async (req, res) => {
                     // 1. Check for DSE-specified allocations (PENDING status)
                     // 🚀 CRITICAL: We prioritize the Staff's choice from the app first
                     const pendingAllocRes = await client.query(`
-                        SELECT pa.*, si.grand_total, COALESCE(si.amount_paid, 0) as current_paid
+                        SELECT pa.*, si.grand_total, COALESCE(si.amount_paid, 0) as current_paid, si.customer_id as invoice_customer_id
                         FROM customer_payment_allocations pa
                         JOIN sales_invoices si ON pa.invoice_id = si.id
                         WHERE pa.payment_id = $1 AND pa.status = 'PENDING'
@@ -242,6 +242,18 @@ router.post('/bulk-update', async (req, res) => {
 
                             const currentBalance = Number(pendingAlloc.grand_total) - Number(pendingAlloc.current_paid);
                             const requestedAmount = Number(pendingAlloc.amount);
+
+                            // 🛡️ FORENSIC SAFETY CHECK: Prevent Cross-Customer Allocation
+                            if (pendingAlloc.invoice_customer_id !== pay.customer_id) {
+                                console.warn(`[Forensic Alert] Misrouted allocation detected for Payment ${pay.id}. Expected Customer ${pay.customer_id}, found ${pendingAlloc.invoice_customer_id}. Reversing.`);
+                                await client.query(`
+                                    UPDATE customer_payment_allocations 
+                                    SET status = 'REVERSED', 
+                                        notes = 'Forensic Catch: Misrouted to wrong customer' 
+                                    WHERE id = $1
+                                `, [pendingAlloc.id]);
+                                continue;
+                            }
 
                             if (currentBalance <= 0) {
                                 // Invoice fully paid - skip and mark as REVERSED
