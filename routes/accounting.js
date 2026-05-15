@@ -439,7 +439,7 @@ router.get('/cash-flow', async (req, res) => {
                 je.transaction_date as trans_date,
                 CASE 
                     WHEN jl.debit > 0 THEN 'FROM: Cheque Repository'
-                    ELSE 'TO: ' || COALESCE(ba.name, 'Bank Account')
+                    ELSE 'TO: ' || COALESCE(ba.bank_name, 'Bank Account')
                 END as party_name,
                 je.description,
                 jl.debit as amount_in,
