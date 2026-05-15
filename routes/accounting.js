@@ -409,6 +409,134 @@ router.get('/statement', async (req, res) => {
 });
 
 /**
+ * [NEW] 1.4 Forensic Cash Flow Statement
+ * Multi-level grouping (Weekly -> Daily -> Category) with detailed audit trails.
+ */
+router.get('/cash-flow', async (req, res) => {
+    try {
+        const { start_date, end_date } = req.query;
+        if (!start_date || !end_date) return res.status(400).json({ error: "start_date and end_date are required" });
+
+        const query = `
+            SELECT 
+                trans_date,
+                party_name,
+                description,
+                amount_in,
+                amount_out,
+                source_table,
+                source_id,
+                liquid_account_id
+            FROM view_unified_liquid_ledger
+            WHERE trans_date >= $1 AND trans_date <= $2
+            ORDER BY trans_date DESC, source_table ASC
+        `;
+        const result = await pool.query(query, [start_date, end_date]);
+        const rows = result.rows;
+
+        const categoryMap = {
+            'customer_payments': 'Operating Receipt (Collections)',
+            'other_income': 'Operating Receipt (Other)',
+            'vendor_payments': 'Operating Payment (Vendors)',
+            'expenses': 'Operating Payment (Expenses)',
+            'dse_expenses': 'Operating Payment (DSE)',
+            'employee_salaries': 'Operating Payment (Payroll)',
+            'employee_advances': 'Operating Payment (Advances)',
+            'internal_transfers': 'Financing Activity (Internal Transfer)',
+            'loan_transactions': 'Financing Activity (Loans)',
+            'asset_transactions': 'Investing Activity (Assets)',
+            'cheques': 'Liquidity Management (Cheques)'
+        };
+
+        const getWeekRange = (dateStr) => {
+            const d = new Date(dateStr);
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Monday start
+            const monday = new Date(new Date(d).setDate(diff));
+            const sunday = new Date(new Date(monday).setDate(monday.getDate() + 6));
+            
+            const options = { day: '2-digit', month: 'short' };
+            return `${monday.toLocaleDateString('en-GB', options)} - ${sunday.toLocaleDateString('en-GB', options)}`;
+        };
+
+        const weeks = {};
+
+        rows.forEach(row => {
+            const dateObj = new Date(row.trans_date);
+            const dateStr = dateObj.toISOString().split('T')[0];
+            const weekLabel = getWeekRange(dateStr);
+            const category = categoryMap[row.source_table] || 'Other Activity';
+
+            if (!weeks[weekLabel]) {
+                weeks[weekLabel] = { label: weekLabel, total_in: 0, total_out: 0, days: {} };
+            }
+
+            if (!weeks[weekLabel].days[dateStr]) {
+                weeks[weekLabel].days[dateStr] = { 
+                    label: dateStr, 
+                    display_date: dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short' }),
+                    total_in: 0, 
+                    total_out: 0, 
+                    categories: {} 
+                };
+            }
+
+            if (!weeks[weekLabel].days[dateStr].categories[category]) {
+                weeks[weekLabel].days[dateStr].categories[category] = { 
+                    label: category, 
+                    total_in: 0, 
+                    total_out: 0, 
+                    transactions: [] 
+                };
+            }
+
+            const amtIn = parseFloat(row.amount_in || 0);
+            const amtOut = parseFloat(row.amount_out || 0);
+
+            weeks[weekLabel].total_in += amtIn;
+            weeks[weekLabel].total_out += amtOut;
+            weeks[weekLabel].days[dateStr].total_in += amtIn;
+            weeks[weekLabel].days[dateStr].total_out += amtOut;
+            weeks[weekLabel].days[dateStr].categories[category].total_in += amtIn;
+            weeks[weekLabel].days[dateStr].categories[category].total_out += amtOut;
+
+            weeks[weekLabel].days[dateStr].categories[category].transactions.push({
+                ...row,
+                amount_in: amtIn.toFixed(2),
+                amount_out: amtOut.toFixed(2),
+                category_label: category,
+                db_ref: `${row.source_table}:${row.source_id}`
+            });
+        });
+
+        // Final sorting and formatting
+        const finalReport = Object.values(weeks).map(w => ({
+            ...w,
+            total_in: w.total_in.toFixed(2),
+            total_out: w.total_out.toFixed(2),
+            net_flow: (w.total_in - w.total_out).toFixed(2),
+            days: Object.values(w.days).map(d => ({
+                ...d,
+                total_in: d.total_in.toFixed(2),
+                total_out: d.total_out.toFixed(2),
+                net_flow: (d.total_in - d.total_out).toFixed(2),
+                categories: Object.values(d.categories).map(c => ({
+                    ...c,
+                    total_in: c.total_in.toFixed(2),
+                    total_out: c.total_out.toFixed(2),
+                    net_flow: (c.total_in - c.total_out).toFixed(2)
+                }))
+            })).sort((a, b) => b.label.localeCompare(a.label))
+        }));
+
+        res.json(finalReport);
+    } catch (err) {
+        console.error('Cash Flow API Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
  * [NEW] 5. Forensic Financial Summary (The "Brain" API)
  * Aggregates all databases with granular breakdowns and transaction streams.
  */
