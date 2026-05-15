@@ -235,4 +235,26 @@ SELECT
     bank_statement_entry_id,
     journal_entry_id
 FROM employee_salaries
-WHERE payment_date IS NOT NULL;
+WHERE payment_date IS NOT NULL
+
+UNION ALL
+
+-- 13. Cheque Clearing (Journal Entries)
+-- This tracks the movement FROM 1004 (Repository) TO a real bank account.
+-- It ensures that the conversion of cheques to liquid cash is reflected.
+SELECT 
+    je.transaction_date as trans_date,
+    'CHEQUE CLEARING' as party_name,
+    je.description,
+    jl.debit as amount_in,
+    jl.credit as amount_out,
+    COALESCE(jl.bank_account_id, jl.account_id) as liquid_account_id,
+    jl.bank_account_id as direct_bank_id,
+    'journal_lines' as source_table,
+    jl.id as source_id,
+    null as bank_statement_entry_id,
+    je.id as journal_entry_id
+FROM journal_lines jl
+JOIN journal_entries je ON jl.journal_entry_id = je.id
+WHERE je.reference_type = 'CHQ_CLEAR'
+  AND (jl.bank_account_id IS NOT NULL OR jl.account_id = 1004);

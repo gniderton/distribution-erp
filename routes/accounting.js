@@ -445,7 +445,8 @@ router.get('/cash-flow', async (req, res) => {
             'internal_transfers': 'Financing Activity (Internal Transfer)',
             'loan_transactions': 'Financing Activity (Loans)',
             'asset_transactions': 'Investing Activity (Assets)',
-            'cheques': 'Liquidity Management (Cheques)'
+            'cheques': 'Liquidity Management (Cheques)',
+            'journal_lines': 'Liquidity Management (Clearing)'
         };
 
         const getWeekRange = (dateStr) => {
