@@ -429,29 +429,27 @@ router.get('/cash-flow', async (req, res) => {
                 liquid_account_id
             FROM view_unified_liquid_ledger
             WHERE trans_date >= $1 AND trans_date <= $2
+              AND liquid_account_id != 1004 -- 🚫 Ignore "Promises" (Cheques in Hand)
             ORDER BY trans_date DESC, source_table ASC
         `;
         const result = await pool.query(query, [start_date, end_date]);
         
-        // 🛡️ [JOURNAL ENGINE] Include Cheque Clearing (From Repository -> To Bank)
+        // 🛡️ [REAL MONEY FLOW] Capture Actual Cash Arrival when Cheques Clear
         const clearQuery = `
             SELECT 
                 je.transaction_date as trans_date,
-                CASE 
-                    WHEN jl.debit > 0 THEN 'FROM: Cheque Repository'
-                    ELSE 'TO: ' || COALESCE(ba.bank_name, 'Bank Account')
-                END as party_name,
-                je.description,
+                COALESCE(chq.party_type || ': ' || chq.party_id, 'Clearing') as party_name,
+                'Cheque ' || chq.cheque_number || ' Cleared' as description,
                 jl.debit as amount_in,
-                jl.credit as amount_out,
-                'journal_lines' as source_table,
-                jl.id as source_id,
-                COALESCE(jl.bank_account_id, jl.account_id) as liquid_account_id
+                0 as amount_out,
+                'cheques' as source_table,
+                chq.id as source_id,
+                jl.bank_account_id as liquid_account_id
             FROM journal_lines jl
             JOIN journal_entries je ON jl.journal_entry_id = je.id
-            LEFT JOIN bank_accounts ba ON jl.bank_account_id = ba.id
+            JOIN cheques chq ON je.reference_id = chq.id::text
             WHERE je.reference_type = 'CHQ_CLEAR'
-              AND (jl.bank_account_id IS NOT NULL OR jl.account_id = 1004)
+              AND jl.bank_account_id IS NOT NULL -- 💰 Only count the Actual Money hitting the bank
               AND je.transaction_date >= $1 AND je.transaction_date <= $2
         `;
         const clearResult = await pool.query(clearQuery, [start_date, end_date]);
