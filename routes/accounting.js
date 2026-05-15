@@ -432,7 +432,28 @@ router.get('/cash-flow', async (req, res) => {
             ORDER BY trans_date DESC, source_table ASC
         `;
         const result = await pool.query(query, [start_date, end_date]);
-        const rows = result.rows;
+        
+        // 🛡️ [IN-MEMORY JOIN] Include Cheque Clearing (Journal Entries) without changing the database view
+        const clearQuery = `
+            SELECT 
+                je.transaction_date as trans_date,
+                'CHEQUE CLEARING' as party_name,
+                je.description,
+                jl.debit as amount_in,
+                jl.credit as amount_out,
+                'journal_lines' as source_table,
+                jl.id as source_id,
+                COALESCE(jl.bank_account_id, jl.account_id) as liquid_account_id
+            FROM journal_lines jl
+            JOIN journal_entries je ON jl.journal_entry_id = je.id
+            WHERE je.reference_type = 'CHQ_CLEAR'
+              AND (jl.bank_account_id IS NOT NULL OR jl.account_id = 1004)
+              AND je.transaction_date >= $1 AND je.transaction_date <= $2
+        `;
+        const clearResult = await pool.query(clearQuery, [start_date, end_date]);
+        
+        // Combine ledger streams with clearing streams
+        const rows = [...result.rows, ...clearResult.rows];
 
         const categoryMap = {
             'customer_payments': 'Operating Receipt (Collections)',
@@ -445,7 +466,8 @@ router.get('/cash-flow', async (req, res) => {
             'internal_transfers': 'Financing Activity (Internal Transfer)',
             'loan_transactions': 'Financing Activity (Loans)',
             'asset_transactions': 'Investing Activity (Assets)',
-            'cheques': 'Liquidity Management (Cheques)'
+            'cheques': 'Liquidity Management (Cheques)',
+            'journal_lines': 'Liquidity Management (Clearing)'
         };
 
         const getWeekRange = (dateStr) => {
