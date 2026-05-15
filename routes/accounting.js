@@ -447,7 +447,7 @@ router.get('/cash-flow', async (req, res) => {
                 jl.bank_account_id as liquid_account_id
             FROM journal_lines jl
             JOIN journal_entries je ON jl.journal_entry_id = je.id
-            JOIN cheques chq ON je.reference_id = chq.id::text
+            JOIN cheques chq ON je.reference_id = chq.id
             WHERE je.reference_type = 'CHQ_CLEAR'
               AND jl.bank_account_id IS NOT NULL -- 💰 Only count the Actual Money hitting the bank
               AND je.transaction_date >= $1 AND je.transaction_date <= $2
