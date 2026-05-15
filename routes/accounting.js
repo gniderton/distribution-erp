@@ -433,11 +433,14 @@ router.get('/cash-flow', async (req, res) => {
         `;
         const result = await pool.query(query, [start_date, end_date]);
         
-        // 🛡️ [IN-MEMORY JOIN] Include Cheque Clearing (Journal Entries) without changing the database view
+        // 🛡️ [JOURNAL ENGINE] Include Cheque Clearing (From Repository -> To Bank)
         const clearQuery = `
             SELECT 
                 je.transaction_date as trans_date,
-                'CHEQUE CLEARING' as party_name,
+                CASE 
+                    WHEN jl.debit > 0 THEN 'FROM: Cheque Repository'
+                    ELSE 'TO: ' || COALESCE(ba.name, 'Bank Account')
+                END as party_name,
                 je.description,
                 jl.debit as amount_in,
                 jl.credit as amount_out,
@@ -446,13 +449,13 @@ router.get('/cash-flow', async (req, res) => {
                 COALESCE(jl.bank_account_id, jl.account_id) as liquid_account_id
             FROM journal_lines jl
             JOIN journal_entries je ON jl.journal_entry_id = je.id
+            LEFT JOIN bank_accounts ba ON jl.bank_account_id = ba.id
             WHERE je.reference_type = 'CHQ_CLEAR'
               AND (jl.bank_account_id IS NOT NULL OR jl.account_id = 1004)
               AND je.transaction_date >= $1 AND je.transaction_date <= $2
         `;
         const clearResult = await pool.query(clearQuery, [start_date, end_date]);
         
-        // Combine ledger streams with clearing streams
         const rows = [...result.rows, ...clearResult.rows];
 
         const categoryMap = {
