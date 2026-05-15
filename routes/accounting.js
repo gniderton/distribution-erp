@@ -434,22 +434,25 @@ router.get('/cash-flow', async (req, res) => {
         `;
         const result = await pool.query(query, [start_date, end_date]);
         
-        // 🛡️ [REAL MONEY FLOW] Capture Actual Cash Arrival when Cheques Clear
+        // 🛡️ [REAL MONEY FLOW] Capture Actual Cash Arrivals/Departures when Cheques Clear
         const clearQuery = `
             SELECT 
                 je.transaction_date as trans_date,
                 COALESCE(chq.party_type || ': ' || chq.party_id, 'Clearing') as party_name,
                 'Cheque ' || chq.cheque_number || ' Cleared' as description,
                 jl.debit as amount_in,
-                0 as amount_out,
-                'cheques' as source_table,
+                jl.credit as amount_out,
+                CASE 
+                    WHEN jl.debit > 0 THEN 'customer_payments' 
+                    ELSE 'vendor_payments' 
+                END as source_table, -- 🎭 Masquerade as standard flow for seamless grouping
                 chq.id as source_id,
                 jl.bank_account_id as liquid_account_id
             FROM journal_lines jl
             JOIN journal_entries je ON jl.journal_entry_id = je.id
             JOIN cheques chq ON je.reference_id = chq.id
             WHERE je.reference_type = 'CHQ_CLEAR'
-              AND jl.bank_account_id IS NOT NULL -- 💰 Only count the Actual Money hitting the bank
+              AND jl.bank_account_id IS NOT NULL -- 💰 Only count Actual Money movements
               AND je.transaction_date >= $1 AND je.transaction_date <= $2
         `;
         const clearResult = await pool.query(clearQuery, [start_date, end_date]);
