@@ -331,4 +331,137 @@ router.get('/:id/ledger', async (req, res) => {
     }
 });
 
+// @route   DELETE /api/finance/loans/transactions/:transactionId
+// @desc    Delete a specific loan installment payment and reverse its effects
+router.delete('/transactions/:transactionId', async (req, res) => {
+    const { transactionId } = req.params;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Fetch transaction details
+        const transRes = await client.query('SELECT * FROM loan_transactions WHERE id = $1', [transactionId]);
+        if (transRes.rows.length === 0) {
+            throw new Error('Transaction not found');
+        }
+        const transaction = transRes.rows[0];
+
+        // 2. Protect the initial disbursement
+        if (transaction.transaction_type === 'DISBURSEMENT') {
+            throw new Error('Disbursement transaction cannot be deleted individually. You must delete the entire loan instead.');
+        }
+
+        // 3. Fetch loan details
+        const loanRes = await client.query('SELECT * FROM loans WHERE id = $1', [transaction.loan_id]);
+        if (loanRes.rows.length === 0) {
+            throw new Error('Associated loan not found');
+        }
+        const loan = loanRes.rows[0];
+
+        // 4. Reverse the loan balance reduction & set status back to 'Active'
+        const restoredPrincipal = parseFloat(loan.balance_principal) + parseFloat(transaction.principal_portion);
+        await client.query(`
+            UPDATE loans 
+            SET balance_principal = $1,
+                status = 'Active'
+            WHERE id = $2
+        `, [restoredPrincipal, loan.id]);
+
+        // 5. Release the bank statement entry (unconsume it)
+        if (transaction.bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = GREATEST(0, COALESCE(consumed_amount, 0) - $1),
+                    status = CASE 
+                        WHEN GREATEST(0, COALESCE(consumed_amount, 0) - $1) = 0 THEN 'Unconsumed'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [transaction.amount, transaction.bank_statement_entry_id]);
+        }
+
+        // 6. Delete the matching Journal Entry
+        // The helper create_journal_entry uses reference_type='LOAN_INST' and reference_id=loanId.
+        // We delete the specific journal entry by matching the loan, the transaction date, and the total transaction amount.
+        await client.query(`
+            DELETE FROM journal_entries 
+            WHERE reference_type = 'LOAN_INST' 
+              AND reference_id = $1 
+              AND transaction_date = $2
+              AND id IN (
+                  SELECT DISTINCT journal_entry_id 
+                  FROM journal_lines 
+                  GROUP BY journal_entry_id 
+                  HAVING SUM(debit) = $3
+              )
+        `, [loan.id, transaction.transaction_date, transaction.amount]);
+
+        // 7. Delete the loan transaction itself
+        await client.query('DELETE FROM loan_transactions WHERE id = $1', [transactionId]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Installment deleted successfully and accounting reversed.' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// @route   DELETE /api/finance/loans/:id
+// @desc    Delete the entire loan and all associated transactions and ledger postings
+router.delete('/:id', async (req, res) => {
+    const loanId = req.params.id;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Verify loan exists
+        const loanRes = await client.query('SELECT * FROM loans WHERE id = $1', [loanId]);
+        if (loanRes.rows.length === 0) {
+            throw new Error('Loan not found');
+        }
+
+        // 2. Fetch all transactions to release linked bank statements
+        const transRes = await client.query('SELECT * FROM loan_transactions WHERE loan_id = $1', [loanId]);
+        for (const transaction of transRes.rows) {
+            if (transaction.bank_statement_entry_id) {
+                await client.query(`
+                    UPDATE bank_statement_entries 
+                    SET consumed_amount = GREATEST(0, COALESCE(consumed_amount, 0) - $1),
+                        status = CASE 
+                            WHEN GREATEST(0, COALESCE(consumed_amount, 0) - $1) = 0 THEN 'Unconsumed'
+                            ELSE 'Partially Consumed'
+                        END
+                    WHERE id = $2
+                `, [transaction.amount, transaction.bank_statement_entry_id]);
+            }
+        }
+
+        // 3. Delete journal entries for both disbursement and payments
+        await client.query(`
+            DELETE FROM journal_entries 
+            WHERE reference_id = $1 
+              AND reference_type IN ('LOAN_DISB', 'LOAN_INST')
+        `, [loanId]);
+
+        // 4. Delete the loan transactions
+        await client.query('DELETE FROM loan_transactions WHERE loan_id = $1', [loanId]);
+
+        // 5. Delete the loan header
+        await client.query('DELETE FROM loans WHERE id = $1', [loanId]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Loan and all history deleted successfully.' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
