@@ -826,26 +826,51 @@ router.post('/:id/reverse', async (req, res) => {
         await client.query(`DELETE FROM debit_note_allocations WHERE debit_note_id = $1`, [id]);
 
         // 3. REVERSE STOCK (If itemized)
-        const linesRes = await client.query(`SELECT * FROM debit_note_lines WHERE debit_note_id = $1`, [id]);
-        for (const line of linesRes.rows) {
-            if (line.qty > 0) {
-                // Restoration Logic: Find the batch and put stock back
-                const restoreRes = await client.query(`
+        const traceRes = await client.query(`
+            SELECT batch_id, product_id, ABS(quantity_change) as qty
+            FROM stock_traceability
+            WHERE reference_id = $1
+            AND reference_type = $2
+            AND transaction_type = 'OUT'
+        `, [id, dn.note_type]);
+
+        if (traceRes.rows.length > 0) {
+            for (const trace of traceRes.rows) {
+                await client.query(`
                     UPDATE inventory_batches 
                     SET quantity_remaining = quantity_remaining + $1 
-                    WHERE batch_code = $2 AND product_id = $3
-                    AND (grn_id IS NOT NULL OR is_active = true)
-                    RETURNING id
-                `, [line.qty, line.batch_number, line.product_id]);
+                    WHERE id = $2
+                `, [trace.qty, trace.batch_id]);
 
-                if (restoreRes.rows.length > 0) {
-                    const batchId = restoreRes.rows[0].id;
-                    await client.query(`
-                        INSERT INTO stock_traceability (
-                            batch_id, product_id, quantity_change, transaction_type, 
-                            reference_id, reference_type, notes
-                        ) VALUES ($1, $2, $3, 'IN', $4, 'Debit Note Reversal', $5)
-                    `, [batchId, line.product_id, line.qty, id, `Reversal of DN: ${dn.debit_note_number}`]);
+                await client.query(`
+                    INSERT INTO stock_traceability (
+                        batch_id, product_id, quantity_change, transaction_type, 
+                        reference_id, reference_type, notes
+                    ) VALUES ($1, $2, $3, 'IN', $4, 'Debit Note Reversal', $5)
+                `, [trace.batch_id, trace.product_id, trace.qty, id, `Reversal of DN: ${dn.debit_note_number}`]);
+            }
+        } else {
+            // Fallback for legacy debit notes without traceability records
+            const linesRes = await client.query(`SELECT * FROM debit_note_lines WHERE debit_note_id = $1`, [id]);
+            for (const line of linesRes.rows) {
+                if (line.qty > 0) {
+                    const restoreRes = await client.query(`
+                        UPDATE inventory_batches 
+                        SET quantity_remaining = quantity_remaining + $1 
+                        WHERE batch_code = $2 AND product_id = $3
+                        AND (grn_id IS NOT NULL OR is_active = true)
+                        RETURNING id
+                    `, [line.qty, line.batch_number, line.product_id]);
+
+                    if (restoreRes.rows.length > 0) {
+                        const batchId = restoreRes.rows[0].id;
+                        await client.query(`
+                            INSERT INTO stock_traceability (
+                                batch_id, product_id, quantity_change, transaction_type, 
+                                reference_id, reference_type, notes
+                            ) VALUES ($1, $2, $3, 'IN', $4, 'Debit Note Reversal', $5)
+                        `, [batchId, line.product_id, line.qty, id, `Reversal of DN: ${dn.debit_note_number} (Legacy Fallback)`]);
+                    }
                 }
             }
         }
