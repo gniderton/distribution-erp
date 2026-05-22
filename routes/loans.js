@@ -373,7 +373,7 @@ router.delete('/transactions/:transactionId', async (req, res) => {
                 UPDATE bank_statement_entries 
                 SET consumed_amount = GREATEST(0, COALESCE(consumed_amount, 0) - $1),
                     status = CASE 
-                        WHEN GREATEST(0, COALESCE(consumed_amount, 0) - $1) = 0 THEN 'Unconsumed'
+                        WHEN GREATEST(0, COALESCE(consumed_amount, 0) - $1) = 0 THEN 'Available'
                         ELSE 'Partially Consumed'
                     END
                 WHERE id = $2
@@ -432,7 +432,7 @@ router.delete('/:id', async (req, res) => {
                     UPDATE bank_statement_entries 
                     SET consumed_amount = GREATEST(0, COALESCE(consumed_amount, 0) - $1),
                         status = CASE 
-                            WHEN GREATEST(0, COALESCE(consumed_amount, 0) - $1) = 0 THEN 'Unconsumed'
+                            WHEN GREATEST(0, COALESCE(consumed_amount, 0) - $1) = 0 THEN 'Available'
                             ELSE 'Partially Consumed'
                         END
                     WHERE id = $2
