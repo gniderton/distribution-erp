@@ -1396,7 +1396,12 @@ router.delete('/advances/:id', async (req, res) => {
             `, [advance.amount, advance.bank_statement_entry_id]);
         }
 
-        // 4. Delete the associated Journal Entry
+        // 4. Nullify journal_entry_id on employee_advances to avoid foreign key constraint violation
+        await client.query(`
+            UPDATE employee_advances SET journal_entry_id = NULL WHERE id = $1
+        `, [id]);
+
+        // 5. Delete the associated Journal Entry
         if (advance.journal_entry_id) {
             await client.query(`
                 DELETE FROM journal_entries WHERE id = $1
@@ -1409,7 +1414,7 @@ router.delete('/advances/:id', async (req, res) => {
             `, [id]);
         }
 
-        // 5. Delete the employee advance record
+        // 6. Delete the employee advance record
         await client.query('DELETE FROM employee_advances WHERE id = $1', [id]);
 
         await client.query('COMMIT');
