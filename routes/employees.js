@@ -1330,6 +1330,99 @@ router.post('/:id/resign', async (req, res) => {
     }
 });
 
+// @route   GET /api/employees/advances
+// @desc    List all employee advances with optional filtering by employee_id or is_settled status
+router.get('/advances', async (req, res) => {
+    try {
+        const { employee_id, is_settled } = req.query;
+        let query = `
+            SELECT ea.*, e.full_name as employee_name, e.employee_code
+            FROM employee_advances ea
+            JOIN employees e ON ea.employee_id = e.id
+            WHERE 1=1
+        `;
+        const params = [];
+
+        if (employee_id) {
+            params.push(employee_id);
+            query += ` AND ea.employee_id = $${params.length}`;
+        }
+
+        if (is_settled !== undefined) {
+            params.push(is_settled === 'true');
+            query += ` AND ea.is_settled = $${params.length}`;
+        }
+
+        query += ' ORDER BY ea.advance_date DESC, ea.created_at DESC';
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   DELETE /api/employees/advances/:id
+// @desc    Void/Delete an employee advance, reversing journal entries and bank reconciliation
+router.delete('/advances/:id', async (req, res) => {
+    const { id } = req.params;
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Fetch advance details
+        const advRes = await client.query('SELECT * FROM employee_advances WHERE id = $1', [id]);
+        if (advRes.rows.length === 0) {
+            throw new Error('Advance record not found');
+        }
+        const advance = advRes.rows[0];
+
+        // 2. Prevent deleting settled advances
+        if (advance.is_settled) {
+            throw new Error('Settled advances cannot be deleted directly. You must delete the corresponding salary payment first.');
+        }
+
+        // 3. Revert Bank Statement Entry (unconsume it)
+        if (advance.payment_mode === 'Online' && advance.bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = GREATEST(0, COALESCE(consumed_amount, 0) - $1),
+                    status = CASE 
+                        WHEN GREATEST(0, COALESCE(consumed_amount, 0) - $1) = 0 THEN 'Available'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [advance.amount, advance.bank_statement_entry_id]);
+        }
+
+        // 4. Delete the associated Journal Entry
+        if (advance.journal_entry_id) {
+            await client.query(`
+                DELETE FROM journal_entries WHERE id = $1
+            `, [advance.journal_entry_id]);
+        } else {
+            // Fallback: delete by reference if ID is not linked directly
+            await client.query(`
+                DELETE FROM journal_entries 
+                WHERE reference_type = 'SALARY_ADVANCE' AND reference_id = $1
+            `, [id]);
+        }
+
+        // 5. Delete the employee advance record
+        await client.query('DELETE FROM employee_advances WHERE id = $1', [id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Employee advance deleted successfully and accounting reversed.' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // @route   GET /api/employees/:id - Get Details (Generic fallback)
 router.get('/:id', async (req, res) => {
     try {
