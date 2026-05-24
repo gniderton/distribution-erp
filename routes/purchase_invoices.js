@@ -369,6 +369,12 @@ router.post('/:id/reverse', async (req, res) => {
 
         const dnId = dnRes.rows[0].id;
 
+        // Allocate the reversal debit note fully to the reversed invoice to prevent leakage
+        await client.query(`
+            INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount)
+            VALUES ($1, $2, $3)
+        `, [dnId, id, invoice.grand_total]);
+
         // 3b. Add DN Lines (For Audit)
         // Fetch original lines to copy, joining with Batches to get the Batch Number
         const linesRes = await client.query(`
@@ -427,8 +433,128 @@ router.post('/:id/reverse', async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error("Reverse GRN Error:", err.message);
-        console.error("DEBUG Body Received:", req.body); // Log what we got
-        // Return actual error message to Frontend for debugging
+        console.error("DEBUG Body Received:", req.body);
+        res.status(500).json({ error: `Server Error: ${err.message}` });
+    } finally {
+        client.release();
+    }
+});
+
+// @route   POST /api/purchase-invoices/:id/purge
+// @desc    Hard Delete a GRN (Purchase Invoice) and log its history to deleted_grns_log
+router.post('/:id/purge', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const { reversed_by_id, reason } = req.body; // Using reversed_by_id as user ID for consistency with Retool/Appsmith schema
+
+        if (!reversed_by_id) {
+            return res.status(400).json({ error: 'User ID (reversed_by_id) is required for auditing' });
+        }
+
+        // 1. Fetch Invoice
+        const invRes = await client.query(`SELECT * FROM purchase_invoice_headers WHERE id = $1`, [id]);
+        if (invRes.rows.length === 0) return res.status(404).json({ error: 'Invoice not found' });
+        const invoice = invRes.rows[0];
+
+        // 2. Check Stock Integrity (block if any stock was sold or moved)
+        const batchCheck = await client.query(`
+            SELECT COUNT(*) 
+            FROM inventory_batches 
+            WHERE purchase_invoice_line_id IN (
+                SELECT id FROM purchase_invoice_lines WHERE purchase_invoice_header_id = $1
+            ) 
+            AND (quantity_initial - quantity_remaining) > 0
+            AND is_active = true
+        `, [id]);
+
+        if (Number(batchCheck.rows[0].count) > 0) {
+            return res.status(400).json({ error: 'Cannot Delete: Stock from this GRN has already been sold.' });
+        }
+
+        await client.query('BEGIN');
+
+        // 3. Fetch Full Details to Serialize for Audit
+        // Fetch Lines
+        const linesRes = await client.query(`
+            SELECT pil.*, ib.batch_code as batch_number 
+            FROM purchase_invoice_lines pil
+            LEFT JOIN inventory_batches ib ON ib.purchase_invoice_line_id = pil.id
+            WHERE pil.purchase_invoice_header_id = $1
+        `, [id]);
+        const lines = linesRes.rows;
+
+        // Fetch Journal Entries & Lines
+        const journalRes = await client.query(`
+            SELECT je.*, COALESCE(
+                json_agg(jl.*) FILTER (WHERE jl.id IS NOT NULL), '[]'::json
+            ) as lines
+            FROM journal_entries je
+            LEFT JOIN journal_lines jl ON je.id = jl.journal_entry_id
+            WHERE je.reference_id = $1 AND je.reference_type = 'GRN'
+            GROUP BY je.id
+        `, [id]);
+        const journals = journalRes.rows;
+
+        const fullGrnData = {
+            header: invoice,
+            lines: lines,
+            journals: journals
+        };
+
+        // 4. Insert Audit Log
+        await client.query(`
+            INSERT INTO deleted_grns_log 
+            (deleted_by_id, reason, original_invoice_id, original_invoice_number, vendor_invoice_number, vendor_id, grand_total, original_grn_data)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `, [
+            reversed_by_id,
+            reason || 'GRN Hard Deletion (Purge)',
+            id,
+            invoice.invoice_number,
+            invoice.vendor_invoice_number,
+            invoice.vendor_id,
+            invoice.grand_total,
+            JSON.stringify(fullGrnData)
+        ]);
+
+        // 5. Hard Delete (Dependency Order)
+        // A. Nullify parent_invoice_id in purchase_invoice_headers for child invoices
+        await client.query(`UPDATE purchase_invoice_headers SET parent_invoice_id = NULL WHERE parent_invoice_id = $1`, [id]);
+
+        // B. Nullify linked_invoice_id in debit_notes
+        await client.query(`UPDATE debit_notes SET linked_invoice_id = NULL WHERE linked_invoice_id = $1`, [id]);
+
+        // C. Delete from debit_note_allocations
+        await client.query(`DELETE FROM debit_note_allocations WHERE purchase_invoice_id = $1`, [id]);
+
+        // D. Delete from stock_traceability for associated batches
+        await client.query(`
+            DELETE FROM stock_traceability 
+            WHERE batch_id IN (
+                SELECT id FROM inventory_batches WHERE grn_id = $1
+            )
+        `, [id]);
+
+        // E. Delete from inventory_batches
+        await client.query(`DELETE FROM inventory_batches WHERE grn_id = $1`, [id]);
+
+        // F. Delete from journal_entries (cascades to journal_lines)
+        await client.query(`DELETE FROM journal_entries WHERE reference_id = $1 AND reference_type = 'GRN'`, [id]);
+
+        // G. Delete from purchase_invoice_headers (cascades to purchase_invoice_lines and payment_allocations)
+        await client.query(`DELETE FROM purchase_invoice_headers WHERE id = $1`, [id]);
+
+        // H. Revert linked PO status to 'Approved' (so it can be inwarded again)
+        if (invoice.purchase_order_id) {
+            await client.query(`UPDATE purchase_order_headers SET status = 'Approved' WHERE id = $1`, [invoice.purchase_order_id]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'GRN Hard-Deleted and Audited Successfully.' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Purge GRN Error:", err.message);
         res.status(500).json({ error: `Server Error: ${err.message}` });
     } finally {
         client.release();

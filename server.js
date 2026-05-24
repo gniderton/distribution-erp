@@ -208,7 +208,8 @@ async function initializeDatabase() {
             { id: '190', path: '190_bank_sync_unique_constraint.sql' },
             { id: '191', path: '191_payment_integrity_triggers.sql' },
             { id: '192', path: '192_eway_bill_and_settings.sql' },
-            { id: '204', path: '204_grn_auto_knockoff_payments.sql' }
+            { id: '204', path: '204_grn_auto_knockoff_payments.sql' },
+            { id: '205', path: '205_grn_hard_delete_audit_log.sql' }
         ];
 
         for (const m of migrations) {
