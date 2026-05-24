@@ -110,6 +110,74 @@ router.get('/', async (req, res) => {
     }
 });
 
+// @route   GET /api/purchase-invoices/aging
+// @desc    Get Purchase Invoices with aging report (bill amt, paid amt, debit note amt, balance, days since received/bill date)
+router.get('/aging', async (req, res) => {
+    try {
+        const { vendor_id } = req.query;
+        let queryParams = [];
+        let whereConditions = [];
+
+        if (vendor_id) {
+            queryParams.push(vendor_id);
+            whereConditions.push(`pi.vendor_id = $${queryParams.length}`);
+        }
+
+        const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+        const query = `
+            SELECT 
+                pi.id,
+                pi.invoice_number,
+                pi.vendor_invoice_number,
+                pi.vendor_invoice_date as bill_date,
+                pi.received_date,
+                pi.vendor_id,
+                v.vendor_name,
+                pi.status,
+                pi.grand_total as bill_amount,
+                COALESCE(pa.paid_amount, 0) as paid_amount,
+                COALESCE(dn.dn_amount, 0) as debit_note_amount,
+                CASE 
+                    WHEN pi.status IN ('Reversed', 'Cancelled') THEN 0.00
+                    ELSE ROUND(pi.grand_total - COALESCE(pa.paid_amount, 0) - COALESCE(dn.dn_amount, 0), 2)
+                END as balance_amount,
+                CASE 
+                    WHEN pi.status NOT IN ('Reversed', 'Cancelled') 
+                         AND (pi.grand_total - COALESCE(pa.paid_amount, 0) - COALESCE(dn.dn_amount, 0)) > 0 
+                    THEN COALESCE((CURRENT_DATE - pi.received_date)::TEXT, 'N/A')
+                    ELSE 'Paid'
+                END as days_since_received,
+                CASE 
+                    WHEN pi.status NOT IN ('Reversed', 'Cancelled') 
+                         AND (pi.grand_total - COALESCE(pa.paid_amount, 0) - COALESCE(dn.dn_amount, 0)) > 0 
+                    THEN COALESCE((CURRENT_DATE - pi.vendor_invoice_date)::TEXT, 'N/A')
+                    ELSE 'Paid'
+                END as days_since_bill_date
+            FROM purchase_invoice_headers pi
+            JOIN vendors v ON pi.vendor_id = v.id
+            LEFT JOIN (
+                SELECT purchase_invoice_id, SUM(amount) as paid_amount 
+                FROM payment_allocations 
+                GROUP BY purchase_invoice_id
+            ) pa ON pi.id = pa.purchase_invoice_id
+            LEFT JOIN (
+                SELECT purchase_invoice_id, SUM(amount) as dn_amount 
+                FROM debit_note_allocations 
+                GROUP BY purchase_invoice_id
+            ) dn ON pi.id = dn.purchase_invoice_id
+            ${whereClause}
+            ORDER BY pi.vendor_invoice_date DESC, pi.id DESC
+        `;
+
+        const result = await pool.query(query, queryParams);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Aging API Error:", err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   POST /api/purchase-invoices
 // @desc    Create new Purchase Invoice (RPC Trigger)
 router.post('/', async (req, res) => {
