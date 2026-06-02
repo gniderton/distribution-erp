@@ -32,37 +32,7 @@ async function calculateFreeItems(items, customerId = null, client = null) {
     if (validSchemeIds.length === 0) return { freeItems: [], priceSlabs: {} };
 
     // ---------------------------------------------------------
-    // STEP 1: SMART LOOKUP (Filter Inputs)
-    // ---------------------------------------------------------
-    // Identify which products are involved in Single or Combo schemes
-    const statusRes = await db.query(`
-        -- Check Single Rules
-        SELECT sr.trigger_id as product_id, 'SINGLE' as type
-        FROM scheme_rules sr
-        WHERE sr.scheme_id = ANY($1::int[])
-          AND sr.trigger_type = 'Product'
-          AND sr.trigger_id = ANY($2::int[])
-
-        UNION
-
-        -- Check Combo Components
-        SELECT scp.product_id, 'COMBO' as type
-        FROM scheme_combo_products scp
-        JOIN scheme_rules sr ON scp.scheme_rule_id = sr.id
-        WHERE sr.scheme_id = ANY($1::int[])
-          AND scp.product_id = ANY($2::int[])
-    `, [validSchemeIds, productIds]);
-
-    const activeTypes = {}; // { 101: ['SINGLE', 'COMBO'] }
-    statusRes.rows.forEach(r => {
-        if (!activeTypes[r.product_id]) activeTypes[r.product_id] = new Set();
-        activeTypes[r.product_id].add(r.type);
-    });
-
-    const freeItems = [];
-
-    // ---------------------------------------------------------
-    // STEP 1.5: CONTEXT (Customer Tier)
+    // STEP 1: CONTEXT (Customer Tier & Product Meta)
     // ---------------------------------------------------------
     let defaultTier = 'Dealer';
     const brandOverrides = {};
@@ -93,217 +63,203 @@ async function calculateFreeItems(items, customerId = null, client = null) {
     const productMeta = {};
     metaRes.rows.forEach(p => productMeta[p.id] = p);
 
-
     // ---------------------------------------------------------
-    // STEP 2: SINGLE LOGIC (Remaining Stock) - PRIORITY 1
+    // STEP 2: FETCH RULES (Single & Combo)
     // ---------------------------------------------------------
-    // Only fetch rules for items that still have quantity AND are flagged as SINGLE
-    const singleCandidates = Object.keys(qtyMap).filter(pid =>
-        qtyMap[pid] > 0 && activeTypes[pid] && activeTypes[pid].has('SINGLE')
-    );
-
-    if (singleCandidates.length > 0) {
-        const rulesRes = await db.query(`
-            SELECT sr.*, s.scheme_name, s.id as scheme_id
-            FROM scheme_rules sr
-            JOIN schemes s ON sr.scheme_id = s.id
-            WHERE s.id = ANY($1::int[])
-              AND sr.scheme_type = 'BUY_GET_FREE' 
-              AND (
-                (sr.trigger_type = 'Product' AND sr.trigger_id = ANY($2::int[])) OR
-                (sr.trigger_type = 'Brand') OR
-                (sr.trigger_type = 'Category')
-              )
-            ORDER BY sr.tier_level DESC, sr.min_qty DESC
-        `, [validSchemeIds, singleCandidates]);
-
-        const rules = rulesRes.rows;
-
-        for (const pid of singleCandidates) {
-            const pidStr = String(pid);
-            const meta = productMeta[pidStr];
-            if (!meta) continue;
-
-            let remainingQty = qtyMap[pidStr];
-            const effectiveTier = (brandOverrides[meta.brand_id] || defaultTier || '').trim().toLowerCase();
-
-            // Filter rules that match this product (Direct, Brand, or Category)
-            const applicableRules = rules.filter(r => {
-                const ruleTier = (r.channel_tier || '').trim().toLowerCase();
-                if (ruleTier && ruleTier !== effectiveTier) return false;
-
-                if (r.trigger_type === 'Product' && r.trigger_id != pid) return false;
-                if (r.trigger_type === 'Brand' && r.trigger_id != meta.brand_id) return false;
-                if (r.trigger_type === 'Category' && r.trigger_id != meta.category_id) return false;
-
-                return true;
-            });
-
-            // Tracking applied schemes for this product to ensure tier exclusivity if desired
-            // (Standard: apply only the best rule PER SCHEME)
-            const schemesApplied = new Set();
-
-            for (const rule of applicableRules) {
-                if (remainingQty <= 0) break;
-
-                // [POLICY] If we already applied a rule from this scheme for this product, skip lower tiers
-                if (schemesApplied.has(rule.scheme_id)) continue;
-
-                let triggerPool = rule.is_case_qty ? Math.floor(remainingQty / (meta.case_quantity || 1)) : remainingQty;
-
-                if (triggerPool >= rule.min_qty) {
-                    let multiplier = rule.is_recursive ? Math.floor(triggerPool / rule.min_qty) : 1;
-                    if (multiplier > 0) {
-                        const rewardQty = multiplier * rule.reward_qty;
-                        console.log(`[SCHEME] Applied ${rule.scheme_name} to PID ${pid}: Buy ${rule.min_qty} Get ${rule.reward_qty} x ${multiplier} = ${rewardQty}`);
-
-                        freeItems.push({
-                            product_id: rule.reward_product_id || pid,
-                            qty: rewardQty,
-                            reason: `${rule.scheme_name} [ID:${rule.scheme_id}] (Buy ${rule.min_qty} Get ${rule.reward_qty})`
-                        });
-
-                        const consumed = rule.is_case_qty ? (multiplier * rule.min_qty * (meta.case_quantity || 1)) : (multiplier * rule.min_qty);
-                        remainingQty -= consumed;
-                        qtyMap[pidStr] -= consumed;
-                        schemesApplied.add(rule.scheme_id);
-                    }
-                }
-            }
-        }
-    }
-
-    // ---------------------------------------------------------
-    // STEP 3: COMBO LOGIC (Basket/Bucket Sum) - PRIORITY 2
-    // ---------------------------------------------------------
-    // A. Fetch All Active Combo Definitions involving these products
-    const comboDefRes = await db.query(`
+    // A. Single Rules (BUY_GET_FREE, PRICE_SLAB, FLAT_MRP_DISCOUNT)
+    const singleRulesRes = await db.query(`
         SELECT 
-            s.id as scheme_id, s.scheme_name,
-            sr.id as rule_id,
-            scp.product_id as component_pid, 
-            sr.reward_product_id, sr.reward_qty,
-            sr.min_qty as limit_qty -- The Basket Size Requirement (e.g. 24)
-        FROM schemes s
-        JOIN scheme_rules sr ON s.id = sr.scheme_id 
-        JOIN scheme_combo_products scp ON sr.id = scp.scheme_rule_id
-        WHERE s.id = ANY($1::int[])
-          AND sr.scheme_type = 'COMBO'
-    `, [validSchemeIds]);
-
-    // Group by Scheme Rule ID (Combos are per-rule)
-    const combos = {};
-    comboDefRes.rows.forEach(r => {
-        if (!combos[r.rule_id]) {
-            combos[r.rule_id] = {
-                name: r.scheme_name,
-                scheme_id: r.scheme_id,
-                reward_pid: r.reward_product_id,
-                reward_qty: r.reward_qty,
-                basket_req: r.limit_qty,
-                components: new Set()
-            };
-        }
-        combos[r.rule_id].components.add(r.component_pid);
-    });
-
-    // Process Combos (Basket Logic)
-    for (const [ruleId, combo] of Object.entries(combos)) {
-        // 1. Calculate Total Basket Qty
-        let basketTotal = 0;
-        const involvedPids = [];
-
-        for (const pid of combo.components) {
-            if (qtyMap[pid]) {
-                basketTotal += qtyMap[pid];
-                involvedPids.push(pid);
-            }
-        }
-
-        // 2. Determine Multiplier
-        const multiplier = Math.floor(basketTotal / combo.basket_req);
-
-        // 3. Award & Consume
-        if (multiplier > 0) {
-            freeItems.push({
-                product_id: combo.reward_pid || Array.from(combo.components)[0],
-                qty: multiplier * combo.reward_qty,
-                reason: `${combo.name} [ID:${combo.scheme_id}] (Basket Total ${basketTotal}, Req ${combo.basket_req})`
-            });
-
-            let toDeduct = multiplier * combo.basket_req;
-            for (const pid of involvedPids) {
-                if (toDeduct <= 0) break;
-                const available = qtyMap[pid];
-                const deduct = Math.min(available, toDeduct);
-                qtyMap[pid] -= deduct;
-                toDeduct -= deduct;
-            }
-        }
-    }
-
-    // ---------------------------------------------------------
-    // STEP 4: PRICE SLABS (Rate Overrides) & FLAT MRP DISCOUNT
-    // ---------------------------------------------------------
-    const priceSlabs = {}; // { [pid]: { special_price, discount_percentage, reason } }
-
-    const slabRes = await db.query(`
-        SELECT 
-            sr.id as rule_id, sr.trigger_id as product_id, sr.trigger_type,
-            sr.min_qty, sr.special_price, sr.scheme_type,
-            s.scheme_name, sr.channel_tier, s.id as scheme_id,
+            sr.id as rule_id, sr.scheme_id, sr.scheme_type,
+            sr.trigger_type, sr.trigger_id, sr.min_qty, sr.is_case_qty,
+            sr.reward_product_id, sr.reward_qty, sr.special_price,
+            sr.tier_level, sr.is_recursive, sr.channel_tier,
+            s.scheme_name,
             (SELECT json_agg(product_id) FROM scheme_targeted_products WHERE scheme_rule_id = sr.id) as targeted_products
         FROM scheme_rules sr
         JOIN schemes s ON sr.scheme_id = s.id
         WHERE s.id = ANY($1::int[])
-          AND sr.scheme_type IN ('PRICE_SLAB', 'FLAT_MRP_DISCOUNT')
-          AND sr.special_price IS NOT NULL
-        ORDER BY sr.min_qty DESC
+          AND sr.scheme_type IN ('BUY_GET_FREE', 'PRICE_SLAB', 'FLAT_MRP_DISCOUNT')
+          AND (
+            (sr.trigger_type = 'Product' AND sr.trigger_id = ANY($2::int[])) OR
+            (sr.trigger_type = 'Brand') OR
+            (sr.trigger_type = 'Category')
+          )
+    `, [validSchemeIds, productIds]);
+
+    // B. Combo Rules
+    const comboRulesRes = await db.query(`
+        SELECT 
+            s.id as scheme_id, s.scheme_name,
+            sr.id as rule_id, sr.scheme_type,
+            sr.reward_product_id, sr.reward_qty,
+            sr.min_qty as basket_req,
+            sr.is_recursive, sr.channel_tier,
+            sr.tier_level,
+            (SELECT json_agg(product_id) FROM scheme_combo_products WHERE scheme_rule_id = sr.id) as combo_products
+        FROM schemes s
+        JOIN scheme_rules sr ON s.id = sr.scheme_id 
+        WHERE s.id = ANY($1::int[])
+          AND sr.scheme_type = 'COMBO'
     `, [validSchemeIds]);
 
-    slabRes.rows.forEach(r => {
-        const pidsToEvaluate = [];
-        if (r.trigger_type === 'Product') {
-            pidsToEvaluate.push(r.product_id);
-        } else if (r.trigger_type === 'Brand') {
-            // All products of this brand (from inputs)
-            productIds.forEach(pid => {
-                if (productMeta[pid]?.brand_id == r.product_id) {
-                    // Check if rule has specific targeted products
-                    if (!r.targeted_products || r.targeted_products.includes(pid)) {
-                        pidsToEvaluate.push(pid);
-                    }
+    // ---------------------------------------------------------
+    // STEP 3: BUILD UNIFIED CANDIDATES LIST
+    // ---------------------------------------------------------
+    const candidates = [];
+
+    // Process Single Rules
+    for (const r of singleRulesRes.rows) {
+        for (const pid of productIds) {
+            const meta = productMeta[pid];
+            if (!meta) continue;
+
+            // Check if rule matches this product
+            let matches = false;
+            if (r.trigger_type === 'Product' && r.trigger_id == pid) {
+                matches = true;
+            } else if (r.trigger_type === 'Brand' && r.trigger_id == meta.brand_id) {
+                if (!r.targeted_products || r.targeted_products.includes(pid)) {
+                    matches = true;
                 }
+            } else if (r.trigger_type === 'Category' && r.trigger_id == meta.category_id) {
+                matches = true;
+            }
+
+            if (!matches) continue;
+
+            // Check tier constraints
+            const effectiveTier = (brandOverrides[meta.brand_id] || defaultTier || '').trim().toLowerCase();
+            const ruleTier = (r.channel_tier || '').trim().toLowerCase();
+            if (ruleTier && ruleTier !== effectiveTier) continue;
+
+            // Compute exact unit requirement
+            const unitReq = r.is_case_qty ? (r.min_qty * (meta.case_quantity || 1)) : r.min_qty;
+
+            candidates.push({
+                type: 'SINGLE',
+                rule_id: Number(r.rule_id),
+                scheme_id: Number(r.scheme_id),
+                scheme_name: r.scheme_name,
+                scheme_type: r.scheme_type,
+                pid,
+                unitReq,
+                special_price: r.special_price,
+                is_recursive: r.is_recursive,
+                reward_product_id: r.reward_product_id,
+                reward_qty: r.reward_qty,
+                tier_level: r.tier_level || 1
             });
         }
+    }
 
-        pidsToEvaluate.forEach(pid => {
-            if (priceSlabs[pid]) return; // Best slab already applied
+    // Process Combo Rules
+    for (const r of comboRulesRes.rows) {
+        if (!r.combo_products || r.combo_products.length === 0) continue;
 
-            const meta = productMeta[pid];
-            const effectiveTier = (brandOverrides[meta?.brand_id] || defaultTier || '').trim().toLowerCase();
-            const ruleTier = (r.channel_tier || '').trim().toLowerCase();
-            if (ruleTier && ruleTier !== effectiveTier) return;
+        // Check if at least one component is ordered
+        const hasOrderedComponent = r.combo_products.some(pid => productIds.includes(Number(pid)));
+        if (!hasOrderedComponent) continue;
 
-            const originalQty = items.find(i => i.product_id == pid)?.qty || 0;
-            if (originalQty >= r.min_qty) {
-                if (r.scheme_type === 'PRICE_SLAB') {
-                    priceSlabs[pid] = {
-                        special_price: Number(r.special_price),
-                        reason: `${r.scheme_name} [ID:${r.scheme_id}] (Slab >= ${r.min_qty})`
-                    };
-                } else if (r.scheme_type === 'FLAT_MRP_DISCOUNT') {
-                    priceSlabs[pid] = {
-                        discount_percentage: Number(r.special_price),
-                        reason: `${r.scheme_name} [ID:${r.scheme_id}] (${r.special_price}% MRP Discount)`
-                    };
-                }
-            }
+        // Check tier constraints
+        const firstPid = Number(r.combo_products[0]);
+        const firstMeta = productMeta[firstPid];
+        const effectiveTier = firstMeta ? ((brandOverrides[firstMeta.brand_id] || defaultTier || '').trim().toLowerCase()) : defaultTier.trim().toLowerCase();
+        const ruleTier = (r.channel_tier || '').trim().toLowerCase();
+        if (ruleTier && ruleTier !== effectiveTier) continue;
+
+        candidates.push({
+            type: 'COMBO',
+            rule_id: Number(r.rule_id),
+            scheme_id: Number(r.scheme_id),
+            scheme_name: r.scheme_name,
+            scheme_type: r.scheme_type,
+            pids: r.combo_products.map(Number),
+            unitReq: r.basket_req,
+            is_recursive: r.is_recursive,
+            reward_product_id: r.reward_product_id,
+            reward_qty: r.reward_qty,
+            tier_level: r.tier_level || 1
         });
+    }
+
+    // Sort by unitReq DESC (primary), tier_level DESC (secondary), rule_id ASC (tertiary)
+    candidates.sort((a, b) => {
+        if (b.unitReq !== a.unitReq) return b.unitReq - a.unitReq;
+        if (b.tier_level !== a.tier_level) return b.tier_level - a.tier_level;
+        return a.rule_id - b.rule_id;
     });
 
+    // ---------------------------------------------------------
+    // STEP 4: SEQUENTIALLY CONSUME QUANTITIES
+    // ---------------------------------------------------------
+    const remainingQty = { ...qtyMap };
+    const freeItems = [];
+    const priceSlabs = {}; // { [pid]: { special_price, discount_percentage, reason, applied_qty } }
 
-    // Merge duplicates
+    for (const cand of candidates) {
+        if (cand.type === 'SINGLE') {
+            const pid = cand.pid;
+            const avail = remainingQty[pid] || 0;
+            if (avail >= cand.unitReq) {
+                const multiplier = cand.is_recursive ? Math.floor(avail / cand.unitReq) : 1;
+                if (multiplier > 0) {
+                    const consumedQty = multiplier * cand.unitReq;
+                    remainingQty[pid] -= consumedQty;
+
+                    if (cand.scheme_type === 'BUY_GET_FREE') {
+                        const rewardQty = multiplier * cand.reward_qty;
+                        freeItems.push({
+                            product_id: cand.reward_product_id || pid,
+                            qty: rewardQty,
+                            reason: `${cand.scheme_name} [ID:${cand.scheme_id}] (Buy ${cand.unitReq} Get ${cand.reward_qty} x ${multiplier})`
+                        });
+                    } else if (cand.scheme_type === 'PRICE_SLAB' || cand.scheme_type === 'FLAT_MRP_DISCOUNT') {
+                        if (!priceSlabs[pid]) {
+                            priceSlabs[pid] = {
+                                applied_qty: 0,
+                                reason: `${cand.scheme_name} [ID:${cand.scheme_id}]`
+                            };
+                            if (cand.scheme_type === 'PRICE_SLAB') {
+                                priceSlabs[pid].special_price = Number(cand.special_price);
+                            } else {
+                                priceSlabs[pid].discount_percentage = Number(cand.special_price);
+                            }
+                        }
+                        priceSlabs[pid].applied_qty += consumedQty;
+                    }
+                }
+            }
+        } else if (cand.type === 'COMBO') {
+            // Basket calculation across components
+            let basketTotal = 0;
+            for (const pid of cand.pids) {
+                basketTotal += (remainingQty[pid] || 0);
+            }
+
+            if (basketTotal >= cand.unitReq) {
+                const multiplier = cand.is_recursive ? Math.floor(basketTotal / cand.unitReq) : 1;
+                if (multiplier > 0) {
+                    let toDeduct = multiplier * cand.unitReq;
+                    for (const pid of cand.pids) {
+                        if (toDeduct <= 0) break;
+                        const avail = remainingQty[pid] || 0;
+                        const deduct = Math.min(avail, toDeduct);
+                        remainingQty[pid] -= deduct;
+                        toDeduct -= deduct;
+                    }
+
+                    const rewardQty = multiplier * cand.reward_qty;
+                    freeItems.push({
+                        product_id: cand.reward_product_id || cand.pids[0],
+                        qty: rewardQty,
+                        reason: `${cand.scheme_name} [ID:${cand.scheme_id}] (Basket Total ${basketTotal}, Req ${cand.unitReq} x ${multiplier})`
+                    });
+                }
+            }
+        }
+    }
+
+    // Merge duplicates in freeItems
     const mergedFree = [];
     freeItems.forEach(f => {
         const existing = mergedFree.find(m => m.product_id == f.product_id);

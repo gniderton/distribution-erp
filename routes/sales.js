@@ -622,6 +622,7 @@ router.post('/orders/:id/dispatch', async (req, res) => {
 
             let fulfilledTotal = 0;
             let qtyToFulfill = totalToShip;
+            let remainingSlabQty = priceSlabs[pid] ? (priceSlabs[pid].applied_qty || 0) : 0;
 
             for (const batch of batches.rows) {
                 if (qtyToFulfill <= 0) break;
@@ -646,7 +647,10 @@ router.post('/orders/:id/dispatch', async (req, res) => {
                 }
 
                 // Price Slab or Flat MRP Discount Calculation
-                if (priceSlabs[pid]) {
+                if (priceSlabs[pid] && remainingSlabQty > 0) {
+                    const slabQtyToApply = Math.min(take, remainingSlabQty);
+                    remainingSlabQty -= slabQtyToApply;
+
                     let unitDeduction = 0;
                     if (priceSlabs[pid].special_price) {
                         const targetNet = Number(priceSlabs[pid].special_price);
@@ -658,7 +662,7 @@ router.post('/orders/:id/dispatch', async (req, res) => {
                         const targetExcl = targetNet / (1 + (taxPct / 100));
                         unitDeduction = Math.max(0, unitRate - targetExcl);
                     }
-                    batchGroups[groupKey].slabDeduction += (take * unitDeduction);
+                    batchGroups[groupKey].slabDeduction += (slabQtyToApply * unitDeduction);
                 }
 
                 await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batchId]);
@@ -1462,6 +1466,7 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                     const batchGroups = {};
 
                     let qtyToFulfill = totalToShip;
+                    let remainingSlabQty = priceSlabs[pid] ? (priceSlabs[pid].applied_qty || 0) : 0;
                     for (const batch of batchesRes.rows) {
                         if (qtyToFulfill <= 0) break;
                         const take = Math.min(qtyToFulfill, batch.quantity_remaining);
@@ -1476,7 +1481,10 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                         }
 
                         // Price Slab or Flat MRP Discount Calculation
-                        if (priceSlabs[pid]) {
+                        if (priceSlabs[pid] && remainingSlabQty > 0) {
+                            const slabQtyToApply = Math.min(take, remainingSlabQty);
+                            remainingSlabQty -= slabQtyToApply;
+
                             let unitDeduction = 0;
                             if (priceSlabs[pid].special_price) {
                                 const targetNet = Number(priceSlabs[pid].special_price);
@@ -1488,7 +1496,7 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                                 const targetExcl = targetNet / (1 + (lineTaxPercent / 100));
                                 unitDeduction = Math.max(0, batchRate - targetExcl);
                             }
-                            batchGroups[groupKey].slabDeduction += (take * unitDeduction);
+                            batchGroups[groupKey].slabDeduction += (slabQtyToApply * unitDeduction);
                         }
 
                         await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batchId]);
@@ -1799,6 +1807,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                     }
 
                     const batchGroups = {};
+                    let remainingSlabQty = priceSlabs[pid] ? (priceSlabs[pid].applied_qty || 0) : 0;
                     for (const batch of batchesRes.rows) {
                         if (qtyToFulfill <= 0) break;
                         const take = Math.min(qtyToFulfill, batch.quantity_remaining);
@@ -1813,7 +1822,10 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                         }
 
                         // Price Slab or Flat MRP Discount Calculation
-                        if (priceSlabs[pid]) {
+                        if (priceSlabs[pid] && remainingSlabQty > 0) {
+                            const slabQtyToApply = Math.min(take, remainingSlabQty);
+                            remainingSlabQty -= slabQtyToApply;
+
                             let unitDeduction = 0;
                             if (priceSlabs[pid].special_price) {
                                 const targetNet = Number(priceSlabs[pid].special_price);
@@ -1825,7 +1837,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                                 const targetExcl = targetNet / (1 + (taxPct / 100));
                                 unitDeduction = Math.max(0, batchRate - targetExcl);
                             }
-                            batchGroups[groupKey].slabDeduction += (take * unitDeduction);
+                            batchGroups[groupKey].slabDeduction += (slabQtyToApply * unitDeduction);
                         }
 
                         await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batchId]);
@@ -1872,7 +1884,10 @@ router.post('/bulk-invoice-generate', async (req, res) => {
 
                         // Price Slab Deduction Calculation (Transit)
                         // Price Slab or Flat MRP Discount Calculation (Transit)
-                        if (priceSlabs[pid]) {
+                        if (priceSlabs[pid] && remainingSlabQty > 0) {
+                            const slabQtyToApply = Math.min(take, remainingSlabQty);
+                            remainingSlabQty -= slabQtyToApply;
+
                             let unitDeduction = 0;
                             if (priceSlabs[pid].special_price) {
                                 const targetNet = Number(priceSlabs[pid].special_price);
@@ -1884,7 +1899,7 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                                 const targetExcl = targetNet / (1 + (taxPct / 100));
                                 unitDeduction = Math.max(0, transitRate - targetExcl);
                             }
-                            batchGroups[groupKey].slabDeduction += (take * unitDeduction);
+                            batchGroups[groupKey].slabDeduction += (slabQtyToApply * unitDeduction);
                         }
 
                         await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batchId]);
@@ -2248,6 +2263,7 @@ router.post('/invoices/regenerate', async (req, res) => {
             `, [Number(pid)]);
 
             const batchGroups = {};
+            let remainingSlabQty = priceSlabs[pid] ? (priceSlabs[pid].applied_qty || 0) : 0;
             for (const batch of batchesRes.rows) {
                 if (qtyToFulfill <= 0) break;
                 const take = Math.min(qtyToFulfill, batch.quantity_remaining);
@@ -2261,7 +2277,10 @@ router.post('/invoices/regenerate', async (req, res) => {
                 }
 
                 // Price Slab or Flat MRP Discount Calculation
-                if (priceSlabs[pid]) {
+                if (priceSlabs[pid] && remainingSlabQty > 0) {
+                    const slabQtyToApply = Math.min(take, remainingSlabQty);
+                    remainingSlabQty -= slabQtyToApply;
+
                     let unitDeduction = 0;
                     if (priceSlabs[pid].special_price) {
                         const targetNet = Number(priceSlabs[pid].special_price);
@@ -2273,7 +2292,7 @@ router.post('/invoices/regenerate', async (req, res) => {
                         const targetExcl = targetNet / (1 + (taxPct / 100));
                         unitDeduction = Math.max(0, batchRate - targetExcl);
                     }
-                    batchGroups[groupKey].slabDeduction += (take * unitDeduction);
+                    batchGroups[groupKey].slabDeduction += (slabQtyToApply * unitDeduction);
                 }
 
                 await client.query('UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2', [take, batchId]);
@@ -2302,7 +2321,7 @@ router.post('/invoices/regenerate', async (req, res) => {
                 const lineScheme = freeItemValue + group.slabDeduction;
 
                 const taxableValue = group.gross - lineScheme;
-                const taxValue = taxableValue * (taxPct / 100);
+                const taxValue = taxableValue * (lineTaxPercent / 100);
                 const netValue = taxableValue + taxValue;
 
                 const reasons = [];

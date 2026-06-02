@@ -148,14 +148,14 @@ BEGIN
         -- Create Inventory Batch
         INSERT INTO inventory_batches (
             product_id, grn_id, purchase_invoice_line_id, batch_code,
-            mrp, purchase_rate,
+            mrp, purchase_rate, net_purchase_rate,
             distributor_rate, wholesale_rate, dealer_rate, retail_rate, 
             quantity_initial, quantity_remaining,
             expiry_date, is_active
         )
         SELECT
             (v_line->>'product_id')::bigint, v_header_id, v_line_id, (v_line->>'batch_number'),
-            (v_line->>'mrp')::numeric, (v_line->>'rate')::numeric,
+            (v_line->>'mrp')::numeric, (v_line->>'rate')::numeric, (v_line->>'net_purchase_rate')::numeric,
             p.distributor_rate, p.wholesale_rate, p.dealer_rate, p.retail_rate, 
             (v_line->>'accepted_qty')::numeric, (v_line->>'accepted_qty')::numeric,
             (v_line->>'expiry_date')::date, true
