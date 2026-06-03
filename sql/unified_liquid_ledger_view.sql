@@ -235,4 +235,22 @@ SELECT
     bank_statement_entry_id,
     journal_entry_id
 FROM employee_salaries
-WHERE payment_date IS NOT NULL;
+WHERE payment_date IS NOT NULL
+
+UNION ALL
+
+-- 13. Bounced Cheque Reversals
+SELECT 
+    bounce_date as trans_date,
+    party_type || ': ' || party_id as party_name,
+    'Cheque Bounce Reversal: ' || cheque_number as description,
+    CASE WHEN type = 'OUTGOING' THEN amount ELSE 0 END as amount_in,
+    CASE WHEN type = 'INCOMING' THEN amount ELSE 0 END as amount_out,
+    1004 as liquid_account_id,
+    bank_account_id as direct_bank_id,
+    'cheques_bounce' as source_table,
+    id as source_id,
+    bank_statement_entry_id,
+    null as journal_entry_id
+FROM cheques
+WHERE status = 'BOUNCED' AND bounce_date IS NOT NULL;
