@@ -919,7 +919,7 @@ router.post('/bulk-update', async (req, res) => {
                 const insertPlaceholders = [];
                 let pIdx = 1;
                 for (const a of alertsToInsert) {
-                    insertPlaceholders.push(`($${pIdx}, $${pIdx+1}, $${pIdx+2}, $${pIdx+3}, $${pIdx+4}, $${pIdx+5}, $${pIdx+6}, $${pIdx+7}, $${pIdx+8}, $${pIdx+9}, $${pIdx+10}, $${pIdx+11})`);
+                    insertPlaceholders.push(`($${pIdx}, $${pIdx+1}, $${pIdx+2}, $${pIdx+3}, $${pIdx+4}, $${pIdx+5}, $${pIdx+6}, $${pIdx+7}, $${pIdx+8}, $${pIdx+9}, $${pIdx+10})`);
                     insertValues.push(
                         a.product_id,
                         a.old_mrp, a.new_mrp,
@@ -928,7 +928,7 @@ router.post('/bulk-update', async (req, res) => {
                         a.old_dealer_rate, a.new_dealer_rate,
                         a.old_retail_rate, a.new_retail_rate
                     );
-                    pIdx += 12;
+                    pIdx += 11;
                 }
                 const insertQuery = `
                     INSERT INTO product_price_alerts (
