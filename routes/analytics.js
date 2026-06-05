@@ -1804,6 +1804,7 @@ router.get('/price-alerts', async (req, res) => {
             WHERE 
                 bs.old_mrp IS NOT NULL 
                 AND bs.new_mrp != bs.old_mrp
+                AND bs.new_mrp = p.mrp
                 AND bs.inward_date >= NOW() - (CAST($1 AS INT) * INTERVAL '1 day')
         `;
 
