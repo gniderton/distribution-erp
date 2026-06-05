@@ -1761,11 +1761,109 @@ router.get('/brands/:id/history', async (req, res) => {
             }))
         });
 
+        client.release();
+    }
+});
+
+// --- [NEW] PRICE CHANGE ALERTS API FOR SALES STAFF ---
+router.get('/price-alerts', async (req, res) => {
+    try {
+        const { brand_id, days = 14, limit = 50, offset = 0 } = req.query;
+
+        let query = `
+            WITH batch_sequence AS (
+                SELECT 
+                    ib.id as batch_id,
+                    ib.product_id,
+                    ib.batch_code,
+                    ib.created_at as inward_date,
+                    ib.mrp as new_mrp,
+                    LAG(ib.mrp) OVER (PARTITION BY ib.product_id ORDER BY ib.id ASC) as old_mrp
+                FROM inventory_batches ib
+            )
+            SELECT 
+                bs.batch_id,
+                bs.product_id,
+                p.product_name,
+                p.product_code,
+                b.brand_name,
+                bs.batch_code,
+                bs.inward_date,
+                bs.old_mrp,
+                bs.new_mrp,
+                (bs.new_mrp - bs.old_mrp) as mrp_change,
+                -- Selling Rates (Exclusive of Tax)
+                p.distributor_rate,
+                p.wholesale_rate,
+                p.dealer_rate,
+                p.retail_rate
+            FROM batch_sequence bs
+            JOIN products p ON bs.product_id = p.id
+            LEFT JOIN brands b ON p.brand_id = b.id
+            WHERE 
+                bs.old_mrp IS NOT NULL 
+                AND bs.new_mrp != bs.old_mrp
+                AND bs.inward_date >= NOW() - (CAST($1 AS INT) * INTERVAL '1 day')
+        `;
+
+        const params = [days.toString()];
+
+        if (brand_id) {
+            params.push(brand_id);
+            query += ` AND p.brand_id = $${params.length}`;
+        }
+
+        query += ` ORDER BY bs.inward_date DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+        const dataParams = [...params, parseInt(limit), parseInt(offset)];
+
+        const result = await pool.query(query, dataParams);
+
+        // Map and format results
+        const alerts = result.rows.map(row => {
+            const oldMrp = parseFloat(row.old_mrp || 0);
+            const newMrp = parseFloat(row.new_mrp || 0);
+            const absoluteChange = newMrp - oldMrp;
+            const percentageChange = oldMrp > 0 ? (absoluteChange / oldMrp) * 100 : 0;
+            
+            let severity = 'Low';
+            const absPct = Math.abs(percentageChange);
+            if (absPct >= 10) severity = 'High';
+            else if (absPct >= 5) severity = 'Medium';
+
+            return {
+                batch_id: parseInt(row.batch_id),
+                product_id: parseInt(row.product_id),
+                product_name: row.product_name,
+                product_code: row.product_code,
+                brand_name: row.brand_name,
+                batch_code: row.batch_code,
+                inward_date: row.inward_date,
+                old_mrp: oldMrp,
+                new_mrp: newMrp,
+                mrp_change: parseFloat(absoluteChange.toFixed(2)),
+                mrp_change_percentage: parseFloat(percentageChange.toFixed(2)),
+                severity: severity,
+                selling_prices: {
+                    distributor_rate: parseFloat(row.distributor_rate || 0),
+                    wholesale_rate: parseFloat(row.wholesale_rate || 0),
+                    dealer_rate: parseFloat(row.dealer_rate || 0),
+                    retail_rate: parseFloat(row.retail_rate || 0)
+                }
+            };
+        });
+
+        res.json({
+            days_window: parseInt(days),
+            count: alerts.length,
+            alerts: alerts
+        });
+
     } catch (err) {
-        console.error('Brand history route error:', err);
+        console.error('Price alerts route error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
 module.exports = router;
+
 
