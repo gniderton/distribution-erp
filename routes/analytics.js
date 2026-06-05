@@ -1772,40 +1772,27 @@ router.get('/price-alerts', async (req, res) => {
         const { brand_id, days = 14, limit = 50, offset = 0 } = req.query;
 
         let query = `
-            WITH batch_sequence AS (
-                SELECT 
-                    ib.id as batch_id,
-                    ib.product_id,
-                    ib.batch_code,
-                    ib.created_at as inward_date,
-                    ib.mrp as new_mrp,
-                    LAG(ib.mrp) OVER (PARTITION BY ib.product_id ORDER BY ib.id ASC) as old_mrp
-                FROM inventory_batches ib
-            )
             SELECT 
-                bs.batch_id,
-                bs.product_id,
+                ppa.id as alert_id,
+                ppa.product_id,
                 p.product_name,
                 p.product_code,
                 b.brand_name,
-                bs.batch_code,
-                bs.inward_date,
-                bs.old_mrp,
-                bs.new_mrp,
-                (bs.new_mrp - bs.old_mrp) as mrp_change,
-                -- Selling Rates (Exclusive of Tax)
-                p.distributor_rate,
-                p.wholesale_rate,
-                p.dealer_rate,
-                p.retail_rate
-            FROM batch_sequence bs
-            JOIN products p ON bs.product_id = p.id
+                ppa.changed_at,
+                ppa.old_mrp,
+                ppa.new_mrp,
+                ppa.old_distributor_rate,
+                ppa.new_distributor_rate,
+                ppa.old_wholesale_rate,
+                ppa.new_wholesale_rate,
+                ppa.old_dealer_rate,
+                ppa.new_dealer_rate,
+                ppa.old_retail_rate,
+                ppa.new_retail_rate
+            FROM product_price_alerts ppa
+            JOIN products p ON ppa.product_id = p.id
             LEFT JOIN brands b ON p.brand_id = b.id
-            WHERE 
-                bs.old_mrp IS NOT NULL 
-                AND bs.new_mrp != bs.old_mrp
-                AND bs.new_mrp = p.mrp
-                AND bs.inward_date >= NOW() - (CAST($1 AS INT) * INTERVAL '1 day')
+            WHERE ppa.changed_at >= NOW() - (CAST($1 AS INT) * INTERVAL '1 day')
         `;
 
         const params = [days.toString()];
@@ -1815,7 +1802,7 @@ router.get('/price-alerts', async (req, res) => {
             query += ` AND p.brand_id = $${params.length}`;
         }
 
-        query += ` ORDER BY bs.inward_date DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+        query += ` ORDER BY ppa.changed_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
         const dataParams = [...params, parseInt(limit), parseInt(offset)];
 
         const result = await pool.query(query, dataParams);
@@ -1833,23 +1820,28 @@ router.get('/price-alerts', async (req, res) => {
             else if (absPct >= 5) severity = 'Medium';
 
             return {
-                batch_id: parseInt(row.batch_id),
+                alert_id: parseInt(row.alert_id),
                 product_id: parseInt(row.product_id),
                 product_name: row.product_name,
                 product_code: row.product_code,
                 brand_name: row.brand_name,
-                batch_code: row.batch_code,
-                inward_date: row.inward_date,
+                changed_at: row.changed_at,
                 old_mrp: oldMrp,
                 new_mrp: newMrp,
                 mrp_change: parseFloat(absoluteChange.toFixed(2)),
                 mrp_change_percentage: parseFloat(percentageChange.toFixed(2)),
                 severity: severity,
                 selling_prices: {
-                    distributor_rate: parseFloat(row.distributor_rate || 0),
-                    wholesale_rate: parseFloat(row.wholesale_rate || 0),
-                    dealer_rate: parseFloat(row.dealer_rate || 0),
-                    retail_rate: parseFloat(row.retail_rate || 0)
+                    distributor_rate: parseFloat(row.new_distributor_rate || 0),
+                    wholesale_rate: parseFloat(row.new_wholesale_rate || 0),
+                    dealer_rate: parseFloat(row.new_dealer_rate || 0),
+                    retail_rate: parseFloat(row.new_retail_rate || 0)
+                },
+                old_selling_prices: {
+                    distributor_rate: parseFloat(row.old_distributor_rate || 0),
+                    wholesale_rate: parseFloat(row.old_wholesale_rate || 0),
+                    dealer_rate: parseFloat(row.old_dealer_rate || 0),
+                    retail_rate: parseFloat(row.old_retail_rate || 0)
                 }
             };
         });

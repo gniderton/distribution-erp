@@ -833,6 +833,17 @@ router.post('/bulk-update', async (req, res) => {
                 paramIdx += 23;
             }
 
+            // Fetch existing prices for comparison
+            const productIds = updates.map(u => u.id).filter(id => id && !isNaN(id));
+            const existingRes = await client.query(
+                'SELECT id, mrp, distributor_rate, wholesale_rate, dealer_rate, retail_rate FROM products WHERE id = ANY($1::bigint[])',
+                [productIds]
+            );
+            const existingMap = {};
+            existingRes.rows.forEach(r => {
+                existingMap[r.id] = r;
+            });
+
             const query = `
                 UPDATE products AS p
                 SET
@@ -868,9 +879,70 @@ router.post('/bulk-update', async (req, res) => {
                     box_length_cm, box_width_cm, box_height_cm, weight_kg, description
                 )
                 WHERE p.id = v.id::bigint
+                RETURNING p.id, p.mrp, p.distributor_rate, p.wholesale_rate, p.dealer_rate, p.retail_rate
             `;
 
-            await client.query(query, values);
+            const result = await client.query(query, values);
+
+            // Compare rates and log changes
+            const alertsToInsert = [];
+            for (const row of result.rows) {
+                const old = existingMap[row.id];
+                if (!old) continue;
+                
+                const hasChanged = 
+                    parseFloat(old.mrp || 0) !== parseFloat(row.mrp || 0) ||
+                    parseFloat(old.distributor_rate || 0) !== parseFloat(row.distributor_rate || 0) ||
+                    parseFloat(old.wholesale_rate || 0) !== parseFloat(row.wholesale_rate || 0) ||
+                    parseFloat(old.dealer_rate || 0) !== parseFloat(row.dealer_rate || 0) ||
+                    parseFloat(old.retail_rate || 0) !== parseFloat(row.retail_rate || 0);
+
+                if (hasChanged) {
+                    alertsToInsert.push({
+                        product_id: row.id,
+                        old_mrp: old.mrp,
+                        new_mrp: row.mrp,
+                        old_distributor_rate: old.distributor_rate,
+                        new_distributor_rate: row.distributor_rate,
+                        old_wholesale_rate: old.wholesale_rate,
+                        new_wholesale_rate: row.wholesale_rate,
+                        old_dealer_rate: old.dealer_rate,
+                        new_dealer_rate: row.dealer_rate,
+                        old_retail_rate: old.retail_rate,
+                        new_retail_rate: row.retail_rate
+                    });
+                }
+            }
+
+            if (alertsToInsert.length > 0) {
+                const insertValues = [];
+                const insertPlaceholders = [];
+                let pIdx = 1;
+                for (const a of alertsToInsert) {
+                    insertPlaceholders.push(`($${pIdx}, $${pIdx+1}, $${pIdx+2}, $${pIdx+3}, $${pIdx+4}, $${pIdx+5}, $${pIdx+6}, $${pIdx+7}, $${pIdx+8}, $${pIdx+9}, $${pIdx+10}, $${pIdx+11})`);
+                    insertValues.push(
+                        a.product_id,
+                        a.old_mrp, a.new_mrp,
+                        a.old_distributor_rate, a.new_distributor_rate,
+                        a.old_wholesale_rate, a.new_wholesale_rate,
+                        a.old_dealer_rate, a.new_dealer_rate,
+                        a.old_retail_rate, a.new_retail_rate
+                    );
+                    pIdx += 12;
+                }
+                const insertQuery = `
+                    INSERT INTO product_price_alerts (
+                        product_id,
+                        old_mrp, new_mrp,
+                        old_distributor_rate, new_distributor_rate,
+                        old_wholesale_rate, new_wholesale_rate,
+                        old_dealer_rate, new_dealer_rate,
+                        old_retail_rate, new_retail_rate
+                    ) VALUES ${insertPlaceholders.join(', ')}
+                `;
+                await client.query(insertQuery, insertValues);
+            }
+
             updatedCount = updates.length;
         }
 
@@ -915,6 +987,13 @@ router.put('/:id', async (req, res) => {
             box_length_cm, box_width_cm, box_height_cm, weight_kg, description,
             brand_id, category_id, tax_id, hsn_id // These come directly from Select widgets
         } = flatBody;
+
+        // Query existing prices to check for differences
+        const currentRes = await pool.query(
+            'SELECT mrp, distributor_rate, wholesale_rate, dealer_rate, retail_rate FROM products WHERE id = $1',
+            [id]
+        );
+        const oldPrices = currentRes.rows[0];
 
         const updateQuery = `
             UPDATE products 
@@ -961,7 +1040,39 @@ router.put('/:id', async (req, res) => {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        res.json({ success: true, product: result.rows[0] });
+        const newProduct = result.rows[0];
+
+        // Compare prices and record alert if anything changed
+        if (oldPrices) {
+            const hasChanged = 
+                parseFloat(oldPrices.mrp || 0) !== parseFloat(newProduct.mrp || 0) ||
+                parseFloat(oldPrices.distributor_rate || 0) !== parseFloat(newProduct.distributor_rate || 0) ||
+                parseFloat(oldPrices.wholesale_rate || 0) !== parseFloat(newProduct.wholesale_rate || 0) ||
+                parseFloat(oldPrices.dealer_rate || 0) !== parseFloat(newProduct.dealer_rate || 0) ||
+                parseFloat(oldPrices.retail_rate || 0) !== parseFloat(newProduct.retail_rate || 0);
+
+            if (hasChanged) {
+                await pool.query(`
+                    INSERT INTO product_price_alerts (
+                        product_id,
+                        old_mrp, new_mrp,
+                        old_distributor_rate, new_distributor_rate,
+                        old_wholesale_rate, new_wholesale_rate,
+                        old_dealer_rate, new_dealer_rate,
+                        old_retail_rate, new_retail_rate
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                `, [
+                    id,
+                    oldPrices.mrp, newProduct.mrp,
+                    oldPrices.distributor_rate, newProduct.distributor_rate,
+                    oldPrices.wholesale_rate, newProduct.wholesale_rate,
+                    oldPrices.dealer_rate, newProduct.dealer_rate,
+                    oldPrices.retail_rate, newProduct.retail_rate
+                ]);
+            }
+        }
+
+        res.json({ success: true, product: newProduct });
 
     } catch (err) {
         console.error("Product Update Error:", err);
