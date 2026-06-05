@@ -1421,4 +1421,351 @@ router.get('/reports/integrity-audit', async (req, res) => {
     }
 });
 
+// --- [NEW] BRAND HISTORY & FORENSICS API ---
+router.get('/brands/:id/history', async (req, res) => {
+    try {
+        const brandId = parseInt(req.params.id);
+        if (isNaN(brandId)) {
+            return res.status(400).json({ error: "Invalid brand ID" });
+        }
+
+        const { month, type = 'all' } = req.query;
+
+        // 1. Fetch Brand Info
+        const brandRes = await pool.query('SELECT * FROM brands WHERE id = $1', [brandId]);
+        if (brandRes.rows.length === 0) {
+            return res.status(404).json({ error: "Brand not found" });
+        }
+        const brand = brandRes.rows[0];
+
+        // 2. Fetch Brand Stock Valuation
+        const stockRes = await pool.query(`
+            SELECT 
+                COALESCE(SUM(ib.quantity_remaining), 0) as stock_qty,
+                COALESCE(SUM(ib.quantity_remaining * ib.purchase_rate), 0) as stock_valuation
+            FROM inventory_batches ib
+            JOIN products p ON ib.product_id = p.id
+            WHERE p.brand_id = $1 AND ib.quantity_remaining > 0
+        `, [brandId]);
+        const stock = stockRes.rows[0];
+
+        // 3. Overall Summary (Aggregate Metrics)
+        const summaryQueries = {
+            sales: pool.query(`
+                SELECT 
+                    COALESCE(SUM(sil.shipped_qty), 0) as qty,
+                    COALESCE(SUM(sil.taxable_amount), 0) as taxable,
+                    COALESCE(SUM(sil.tax_amount), 0) as tax,
+                    COALESCE(SUM(sil.amount), 0) as amount
+                FROM sales_invoice_lines sil
+                JOIN sales_invoices si ON sil.invoice_id = si.id
+                JOIN products p ON sil.product_id = p.id
+                WHERE p.brand_id = $1 AND si.status != 'Cancelled'
+            `, [brandId]),
+            purchases: pool.query(`
+                SELECT 
+                    COALESCE(SUM(pil.accepted_qty), 0) as qty,
+                    COALESCE(SUM(pil.rate * pil.accepted_qty), 0) as taxable,
+                    COALESCE(SUM(pil.tax_amount), 0) as tax,
+                    COALESCE(SUM(pil.amount), 0) as amount
+                FROM purchase_invoice_lines pil
+                JOIN purchase_invoice_headers pih ON pil.purchase_invoice_header_id = pih.id
+                JOIN products p ON pil.product_id = p.id
+                WHERE p.brand_id = $1 AND pih.status != 'Cancelled'
+            `, [brandId]),
+            sales_returns: pool.query(`
+                SELECT 
+                    COALESCE(SUM(srl.qty), 0) as qty,
+                    COALESCE(SUM(srl.rate * srl.qty), 0) as taxable,
+                    COALESCE(SUM(srl.tax_amount), 0) as tax,
+                    COALESCE(SUM(srl.amount), 0) as amount
+                FROM sales_return_lines srl
+                JOIN sales_returns sr ON srl.return_id = sr.id
+                JOIN products p ON srl.product_id = p.id
+                WHERE p.brand_id = $1 AND sr.status != 'Cancelled'
+            `, [brandId]),
+            purchase_returns: pool.query(`
+                SELECT 
+                    COALESCE(SUM(dnl.qty), 0) as qty,
+                    COALESCE(SUM(dnl.amount), 0) as amount
+                FROM debit_note_lines dnl
+                JOIN debit_notes dn ON dnl.debit_note_id = dn.id
+                JOIN products p ON dnl.product_id = p.id
+                WHERE p.brand_id = $1 AND dn.status != 'Cancelled'
+            `, [brandId])
+        };
+
+        const [salesSum, purchaseSum, salesRetSum, purchaseRetSum] = await Promise.all([
+            summaryQueries.sales,
+            summaryQueries.purchases,
+            summaryQueries.sales_returns,
+            summaryQueries.purchase_returns
+        ]);
+
+        const sSum = salesSum.rows[0];
+        const pSum = purchaseSum.rows[0];
+        const srSum = salesRetSum.rows[0];
+        const prSum = purchaseRetSum.rows[0];
+
+        // Format summaries as float numbers
+        const totalSalesQty = parseFloat(sSum.qty);
+        const totalSalesTaxable = parseFloat(sSum.taxable);
+        const totalSalesTax = parseFloat(sSum.tax);
+        const totalSalesAmount = parseFloat(sSum.amount);
+
+        const totalPurchQty = parseFloat(pSum.qty);
+        const totalPurchTaxable = parseFloat(pSum.taxable);
+        const totalPurchTax = parseFloat(pSum.tax);
+        const totalPurchAmount = parseFloat(pSum.amount);
+
+        const totalSalesRetQty = parseFloat(srSum.qty);
+        const totalSalesRetTaxable = parseFloat(srSum.taxable);
+        const totalSalesRetTax = parseFloat(srSum.tax);
+        const totalSalesRetAmount = parseFloat(srSum.amount);
+
+        const totalPurchRetQty = parseFloat(prSum.qty);
+        const totalPurchRetAmount = parseFloat(prSum.amount);
+
+        // Margins Calculations
+        const avgSalesRate = totalSalesQty > 0 ? totalSalesTaxable / totalSalesQty : 0;
+        const avgPurchaseRate = totalPurchQty > 0 ? totalPurchTaxable / totalPurchQty : 0;
+        const grossMargin = avgSalesRate > 0 ? ((avgSalesRate - avgPurchaseRate) / avgSalesRate) * 100 : 0;
+
+        const netSalesQty = totalSalesQty - totalSalesRetQty;
+        const netSalesTaxable = totalSalesTaxable - totalSalesRetTaxable;
+        const netSalesAmount = totalSalesAmount - totalSalesRetAmount;
+
+        const netPurchQty = totalPurchQty - totalPurchRetQty;
+        const netPurchAmount = totalPurchAmount - totalPurchRetAmount;
+
+        const netCOGS = netSalesQty * avgPurchaseRate;
+        const netRealizedMargin = netSalesTaxable > 0 ? ((netSalesTaxable - netCOGS) / netSalesTaxable) * 100 : 0;
+
+        // 4. Monthly Trend Analytics (Last 12 Months)
+        const monthlyRes = await pool.query(`
+            WITH months AS (
+                SELECT generate_series(
+                    DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '12 months', 
+                    DATE_TRUNC('month', CURRENT_DATE), 
+                    '1 month'::interval
+                )::date as month_start
+            )
+            SELECT 
+                TO_CHAR(m.month_start, 'YYYY-MM') as month_label,
+                -- Sales
+                COALESCE((
+                    SELECT SUM(sil.amount) 
+                    FROM sales_invoice_lines sil 
+                    JOIN sales_invoices si ON sil.invoice_id = si.id 
+                    JOIN products p ON sil.product_id = p.id
+                    WHERE p.brand_id = $1 AND si.status != 'Cancelled' AND DATE_TRUNC('month', si.invoice_date) = m.month_start
+                ), 0) as sales_amount,
+                -- Purchases
+                COALESCE((
+                    SELECT SUM(pil.amount) 
+                    FROM purchase_invoice_lines pil 
+                    JOIN purchase_invoice_headers pih ON pil.purchase_invoice_header_id = pih.id 
+                    JOIN products p ON pil.product_id = p.id
+                    WHERE p.brand_id = $1 AND pih.status != 'Cancelled' AND DATE_TRUNC('month', pih.received_date) = m.month_start
+                ), 0) as purchase_amount,
+                -- Sales Returns
+                COALESCE((
+                    SELECT SUM(srl.amount) 
+                    FROM sales_return_lines srl 
+                    JOIN sales_returns sr ON srl.return_id = sr.id 
+                    JOIN products p ON srl.product_id = p.id
+                    WHERE p.brand_id = $1 AND sr.status != 'Cancelled' AND DATE_TRUNC('month', sr.return_date) = m.month_start
+                ), 0) as sales_return_amount,
+                -- Purchase Returns
+                COALESCE((
+                    SELECT SUM(dnl.amount) 
+                    FROM debit_note_lines dnl 
+                    JOIN debit_notes dn ON dnl.debit_note_id = dn.id 
+                    JOIN products p ON dnl.product_id = p.id
+                    WHERE p.brand_id = $1 AND dn.status != 'Cancelled' AND DATE_TRUNC('month', dn.debit_note_date) = m.month_start
+                ), 0) as purchase_return_amount
+            FROM months m
+            ORDER BY m.month_start DESC
+        `, [brandId]);
+
+        // 5. Transaction Stream (Filterable)
+        let params = [brandId];
+
+        let dateFilterSales = "";
+        let dateFilterPurch = "";
+        let dateFilterSalesRet = "";
+        let dateFilterPurchRet = "";
+
+        if (month) {
+            params.push(month);
+            const paramIdx = params.length;
+            dateFilterSales = ` AND TO_CHAR(si.invoice_date, 'YYYY-MM') = $${paramIdx}`;
+            dateFilterPurch = ` AND TO_CHAR(pih.received_date, 'YYYY-MM') = $${paramIdx}`;
+            dateFilterSalesRet = ` AND TO_CHAR(sr.return_date, 'YYYY-MM') = $${paramIdx}`;
+            dateFilterPurchRet = ` AND TO_CHAR(dn.debit_note_date, 'YYYY-MM') = $${paramIdx}`;
+        }
+
+        const salesQuery = `
+            SELECT 
+                si.invoice_date::text as trans_date,
+                'Sale' as trans_type,
+                si.invoice_number as document_number,
+                p.product_code,
+                p.product_name,
+                sil.shipped_qty as qty,
+                sil.rate,
+                sil.tax_amount as tax,
+                sil.amount as total_amount,
+                c.customer_name as party_name
+            FROM sales_invoice_lines sil
+            JOIN sales_invoices si ON sil.invoice_id = si.id
+            JOIN products p ON sil.product_id = p.id
+            JOIN customers c ON si.customer_id = c.id
+            WHERE p.brand_id = $1 AND si.status != 'Cancelled' ${dateFilterSales}
+        `;
+
+        const purchaseQuery = `
+            SELECT 
+                pih.received_date::text as trans_date,
+                'Purchase' as trans_type,
+                pih.invoice_number as document_number,
+                p.product_code,
+                p.product_name,
+                pil.accepted_qty as qty,
+                pil.rate,
+                pil.tax_amount as tax,
+                pil.amount as total_amount,
+                v.vendor_name as party_name
+            FROM purchase_invoice_lines pil
+            JOIN purchase_invoice_headers pih ON pil.purchase_invoice_header_id = pih.id
+            JOIN products p ON pil.product_id = p.id
+            JOIN vendors v ON pih.vendor_id = v.id
+            WHERE p.brand_id = $1 AND pih.status != 'Cancelled' ${dateFilterPurch}
+        `;
+
+        const salesRetQuery = `
+            SELECT 
+                sr.return_date::text as trans_date,
+                'Sales Return' as trans_type,
+                sr.return_number as document_number,
+                p.product_code,
+                p.product_name,
+                srl.qty as qty,
+                srl.rate,
+                srl.tax_amount as tax,
+                srl.amount as total_amount,
+                c.customer_name as party_name
+            FROM sales_return_lines srl
+            JOIN sales_returns sr ON srl.return_id = sr.id
+            JOIN products p ON srl.product_id = p.id
+            JOIN customers c ON sr.customer_id = c.id
+            WHERE p.brand_id = $1 AND sr.status != 'Cancelled' ${dateFilterSalesRet}
+        `;
+
+        const purchaseRetQuery = `
+            SELECT 
+                dn.debit_note_date::text as trans_date,
+                'Purchase Return' as trans_type,
+                dn.debit_note_number as document_number,
+                p.product_code,
+                p.product_name,
+                dnl.qty as qty,
+                dnl.rate,
+                0::numeric as tax,
+                dnl.amount as total_amount,
+                v.vendor_name as party_name
+            FROM debit_note_lines dnl
+            JOIN debit_notes dn ON dnl.debit_note_id = dn.id
+            JOIN products p ON dnl.product_id = p.id
+            JOIN vendors v ON dn.vendor_id = v.id
+            WHERE p.brand_id = $1 AND dn.status != 'Cancelled' ${dateFilterPurchRet}
+        `;
+
+        let activeQueries = [];
+        if (type === 'all' || type === 'sales') activeQueries.push(salesQuery);
+        if (type === 'all' || type === 'purchases') activeQueries.push(purchaseQuery);
+        if (type === 'all' || type === 'sales_returns') activeQueries.push(salesRetQuery);
+        if (type === 'all' || type === 'purchase_returns') activeQueries.push(purchaseRetQuery);
+
+        const combinedQuery = `${activeQueries.join('\nUNION ALL\n')} ORDER BY trans_date DESC, document_number DESC LIMIT 100`;
+        const streamRes = await pool.query(combinedQuery, params);
+
+        res.json({
+            brand: {
+                id: brand.id,
+                name: brand.brand_name,
+                code: brand.brand_code,
+                is_active: brand.is_active
+            },
+            stock_valuation: {
+                qty: parseFloat(stock.stock_qty),
+                valuation: parseFloat(stock.stock_valuation)
+            },
+            summary: {
+                gross: {
+                    sales: {
+                        qty: totalSalesQty,
+                        taxable: parseFloat(totalSalesTaxable.toFixed(2)),
+                        tax: parseFloat(totalSalesTax.toFixed(2)),
+                        amount: parseFloat(totalSalesAmount.toFixed(2))
+                    },
+                    purchases: {
+                        qty: totalPurchQty,
+                        taxable: parseFloat(totalPurchTaxable.toFixed(2)),
+                        tax: parseFloat(totalPurchTax.toFixed(2)),
+                        amount: parseFloat(totalPurchAmount.toFixed(2))
+                    },
+                    sales_returns: {
+                        qty: totalSalesRetQty,
+                        taxable: parseFloat(totalSalesRetTaxable.toFixed(2)),
+                        tax: parseFloat(totalSalesRetTax.toFixed(2)),
+                        amount: parseFloat(totalSalesRetAmount.toFixed(2))
+                    },
+                    purchase_returns: {
+                        qty: totalPurchRetQty,
+                        amount: parseFloat(totalPurchRetAmount.toFixed(2))
+                    }
+                },
+                net: {
+                    sales: {
+                        qty: netSalesQty,
+                        taxable: parseFloat(netSalesTaxable.toFixed(2)),
+                        amount: parseFloat(netSalesAmount.toFixed(2))
+                    },
+                    purchases: {
+                        qty: netPurchQty,
+                        amount: parseFloat(netPurchAmount.toFixed(2))
+                    }
+                },
+                margins: {
+                    average_sales_rate: parseFloat(avgSalesRate.toFixed(2)),
+                    average_purchase_rate: parseFloat(avgPurchaseRate.toFixed(2)),
+                    gross_margin_pct: parseFloat(grossMargin.toFixed(2)) + '%',
+                    net_realized_margin_pct: parseFloat(netRealizedMargin.toFixed(2)) + '%'
+                }
+            },
+            monthly_trends: monthlyRes.rows.map(m => ({
+                month: m.month_label,
+                sales: parseFloat(m.sales_amount),
+                purchase: parseFloat(m.purchase_amount),
+                sales_return: parseFloat(m.sales_return_amount),
+                purchase_return: parseFloat(m.purchase_return_amount),
+                net_movement: parseFloat((parseFloat(m.sales_amount) - parseFloat(m.sales_return_amount) - (parseFloat(m.purchase_amount) - parseFloat(m.purchase_return_amount))).toFixed(2))
+            })),
+            transactions: streamRes.rows.map(t => ({
+                ...t,
+                qty: parseFloat(t.qty),
+                rate: parseFloat(t.rate),
+                tax: parseFloat(t.tax),
+                total_amount: parseFloat(t.total_amount)
+            }))
+        });
+
+    } catch (err) {
+        console.error('Brand history route error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
+
