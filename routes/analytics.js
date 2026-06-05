@@ -1760,8 +1760,9 @@ router.get('/brands/:id/history', async (req, res) => {
                 total_amount: parseFloat(t.total_amount)
             }))
         });
-
-        client.release();
+    } catch (err) {
+        console.error('Brand history route error:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 
