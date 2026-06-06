@@ -115,13 +115,60 @@ router.post('/', async (req, res) => {
             // 1. BRANCH LOGIC: INCREASE (Found) vs DECREASE (Damage/Lost/Etc)
             // -------------------------------------------------------------
             if (reason === 'Found') {
-                // ... (Existing Found Logic) ...
+                let mrp = 0;
+                let purchaseRate = 0;
+                let distributorRate = 0;
+                let wholesaleRate = 0;
+                let dealerRate = 0;
+                let retailRate = 0;
+
+                // 1. Try to copy rates from matching batch code
+                let matched = false;
+                if (batch_code) {
+                    const matchRes = await client.query(
+                        `SELECT mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate 
+                         FROM inventory_batches 
+                         WHERE product_id = $1 AND batch_code = $2 
+                         LIMIT 1`,
+                        [product_id, batch_code]
+                    );
+                    if (matchRes.rows.length > 0) {
+                        const match = matchRes.rows[0];
+                        mrp = Number(match.mrp || 0);
+                        purchaseRate = Number(match.purchase_rate || 0);
+                        distributorRate = Number(match.distributor_rate || 0);
+                        wholesaleRate = Number(match.wholesale_rate || 0);
+                        dealerRate = Number(match.dealer_rate || 0);
+                        retailRate = Number(match.retail_rate || 0);
+                        matched = true;
+                    }
+                }
+
+                // 2. Fallback to product defaults if not matched
+                if (!matched) {
+                    const prodRes = await client.query(
+                        `SELECT mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate 
+                         FROM products 
+                         WHERE id = $1`,
+                        [product_id]
+                    );
+                    if (prodRes.rows.length > 0) {
+                        const prod = prodRes.rows[0];
+                        mrp = Number(prod.mrp || 0);
+                        purchaseRate = Number(prod.purchase_rate || 0);
+                        distributorRate = Number(prod.distributor_rate || 0);
+                        wholesaleRate = Number(prod.wholesale_rate || 0);
+                        dealerRate = Number(prod.dealer_rate || 0);
+                        retailRate = Number(prod.retail_rate || 0);
+                    }
+                }
+
                 const batchCode = batch_code || `FOUND-${new Date().toISOString().split('T')[0]}`;
                 await client.query(`
                     INSERT INTO inventory_batches 
-                    (product_id, batch_code, quantity_initial, quantity_remaining, purchase_rate, is_active, created_at)
-                    VALUES ($1, $2, $3, $3, 0, true, $4) 
-                `, [product_id, batchCode, moveQty, adjDate]);
+                    (product_id, batch_code, quantity_initial, quantity_remaining, mrp, purchase_rate, net_purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate, is_active, created_at)
+                    VALUES ($1, $2, $3, $3, $4, $5, 0, $6, $7, $8, $9, true, $10) 
+                `, [product_id, batchCode, moveQty, mrp, purchaseRate, distributorRate, wholesaleRate, dealerRate, retailRate, adjDate]);
 
             } else {
                 // HANDLE STOCK DECREASE (Damage, Expiry, Lost)
