@@ -1080,4 +1080,36 @@ router.put('/:id', async (req, res) => {
     }
 });
 
+// POST /api/products/bulk-status - Bulk Update Product Active Status
+router.post('/bulk-status', async (req, res) => {
+    try {
+        const { ids, is_active } = req.body;
+
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: "ids must be a non-empty array of numbers" });
+        }
+        if (typeof is_active !== 'boolean') {
+            return res.status(400).json({ error: "is_active must be a boolean value" });
+        }
+
+        const updateQuery = `
+            UPDATE products
+            SET is_active = $1
+            WHERE id = ANY($2::bigint[])
+            RETURNING id, product_name, product_code, is_active
+        `;
+
+        const result = await pool.query(updateQuery, [is_active, ids]);
+
+        res.json({
+            success: true,
+            updated_count: result.rowCount,
+            products: result.rows
+        });
+    } catch (err) {
+        console.error("Bulk Status Update Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
