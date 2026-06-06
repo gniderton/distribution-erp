@@ -107,7 +107,7 @@ router.post('/', async (req, res) => {
         let totalLossValue = 0;
 
         for (const item of items) {
-            const { product_id, qty, reason } = item;
+            const { product_id, qty, reason, batch_code } = item;
             const moveQty = Number(qty);
 
             if (moveQty <= 0) continue;
@@ -116,7 +116,7 @@ router.post('/', async (req, res) => {
             // -------------------------------------------------------------
             if (reason === 'Found') {
                 // ... (Existing Found Logic) ...
-                const batchCode = item.batch_code || `FOUND-${new Date().toISOString().split('T')[0]}`;
+                const batchCode = batch_code || `FOUND-${new Date().toISOString().split('T')[0]}`;
                 await client.query(`
                     INSERT INTO inventory_batches 
                     (product_id, batch_code, quantity_initial, quantity_remaining, purchase_rate, is_active, created_at)
@@ -127,14 +127,20 @@ router.post('/', async (req, res) => {
                 // HANDLE STOCK DECREASE (Damage, Expiry, Lost)
                 let remainingToDeduct = moveQty;
 
-                // Fetch FIFO Batches (Good Status only)
-                const batches = await client.query(`
+                // Fetch Batches (Good Status only, optionally filtered by selected batch_code)
+                let selectQuery = `
                     SELECT * 
                     FROM inventory_batches 
                     WHERE product_id = $1 AND quantity_remaining > 0 AND status = 'Good'
-                    ORDER BY created_at ASC 
-                    FOR UPDATE
-                `, [product_id]);
+                `;
+                const queryParams = [product_id];
+                if (batch_code) {
+                    queryParams.push(batch_code);
+                    selectQuery += ` AND batch_code = $2`;
+                }
+                selectQuery += ` ORDER BY created_at ASC FOR UPDATE`;
+
+                const batches = await client.query(selectQuery, queryParams);
 
                 for (const batch of batches.rows) {
                     if (remainingToDeduct <= 0) break;
