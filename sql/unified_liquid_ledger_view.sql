@@ -192,14 +192,32 @@ SELECT
     at.transaction_date as trans_date,
     'ASSET: ' || at.asset_id as party_name,
     at.transaction_type as description,
-    CASE WHEN at.transaction_type ILIKE 'SALE' THEN amount ELSE 0 END as amount_in,
-    CASE WHEN at.transaction_type ILIKE 'PURCHASE' THEN amount ELSE 0 END as amount_out,
-    1002 as liquid_account_id,
-    null as direct_bank_id,
+    CASE WHEN at.transaction_type ILIKE 'SALE_PAYMENT' THEN amount ELSE 0 END as amount_in,
+    CASE WHEN at.transaction_type ILIKE 'PAYMENT' THEN amount ELSE 0 END as amount_out,
+    COALESCE(
+        (SELECT CASE 
+                    WHEN coa.code = '1003' THEN 1
+                    WHEN coa.code = '1004' THEN 1004
+                    WHEN coa.code = '1002' THEN 1002
+                    ELSE NULL
+                END
+         FROM journal_lines jl
+         JOIN chart_of_accounts coa ON jl.account_id = coa.id
+         WHERE jl.journal_entry_id = at.journal_entry_id 
+           AND coa.code IN ('1002', '1003', '1004')
+         LIMIT 1),
+        1002
+    ) as liquid_account_id,
+    (SELECT jl.bank_account_id 
+     FROM journal_lines jl
+     JOIN chart_of_accounts coa ON jl.account_id = coa.id
+     WHERE jl.journal_entry_id = at.journal_entry_id 
+       AND coa.code = '1002'
+     LIMIT 1) as direct_bank_id,
     'asset_transactions' as source_table,
-    id as source_id,
-    bank_statement_entry_id,
-    journal_entry_id
+    at.id as source_id,
+    at.bank_statement_entry_id,
+    at.journal_entry_id
 FROM asset_transactions at
 
 UNION ALL
