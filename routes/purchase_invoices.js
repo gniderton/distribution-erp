@@ -561,4 +561,77 @@ router.post('/:id/purge', async (req, res) => {
     }
 });
 
+// @route   GET /api/purchase-invoices/lines
+// @desc    Get all Purchase Invoice Lines with vendor/date filters
+router.get('/lines', async (req, res) => {
+    try {
+        const { vendor_id, start_date, end_date } = req.query;
+        let queryParams = [];
+        let whereConditions = [];
+        let paramIdx = 1;
+
+        if (vendor_id && vendor_id !== 'all' && vendor_id !== '') {
+            queryParams.push(vendor_id);
+            whereConditions.push(`pi.vendor_id = $${paramIdx}`);
+            paramIdx++;
+        }
+
+        if (start_date) {
+            queryParams.push(start_date);
+            whereConditions.push(`pi.received_date >= $${paramIdx}::date`);
+            paramIdx++;
+        }
+
+        if (end_date) {
+            queryParams.push(end_date);
+            whereConditions.push(`pi.received_date <= $${paramIdx}::date`);
+            paramIdx++;
+        }
+
+        const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+        const query = `
+            SELECT 
+                pl.id as line_id,
+                pl.purchase_invoice_header_id,
+                pi.invoice_number,
+                pi.vendor_invoice_number,
+                pi.vendor_invoice_date,
+                pi.received_date,
+                pi.vendor_id,
+                v.vendor_name,
+                pl.product_id,
+                p.product_name,
+                p.product_code,
+                p.ean_code,
+                pl.accepted_qty,
+                pl.rate,
+                pl.discount_percent,
+                pl.discount_amount,
+                pl.scheme_amount,
+                pl.tax_amount,
+                pl.amount as net_amount,
+                (pl.amount - pl.tax_amount) as taxable_amount,
+                COALESCE(t.tax_percentage, 0) as tax_percentage,
+                ib.mrp,
+                ib.batch_code,
+                ib.expiry_date
+            FROM purchase_invoice_lines pl
+            JOIN purchase_invoice_headers pi ON pl.purchase_invoice_header_id = pi.id
+            JOIN vendors v ON pi.vendor_id = v.id
+            JOIN products p ON pl.product_id = p.id
+            LEFT JOIN taxes t ON p.tax_id = t.id
+            LEFT JOIN inventory_batches ib ON ib.purchase_invoice_line_id = pl.id
+            ${whereClause}
+            ORDER BY pi.id DESC, pl.id ASC
+        `;
+
+        const result = await pool.query(query, queryParams);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Fetch Purchase Invoice Lines Error:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
