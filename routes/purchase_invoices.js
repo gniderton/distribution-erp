@@ -604,6 +604,8 @@ router.get('/lines', async (req, res) => {
                 p.product_name,
                 p.product_code,
                 p.ean_code,
+                p.brand_id,
+                b.brand_name,
                 pl.accepted_qty,
                 pl.rate,
                 pl.discount_percent,
@@ -620,6 +622,7 @@ router.get('/lines', async (req, res) => {
             JOIN purchase_invoice_headers pi ON pl.purchase_invoice_header_id = pi.id
             JOIN vendors v ON pi.vendor_id = v.id
             JOIN products p ON pl.product_id = p.id
+            LEFT JOIN brands b ON p.brand_id = b.id
             LEFT JOIN taxes t ON p.tax_id = t.id
             LEFT JOIN inventory_batches ib ON ib.purchase_invoice_line_id = pl.id
             ${whereClause}
