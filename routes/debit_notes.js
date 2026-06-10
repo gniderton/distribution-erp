@@ -250,6 +250,14 @@ router.post('/', async (req, res) => {
                         require('fs').appendFileSync('debug_dn.txt', `Fallback Search Valid Batches: ${batches.rows.length}\n`);
                     }
 
+                    // Enforce Strict Stock Validation
+                    const totalAvailable = batches.rows.reduce((sum, b) => sum + Number(b.quantity_remaining), 0);
+                    if (totalAvailable < remainingReturnQty) {
+                        const prodRes = await client.query('SELECT product_name FROM products WHERE id = $1', [line.product_id]);
+                        const prodName = prodRes.rows.length > 0 ? prodRes.rows[0].product_name : `ID: ${line.product_id}`;
+                        throw new Error(`Insufficient stock for product "${prodName}": requested ${remainingReturnQty}, but only ${totalAvailable} is available.`);
+                    }
+
                     // 2. Deduct from Batches
                     for (const batch of batches.rows) {
                         if (remainingReturnQty <= 0) break;
