@@ -1264,15 +1264,25 @@ router.post('/returns/:id/apply', async (req, res) => {
                         VALUES ($1, $2, NOW(), $3, 'ACTIVE')
                     `, [ret.invoice_id, apply, id]);
 
+                    // Update invoice from ground truth active allocations and advances
                     await client.query(`
-                        UPDATE sales_invoices 
-                        SET amount_paid = COALESCE(amount_paid, 0) + $1,
-                            status = CASE 
-                                WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' 
-                                ELSE 'Partially Paid' 
-                            END
-                        WHERE id = $2
-                    `, [apply, ret.invoice_id]);
+                        UPDATE sales_invoices si
+                        SET amount_paid = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                                          COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0),
+                            paid_amount = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                                          COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
+                        WHERE id = $1
+                    `, [ret.invoice_id]);
+
+                    await client.query(`
+                        UPDATE sales_invoices
+                        SET status = CASE 
+                            WHEN (grand_total - amount_paid) <= 1 THEN 'Paid'
+                            WHEN amount_paid > 0 THEN 'Partially Paid'
+                            ELSE 'Unpaid' 
+                        END
+                        WHERE id = $1
+                    `, [ret.invoice_id]);
                     creditRemaining -= apply;
                 }
             }
@@ -1298,15 +1308,25 @@ router.post('/returns/:id/apply', async (req, res) => {
                         VALUES ($1, $2, NOW(), $3, 'ACTIVE')
                     `, [inv.id, apply, id]);
 
+                    // Update invoice from ground truth active allocations and advances
                     await client.query(`
-                        UPDATE sales_invoices 
-                        SET amount_paid = COALESCE(amount_paid, 0) + $1,
-                            status = CASE 
-                                WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' 
-                                ELSE 'Partially Paid' 
-                            END
-                        WHERE id = $2
-                    `, [apply, inv.id]);
+                        UPDATE sales_invoices si
+                        SET amount_paid = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                                          COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0),
+                            paid_amount = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                                          COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
+                        WHERE id = $1
+                    `, [inv.id]);
+
+                    await client.query(`
+                        UPDATE sales_invoices
+                        SET status = CASE 
+                            WHEN (grand_total - amount_paid) <= 1 THEN 'Paid'
+                            WHEN amount_paid > 0 THEN 'Partially Paid'
+                            ELSE 'Unpaid' 
+                        END
+                        WHERE id = $1
+                    `, [inv.id]);
                     creditRemaining -= apply;
                 }
             }

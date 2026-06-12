@@ -187,8 +187,35 @@ router.delete('/:id', async (req, res) => {
         }
 
         // B. Rollback Allocations (Restore Invoice Balances)
-        // This is the most important step for financial cleanup
+        // Identify all invoices affected by this return's allocations
+        const affectedInvsRes = await client.query('SELECT DISTINCT invoice_id FROM customer_payment_allocations WHERE return_id = $1', [id]);
+
+        // Delete the allocations
         await client.query('DELETE FROM customer_payment_allocations WHERE return_id = $1', [id]);
+
+        // Recalculate balances from ground truth for each affected invoice
+        for (const row of affectedInvsRes.rows) {
+            if (row.invoice_id) {
+                await client.query(`
+                    UPDATE sales_invoices si
+                    SET amount_paid = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                                      COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0),
+                        paid_amount = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                                      COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
+                    WHERE id = $1
+                `, [row.invoice_id]);
+
+                await client.query(`
+                    UPDATE sales_invoices
+                    SET status = CASE 
+                        WHEN (grand_total - amount_paid) <= 1 THEN 'Paid'
+                        WHEN amount_paid > 0 THEN 'Partially Paid'
+                        ELSE 'Unpaid' 
+                    END
+                    WHERE id = $1
+                `, [row.invoice_id]);
+            }
+        }
 
         // C. Rollback Stock (Only if returned to stock)
         const linesRes = await client.query('SELECT product_id, batch_id, qty, return_to_stock FROM sales_return_lines WHERE return_id = $1', [id]);

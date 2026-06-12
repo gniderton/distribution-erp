@@ -275,17 +275,25 @@ router.post('/bulk-update', async (req, res) => {
                                 WHERE id = $2
                             `, [allocateAmount, pendingAlloc.id]);
 
-                            // Update invoice
+                            // Update invoice from ground truth active allocations and advances
                             await client.query(`
-                                UPDATE sales_invoices 
-                                SET amount_paid = COALESCE(amount_paid, 0) + $1,
-                                    paid_amount = COALESCE(paid_amount, 0) + $1,
-                                    status = CASE 
-                                        WHEN (grand_total - (COALESCE(amount_paid, 0) + $1)) <= 1 THEN 'Paid'
-                                        ELSE 'Partially Paid' 
-                                    END
-                                WHERE id = $2
-                            `, [allocateAmount, pendingAlloc.invoice_id]);
+                                UPDATE sales_invoices si
+                                SET amount_paid = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                                                  COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0),
+                                    paid_amount = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                                                  COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
+                                WHERE id = $1
+                            `, [pendingAlloc.invoice_id]);
+
+                            await client.query(`
+                                UPDATE sales_invoices
+                                SET status = CASE 
+                                    WHEN (grand_total - amount_paid) <= 1 THEN 'Paid'
+                                    WHEN amount_paid > 0 THEN 'Partially Paid'
+                                    ELSE 'Unpaid' 
+                                END
+                                WHERE id = $1
+                            `, [pendingAlloc.invoice_id]);
 
                             remainingToAllocate -= allocateAmount;
                             processedInvoices.add(pendingAlloc.invoice_id);
