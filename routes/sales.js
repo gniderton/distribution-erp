@@ -2400,7 +2400,7 @@ router.post('/invoices/regenerate', async (req, res) => {
 // @desc    Get sales invoice lines with dynamic COGS and margins
 router.get('/invoice-lines', async (req, res) => {
     try {
-        const { customer_id, start_date, end_date } = req.query;
+        const { customer_id, start_date, end_date, page = 1, limit } = req.query;
         let queryParams = [];
         let whereConditions = [];
         let paramIdx = 1;
@@ -2425,7 +2425,7 @@ router.get('/invoice-lines', async (req, res) => {
 
         const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
-        const query = `
+        let query = `
             SELECT 
                 sil.id as line_id,
                 sil.invoice_id,
@@ -2468,6 +2468,15 @@ router.get('/invoice-lines', async (req, res) => {
             ${whereClause}
             ORDER BY si.id DESC, sil.id ASC
         `;
+
+        if (limit && limit !== '0') {
+            const limitVal = parseInt(limit);
+            const pageVal = parseInt(page);
+            const offset = (pageVal - 1) * limitVal;
+
+            query += ` LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
+            queryParams.push(limitVal, offset);
+        }
 
         const result = await pool.query(query, queryParams);
         res.json(result.rows);
