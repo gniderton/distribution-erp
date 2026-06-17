@@ -68,6 +68,10 @@ const productRoutes = require('./routes/products');
 app.use('/api/bank-inbound', require('./routes/bankInbound'));
 app.use('/api/sms', require('./routes/bankInbound')); // Shorthand alias
 
+// Import dynamic router
+const dynamicRouter = require('./routes/dynamic');
+app.use('/api', dynamicRouter);
+
 app.use('/api/vendors', require('./routes/vendors'));
 app.use('/api/vendor-payments', require('./routes/vendor_payments'));
 app.use('/api/debit-notes', require('./routes/debit_notes')); // [NEW] Debit Notes
@@ -121,6 +125,7 @@ app.use('/api/finance/loans', require('./routes/loans')); // [NEW] Loan Manageme
 app.use('/api', require('./routes/accounting')); // Shorthand for /api/journal-entries
 app.use('/api/finance/gst', require('./routes/gst_reports'));
 app.use('/api/backups', require('./routes/backups')); 
+
 
 // [TEMP] Migration Endpoint to fix Combo Schema
 app.get('/api/fix-combo-db', async (req, res) => {
