@@ -44,8 +44,8 @@ router.get('/:entity/template', async (req, res) => {
 // 2. GET /api/:entity
 router.get('/:entity', async (req, res, next) => {
     const entity = normalizeEntity(req.params.entity);
-    const specificEntities = ['vendors', 'vendor', 'products', 'product', 'employees', 'employee', 'customers', 'customer', 'channels', 'channel', 'categories', 'category'];
-    if (specificEntities.includes(entity)) {
+    const handledEntities = ['routes', 'route', 'customers', 'customer'];
+    if (!handledEntities.includes(entity)) {
         return next();
     }
     try {
@@ -128,8 +128,15 @@ function parseRaw2DArray(data) {
 }
 
 // 3. POST /api/:entity/bulk
-router.post('/:entity/bulk', async (req, res) => {
+router.post('/:entity/bulk', async (req, res, next) => {
     const entity = normalizeEntity(req.params.entity);
+    const supportedEntities = [
+        'routes', 'route', 'customers', 'customer',
+        'brands', 'brand', 'categories', 'category', 'channels', 'channel'
+    ];
+    if (!supportedEntities.includes(entity)) {
+        return next();
+    }
     const rawData = req.body;
     
     let items;
@@ -311,22 +318,8 @@ router.post('/:entity/bulk', async (req, res) => {
 });
 
 // 4. Bulk DELETE (/api/:entity)
-router.delete('/:entity', async (req, res) => {
+router.delete('/:entity', async (req, res, next) => {
     const entity = normalizeEntity(req.params.entity);
-    
-    console.log("DELETE REQUEST BODY:", req.body);
-    let ids = req.body;
-    if (typeof req.body === 'object' && req.body !== null) {
-        if (Array.isArray(req.body.ids)) {
-            ids = req.body.ids;
-        } else if (Array.isArray(req.body)) {
-            ids = req.body;
-        }
-    }
-    
-    if (!Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ error: 'ids array is required for bulk delete' });
-    }
     
     const tableMap = {
         routes: 'routes', route: 'routes',
@@ -342,7 +335,21 @@ router.delete('/:entity', async (req, res) => {
     
     const table = tableMap[entity];
     if (!table) {
-        return res.status(400).json({ error: `Bulk delete not supported for entity: ${req.params.entity}` });
+        return next();
+    }
+    
+    console.log("DELETE REQUEST BODY:", req.body);
+    let ids = req.body;
+    if (typeof req.body === 'object' && req.body !== null) {
+        if (Array.isArray(req.body.ids)) {
+            ids = req.body.ids;
+        } else if (Array.isArray(req.body)) {
+            ids = req.body;
+        }
+    }
+    
+    if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: 'ids array is required for bulk delete' });
     }
     
     try {
