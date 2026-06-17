@@ -44,7 +44,7 @@ router.get('/:entity/template', async (req, res) => {
 // 2. GET /api/:entity
 router.get('/:entity', async (req, res, next) => {
     const entity = normalizeEntity(req.params.entity);
-    const handledEntities = ['routes', 'route', 'customers', 'customer'];
+    const handledEntities = ['routes', 'route'];
     if (!handledEntities.includes(entity)) {
         return next();
     }
