@@ -108,6 +108,8 @@ app.use('/api/verify-requests', require('./routes/verify_requests')); // [NEW] C
 app.use('/api/targets', require('./routes/targets')); // [NEW] Employee Targets & Performance
 app.use('/api/ai', require('./routes/ai')); // [NEW] Gemini Vision AI OCR
 app.use('/api/eway-bill', require('./routes/eway_bill')); // [NEW] KDK E-Way Bill & Settings
+// [NEW] Letterhead Editor & Email Routes
+app.use('/api/letters', require('./routes/letters'));
 
 // [NEW] Finance Module
 app.use('/api/finance/reconciliation', require('./routes/payment_reconciliation'));
