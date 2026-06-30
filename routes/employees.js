@@ -952,7 +952,7 @@ router.post('/bulk-salary-payment', async (req, res) => {
                                     INSERT INTO customer_payments (
                                         customer_id, amount, payment_mode, transaction_ref, 
                                         status, verification_status, payment_date, remarks
-                                    ) VALUES ($1, $2, 'SALARY_DEDUCTION', $3, 'Verified', 'Verified', NOW(), $4)
+                                    ) VALUES ($1, $2, 'EMPLOYEE_ADJUSTMENT', $3, 'Verified', 'Verified', NOW(), $4)
                                     RETURNING id
                                 `, [customerId, l.amount, `EMP-LIAB-${l.id}`, `Settled via Salary Payment - ${p.month}/${p.year}`]);
                                 const paymentId = payRes.rows[0].id;
