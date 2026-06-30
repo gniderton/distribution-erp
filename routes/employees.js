@@ -968,9 +968,8 @@ router.post('/bulk-salary-payment', async (req, res) => {
                                     UPDATE sales_invoices 
                                     SET 
                                         paid_amount = COALESCE(paid_amount, 0) + $1,
-                                        balance_amount = COALESCE(balance_amount, grand_total) - $1,
                                         status = CASE 
-                                            WHEN (COALESCE(balance_amount, grand_total) - $1) <= 1 THEN 'Paid'
+                                            WHEN (grand_total - (COALESCE(paid_amount, 0) + $1)) <= 1 THEN 'Paid'
                                             ELSE 'Partially Paid'
                                         END
                                     WHERE id = $2
