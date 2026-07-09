@@ -56,6 +56,18 @@ router.post('/', async (req, res) => {
             user_id
         } = req.body;
 
+        let resolvedBankAccountId = bank_account_id;
+
+        // 🚀 SMART AUTO-RESOLUTION: Derive bank account from statement entry if provided
+        if (payment_mode !== 'Cheque' && bank_statement_entry_id) {
+            const bRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [bank_statement_entry_id]);
+            if (bRes.rows.length === 0) {
+                return res.status(400).json({ error: `Bank statement entry ID ${bank_statement_entry_id} not found` });
+            }
+            resolvedBankAccountId = bRes.rows[0].bank_account_id;
+            console.log(`[Smart Loan Disbursement] Resolved bank_account_id from ${bank_account_id} to ${resolvedBankAccountId} via statement entry`);
+        }
+
         await client.query('BEGIN');
 
         // 1. Generate Loan Number
@@ -105,14 +117,14 @@ router.post('/', async (req, res) => {
         if (loan_type === 'TAKEN') {
             // Money Borrowed: Dr Cash/Bank, Cr Loan Payable
             ledgerLines = [
-                { code: acc_bank_cash, debit: principal_amount, credit: 0, bank_account_id },
+                { code: acc_bank_cash, debit: principal_amount, credit: 0, bank_account_id: resolvedBankAccountId },
                 { code: acc_payable, debit: 0, credit: principal_amount }
             ];
         } else {
             // Money Lent: Dr Loan Receivable, Cr Cash/Bank
             ledgerLines = [
                 { code: acc_receivable, debit: principal_amount, credit: 0 },
-                { code: acc_bank_cash, debit: 0, credit: principal_amount, bank_account_id }
+                { code: acc_bank_cash, debit: 0, credit: principal_amount, bank_account_id: resolvedBankAccountId }
             ];
         }
 
@@ -163,6 +175,18 @@ router.post('/:id/installment', async (req, res) => {
             bank_statement_entry_id
         } = req.body;
 
+        let resolvedBankAccountId = bank_account_id;
+
+        // 🚀 SMART AUTO-RESOLUTION: Derive bank account from statement entry if provided
+        if (payment_mode !== 'Cheque' && bank_statement_entry_id) {
+            const bRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [bank_statement_entry_id]);
+            if (bRes.rows.length === 0) {
+                return res.status(400).json({ error: `Bank statement entry ID ${bank_statement_entry_id} not found` });
+            }
+            resolvedBankAccountId = bRes.rows[0].bank_account_id;
+            console.log(`[Smart Loan Installment] Resolved bank_account_id from ${bank_account_id} to ${resolvedBankAccountId} via statement entry`);
+        }
+
         const total_amount = parseFloat(req.body.total_amount) || 0;
         const principal_portion = parseFloat(req.body.principal_portion) || 0;
         const interest_portion = parseFloat(req.body.interest_portion) || 0;
@@ -206,12 +230,12 @@ router.post('/:id/installment', async (req, res) => {
             ledgerLines = [
                 { code: acc_payable, debit: principal_portion, credit: 0 },
                 { code: acc_int_expense, debit: interest_portion, credit: 0 },
-                { code: acc_bank_cash, debit: 0, credit: total_amount, bank_account_id }
+                { code: acc_bank_cash, debit: 0, credit: total_amount, bank_account_id: resolvedBankAccountId }
             ];
         } else {
             // Receiving Lent Money: Dr Cash/Bank, Cr Loans Receivable (Principal), Cr Interest Income
             ledgerLines = [
-                { code: acc_bank_cash, debit: total_amount, credit: 0, bank_account_id },
+                { code: acc_bank_cash, debit: total_amount, credit: 0, bank_account_id: resolvedBankAccountId },
                 { code: acc_receivable, debit: 0, credit: principal_portion },
                 { code: acc_int_income, debit: 0, credit: interest_portion }
             ];
