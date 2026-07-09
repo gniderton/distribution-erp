@@ -78,6 +78,18 @@ router.post('/', async (req, res) => {
 
     const client = await pool.connect();
     try {
+        let resolvedDestinationId = destination_account_id;
+
+        // 🚀 SMART AUTO-RESOLUTION: Derive destination account from statement entry if provided
+        if (payment_mode !== 'Cheque' && bank_statement_entry_id) {
+            const bRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [bank_statement_entry_id]);
+            if (bRes.rows.length === 0) {
+                return res.status(400).json({ error: `Bank statement entry ID ${bank_statement_entry_id} not found` });
+            }
+            resolvedDestinationId = bRes.rows[0].bank_account_id;
+            console.log(`[Smart Other Income] Resolved destination_account_id from ${destination_account_id} to ${resolvedDestinationId} via statement entry`);
+        }
+
         await client.query('BEGIN');
 
         // 1. Handle Sequence
@@ -99,8 +111,8 @@ router.post('/', async (req, res) => {
         if (payment_mode === 'Cheque') {
             drAccountCode = 1004; // Cheques in Hand
         } else {
-            if (!destination_account_id) throw new Error("Destination Account is required for Cash/Online payments");
-            const destRes = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [destination_account_id]);
+            if (!resolvedDestinationId) throw new Error("Destination Account is required for Cash/Online payments");
+            const destRes = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [resolvedDestinationId]);
             if (destRes.rows.length === 0) throw new Error("Invalid Destination Account");
             isCash = destRes.rows[0].bank_name.toLowerCase().includes('cash');
             drAccountCode = isCash ? 1003 : 1002;
@@ -114,7 +126,7 @@ router.post('/', async (req, res) => {
         // 3. Prepare Journal Lines
         const journalLines = [];
         const isCheque = payment_mode === 'Cheque';
-        const effectiveBankAccountId = isCheque ? null : destination_account_id;
+        const effectiveBankAccountId = isCheque ? null : resolvedDestinationId;
 
         if (is_gst_income && Number(tax_amount) > 0) {
             // DR Bank/Cash/Cheque (Asset) - Received Grand Total
@@ -151,7 +163,7 @@ router.post('/', async (req, res) => {
             RETURNING id
         `, [
             incomeNumber, transaction_date || new Date(), category_account_id,
-            destination_account_id, amount, taxable_amount || amount, tax_amount || 0,
+            resolvedDestinationId, amount, taxable_amount || amount, tax_amount || 0,
             is_gst_income || false, gst_no, received_from, /* Reused received_from variable for ID */
             reference_no, description, user_id, journalEntryId, bank_statement_entry_id
         ]);

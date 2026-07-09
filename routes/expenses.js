@@ -99,7 +99,19 @@ router.post('/', async (req, res) => {
         const pSourceId = cleanID(payment_source_id);
         const pCatId = cleanID(category_account_id);
 
-        if (payment_mode !== 'Cheque' && !pSourceId) throw new Error("payment_source_id is missing");
+        let resolvedPaymentSourceId = pSourceId;
+
+        // 🚀 SMART AUTO-RESOLUTION: Derive payment source account from statement entry if provided
+        if (payment_mode !== 'Cheque' && bank_statement_entry_id) {
+            const bRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [bank_statement_entry_id]);
+            if (bRes.rows.length === 0) {
+                return res.status(400).json({ error: `Bank statement entry ID ${bank_statement_entry_id} not found` });
+            }
+            resolvedPaymentSourceId = bRes.rows[0].bank_account_id;
+            console.log(`[Smart Expense] Resolved payment_source_id from ${pSourceId} to ${resolvedPaymentSourceId} via statement entry`);
+        }
+
+        if (payment_mode !== 'Cheque' && !resolvedPaymentSourceId) throw new Error("payment_source_id is missing");
         if (!pCatId) throw new Error("category_account_id is missing");
 
         // Use sequential expense number
@@ -114,7 +126,6 @@ router.post('/', async (req, res) => {
         const expenseNumber = `${prefix}${current_number.toString().padStart(5, '0')}`;
 
         // 1. Get Source Account ID (Cash/Bank/Cheque)
-        let resolvedPaymentSourceId = pSourceId;
         let paymentCOAId = 2004; // Defaults to Cheques Issued if Cheque
         
         // Map Bank Account IDs to Chart of Account Codes
@@ -123,12 +134,12 @@ router.post('/', async (req, res) => {
  
         if (payment_mode !== 'Cheque') {
             let sourceRes;
-            if (!isNaN(pSourceId)) {
-                sourceRes = await client.query('SELECT id FROM bank_accounts WHERE id = $1', [pSourceId]);
+            if (!isNaN(resolvedPaymentSourceId)) {
+                sourceRes = await client.query('SELECT id FROM bank_accounts WHERE id = $1', [resolvedPaymentSourceId]);
             } else {
-                sourceRes = await client.query('SELECT id FROM bank_accounts WHERE bank_name = $1', [pSourceId]);
+                sourceRes = await client.query('SELECT id FROM bank_accounts WHERE bank_name = $1', [resolvedPaymentSourceId]);
             }
-            if (sourceRes.rows.length === 0) throw new Error(`Invalid Payment Source: "${pSourceId}"`);
+            if (sourceRes.rows.length === 0) throw new Error(`Invalid Payment Source: "${resolvedPaymentSourceId}"`);
             resolvedPaymentSourceId = sourceRes.rows[0].id;
             paymentCOAId = coa_map[resolvedPaymentSourceId] || 1003; // Fallback to Cash if unknown
         }
