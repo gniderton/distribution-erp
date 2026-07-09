@@ -20,15 +20,38 @@ router.post('/', async (req, res) => {
             denominations                // Cash denominations JSON
         } = req.body;
 
-        if (from_account_id === to_account_id) {
+        let resolvedFromId = from_account_id;
+        let resolvedToId = to_account_id;
+
+        // 🚀 SMART AUTO-RESOLUTION: Derive source account from statement entry if provided
+        if (from_bank_statement_entry_id) {
+            const bRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [from_bank_statement_entry_id]);
+            if (bRes.rows.length === 0) {
+                return res.status(400).json({ error: `Source bank statement entry ID ${from_bank_statement_entry_id} not found` });
+            }
+            resolvedFromId = bRes.rows[0].bank_account_id;
+            console.log(`[Smart Transfer] Resolved from_account_id from ${from_account_id} to ${resolvedFromId} via statement entry`);
+        }
+
+        // 🚀 SMART AUTO-RESOLUTION: Derive destination account from statement entry if provided
+        if (to_bank_statement_entry_id) {
+            const bRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [to_bank_statement_entry_id]);
+            if (bRes.rows.length === 0) {
+                return res.status(400).json({ error: `Destination bank statement entry ID ${to_bank_statement_entry_id} not found` });
+            }
+            resolvedToId = bRes.rows[0].bank_account_id;
+            console.log(`[Smart Transfer] Resolved to_account_id from ${to_account_id} to ${resolvedToId} via statement entry`);
+        }
+
+        if (resolvedFromId === resolvedToId) {
             return res.status(400).json({ error: 'Source and Destination accounts cannot be the same' });
         }
 
         await client.query('BEGIN');
 
         // 1. Get Accounts Info
-        const fromAccRes = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [from_account_id]);
-        const toAccRes = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [to_account_id]);
+        const fromAccRes = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [resolvedFromId]);
+        const toAccRes = await client.query('SELECT bank_name FROM bank_accounts WHERE id = $1', [resolvedToId]);
 
         if (fromAccRes.rows.length === 0 || toAccRes.rows.length === 0) {
             throw new Error('One or both accounts not found');
@@ -39,14 +62,14 @@ router.post('/', async (req, res) => {
 
         // 2. Determine COA Codes (Cash: 1003, All Banks: 1002)
         const coa_map = { 1: 1002, 2: 1003, 3: 1002, 4: 1002, 5: 1002 }; 
-        const fromCOAId = coa_map[from_account_id] || 1003;
-        const toCOAId = coa_map[to_account_id] || 1003;
+        const fromCOAId = coa_map[resolvedFromId] || 1003;
+        const toCOAId = coa_map[resolvedToId] || 1003;
 
         // 3. Create Journal Entry
         // Debit To-Account, Credit From-Account
         const ledgerLines = [
-            { code: toCOAId, debit: Number(amount), credit: 0, bank_account_id: to_account_id },
-            { code: fromCOAId, debit: 0, credit: Number(amount), bank_account_id: from_account_id }
+            { code: toCOAId, debit: Number(amount), credit: 0, bank_account_id: resolvedToId },
+            { code: fromCOAId, debit: 0, credit: Number(amount), bank_account_id: resolvedFromId }
         ];
 
         const description = `Internal Transfer (${payment_mode}): ${fromAcc.bank_name} -> ${toAcc.bank_name}${reference_no ? ' (Ref: ' + reference_no + ')' : ''}`;
@@ -65,7 +88,7 @@ router.post('/', async (req, res) => {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING id
         `, [
-            transfer_date, from_account_id, to_account_id, amount,
+            transfer_date, resolvedFromId, resolvedToId, amount,
             payment_mode, reference_no, remarks, journalId,
             from_bank_statement_entry_id, to_bank_statement_entry_id,
             denominations ? JSON.stringify(denominations) : null
