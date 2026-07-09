@@ -269,6 +269,18 @@ router.post('/payment', async (req, res) => {
             remarks
         } = req.body;
 
+        let resolvedBankAccountId = bank_account_id;
+
+        // 🚀 SMART AUTO-RESOLUTION: Derive bank account from statement entry if provided
+        if (payment_mode !== 'Cheque' && bank_statement_entry_id) {
+            const bRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [bank_statement_entry_id]);
+            if (bRes.rows.length === 0) {
+                return res.status(400).json({ error: `Bank statement entry ID ${bank_statement_entry_id} not found` });
+            }
+            resolvedBankAccountId = bRes.rows[0].bank_account_id;
+            console.log(`[Smart Asset Purchase Payment] Resolved bank_account_id from ${bank_account_id} to ${resolvedBankAccountId} via statement entry`);
+        }
+
         await client.query('BEGIN');
 
         // 1. Get Asset Info
@@ -293,7 +305,7 @@ router.post('/payment', async (req, res) => {
 
         const ledgerLines = [
             { code: acc_ap, debit: Number(amount), credit: 0 },
-            { code: creditAcc, debit: 0, credit: Number(amount), bank_account_id: (payment_mode !== 'Cash') ? bank_account_id : null }
+            { code: creditAcc, debit: 0, credit: Number(amount), bank_account_id: (payment_mode !== 'Cash') ? resolvedBankAccountId : null }
         ];
 
         const description = `Asset Purchase Payment (${payment_mode}): ${assetName}`;
@@ -608,6 +620,18 @@ router.post('/:id/sale-payment', async (req, res) => {
             online_reference_no  // Added
         } = req.body;
 
+        let resolvedBankAccountId = bank_account_id;
+
+        // 🚀 SMART AUTO-RESOLUTION: Derive bank account from statement entry if provided
+        if (payment_mode !== 'Cheque' && bank_statement_entry_id) {
+            const bRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [bank_statement_entry_id]);
+            if (bRes.rows.length === 0) {
+                return res.status(400).json({ error: `Bank statement entry ID ${bank_statement_entry_id} not found` });
+            }
+            resolvedBankAccountId = bRes.rows[0].bank_account_id;
+            console.log(`[Smart Asset Sale Payment] Resolved bank_account_id from ${bank_account_id} to ${resolvedBankAccountId} via statement entry`);
+        }
+
         await client.query('BEGIN');
 
         // 1. Get Asset Info
@@ -627,7 +651,7 @@ router.post('/:id/sale-payment', async (req, res) => {
         if (payment_mode === 'Cheque') debitAcc = acc_chq_in_hand;
 
         const ledgerLines = [
-            { code: debitAcc, debit: Number(amount), credit: 0, bank_account_id: (payment_mode !== 'Cash' && payment_mode !== 'Cheque') ? bank_account_id : null },
+            { code: debitAcc, debit: Number(amount), credit: 0, bank_account_id: (payment_mode !== 'Cash' && payment_mode !== 'Cheque') ? resolvedBankAccountId : null },
             { code: acc_ar, debit: 0, credit: Number(amount) }
         ];
 
