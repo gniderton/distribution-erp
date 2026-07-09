@@ -57,6 +57,19 @@ router.post('/', async (req, res) => {
 
         await client.query('BEGIN');
 
+        // Resolve Bank Account & UTR ref dynamically if Online mode with Statement Entry selected
+        let resolvedBankAccountId = bank_account_id;
+        let resolvedTransactionRef = transaction_ref;
+        if (mode && mode.toUpperCase() === 'ONLINE' && bank_statement_entry_id) {
+            const bseRes = await client.query('SELECT bank_account_id, bank_ref_id FROM bank_statement_entries WHERE id = $1', [bank_statement_entry_id]);
+            if (bseRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Selected Bank Statement Entry not found' });
+            }
+            resolvedBankAccountId = bseRes.rows[0].bank_account_id;
+            resolvedTransactionRef = bseRes.rows[0].bank_ref_id;
+        }
+
         // 0.5 Generate Payment Number
         const seqRes = await client.query(`
             SELECT id, prefix, current_number 
@@ -82,7 +95,7 @@ router.post('/', async (req, res) => {
             (vendor_id, amount, payment_date, payment_mode, transaction_ref, remarks, transaction_type, bank_account_id, payment_number, bank_statement_entry_id)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id, payment_number
-        `, [vendor_id, amount, payment_date, mode, transaction_ref, remarks, type, bank_account_id, paymentNumber, bank_statement_entry_id]);
+        `, [vendor_id, amount, payment_date, mode, resolvedTransactionRef, remarks, type, resolvedBankAccountId, paymentNumber, bank_statement_entry_id]);
 
         const paymentId = paymentRes.rows[0].id;
 
@@ -107,7 +120,7 @@ router.post('/', async (req, res) => {
             // Dr Accounts Payable (Liability decreases), Cr Bank/Cash/Cheque Issued
             ledgerLines = [
                 { code: acc_ap, debit: Number(amount), credit: 0 },
-                { code: targetAcc, debit: 0, credit: Number(amount), bank_account_id: (normalizedMode === 'CHEQUE') ? null : bank_account_id }
+                { code: targetAcc, debit: 0, credit: Number(amount), bank_account_id: (normalizedMode === 'CHEQUE') ? null : resolvedBankAccountId }
             ];
 
             if (normalizedMode === 'CHEQUE') {
@@ -118,7 +131,7 @@ router.post('/', async (req, res) => {
                         type, party_type, party_id, reference_type, reference_id, status
                     ) VALUES ($1, $2, $3, $4, $5, 'OUTGOING', 'VENDOR', $6, 'VENDOR_PAYMENT', $7, 'PENDING')
                 `, [
-                    transaction_ref, 
+                    resolvedTransactionRef, 
                     req.body.cheque_date || payment_date, 
                     bId,
                     req.body.bank_name || 'Own Bank', 
@@ -133,7 +146,7 @@ router.post('/', async (req, res) => {
             let targetAcc = (normalizedMode === 'CASH') ? acc_cash : acc_bank;
 
             ledgerLines = [
-                { code: targetAcc, debit: Number(amount), credit: 0, bank_account_id: bank_account_id },
+                { code: targetAcc, debit: Number(amount), credit: 0, bank_account_id: resolvedBankAccountId },
                 { code: acc_ap, debit: 0, credit: Number(amount) }
             ];
         }
