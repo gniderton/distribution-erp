@@ -2461,6 +2461,7 @@ router.get('/invoice-lines', async (req, res) => {
                 b.brand_name,
                 sil.shipped_qty,
                 sil.rate as selling_rate,
+                COALESCE(sil.mrp, ib.mrp, p.mrp, 0) as mrp,
                 sil.tax_percent,
                 sil.tax_amount,
                 sil.gross_amount,
