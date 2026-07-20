@@ -98,6 +98,14 @@ app.use('/api/dse', require('./routes/dse')); // [NEW] DSE Ops (EOD, etc)
 app.use('/api/sales-orders', require('./routes/sales_orders')); // [NEW] Sales Admin
 app.use('/api/schemes', require('./routes/schemes')); // [NEW] Scheme Engine
 app.use('/api/migration', require('./routes/migration')); // Bulk Data Importer
+app.get('/api/company-settings', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM company_settings LIMIT 1');
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 app.use('/api/loan-entities', require('./routes/loan_entities')); // Master Data for Loans
 app.use('/api/asset-entities', require('./routes/asset_entities')); // [NEW] Master Data for Assets (Vendors/Customers)
 app.use('/api/channels', require('./routes/channels')); // [NEW] Channel Maaping
