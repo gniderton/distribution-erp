@@ -413,9 +413,9 @@ export default function VendorPage() {
       
       // Default fallback brand values matching ERP defaults
       const brand = {
-        regt_name: companySettings?.company_name || "GNIDERTON DISTRIBUTIONS PVT LTD",
-        address: companySettings?.address || "Industrial Development Area, Kozhikode, Kerala",
-        gst: companySettings?.gstin || "32AAACG1924D1ZS"
+        regt_name: companySettings?.company_name || companySettings?.regt_name || "GNIDERTON DISTRIBUTIONS PVT LTD",
+        address: [companySettings?.address, companySettings?.district].filter(Boolean).join(', ') || "Industrial Development Area, Kozhikode, Kerala",
+        gst: companySettings?.gstin || companySettings?.gst || "32AAACG1924D1ZS"
       }
 
       try {
@@ -648,9 +648,9 @@ export default function VendorPage() {
       const downloadTimestamp = new Date().toLocaleString()
 
       const brand = {
-        regt_name: companySettings?.company_name || "GNIDERTON DISTRIBUTIONS PVT LTD",
-        address: companySettings?.address || "Industrial Development Area, Kozhikode, Kerala",
-        gst: companySettings?.gstin || "32AAACG1924D1ZS",
+        regt_name: companySettings?.company_name || companySettings?.regt_name || "GNIDERTON DISTRIBUTIONS PVT LTD",
+        address: [companySettings?.address, companySettings?.district].filter(Boolean).join(', ') || "Industrial Development Area, Kozhikode, Kerala",
+        gst: companySettings?.gstin || companySettings?.gst || "32AAACG1924D1ZS",
         email: companySettings?.email || "accounts@gniderton.com",
         contact_no: companySettings?.contact_no || "+91 495 272 1924"
       }
