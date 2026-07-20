@@ -444,7 +444,7 @@ export default function VendorPage() {
       doc.setFont("helvetica", "normal")
       doc.setFontSize(9)
       doc.text(`Slip No: ${header.payment_number || '-'}`, margin + 5, boxY + 30)
-      doc.text(`Date: ${header.payment_date || '-'}`, margin + 5, boxY + 45)
+      doc.text(`Date: ${header.payment_date ? new Date(header.payment_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-') : '-'}`, margin + 5, boxY + 45)
       doc.text(`Mode: ${header.payment_mode || '-'}`, margin + 5, boxY + 60)
       doc.text(`Ref: ${header.final_ref || '-'}`, margin + 5, boxY + 75)
 
@@ -457,8 +457,8 @@ export default function VendorPage() {
       doc.text(brand.regt_name, margin + boxWidth + 10, boxY + 28, { maxWidth: boxWidth - 15 })
       doc.setFontSize(8)
       doc.setFont("helvetica", "normal")
-      doc.text(brand.address, margin + boxWidth + 10, boxY + 45, { maxWidth: boxWidth - 15 })
-      doc.text(`GST: ${brand.gst}`, margin + boxWidth + 10, boxY + 75)
+      doc.text(brand.address, margin + boxWidth + 10, boxY + 40, { maxWidth: boxWidth - 15 })
+      doc.text(`GST: ${brand.gst}`, margin + boxWidth + 10, boxY + 70)
       doc.text(`Bank: ${header.bank_name || 'N/A'}`, margin + boxWidth + 10, boxY + 92)
 
       // Box 3: Paid To
@@ -475,7 +475,7 @@ export default function VendorPage() {
       doc.text(`Location: ${header.vendor_city || selectedVendor.district || ''}`, margin + boxWidth * 2 + 15, boxY + 84)
 
       const mainBody = allocations.map((a: any) => [
-        a.invoice_date || '-',
+        a.invoice_date ? new Date(a.invoice_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-') : '-',
         a.bill_no_vendor || a.invoice_number || '-',
         Number(a.bill_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
         Number(a.amount_paid || a.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })
