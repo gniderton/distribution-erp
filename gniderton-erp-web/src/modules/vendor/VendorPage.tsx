@@ -32,7 +32,7 @@ export default function VendorPage() {
 
   const [companySettings, setCompanySettings] = useState<any>(null)
   useEffect(() => {
-    api.get('/company-settings')
+    api.get('/api/company-settings')
       .then(res => {
         setCompanySettings(res.data)
       })
@@ -446,7 +446,7 @@ export default function VendorPage() {
       doc.text(`Slip No: ${header.payment_number || '-'}`, margin + 5, boxY + 30)
       doc.text(`Date: ${header.payment_date || '-'}`, margin + 5, boxY + 45)
       doc.text(`Mode: ${header.payment_mode || '-'}`, margin + 5, boxY + 60)
-      doc.text(`Ref: ${header.transaction_ref || '-'}`, margin + 5, boxY + 75)
+      doc.text(`Ref: ${header.final_ref || '-'}`, margin + 5, boxY + 75)
 
       // Box 2: Issued By
       doc.rect(margin + boxWidth + 5, boxY, boxWidth, 100)

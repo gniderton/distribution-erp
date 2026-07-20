@@ -94,7 +94,7 @@ export default function InventoryPage() {
   // Dynamic Company Settings from DB company_settings table
   const [companySettings, setCompanySettings] = useState<any>(null)
   useEffect(() => {
-    api.get('/company-settings')
+    api.get('/api/company-settings')
       .then(res => {
         setCompanySettings(res.data)
       })
