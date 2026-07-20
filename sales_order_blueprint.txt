@@ -1,0 +1,424 @@
+--- SALES ORDER PAGE ARCHITECTURE ---
+- undefined [Type: CANVAS_WIDGET] 
+  - undefined [Type: CONTAINER_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: TEXT_WIDGET] (Label: "GNIDERTON ERP - Sales Order")
+      - undefined [Type: BUTTON_GROUP_WIDGET] 
+      - undefined [Type: BUTTON_WIDGET] (Label: "Logout")
+          * Event -> onClick: "{{ storeValue('isAuthenticated', false); navigateTo('Login'); }}"
+  - undefined [Type: MODAL_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: ICON_BUTTON_WIDGET] 
+          * Event -> onClick: "{{closeModal(modalStockAllocation.name);}}"
+      - undefined [Type: TABLE_WIDGET_V2] 
+          * Table Columns:
+            - item_id (Label: "item_id", Type: text, Editable: false)
+            - product_name (Label: "product_name", Type: text, Editable: false)
+            - demand (Label: "demand", Type: number, Editable: false)
+            - master_rate (Label: "master_rate", Type: number, Editable: false)
+            - real_stock (Label: "real_stock", Type: number, Editable: false)
+            - transit_qty (Label: "transit_qty", Type: number, Editable: false)
+            - temp_batch (Label: "temp_batch", Type: text, Editable: false)
+            - total_avail (Label: "total_avail", Type: number, Editable: false)
+            - shortage (Label: "shortage", Type: number, Editable: false)
+            - status (Label: "status", Type: text, Editable: false)
+            - mrp (Label: "mrp", Type: number, Editable: false)
+            - distributor_rate (Label: "distributor_rate", Type: number, Editable: false)
+            - wholesale_rate (Label: "wholesale_rate", Type: number, Editable: false)
+            - dealer_rate (Label: "dealer_rate", Type: number, Editable: false)
+            - retail_rate (Label: "retail_rate", Type: number, Editable: false)
+            - rate (Label: "rate", Type: number, Editable: false)
+            - customColumn1 (Label: "View", Type: iconButton, Editable: false)
+              * Col Event -> onClick: "{{JSObject2.getProductBreakup();}}"
+      - undefined [Type: INPUT_WIDGET_V2] 
+      - undefined [Type: INPUT_WIDGET_V2] 
+      - undefined [Type: BUTTON_GROUP_WIDGET] 
+  - undefined [Type: CHECKBOX_GROUP_WIDGET] 
+  - undefined [Type: BUTTON_WIDGET] (Label: "Process Selected Orders")
+      * Event -> onClick: "{{getProducts.run().then(() => {\n  JSObject1.analyzeDemand();\n  showModal(modalStockAllocation.name);\n});}}"
+  - undefined [Type: TABLE_WIDGET_V2] 
+      * Table Columns:
+        - id (Label: "id", Type: text, Editable: false)
+        - created_at (Label: "created_at", Type: date, Editable: false)
+        - so_number (Label: "so_number", Type: text, Editable: false)
+        - customer_id (Label: "customer_id", Type: text, Editable: false)
+        - created_by (Label: "created_by", Type: text, Editable: false)
+        - order_date (Label: "order_date", Type: date, Editable: false)
+        - delivery_date (Label: "delivery_date", Type: text, Editable: false)
+        - status (Label: "status", Type: text, Editable: false)
+        - total_amount (Label: "total_amount", Type: text, Editable: false)
+        - tax_amount (Label: "tax_amount", Type: text, Editable: false)
+        - remarks (Label: "remarks", Type: text, Editable: false)
+        - payment_instruction (Label: "payment_instruction", Type: text, Editable: false)
+        - special_instruction (Label: "special_instruction", Type: text, Editable: false)
+        - location_lat (Label: "location_lat", Type: text, Editable: false)
+        - location_lng (Label: "location_lng", Type: text, Editable: false)
+        - offline_id (Label: "offline_id", Type: text, Editable: false)
+        - dse_id (Label: "dse_id", Type: text, Editable: false)
+        - updated_at (Label: "updated_at", Type: date, Editable: false)
+        - latitude (Label: "latitude", Type: text, Editable: false)
+        - longitude (Label: "longitude", Type: text, Editable: false)
+        - notes (Label: "notes", Type: text, Editable: false)
+        - sync_id (Label: "sync_id", Type: text, Editable: false)
+        - report_id (Label: "report_id", Type: text, Editable: false)
+        - customer_name (Label: "customer_name", Type: text, Editable: false)
+        - route_id (Label: "route_id", Type: text, Editable: false)
+        - route_name (Label: "route_name", Type: text, Editable: false)
+        - dse_name (Label: "dse_name", Type: text, Editable: false)
+        - lines (Label: "lines", Type: text, Editable: false)
+        - customColumn1 (Label: "View", Type: iconButton, Editable: false)
+          * Col Event -> onClick: "{{showModal(mdlViewOrderLines.name);}}"
+  - undefined [Type: MODAL_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: ICON_BUTTON_WIDGET] 
+          * Event -> onClick: "{{closeModal(modalTransitEntry.name).then(() => {\n  showModal(modalStockAllocation.name);\n});}}"
+      - undefined [Type: TABLE_WIDGET_V2] 
+          * Table Columns:
+            - item_id (Label: "item_id", Type: text, Editable: false)
+            - ordered_qty (Label: "ordered_qty", Type: number, Editable: false)
+            - shortfall_qty (Label: "shortfall_qty", Type: number, Editable: false)
+            - qty (Label: "qty", Type: number, Editable: true)
+              * Col Event -> onSubmit: "{{TransitTableEdit.syncTransitEntry();}}"
+            - batch_code (Label: "batch_code", Type: text, Editable: false)
+            - rate (Label: "rate", Type: number, Editable: false)
+            - product_name (Label: "product_name", Type: text, Editable: false)
+      - undefined [Type: BUTTON_WIDGET] (Label: "Update Transit Stock")
+          * Event -> onClick: "{{TransitTableEdit.syncTransitEntry();}}"
+  - undefined [Type: MODAL_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: ICON_BUTTON_WIDGET] 
+          * Event -> onClick: "{{closeModal(mdlViewOrderLines.name);}}"
+      - undefined [Type: TEXT_WIDGET] (Label: "{{tblSalesOrders.triggeredRow.customer_name}}")
+      - undefined [Type: TABLE_WIDGET_V2] 
+          * Table Columns:
+            - product_id (Label: "product_id", Type: number, Editable: false)
+            - product_name (Label: "product_name", Type: text, Editable: false)
+            - qty (Label: "qty", Type: number, Editable: false)
+            - rate (Label: "rate", Type: number, Editable: false)
+            - amount (Label: "amount", Type: number, Editable: false)
+  - undefined [Type: MODAL_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: ICON_BUTTON_WIDGET] 
+          * Event -> onClick: "{{showModal(modalStockAllocation.name);}}"
+      - undefined [Type: TABLE_WIDGET_V2] 
+          * Table Columns:
+            - so_number (Label: "so_number", Type: text, Editable: false)
+            - customer_name (Label: "customer_name", Type: text, Editable: false)
+            - route (Label: "route", Type: text, Editable: false)
+            - dse_name (Label: "dse_name", Type: text, Editable: false)
+            - qty (Label: "qty", Type: number, Editable: false)
+            - rate (Label: "rate", Type: number, Editable: false)
+            - amount (Label: "amount", Type: number, Editable: false)
+
+--- CONNECTED QUERIES & API ENDPOINTS ---
+- Action Query: getSalesOrder
+  Path: /api/sales-orders
+  Method: GET
+  Query Parameters: [{"key":"status","value":"{{ 'Confirmed'}}"}]
+  Body: ""
+- Action Query: analyzeDemand
+  Path: 
+  Method: 
+  Query Parameters: []
+  Body: "() => {\n  const selectedOrders = tblSalesOrders.selectedRows || [];\n  const allProducts = getProducts.data.data || getProducts.data || [];\n  const transitMap = appsmith.store.varTransitStock || ({});\n  console.log(\"Debug: Processing\", selectedOrders.length, \"orders\");\n  console.log(\"Debug: All Products (First Entry):\", allProducts[0]);\n  if (selectedOrders.length === 0) {\n    showAlert(\"Please select at least one order.\", \"warning\");\n    return;\n  }\n  let demandMap = {};\n  selectedOrders.forEach(order => {\n    let lines = [];\n    try {\n      lines = typeof order.lines === 'string' ? JSON.parse(order.lines) : order.lines || [];\n    } catch (e) {\n      console.error(\"Error parsing order lines\", e);\n    }\n    lines.forEach(line => {\n      const pid = String(line.product_id);\n      if (!demandMap[pid]) {\n        demandMap[pid] = {\n          item_id: pid,\n          product_name: line.product_name,\n          demand: 0,\n          master_rate: Number(line.rate || 0)\n        };\n      }\n      demandMap[pid].demand += Number(line.qty || line.ordered_qty || 0);\n    });\n  });\n  const analysis = Object.values(demandMap).map(item => {\n    const product = allProducts.find(p => String(p.id) === String(item.item_id));\n    if (!product) console.warn(\"Could not find product details for ID:\", item.item_id);\n    const realStock = Number(product.current_stock || 0);\n    const transitEntry = transitMap[item.item_id] || ({});\n    const transitQty = Number(transitEntry.qty || 0);\n    const totalAvail = realStock + transitQty;\n    const shortage = Math.max(0, item.demand - totalAvail);\n    return {\n      ...item,\n      real_stock: realStock,\n      transit_qty: transitQty,\n      temp_batch: transitEntry.batch_code || '-',\n      total_avail: totalAvail,\n      shortage: shortage,\n      status: shortage > 0 ? \"SHORT\" : \"OK\",\n      mrp: Number(product.mrp || 0),\n      distributor_rate: Number(product?.distributor_rate || 0),\n      wholesale_rate: Number(product?.wholesale_rate || 0),\n      dealer_rate: Number(product?.dealer_rate || 0),\n      retail_rate: Number(product?.retail_rate || 0),\n      rate: item.master_rate\n    };\n  });\n  storeValue('varDemandAnalysis', analysis);\n  showModal('modalStockAllocation');\n}"
+- Action Query: getProducts
+  Path: /api/products
+  Method: GET
+  Query Parameters: []
+  Body: ""
+- Action Query: generateBulkInvoices
+  Path: 
+  Method: 
+  Query Parameters: []
+  Body: "async () => {\n  const selectedRows = tblSalesOrders.selectedRows || [];\n  const selectedIDs = selectedRows.map(row => row.id);\n  const transitData = appsmith.store.varTransitStock || ({});\n  if (!selectedIDs || selectedIDs.length === 0) {\n    showAlert(\"No orders selected.\", \"warning\");\n    return;\n  }\n  try {\n    const data = await apiBulkInvoiceGenerate.run({\n      order_ids: selectedIDs,\n      transit_stock: transitData,\n      allow_negative_stock: true\n    });\n    closeModal('modalStockAllocation');\n    showAlert(`Generated ${data.invoices ? data.invoices.length : 'multiple'} Invoices`, \"success\");\n    await getSalesOrder.run();\n    storeValue('varTransitStock', {});\n    storeValue('varDemandAnalysis', []);\n  } catch (err) {\n    showAlert(\"Error: \" + (err.message || \"Failed to generate invoices\"), \"error\");\n  }\n}"
+- Action Query: apiBulkInvoiceGenerate
+  Path: /api/sales/bulk-invoice-generate
+  Method: POST
+  Query Parameters: []
+  Body: "{\n  \"order_ids\": {{this.params.order_ids}},\n  \"transit_stock\": {{this.params.transit_stock}},\n  \"allow_negative_stock\": {{this.params.allow_negative_stock}}\n}"
+- Action Query: openTransitEntry
+  Path: 
+  Method: 
+  Query Parameters: []
+  Body: "() => {\n  const rows = tblAllocation.selectedRows || [];\n  if (rows.length === 0) {\n    showAlert(\"Please select at least one item to allocate transit stock.\", \"warning\");\n    return;\n  }\n  const currentStock = appsmith.store.varTransitStock || ({});\n  const tableRows = rows.map(r => {\n    const pid = String(r.item_id || r.id);\n    const saved = currentStock[pid] || ({});\n    return {\n      item_id: pid,\n      product_name: r.product_name,\n      ordered_qty: Number(r.ordered_qty || 0),\n      shortfall_qty: Number(r.shortfall_qty || 0),\n      qty: saved.qty !== undefined ? saved.qty : Number(r.shortfall_qty || 0),\n      batch_code: saved.batch_code || 'TRANSIT-PENDING',\n      rate: saved.rate !== undefined ? saved.rate : Number(r.rate || 0)\n    };\n  });\n  storeValue('varTransitTableData', tableRows);\n}"
+- Action Query: syncTransitEntry
+  Path: 
+  Method: 
+  Query Parameters: []
+  Body: "async () => {\n  const changes = tblTransitEntry.updatedRows || [];\n  if (changes.length === 0) return;\n  let newTableData = _.cloneDeep(appsmith.store.varTransitTableData || []);\n  let sessionMap = _.cloneDeep(appsmith.store.varTransitStock || ({}));\n  changes.forEach(change => {\n    const updatedRowData = change.allFields;\n    const pid = String(updatedRowData.item_id);\n    const targetIndex = newTableData.findIndex(row => String(row.item_id) === pid);\n    if (targetIndex !== -1) {\n      newTableData[targetIndex] = {\n        ...newTableData[targetIndex],\n        ...updatedRowData\n      };\n      const finalRow = newTableData[targetIndex];\n      sessionMap[pid] = {\n        qty: Number(finalRow.qty),\n        batch_code: finalRow.batch_code,\n        rate: Number(finalRow.rate)\n      };\n    }\n  });\n  await storeValue(\"varTransitTableData\", newTableData);\n  await storeValue(\"varTransitStock\", sessionMap);\n  resetWidget(\"tblTransitEntry\", true);\n  showAlert(`Updated ${changes.length} line(s)`, \"info\");\n}"
+- Action Query: getProductBreakup
+  Path: 
+  Method: 
+  Query Parameters: []
+  Body: "() => {\n  const selectedProduct = tblAllocation.triggeredRow;\n  const allOrders = tblSalesOrders.selectedRows || [];\n  if (!selectedProduct || !selectedProduct.item_id) {\n    showAlert(\"Please select a product row first.\", \"warning\");\n    return;\n  }\n  const targetId = String(selectedProduct.item_id);\n  const breakup = allOrders.reduce((acc, order) => {\n    let lines = [];\n    try {\n      lines = typeof order.lines === 'string' ? JSON.parse(order.lines) : order.lines || [];\n    } catch (e) {\n      return acc;\n    }\n    const productLine = lines.find(l => String(l.product_id) === targetId);\n    if (productLine) {\n      acc.push({\n        so_number: order.so_number,\n        customer_name: order.customer_name,\n        route: order.route_name,\n        dse_name: order.dse_name,\n        qty: Number(productLine.qty || 0),\n        rate: productLine.rate,\n        amount: productLine.amount\n      });\n    }\n    return acc;\n  }, []);\n  storeValue('varProductBreakup', breakup);\n  showModal('mdlBreakup');\n}"
+
+--- CONNECTED JS OBJECTS (JS SCRIPTS) ---
+- JS Object: JSObject1
+  Code:
+export default {
+    analyzeDemand: () => {
+        // 1. Debugging Inputs
+        // Make sure your tblSalesOrders widget has "Enable multi-row selection" turned ON
+        const selectedOrders = tblSalesOrders.selectedRows || [];
+        const allProducts = getProducts.data.data || getProducts.data || [];
+        
+        // Appsmith uses the global 'store' for state variables
+        const transitMap = appsmith.store.varTransitStock || {};
+        
+        console.log("Debug: Processing", selectedOrders.length, "orders");
+        console.log("Debug: All Products (First Entry):", allProducts[0]);
+        
+        if (selectedOrders.length === 0) {
+            showAlert("Please select at least one order.", "warning");
+            return;
+        }
+
+        // 2. Aggregate Demand
+        let demandMap = {}; 
+        selectedOrders.forEach(order => {
+            // Sometimes Appsmith stores nested JSON as strings. Parse it if necessary.
+            let lines = [];
+            try {
+                lines = typeof order.lines === 'string' ? JSON.parse(order.lines) : (order.lines || []);
+            } catch(e) {
+                console.error("Error parsing order lines", e);
+            }
+            
+            lines.forEach(line => {
+                // FORCE STRING for comparison safety
+                const pid = String(line.product_id); 
+                if (!demandMap[pid]) {
+                    demandMap[pid] = { 
+                        item_id: pid, 
+                        product_name: line.product_name, 
+                        demand: 0,
+                        master_rate: Number(line.rate || 0) 
+                    };
+                }
+                demandMap[pid].demand += Number(line.qty || line.ordered_qty || 0); // Handle 'qty' or 'ordered_qty'
+            });
+        });
+
+        // 3. Compare (Real DB + Temp Variable)
+        const analysis = Object.values(demandMap).map(item => {
+            // TYPE SAFE FIND: Compare as Strings
+            const product = allProducts.find(p => String(p.id) === String(item.item_id));
+            
+            if (!product) console.warn("Could not find product details for ID:", item.item_id);
+            
+            const realStock = Number(product.current_stock || 0);
+            const transitEntry = transitMap[item.item_id] || {};
+            const transitQty = Number(transitEntry.qty || 0);
+            
+            const totalAvail = realStock + transitQty;
+            const shortage = Math.max(0, item.demand - totalAvail);
+            
+            return {
+                ...item,
+                real_stock: realStock,
+                transit_qty: transitQty,
+                temp_batch: transitEntry.batch_code || '-',
+                total_avail: totalAvail,
+                shortage: shortage,
+                status: shortage > 0 ? "SHORT" : "OK",
+                // Prices from Master Table (Null check)
+                mrp: Number(product.mrp || 0),
+                distributor_rate: Number(product?.distributor_rate || 0),
+                wholesale_rate: Number(product?.wholesale_rate || 0),
+                dealer_rate: Number(product?.dealer_rate || 0),
+                retail_rate: Number(product?.retail_rate || 0),
+                rate: item.master_rate 
+            };
+        });
+
+        // 4. Update and Open Modal
+        // Appsmith global store takes a key and a value
+        storeValue('varDemandAnalysis', analysis);
+        
+        // Show the Appsmith Modal widget
+        showModal('modalStockAllocation');
+    }
+}
+
+
+- JS Object: Invoice_Actions
+  Code:
+export default {
+    generateBulkInvoices: async () => {
+        // Appsmith gives you the full array of selected rows. Map them to extract just the ID.
+        // Make sure 'id' matches the primary key column name in your table!
+        const selectedRows = tblSalesOrders.selectedRows || [];
+        const selectedIDs = selectedRows.map(row => row.id); 
+        
+        // Get state variable from the Appsmith store
+        const transitData = appsmith.store.varTransitStock || {};
+        
+        if (!selectedIDs || selectedIDs.length === 0) {
+             showAlert("No orders selected.", "warning");
+             return;
+        }
+
+        try {
+            // Trigger Backend - Pass variables directly into the run() function
+            // Note: Inside the actual API widget body, you MUST reference these 
+            // values using {{this.params.order_ids}} and {{this.params.transit_stock}}
+            const data = await apiBulkInvoiceGenerate.run({
+                order_ids: selectedIDs,
+                transit_stock: transitData, 
+                allow_negative_stock: true
+            });
+            
+            // --- On Success ---
+            closeModal('modalStockAllocation');
+            showAlert(`Generated ${data.invoices ? data.invoices.length : 'multiple'} Invoices`, "success");
+            
+            // Cleanup actions
+            await getSalesOrder.run();  
+            storeValue('varTransitStock', {}); 
+            storeValue('varDemandAnalysis', []); 
+            
+        } catch (err) {
+            // --- On Failure ---
+            showAlert("Error: " + (err.message || "Failed to generate invoices"), "error");
+        }
+    }
+}
+
+
+- JS Object: Transit_Actions
+  Code:
+export default {
+    openTransitEntry: () => {
+        // 1. Get selected rows
+        // Appsmith gives us the full row objects directly from selectedRows
+        const rows = tblAllocation.selectedRows || [];
+        
+        if (rows.length === 0) {
+            showAlert("Please select at least one item to allocate transit stock.", "warning");
+            return;
+        }
+
+        // 2. Map to Table Rows (incorporate existing session data if any)
+        const currentStock = appsmith.store.varTransitStock || {};
+        
+        const tableRows = rows.map(r => {
+            const pid = String(r.item_id || r.id);
+            const saved = currentStock[pid] || {};
+            
+            return {
+                item_id: pid,
+                product_name: r.product_name,
+                ordered_qty: Number(r.ordered_qty || 0),
+                shortfall_qty: Number(r.shortfall_qty || 0),
+                qty: saved.qty !== undefined ? saved.qty : Number(r.shortfall_qty || 0),
+                batch_code: saved.batch_code || 'TRANSIT-PENDING',
+                rate: saved.rate !== undefined ? saved.rate : Number(r.rate || 0)
+            };
+        });
+
+        // 3. Set the table variable
+        storeValue('varTransitTableData', tableRows); 
+
+    }
+}
+
+
+- JS Object: TransitTableEdit
+  Code:
+export default {
+  syncTransitEntry: async () => {
+    // 1. Get Changes from Appsmith Table (updatedRows contains the edited cells)
+    const changes = tblTransitEntry.updatedRows || [];
+    if (changes.length === 0) return;
+
+    // 2. Access Appsmith Store (equivalent to Retool Variables)
+    // Assuming your data is stored in the Appsmith store
+    let newTableData = _.cloneDeep(appsmith.store.varTransitTableData || []);
+    let sessionMap = _.cloneDeep(appsmith.store.varTransitStock || {});
+
+    // 3. Process Changes
+    changes.forEach(change => {
+      // Appsmith 'updatedRows' structure: { "0": { "qty": 10 }, "1": { "rate": 50 } }
+      // The key is the row index. 'change.allRowData' gives the full row.
+      const updatedRowData = change.allFields;
+      const pid = String(updatedRowData.item_id);
+      
+      // Find row in our local copy
+      const targetIndex = newTableData.findIndex(row => String(row.item_id) === pid);
+
+      if (targetIndex !== -1) {
+        // A. Update the specific row
+        newTableData[targetIndex] = { ...newTableData[targetIndex], ...updatedRowData };
+
+        // B. Sync to Global Session Map
+        const finalRow = newTableData[targetIndex];
+        sessionMap[pid] = {
+          qty: Number(finalRow.qty),
+          batch_code: finalRow.batch_code,
+          rate: Number(finalRow.rate)
+        };
+      }
+    });
+
+    // 4. Commit Changes to Appsmith Store
+    // 'true' as the second argument ensures the store persists across sessions
+    await storeValue("varTransitTableData", newTableData);
+    await storeValue("varTransitStock", sessionMap);
+
+    // 5. Cleanup UI Markers 
+    // In Appsmith, resetting the table data property usually clears "dirty" cells
+    resetWidget("tblTransitEntry", true);
+
+    showAlert(`Updated ${changes.length} line(s)`, "info");
+  }
+}
+
+- JS Object: JSObject2
+  Code:
+export default {
+    // ... your analyzeDemand code ...
+
+    getProductBreakup: () => {
+        const selectedProduct = tblAllocation.triggeredRow; 
+        const allOrders = tblSalesOrders.selectedRows || [];
+        
+        if (!selectedProduct || !selectedProduct.item_id) {
+            showAlert("Please select a product row first.", "warning");
+            return;
+        }
+
+        const targetId = String(selectedProduct.item_id);
+
+        const breakup = allOrders.reduce((acc, order) => {
+            let lines = [];
+            try {
+                // Defensive check for the 'lines' structure
+                lines = typeof order.lines === 'string' ? JSON.parse(order.lines) : (order.lines || []);
+            } catch(e) { 
+                return acc; 
+            }
+
+            const productLine = lines.find(l => String(l.product_id) === targetId);
+
+            if (productLine) {
+                acc.push({
+                    so_number: order.so_number,
+                    customer_name: order.customer_name,
+                    route: order.route_name,
+                    dse_name: order.dse_name,
+                    qty: Number(productLine.qty || 0),
+                    rate: productLine.rate,
+                    amount: productLine.amount
+                });
+            }
+            return acc;
+        }, []);
+
+        // 1. Save the filtered results to the Appsmith Store
+        storeValue('varProductBreakup', breakup);
+        
+        // 2. Open the modal
+        showModal('mdlBreakup');
+    }
+}
+

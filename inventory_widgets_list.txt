@@ -1,0 +1,109 @@
+--- WIDGET TREE FOR INVENTORY PAGE ---
+- undefined [Type: CANVAS_WIDGET] 
+  - undefined [Type: CONTAINER_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: TEXT_WIDGET] (Label: "GNIDERTON ERP - Inventory")
+      - undefined [Type: BUTTON_GROUP_WIDGET] 
+      - undefined [Type: BUTTON_WIDGET] (Label: "Logout")
+          * Event -> onClick: "{{ storeValue('isAuthenticated', false); navigateTo('Login'); }}"
+  - undefined [Type: TABS_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: TABLE_WIDGET_V2] 
+      - undefined [Type: BUTTON_WIDGET] (Label: "Create New PO")
+          * Event -> onClick: "{{JSObject1.openCreatePO();}}"
+      - undefined [Type: PROGRESS_WIDGET] 
+      - undefined [Type: CUSTOM_WIDGET] 
+          * Event -> onViewClick: "{{populateDrawerFromPO.viewPO()}}"
+          * Event -> onCreateGRNClick: "{{JSObjectGrnfromPo.inwardPO_FromTable()}}"
+          * Event -> onPDFClick: "{{ PDF_Generator.previewPO(Custom1.model.triggeredRow) }}"
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: TABLE_WIDGET_V2] 
+      - undefined [Type: BUTTON_WIDGET] (Label: "Create New GRN")
+          * Event -> onClick: "{{JSOpenModalGrn.openNewGRN();}}"
+  - undefined [Type: MODAL_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: ICON_BUTTON_WIDGET] 
+          * Event -> onClick: "{{closeModal(drawerCreatePO.name);\nresetWidget(\"vendorDropdown\", true);}}"
+      - undefined [Type: TEXT_WIDGET] (Label: "{{ appsmith.store.poMode === 'CREATE' ? 'New Purchase Order' : (appsmith.store.poMode.value === 'EDIT' ? 'Edit PO ' + (poNumber2.value || '') : 'View PO ' + (poNumber2.value || '')) }}")
+      - undefined [Type: DATE_PICKER_WIDGET2] 
+      - undefined [Type: SELECT_WIDGET] 
+          * Event -> onOptionChange: "{{PopulateProductsTableByVendors.populateForVendor(vendorDropdown.selectedOptionValue);}}"
+      - undefined [Type: TABLE_WIDGET_V2] 
+      - undefined [Type: CONTAINER_WIDGET] 
+        - undefined [Type: CANVAS_WIDGET] 
+          - undefined [Type: TEXT_WIDGET] (Label: "Total Gross: {{ (_.sum((poTable.tableData || []).map(r => Number(r["Gross $"] ?? 0)))).toFixed(2) }}")
+          - undefined [Type: TEXT_WIDGET] (Label: "Total Taxable: {{ (_.sum((poTable.tableData || []).map(r => Number(r["Taxable $"] ?? 0)))).toFixed(2) }}")
+          - undefined [Type: TEXT_WIDGET] (Label: "Total GST: {{ (_.sum((poTable.tableData || []).map(r => Number(r["GST $"] ?? 0)))).toFixed(2) }}")
+          - undefined [Type: TEXT_WIDGET] (Label: "Total Net: {{ Math.round(_.sum((poTable.tableData || []).map(r => Number(r["Net $"] ?? 0)))) }}")
+      - undefined [Type: BUTTON_WIDGET] (Label: "Save PO")
+          * Event -> onClick: "{{POManager.savePO();\ngetPOs.run().then(() => {\n  getPOs.run();\n});}}"
+      - undefined [Type: INPUT_WIDGET_V2] 
+      - undefined [Type: INPUT_WIDGET_V2] 
+      - undefined [Type: BUTTON_WIDGET] (Label: "Update PO")
+          * Event -> onClick: "{{triggerUpdatePO.updatePO();}}"
+      - undefined [Type: BUTTON_WIDGET] (Label: "Edit PO")
+          * Event -> onClick: "{{editPOHandler.editPO();}}"
+      - undefined [Type: ICON_BUTTON_WIDGET] 
+          * Event -> onClick: "{{PO_Helper.downloadTemplate()}}"
+      - undefined [Type: FILE_PICKER_WIDGET_V2] 
+          * Event -> onFilesSelected: "{{ PO_Helper.handleCSVUpload(FilePicker1.files[0].data) }}"
+  - undefined [Type: MODAL_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: ICON_BUTTON_WIDGET] 
+          * Event -> onClick: "{{closeModal(modalViewGRN.name);}}"
+      - undefined [Type: TABLE_WIDGET_V2] 
+      - undefined [Type: INPUT_WIDGET_V2] 
+      - undefined [Type: DATE_PICKER_WIDGET2] 
+      - undefined [Type: INPUT_WIDGET_V2] 
+      - undefined [Type: TABLE_WIDGET_V2] 
+      - undefined [Type: BUTTON_GROUP_WIDGET] 
+  - undefined [Type: MODAL_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: ICON_BUTTON_WIDGET] 
+          * Event -> onClick: "{{closeModal(modalFrameGRN.name);}}"
+      - undefined [Type: SELECT_WIDGET] 
+          * Event -> onOptionChange: "{{vendorSelectJS.onVendorSelect();}}"
+      - undefined [Type: SELECT_WIDGET] 
+          * Event -> onOptionChange: "{{JSPoOptionChange.onPOSelected();}}"
+      - undefined [Type: DATE_PICKER_WIDGET2] 
+      - undefined [Type: TABLE_WIDGET_V2] 
+      - undefined [Type: INPUT_WIDGET_V2] 
+      - undefined [Type: DATE_PICKER_WIDGET2] 
+      - undefined [Type: BUTTON_GROUP_WIDGET] 
+      - undefined [Type: TABLE_WIDGET_V2] 
+      - undefined [Type: PROGRESS_WIDGET] 
+      - undefined [Type: ICON_BUTTON_WIDGET] 
+          * Event -> onClick: "{{JSPoOptionChange.onPOSelected();}}"
+  - undefined [Type: MODAL_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: ICON_BUTTON_WIDGET] 
+          * Event -> onClick: "{{closeModal(drawerVendorProfile.name);}}"
+      - undefined [Type: TABS_WIDGET] 
+        - undefined [Type: CANVAS_WIDGET] 
+        - undefined [Type: CANVAS_WIDGET] 
+          - undefined [Type: TABLE_WIDGET_V2] 
+          - undefined [Type: BUTTON_WIDGET] (Label: "Submit")
+              * Event -> onClick: "{{Payments_Logic.preparePayment();}}"
+          - undefined [Type: TEXT_WIDGET] (Label: "{{ 
+  "Total Selected: " + 
+  (_.sum(tblPendingBills.selectedRows.map(row => Number(row.balance) || 0))).toFixed(2) 
+}}")
+      - undefined [Type: TEXT_WIDGET] (Label: "{{tblVendors.selectedRow.vendor_name}}
+{{tblVendors.selectedRow.vendor_code}}")
+  - undefined [Type: MODAL_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: ICON_BUTTON_WIDGET] 
+          * Event -> onClick: "{{closeModal(modalMakePayment.name);}}"
+      - undefined [Type: TEXT_WIDGET] (Label: "Modal Title")
+      - undefined [Type: BUTTON_WIDGET] (Label: "Close")
+          * Event -> onClick: "{{closeModal(modalMakePayment.name);}}"
+      - undefined [Type: BUTTON_WIDGET] (Label: "Confirm")
+  - undefined [Type: MODAL_WIDGET] 
+    - undefined [Type: CANVAS_WIDGET] 
+      - undefined [Type: TEXT_WIDGET] (Label: "Are you sure? This will reverse all stock entries for this GRN. This action cannot be undone.")
+      - undefined [Type: BUTTON_WIDGET] (Label: "Close")
+          * Event -> onClick: "{{closeModal(modalConfirmReverse.name).then(() => {\n  showModal(modalViewGRN.name);\n});}}"
+      - undefined [Type: BUTTON_WIDGET] (Label: "Confirm")
+          * Event -> onClick: "{{apiReverseGRN.run().then(() => {\n  closeModal(modalConfirmReverse.name);\n  getGRNList.run().then(apiReverseGRN.data);\n});}}"
+      - undefined [Type: TEXT_WIDGET] (Label: "Warning! Proceed with Caution")
+      - undefined [Type: INPUT_WIDGET_V2] 

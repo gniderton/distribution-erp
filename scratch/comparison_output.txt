@@ -1,0 +1,176 @@
+Original version has 21 pages.
+Current version has 23 pages.
+
+--- Page Level Comparison ---
+Missing pages in Current (present in Original): []
+Extra pages in Current (not in Original): ["Login","Letterhead Editor"]
+
+--- Widget Level Comparison for Common Pages ---
+
+Page: Inventory
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_tu8adx65ra (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Vendor
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_vna7q20hzp (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Debit Notes
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_8zh111uwlw (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Items
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_uv6sr4oy8p (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Sales Order
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_e13aqumx6i (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Invoice
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_8d1826txrq (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Schemes
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_ac9ep3g7bd (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Customer
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_x79j8yakkz (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Migration Setup
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_s81mk0mx0y (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Loan
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_rqenfhle4q (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Assets
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_ozeoyxhugk (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Cheque Management
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_x4dk6wq4w3 (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Transactions
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_mdnhkfpppp (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Reports
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_vyrcnz67so (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: HR
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_n4hzdgzb9j (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Payment Settlement
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_qw6osp707r (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Settings
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_fjqidz01gf (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Incentives
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_1ahb8kh8j4 (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Supply Chain Management
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_zq37i5c0rt (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: Credit Note
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_irk5few1bi (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)
+
+Page: GST
+  - Extra widgets (present in Current, missing in Original):
+    * navHeader (CONTAINER_WIDGET)
+    * Canvas_uzbywv0y0k (CANVAS_WIDGET)
+    * txtHeaderTitle (TEXT_WIDGET)
+    * btnGroupPageNav (BUTTON_GROUP_WIDGET)
+    * btnHeaderLogout (BUTTON_WIDGET)

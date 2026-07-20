@@ -1,0 +1,37 @@
+name: gniderton_sales_mobile
+description: A native, high-performance offline-first sales mobile app for Gniderton.
+version: 1.0.0+1
+
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Navigation & State
+  provider: ^6.0.5
+
+  # Storage & Offline Databases
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  path_provider: ^2.1.1
+  shared_preferences: ^2.2.2
+
+  # Networking & Async
+  http: ^1.1.0
+
+  # Utilities
+  collection: ^1.18.0
+  intl: ^0.19.0
+  uuid: ^4.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

@@ -419,8 +419,11 @@ export default function VendorPage() {
       }
 
       try {
-        if (companySettings?.logo && companySettings.logo.startsWith("data:image/")) {
-          doc.addImage(companySettings.logo, 'PNG', 40, 20, 75, 25)
+        if (companySettings?.logo) {
+          const logoData = companySettings.logo.startsWith('data:image') 
+            ? companySettings.logo 
+            : `data:image/png;base64,${companySettings.logo}`;
+          doc.addImage(logoData, 'PNG', 40, 20, 75, 25)
         }
       } catch (e) {}
 
@@ -654,10 +657,13 @@ export default function VendorPage() {
 
       const drawMainHeader = (currentPage: number, totalPages: number) => {
         try {
-          if (companySettings?.logo && companySettings.logo.startsWith("data:image/")) {
-            doc.addImage(companySettings.logo, 'PNG', margin, margin, 75, 25)
+          if (companySettings?.logo) {
+            const logoData = companySettings.logo.startsWith('data:image') 
+              ? companySettings.logo 
+              : `data:image/png;base64,${companySettings.logo}`;
+            doc.addImage(logoData, 'PNG', margin, margin, 75, 25)
           }
-        } catch (e) {}
+        } catch(e) {}
 
         doc.setTextColor(0, 0, 0)
         doc.setFont("helvetica", "bold")

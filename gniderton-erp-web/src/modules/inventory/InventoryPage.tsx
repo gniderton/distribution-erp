@@ -859,8 +859,11 @@ export default function InventoryPage() {
       const drawMainHeader = (currentPage: number, totalPages: number) => {
         const headerY = margin
         try {
-          if (companySettings?.logo && companySettings.logo.startsWith("data:image/")) {
-            doc.addImage(companySettings.logo, 'PNG', margin, headerY, 90, 30)
+          if (companySettings?.logo) {
+            const logoData = companySettings.logo.startsWith('data:image') 
+              ? companySettings.logo 
+              : `data:image/png;base64,${companySettings.logo}`;
+            doc.addImage(logoData, 'PNG', margin, headerY, 90, 30)
           }
         } catch (e) {}
         doc.setTextColor(0, 0, 0)
@@ -979,61 +982,154 @@ export default function InventoryPage() {
         gst: companySettings?.gstin || "32AAACG1924D1ZS"
       }
 
-      try {
-        if (companySettings?.logo && companySettings.logo.startsWith("data:image/")) {
-          doc.addImage(companySettings.logo, 'PNG', margin, margin, 75, 25)
-        }
-      } catch (e) {}
+      const toWords = (num: number) => {
+        const a = ['','One ','Two ','Three ','Four ', 'Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen ']
+        const b = ['', '', 'Twenty','Thirty','Forty','Fifty', 'Sixty','Seventy','Eighty','Ninety']
+        const n = ("000000000" + Math.floor(num)).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/)
+        if (!n) return ''
+        let str = ''
+        str += (Number(n[1]) !== 0) ? (a[Number(n[1])] || b[Number(n[1][0])] + ' ' + a[Number(n[1][1])]) + 'Crore ' : ''
+        str += (Number(n[2]) !== 0) ? (a[Number(n[2])] || b[Number(n[2][0])] + ' ' + a[Number(n[2][1])]) + 'Lakh ' : ''
+        str += (Number(n[3]) !== 0) ? (a[Number(n[3])] || b[Number(n[3][0])] + ' ' + a[Number(n[3][1])]) + 'Thousand ' : ''
+        str += (Number(n[4]) !== 0) ? (a[Number(n[4])] || b[Number(n[4][0])] + ' ' + a[Number(n[4][1])]) + 'Hundred ' : ''
+        str += (Number(n[5]) !== 0) ? ((str !== '') ? 'and ' : '') + (a[Number(n[5])] || b[Number(n[5][0])] + ' ' + a[Number(n[5][1])]) + 'Only ' : 'Only '
+        return str
+      }
 
-      doc.setFont("helvetica", "bold")
-      doc.setFontSize(16)
-      doc.text("GOODS RECEIVED NOTE", pageWidth / 2, margin + 20, { align: 'center' })
-      doc.setFontSize(10)
-      doc.text(`Invoice No: ${grnRecord.vendor_invoice_number || 'N/A'}`, pageWidth / 2, margin + 35, { align: 'center' })
-      doc.text(`Received Date: ${grnRecord.received_date?.split('T')[0] || ''}`, pageWidth / 2, margin + 48, { align: 'center' })
+      const drawSimpleBox = (docObj: any, x: number, y: number, width: number, height: number, rows: string[][]) => {
+        docObj.setDrawColor(0, 0, 0)
+        docObj.setLineWidth(0.5)
+        docObj.rect(x, y, width, height)
+        let rowY = y + 11
+        rows.forEach(r => {
+          docObj.setFontSize(7.5)
+          docObj.setFont("helvetica", "bold")
+          docObj.text(String(r[0]) + ":", x + 5, rowY)
+          docObj.setFont("helvetica", "normal")
+          const val = String(r[1] || "-")
+          const splitVal = docObj.splitTextToSize(val, width - 60)
+          docObj.text(splitVal, x + 55, rowY)
+          rowY += (splitVal.length * 9.5) + 1
+        })
+      }
 
-      const boxY = margin + 60
-      const boxWidth = (pageWidth - (margin * 2) - 10) / 2
+      const drawMainHeader = (currentPage: number, totalPages: number) => {
+        const headerY = margin
+        try {
+          if (companySettings?.logo) {
+            const logoData = companySettings.logo.startsWith('data:image') 
+              ? companySettings.logo 
+              : `data:image/png;base64,${companySettings.logo}`;
+            doc.addImage(logoData, 'PNG', margin, headerY, 90, 30)
+          }
+        } catch(e) {}
+        
+        doc.setTextColor(0, 0, 0)
+        doc.setFont("helvetica", "bold")
+        doc.setFontSize(16)
+        doc.text("GOODS RECEIPT NOTE (GRN)", pageWidth / 2, headerY + 15, { align: "center" })
+        doc.setFontSize(11)
+        doc.text(String(grnRecord.invoice_number || grnRecord.vendor_invoice_number || 'N/A'), pageWidth / 2, headerY + 30, { align: "center" })
+        
+        const boxesY = headerY + 40
+        const gap = 8
+        const boxWidth = (pageWidth - (margin * 2) - (gap * 2)) / 3
+        const boxHeight = 70
+        
+        drawSimpleBox(doc, margin, boxesY, boxWidth, boxHeight, [
+          ["GRN NO", String(grnRecord.invoice_number || grnRecord.id || "-")],
+          ["DATE", grnRecord.received_date ? grnRecord.received_date.split('T')[0] : "-"],
+          ["VND INV", String(grnRecord.vendor_invoice_number || "-")],
+          ["PAGE", `${currentPage} / ${totalPages}`]
+        ])
+        
+        drawSimpleBox(doc, margin + boxWidth + gap, boxesY, boxWidth, boxHeight, [
+          ["Bill From", String(brand.regt_name)],
+          ["Address", String(brand.address)],
+          ["District", String(brand.District)],
+          ["GST", String(brand.gst)]
+        ])
+        
+        drawSimpleBox(doc, margin + (boxWidth * 2) + (gap * 2), boxesY, boxWidth, boxHeight, [
+          ["Vendor", String(grnRecord.vendor_name || "-")],
+          ["Code", String(grnRecord.vendor_code || "-")],
+          ["Address", `${grnRecord.vendor_address_1 || ""} ${grnRecord.vendor_address_2 || ""}`.trim()],
+          ["GST / PAN", `${grnRecord.vendor_gst || "-"} / ${grnRecord.vendor_pan || "-"}`]
+        ])
+        
+        return boxesY + boxHeight
+      }
 
-      // Box 1: Vendor Info
-      doc.rect(margin, boxY, boxWidth, 75)
-      doc.text("SUPPLIER", margin + 8, boxY + 12)
-      doc.setFont("helvetica", "normal")
-      doc.setFontSize(8)
-      doc.text(grnRecord.vendor_name || 'N/A', margin + 8, boxY + 28, { maxWidth: boxWidth - 16 })
-      doc.text(`Invoice Amount: ${Number(grnRecord.grand_total).toFixed(2)}`, margin + 8, boxY + 58)
+      const body = grnLines.map((row, index) => {
+        const gross = Number(row.gross || (Number(row.qty || 0) * Number(row.price || 0)))
+        const sch = Number(row.sch || 0)
+        const discPct = Number(row.disc_pct || 0)
+        const discAmt = (gross - sch) * (discPct / 100)
+        return [
+          index + 1,
+          row.product_name,
+          row.batch_no || "DEFAULT",
+          row.expiry ? row.expiry.split('T')[0] : "-",
+          Number(row.mrp || 0).toFixed(2),
+          row.qty || 0,
+          Number(row.price || 0).toFixed(2),
+          gross.toFixed(2),
+          sch.toFixed(2),
+          discPct + "%",
+          discAmt.toFixed(2),
+          Number(row.taxable || 0).toFixed(2),
+          Number(row.gst_pct || 5) + "%",
+          Number(row.gst_amt || 0).toFixed(2),
+          Number(row.net || 0).toFixed(2)
+        ]
+      })
 
-      // Box 2: System Details
-      doc.rect(margin + boxWidth + 10, boxY, boxWidth, 75)
-      doc.setFont("helvetica", "bold")
-      doc.setFontSize(9)
-      doc.text("SYSTEM DETAILS", margin + boxWidth + 18, boxY + 12)
-      doc.setFont("helvetica", "normal")
-      doc.setFontSize(8)
-      doc.text(`PO Ref: ${grnRecord.po_number || '-'}`, margin + boxWidth + 18, boxY + 28)
-      doc.text(`Status: ${grnRecord.status}`, margin + boxWidth + 18, boxY + 40)
-      doc.text(`Balance Payable: ${Number(grnRecord.balance).toFixed(2)}`, margin + boxWidth + 18, boxY + 58)
+      autoTable(doc, {
+        startY: margin + 40 + 70 + 10,
+        margin: { left: margin, right: margin, top: margin + 140 },
+        head: [["S.N", "ITEM NAME", "BATCH", "EXPIRY", "MRP", "QTY", "PRICE", "GROSS", "SCH", "D%", "D.AMT", "TXBL", "GST%", "GST$", "NET$"]],
+        body,
+        didDrawPage: (data: any) => {
+          const totalPages = doc.internal.getNumberOfPages()
+          drawMainHeader(data.pageNumber, totalPages)
+        },
+        theme: 'grid',
+        styles: { fontSize: 7.5, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.5, textColor: [0, 0, 0] },
+        headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.5 },
+        columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 'auto', minCellWidth: 100 } }
+      })
 
-      const body = grnLines.map((l, i) => [
-        i + 1,
-        l.product_name,
-        l.qty,
-        Number(l.price).toFixed(2),
-        l.batch_no,
-        l.expiry,
-        Number(l.taxable).toFixed(2),
-        Number(l.net).toFixed(2)
+      const summaryBody = grnTaxSummary.map(row => [
+        row.particulars, row.pcs, row.gross.toFixed(2), row.sch.toFixed(2),
+        row.disc.toFixed(2), row.taxable.toFixed(2), row.tax.toFixed(2), row.net.toFixed(2)
       ])
 
       autoTable(doc, {
-        startY: boxY + 85,
+        startY: (doc as any).lastAutoTable.finalY + 8,
         margin: { left: margin, right: margin },
-        head: [["S.No", "Item Name", "Qty", "Price", "Batch No", "Expiry", "Taxable", "Net"]],
-        body,
+        head: [["TAX SUMMARY", "PCS", "GROSS", "SCH", "DISC", "TAXABLE", "TAX", "NET"]],
+        body: summaryBody,
         theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 3, textColor: [0, 0, 0] },
-        headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' }
+        styles: { fontSize: 8, cellPadding: 2.5, lineColor: [0, 0, 0], lineWidth: 0.5, textColor: [0, 0, 0] },
+        headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.5 },
+        bodyStyles: (row: any) => (row.raw[0] === 'Total' ? { fontStyle: 'bold', fillColor: [250, 250, 250] } : {})
       })
+
+      const wordsY = (doc as any).lastAutoTable.finalY + 20
+      doc.setFontSize(12)
+      doc.setFont("helvetica", "bold")
+      doc.text("Total Amount (in words):", margin, wordsY)
+      doc.setFont("helvetica", "normal")
+      const netTotalForWords = grnRecord.grand_total ? Number(grnRecord.grand_total) : (grnRecord.total_net ? Number(grnRecord.total_net) : grnTotals.net)
+      doc.text(toWords(Math.round(netTotalForWords)), margin + 150, wordsY)
+
+      const notesY = wordsY + 20
+      doc.setFontSize(8.5)
+      doc.setFont("helvetica", "bold")
+      doc.text("Notes / Terms:", margin, notesY)
+      doc.setFont("helvetica", "normal")
+      doc.text("1. Payments will be made as per the GRN accepted amount.", margin, notesY + 14)
+      doc.text("2. This is a computer generated document and does not require a physical signature.", margin, notesY + 26)
 
       doc.save(`GRN_${grnRecord.vendor_invoice_number || grnRecord.id}.pdf`)
       setAlertMsg({ type: 'success', text: 'GRN PDF Receipt downloaded!' })
@@ -1590,8 +1686,13 @@ export default function InventoryPage() {
                         <th className="px-4 py-2 w-20">MRP</th>
                         <th className="px-4 py-2 w-20">Rate</th>
                         <th className="px-4 py-2 w-20">Inward Qty</th>
+                        <th className="px-4 py-2 w-20">Gross $</th>
                         <th className="px-4 py-2 w-16">Scheme</th>
                         <th className="px-4 py-2 w-16">Disc %</th>
+                        <th className="px-4 py-2 w-20">Disc. $</th>
+                        <th className="px-4 py-2 w-20">Taxable $</th>
+                        <th className="px-4 py-2 w-16">Tax %</th>
+                        <th className="px-4 py-2 w-20">Tax $</th>
                         <th className="px-4 py-2 w-28">Batch No</th>
                         <th className="px-4 py-2 w-32">Expiry</th>
                         <th className="px-4 py-2 w-24 text-right">Net</th>
@@ -1624,6 +1725,7 @@ export default function InventoryPage() {
                               }`}
                             />
                           </td>
+                          <td className="px-4 py-2">${(line.gross || 0).toFixed(2)}</td>
                           <td className="px-4 py-2">
                             <input 
                               type="number"
@@ -1642,6 +1744,10 @@ export default function InventoryPage() {
                               className="w-full bg-surface border border-border-subtle rounded px-2 py-1 text-xs"
                             />
                           </td>
+                          <td className="px-4 py-2">${(line.disc_amt || 0).toFixed(2)}</td>
+                          <td className="px-4 py-2">${(line.taxable || 0).toFixed(2)}</td>
+                          <td className="px-4 py-2">{line.gst_pct || 5}%</td>
+                          <td className="px-4 py-2 text-rose-500">${(line.gst_amt || 0).toFixed(2)}</td>
                           <td className="px-4 py-2">
                             <input 
                               type="text"
@@ -1735,7 +1841,12 @@ export default function InventoryPage() {
                 </button>
                 <button
                   onClick={handleSaveGRN}
-                  className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2 rounded-lg text-xs font-semibold transition shadow-sm"
+                  disabled={!vendorInvoiceNo || !invoiceDate || !receivedDate}
+                  className={`px-6 py-2 rounded-lg text-xs font-semibold transition shadow-sm ${
+                    (!vendorInvoiceNo || !invoiceDate || !receivedDate)
+                      ? 'bg-ink-200 text-ink-400 cursor-not-allowed'
+                      : 'bg-brand-600 hover:bg-brand-700 text-white'
+                  }`}
                 >
                   Post Goods Receipt (GRN)
                 </button>

@@ -1,0 +1,910 @@
+Summary:
+- Pages: 24
+- Actions (Queries/APIs): 545
+- Action Collections (JS Objects): 119
+
+--- PAGES ---
+1. Page: Inventory (ID: undefined)
+2. Page: Vendor (ID: undefined)
+3. Page: Debit Notes (ID: undefined)
+4. Page: Items (ID: undefined)
+5. Page: Sales Order (ID: undefined)
+6. Page: Invoice (ID: undefined)
+7. Page: Schemes (ID: undefined)
+8. Page: Customer (ID: undefined)
+9. Page: Migration Setup (ID: undefined)
+10. Page: Loan (ID: undefined)
+11. Page: Assets (ID: undefined)
+12. Page: Cheque Management (ID: undefined)
+13. Page: Transactions (ID: undefined)
+14. Page: Reports (ID: undefined)
+15. Page: HR (ID: undefined)
+16. Page: Payment Settlement (ID: undefined)
+17. Page: Settings (ID: undefined)
+18. Page: Incentives (ID: undefined)
+19. Page: Supply Chain Management (ID: undefined)
+20. Page: Credit Note (ID: undefined)
+21. Page: GST (ID: undefined)
+22. Page: Login (ID: undefined)
+23. Page: Letterhead Editor (ID: undefined)
+24. Page: Page1 (ID: undefined)
+
+--- JS OBJECTS (ACTION COLLECTIONS) ---
+Page: Inventory
+  JS Object: PopulateProductsTableByVendors
+    Functions: 
+  JS Object: savePOLine
+    Functions: 
+  JS Object: populateDrawerFromPO
+    Functions: 
+  JS Object: editPOHandler
+    Functions: 
+  JS Object: vendorSelectJS
+    Functions: 
+  JS Object: saveGRNJS
+    Functions: 
+  JS Object: savePaymentJS
+    Functions: 
+  JS Object: saveDebitNoteJS
+    Functions: 
+  JS Object: jsGroupProducts
+    Functions: 
+  JS Object: jsCommitSmartUpdates
+    Functions: 
+  JS Object: JSObjectState
+    Functions: 
+  JS Object: JSObject1
+    Functions: 
+  JS Object: POManager
+    Functions: 
+  JS Object: triggerUpdatePO
+    Functions: 
+  JS Object: GRNSummary
+    Functions: 
+  JS Object: JSFilterGRNPo
+    Functions: 
+  JS Object: JSPoOptionChange
+    Functions: 
+  JS Object: EditGrnTable
+    Functions: 
+  JS Object: JSAddOtherProducts
+    Functions: 
+  JS Object: JSOpenModalGrn
+    Functions: 
+  JS Object: JSObjectGrnfromPo
+    Functions: 
+  JS Object: GRNEditSummary
+    Functions: 
+  JS Object: Vendor_Logic
+    Functions: 
+  JS Object: getVendorPendingBills
+    Functions: 
+  JS Object: Payments_Logic
+    Functions: 
+  JS Object: PDF_Generator
+    Functions: 
+  JS Object: Global_Assets
+    Functions: 
+  JS Object: PDFUtilsGRN
+    Functions: 
+  JS Object: PO_Helper
+    Functions: 
+Page: Vendor
+  JS Object: savePaymentJS
+    Functions: 
+  JS Object: Vendor_Logic
+    Functions: 
+  JS Object: getVendorPendingBills
+    Functions: 
+  JS Object: Payments_Logic
+    Functions: 
+  JS Object: JSObjectState
+    Functions: 
+  JS Object: Ledger_Logic
+    Functions: 
+  JS Object: Profile_Logic
+    Functions: 
+  JS Object: Location_Data
+    Functions: 
+  JS Object: Global_Assets
+    Functions: 
+  JS Object: Vendor_Assets
+    Functions: 
+Page: Debit Notes
+  JS Object: DebitNote_Logic
+    Functions: 
+  JS Object: DebitNote_LogicPopulateLines
+    Functions: 
+  JS Object: DebitNoteTableEdit
+    Functions: 
+  JS Object: CreateDebitNoteJS
+    Functions: 
+  JS Object: RStoDN
+    Functions: 
+  JS Object: PDFUtils
+    Functions: 
+  JS Object: Global_Assets
+    Functions: 
+  JS Object: JSObject1
+    Functions: 
+  JS Object: JSObject2
+    Functions: 
+  JS Object: JS_Delete_Lines
+    Functions: 
+Page: Items
+  JS Object: Brand_Utils
+    Functions: 
+  JS Object: ProductImportUtils
+    Functions: 
+  JS Object: The_Smart_Upload
+    Functions: 
+  JS Object: AdjustmentUtils
+    Functions: 
+  JS Object: JSObject1
+    Functions: 
+  JS Object: BrandPDF
+    Functions: 
+Page: Sales Order
+  JS Object: JSObject1
+    Functions: 
+  JS Object: Invoice_Actions
+    Functions: 
+  JS Object: Transit_Actions
+    Functions: 
+  JS Object: TransitTableEdit
+    Functions: 
+  JS Object: JSObject2
+    Functions: 
+Page: Invoice
+  JS Object: OpenModal
+    Functions: 
+  JS Object: Invoice_Utils
+    Functions: 
+  JS Object: Invoice_Edit_Utils
+    Functions: 
+  JS Object: Invoice_Utils_Pdf
+    Functions: 
+  JS Object: Global_Assets
+    Functions: 
+  JS Object: Invoice_Bulk_Download
+    Functions: 
+Page: Schemes
+  JS Object: Scheme_Utils
+    Functions: 
+  JS Object: Save_Scheme
+    Functions: 
+  JS Object: Combo_Group_Add
+    Functions: 
+  JS Object: Combo_Utils
+    Functions: 
+  JS Object: PriceSlab_Utils
+    Functions: 
+  JS Object: JS_Schemes
+    Functions: 
+  JS Object: JSObject1
+    Functions: 
+  JS Object: Scheme_Reports
+    Functions: 
+  JS Object: DownloadInvoices
+    Functions: 
+  JS Object: Global_Assets
+    Functions: 
+  JS Object: JS_Schemes_New
+    Functions: 
+Page: Customer
+  JS Object: Location_Data
+    Functions: 
+  JS Object: DownloadLedger_JS
+    Functions: 
+  JS Object: Global_Assets
+    Functions: 
+Page: Migration Setup
+  JS Object: Migration_Utils
+    Functions: 
+Page: Assets
+  JS Object: Location_Data
+    Functions: 
+Page: Transactions
+  JS Object: InternalTransfer
+    Functions: 
+  JS Object: DenomUtils
+    Functions: 
+Page: Reports
+  JS Object: Global_Assets
+    Functions: 
+  JS Object: JS_Receivables
+    Functions: 
+  JS Object: JS_BankUpload
+    Functions: 
+  JS Object: utilsPnL
+    Functions: 
+  JS Object: DownloadPnl
+    Functions: 
+  JS Object: FinancialEngine
+    Functions: 
+  JS Object: StockReport_PDF
+    Functions: 
+  JS Object: Payslip_JS
+    Functions: 
+  JS Object: JSObject1
+    Functions: 
+Page: HR
+  JS Object: Utils
+    Functions: 
+  JS Object: UpdateSalary
+    Functions: 
+  JS Object: AdvanceUtils
+    Functions: 
+  JS Object: SalaryUtils
+    Functions: 
+Page: Payment Settlement
+  JS Object: utils
+    Functions: 
+  JS Object: utilsdisable
+    Functions: 
+Page: Settings
+  JS Object: utilsBackups
+    Functions: 
+  JS Object: ThemeManager
+    Functions: 
+Page: Supply Chain Management
+  JS Object: TripEditor
+    Functions: 
+  JS Object: SyncManager1
+    Functions: 
+  JS Object: TripReports
+    Functions: 
+  JS Object: Global_Assets
+    Functions: 
+  JS Object: TripActions
+    Functions: 
+  JS Object: utils
+    Functions: 
+  JS Object: DataFormatter
+    Functions: 
+Page: Credit Note
+  JS Object: CreditNoteManager
+    Functions: 
+  JS Object: Global_Assets
+    Functions: 
+  JS Object: init_js
+    Functions: 
+  JS Object: CN_Helper
+    Functions: 
+  JS Object: taxSummary
+    Functions: 
+Page: GST
+  JS Object: GstUtils
+    Functions: 
+  JS Object: Gstr1Engine
+    Functions: 
+Page: Letterhead Editor
+  JS Object: LetterheadJS
+    Functions: 
+  JS Object: Global_Assets
+    Functions: 
+Page: Page1
+  JS Object: Global_Assets
+    Functions: 
+  JS Object: InvoiceUtils
+    Functions: 
+
+--- QUERIES / APIS (ACTIONS) GROUPED BY PAGE ---
+Page: Inventory
+  - Vendors [Type: undefined] [Datasource: RenderCloud] [GET /api/vendors]
+  - Products [Type: undefined] [Datasource: RenderCloud] [GET /api/products]
+  - Tax [Type: undefined] [Datasource: RenderCloud] [GET /api/master/taxes]
+  - getBankAccounts [Type: undefined] [Datasource: RenderCloud] [GET /api/bank-accounts]
+  - getNextPO [Type: undefined] [Datasource: RenderCloud] [GET /api/documents/next/PO]
+  - getvendoraddress [Type: undefined] [Datasource: RenderCloud] [GET /api/master/vendor-addresses]
+  - getPOs [Type: undefined] [Datasource: RenderCloud] [GET /api/purchase-orders]
+  - getGRNList [Type: undefined] [Datasource: RenderCloud] [GET /api/purchase-invoices]
+  - getBrands [Type: undefined] [Datasource: RenderCloud] [GET /api/master/brands]
+  - getCategories [Type: undefined] [Datasource: RenderCloud] [GET /api/master/categories]
+  - getHSN [Type: undefined] [Datasource: RenderCloud] [GET /api/master/hsn]
+  - getTemplateData [Type: undefined] [Datasource: RenderCloud] [GET /api/products/template-data]
+  - q_getUnconsumedDebits [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/unconsumed-debits]
+  - getPOById [Type: undefined] [Datasource: RenderCloud] [GET /api/purchase-orders/{{ poListTable.triggeredRow.id }}]
+  - getVendorLedger [Type: undefined] [Datasource: RenderCloud] [GET /api/vendor-payments/ledger/{{ appsmith.store.selectedVendor.id }}]
+  - getVendorDebitNotes [Type: undefined] [Datasource: RenderCloud] [GET /api/debit-notes/vendor/{{ appsmith.store.selectedVendor.id}}]
+  - apiGetAddresses [Type: undefined] [Datasource: RenderCloud] [GET /api/vendors/{{ tblVendors.selectedRow.id }}/addresses]
+  - apiGetBatches [Type: undefined] [Datasource: RenderCloud] [GET /api/stock/adjust/batches/{{ selAdjProduct.selectedOptionValue }}]
+  - getDebitNoteLines [Type: undefined] [Datasource: RenderCloud] [GET /api/debit-notes/{{ debiteNotetbl.selectedRow.id }}/items]
+  - onCellChange [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - viewPO [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - editPO [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addMissingProducts [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - onVendorSelect [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - makePayment [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - saveDebitNote [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - groupByBrand [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - commitUpdates [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - openCreatePO [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - initializeState [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - submitPO [Type: undefined] [Datasource: RenderCloud] [POST /api/purchase-orders]
+  - savePO [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - updatePO [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - updatePOQuery [Type: undefined] [Datasource: RenderCloud] [PUT /api/purchase-orders/{{ appsmith.store.selectedPOId }}]
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getPOForGRN [Type: undefined] [Datasource: RenderCloud] [GET /api/purchase-orders/{{ChoosePo.selectedOptionValue }}]
+  - transformPORows [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - onPOSelected [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - recalculateRow [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addRemainingProducts [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - saveGRN [Type: undefined] [Datasource: RenderCloud] [POST /api/purchase-invoices]
+  - openNewGRN [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - inwardPO_FromTable [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getTaxSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - viewVendorProfile [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getFilteredPendingBills [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - apiGetBank [Type: undefined] [Datasource: RenderCloud] [GET /api/master/banks]
+  - preparePayment [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - apiReverseGRN [Type: undefined] [Datasource: RenderCloud] [POST /api/purchase-invoices/{{ tblGrn.triggeredRow.id }}/reverse]
+  - getMe [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile]
+  - getLogo [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - previewPO [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - previewGRN [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - saveGRN [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - populateForVendor [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - handleCSVUpload [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - downloadTemplate [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+Page: Vendor
+  - initializeState [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getFilteredPendingBills [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - viewVendorProfile [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - preparePayment [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - apiGetAddresses [Type: undefined] [Datasource: RenderCloud] [GET /api/vendors/{{ tblVendors.triggeredRow.id}}/addresses]
+  - apiGetBank [Type: undefined] [Datasource: RenderCloud] [GET /api/master/banks]
+  - getBankAccounts [Type: undefined] [Datasource: RenderCloud] [GET /api/bank-accounts]
+  - Vendors [Type: undefined] [Datasource: RenderCloud] [GET /api/vendors]
+  - getvendoraddress [Type: undefined] [Datasource: RenderCloud] [GET /api/master/vendor-addresses]
+  - getVendorDebitNotes [Type: undefined] [Datasource: RenderCloud] [GET /api/debit-notes/vendor/{{ appsmith.store.selectedVendor.id}}]
+  - getGRNList [Type: undefined] [Datasource: RenderCloud] [GET /api/purchase-invoices]
+  - q_getUnconsumedDebits [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/unconsumed-debits]
+  - getVendorLedger [Type: undefined] [Datasource: RenderCloud] [GET /api/vendor-payments/ledger/{{ appsmith.store.selectedVendor.id}}]
+  - getDebitNoteLines [Type: undefined] [Datasource: RenderCloud] [GET /api/debit-notes/{{ debiteNotetbl.selectedRow.id }}/items]
+  - apiGetVendor [Type: undefined] [Datasource: RenderCloud] [GET /api/vendors/{{ tblVendors.triggeredRow.id}}]
+  - startEditing [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - stopEditing [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - apiUpdateVendor [Type: undefined] [Datasource: RenderCloud] [PUT /api/vendors/{{ tblVendors.selectedRow.id }}]
+  - getVendorLedgerData [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - apiMakePayment [Type: undefined] [Datasource: RenderCloud] [POST /api/vendor-payments]
+  - submitPayment [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getStates [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getDistricts [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - apiAddAddress [Type: undefined] [Datasource: RenderCloud] [POST /api/vendors/{{ tblVendors.triggeredRow.id }}/addresses]
+  - apiCreateVendor [Type: undefined] [Datasource: RenderCloud] [POST /api/vendors]
+  - getDoc [Type: undefined] [Datasource: RenderCloud] [GET /api/documents/all-sequences]
+  - getLogo [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getVendorPaymentHistory [Type: undefined] [Datasource: RenderCloud] [GET /api/vendor-payments/history/{{tblVendors.triggeredRow.id}}]
+  - getVendorPaymentSlipDetails [Type: undefined] [Datasource: RenderCloud] [GET /api/vendor-payments/{{tblVendorPayments.triggeredRow.id}}/slip-details]
+  - previewPaymentSlip [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - fetch_invoices_api [Type: undefined] [Datasource: RenderCloud] [GET /api/purchase-invoices/aging]
+Page: Debit Notes
+  - getDebitNotes [Type: undefined] [Datasource: RenderCloud] [GET /api/debit-notes]
+  - getDebitNoteLines [Type: undefined] [Datasource: RenderCloud] [GET /api/debit-notes/{{debiteNotetbl.triggeredRow.id}}/items]
+  - getDNTaxSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - Products [Type: undefined] [Datasource: RenderCloud] [GET /api/products]
+  - Vendors [Type: undefined] [Datasource: RenderCloud] [GET /api/vendors]
+  - getDocNo [Type: undefined] [Datasource: RenderCloud] [GET /api/documents/all-sequences]
+  - getPendingBills [Type: undefined] [Datasource: RenderCloud] [GET /api/purchase-invoices]
+  - apiCreateDebitNote [Type: undefined] [Datasource: RenderCloud] [POST /api/debit-notes]
+  - createDebitNote [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getBatches [Type: undefined] [Datasource: RenderCloud] [GET /api/stock/adjust/batches/{{tblDebitLines.selectedRow._product_id}}]
+  - apiConvertRSToDN [Type: undefined] [Datasource: RenderCloud] [POST /api/debit-notes/{{debiteNotetbl.triggeredRow.id}}/convert]
+  - convertToDN [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getLogo [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getBatch [Type: undefined] [Datasource: RenderCloud] [GET /api/products/batches]
+  - ReverseDebitNote [Type: undefined] [Datasource: RenderCloud] [POST /api/debit-notes/{{debiteNotetbl.triggeredRow.id}}/reverse]
+  - getMe [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile]
+  - duplicateRow [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - updateDebitRow [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - toWords [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - populateDebitLines [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - previewDebitNote [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getDNTaxSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - populateDebitLines [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - deleteSelectedLines [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - keepOnlySelectedLines [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - deleteSingleLine [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+Page: Items
+  - Products [Type: undefined] [Datasource: RenderCloud] [GET /api/products]
+  - getGroupedBrands [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getBrands [Type: undefined] [Datasource: RenderCloud] [GET /api/master/brands]
+  - apiUpdateProduct [Type: undefined] [Datasource: RenderCloud] [PUT /api/products/{{tblProducts.triggeredRow.id}}]
+  - getCategories [Type: undefined] [Datasource: RenderCloud] [GET /api/master/categories]
+  - getTaxes [Type: undefined] [Datasource: RenderCloud] [GET /api/master/taxes]
+  - getHSN [Type: undefined] [Datasource: RenderCloud] [GET /api/master/hsn]
+  - apiCreateProduct [Type: undefined] [Datasource: RenderCloud] [POST /api/products]
+  - getTemplateData [Type: undefined] [Datasource: RenderCloud] [GET /api/products/template-data]
+  - downloadTemplate [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - downloadErrors [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - submitValidData [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - apiImportProducts [Type: undefined] [Datasource: RenderCloud] [POST /api/products/import]
+  - processUpload [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - apiBulkUpdateProducts [Type: undefined] [Datasource: RenderCloud] [POST /api/products/bulk-update]
+  - apiGetBatches [Type: undefined] [Datasource: RenderCloud] [GET /api/stock/adjust/batches/{{ selAdjProduct.selectedOptionValue }}]
+  - apiCreateStockAdjustment [Type: undefined] [Datasource: RenderCloud] [POST /api/stock/adjust]
+  - submitToDatabase [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addAdjustment [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - deleteRow [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getAdjustementHistory [Type: undefined] [Datasource: RenderCloud] [GET /api/stock/adjust]
+  - getMe [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile]
+  - apiDeleteAdjustment [Type: undefined] [Datasource: RenderCloud] [DELETE /api/stock/adjust/{{tblStockAdjHistory.triggeredRow.id}}]
+  - getInventoryBatches [Type: undefined] [Datasource: RenderCloud] [GET /api/products/{{tblProducts.triggeredRow.id}}/batches]
+  - UpdateBatchAPI [Type: undefined] [Datasource: RenderCloud] [PUT /api/products/batches/{{tblBatches.triggeredRow.id}}]
+  - productLedger [Type: undefined] [Datasource: RenderCloud] [GET /api/inventory/ledger/{{tblProducts.triggeredRow.id}}]
+  - getProductProfile [Type: undefined] [Datasource: RenderCloud] [GET /api/analytics/products/{{tblProducts.triggeredRow.id}}/profile]
+  - Brand_History [Type: undefined] [Datasource: RenderCloud] [GET /api/analytics/brands/{{List1.triggeredItem.id}}/history]
+  - processBulkUpdate [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - pushToWidget [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - myFun2 [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - myFun1 [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - generate [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - BulkUpdateStatus [Type: undefined] [Datasource: RenderCloud] [POST /api/products/bulk-status]
+Page: Sales Order
+  - getSalesOrder [Type: undefined] [Datasource: RenderCloud] [GET /api/sales-orders]
+  - analyzeDemand [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getProducts [Type: undefined] [Datasource: RenderCloud] [GET /api/products]
+  - generateBulkInvoices [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - apiBulkInvoiceGenerate [Type: undefined] [Datasource: RenderCloud] [POST /api/sales/bulk-invoice-generate]
+  - openTransitEntry [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - syncTransitEntry [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getProductBreakup [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+Page: Invoice
+  - getInvoices [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/unified]
+  - getUnifiedInvoiceDetail [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/unified/{{appsmith.store.varSelectedInvoice}}]
+  - viewInvoice [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - apiUnlockInvoice [Type: undefined] [Datasource: RenderCloud] [POST /api/sales/invoices/{{appsmith.store.varInvoiceId}}/unlock-for-edit]
+  - apiRegenerateInvoice [Type: undefined] [Datasource: RenderCloud] [POST /api/sales/invoices/regenerate]
+  - apiUpdateSalesOrder [Type: undefined] [Datasource: RenderCloud] [PUT /api/sales/orders/{{appsmith.store.varInvoiceViewData.order_id}}]
+  - unlockInvoice [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - removeLine [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - regenerateInvoice [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - syncTableEdits [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getBankDetails [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/bank-details/3]
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getLogo [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getInvoiceLines [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/unified/{{tblSales.triggeredRow.id}}]
+  - previewInvoice [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - downloadBulkInvoices [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - onPageLoad [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - previewInvoice [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+Page: Schemes
+  - getSchemes [Type: undefined] [Datasource: RenderCloud] [GET /api/schemes]
+  - getProducts [Type: undefined] [Datasource: RenderCloud] [GET /api/products]
+  - getBrands [Type: undefined] [Datasource: RenderCloud] [GET /api/products/brands]
+  - getCategories [Type: undefined] [Datasource: RenderCloud] [GET /api/categories]
+  - createScheme [Type: undefined] [Datasource: RenderCloud] [POST /api/schemes]
+  - addNewSlab [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addComboSlab [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addPriceSlab [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - createScheme [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - updateScheme [Type: undefined] [Datasource: RenderCloud] [PUT /api/schemes/{{this.params.id}}]
+  - addComboProduct [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - enableEdit [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - cancelEdit [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - hydrateUI [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - initView [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - toggleSchemeStatus [Type: undefined] [Datasource: RenderCloud] [PATCH /api/schemes/{{tblSchemes.triggeredRow.id}}/toggle]
+  - getSchemeUsage [Type: undefined] [Datasource: RenderCloud] [GET /api/schemes/{{SelectScheme.selectedOptionValue}}/usage]
+  - saveScheme [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - initCreate [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - onSaveSuccess [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - toggleStatus [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addComboSlab [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addNewSlab [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addComboProduct [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addPriceSlab [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - resetModal [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getBulkInvoiceLines [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/invoices/lines-bulk]
+  - bulkDownloadInvoices [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getLogo [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getBankDetails [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/bank-details/3]
+  - getUnifiedInvoiceDetail [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/unified/{{this.params.id}}]
+  - downloadSelectedTableInvoices [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - downloadBulkInvoices [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - previewInvoice [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getCustomers [Type: undefined] [Datasource: RenderCloud] [GET /api/customers]
+  - cancelEdit [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - enableEdit [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - initView [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - onSaveSuccess [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - initCreate [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addFlatMrpSlab [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addNewSlab [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addPriceSlab [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - saveScheme [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addComboSlab [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - toggleStatus [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - addComboProduct [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - resetModal [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - hydrateUI [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - generateReports [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getProductSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getCustomerSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getDSESummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getInvoiceSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getTierSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getProductSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - generateReports [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getDSESummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getInvoiceSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getTierSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getCustomerSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+Page: Customer
+  - getCustomers [Type: undefined] [Datasource: RenderCloud] [GET /api/customers/detailed-list]
+  - getChannel [Type: undefined] [Datasource: RenderCloud] [GET /api/channels]
+  - getRoutes [Type: undefined] [Datasource: RenderCloud] [GET /api/master/routes]
+  - getDSEs [Type: undefined] [Datasource: RenderCloud] [GET /api/employees]
+  - getRouteFrequency [Type: undefined] [Datasource: RenderCloud] [GET /api/master/route-types]
+  - getStates [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getDistricts [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - CreateCustomer_API [Type: undefined] [Datasource: RenderCloud] [POST /api/customers]
+  - view_customer_ledger [Type: undefined] [Datasource: RenderCloud] [GET /api/customers/{{tblCustomers.triggeredRow.id}}/ledger]
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getLogo [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - previewLedger [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - exportToExcel [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - UpdateCustomer_API [Type: undefined] [Datasource: RenderCloud] [PUT //api/customers/{{tblCustomers.triggeredRow.id}}]
+  - getPendingRequests [Type: undefined] [Datasource: RenderCloud] [GET /api/verify-requests/pending]
+  - approveCustomer [Type: undefined] [Datasource: RenderCloud] [POST /api/customers/{{ tblPending.triggeredRow.id }}/verify]
+  - getMe [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile]
+  - approveRequest [Type: undefined] [Datasource: RenderCloud] [POST /api/verify-requests/{{tblPending.triggeredRow.id}}/approve]
+  - rejectRequest [Type: undefined] [Datasource: RenderCloud] [POST /api/verify-requests/{{tblPending.triggeredRow.id}}/reject]
+  - createRealCustomer [Type: undefined] [Datasource: RenderCloud] [POST /api/customers]
+  - apiUpdatePricing [Type: undefined] [Datasource: RenderCloud] [POST /api/customers/{{tblCustomers.triggeredRow.id}}/pricing]
+  - getBrands [Type: undefined] [Datasource: RenderCloud] [GET /api/master/brands]
+  - apiGetPricing [Type: undefined] [Datasource: RenderCloud] [GET /api/customers/{{tblCustomers.triggeredRow.id}}/pricing]
+  - BulkEditCustomersAPI [Type: undefined] [Datasource: RenderCloud] [POST /api/customers/bulk-edit]
+Page: Migration Setup
+  - BulkImport_Customers [Type: undefined] [Datasource: RenderCloud] [POST /api/migration/customers]
+  - BulkImport_Vendors [Type: undefined] [Datasource: RenderCloud] [POST /api/migration/vendors]
+  - BulkImport_Inventory [Type: undefined] [Datasource: RenderCloud] [POST /api/migration/opening-stock]
+  - BulkImport_Invoices [Type: undefined] [Datasource: RenderCloud] [POST /api/migration/outstanding-invoices]
+  - BulkImport_Bills [Type: undefined] [Datasource: RenderCloud] [POST /api/migration/outstanding-bills]
+  - BulkImport_CustAdvances [Type: undefined] [Datasource: RenderCloud] [POST /api/migration/customer-advances]
+  - BulkImport_VendAdvances [Type: undefined] [Datasource: RenderCloud] [POST /api/migration/vendor-advances]
+  - BulkImport_Loans [Type: undefined] [Datasource: RenderCloud] [POST /api/migration/loans]
+  - formatDate [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - downloadTemplate [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - startImport [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+Page: Loan
+  - GetLoanEntities [Type: undefined] [Datasource: RenderCloud] [GET /api/loan-entities]
+  - CreateLoanEntity [Type: undefined] [Datasource: RenderCloud] [POST /api/loan-entities]
+  - GetEmployees_API [Type: undefined] [Datasource: RenderCloud] [GET /api/employees]
+  - getLoanTransactions [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/loans]
+  - getBanks [Type: undefined] [Datasource: RenderCloud] [GET /api/bank-accounts]
+  - GetUnconsumedCredits [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/unconsumed-credits]
+  - GetUnconsumedDebits [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/unconsumed-debits]
+  - CreateLoanTransaction [Type: undefined] [Datasource: RenderCloud] [POST /api/finance/loans]
+  - getMe [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile]
+  - CreateInstallment [Type: undefined] [Datasource: RenderCloud] [POST /api/finance/loans/{{ tblLoans.triggeredRow.id }}/installment]
+  - GetLoanLedger [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/loans/{{tblLoans.triggeredRow.id}}/ledger]
+  - GetEntityLedger [Type: undefined] [Datasource: RenderCloud] [GET /api/loan-entities/{{tblEntity.triggeredRow.id}}/ledger]
+  - DeleteLoanTransaction [Type: undefined] [Datasource: RenderCloud] [DELETE /api/finance/loans/transactions/{{tblLoanTransactionLed.triggeredRow.id}}]
+  - deleteLoan [Type: undefined] [Datasource: RenderCloud] [DELETE /api/finance/loans/{{tblLoans.triggeredRow.id}}]
+Page: Assets
+  - getStates [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getDistricts [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getBanks [Type: undefined] [Datasource: RenderCloud] [GET /api/bank-accounts]
+  - CreateAssetEntity [Type: undefined] [Datasource: RenderCloud] [POST /api/asset-entities]
+  - GetAssetEntities [Type: undefined] [Datasource: RenderCloud] [GET /api/asset-entities]
+  - getAssets [Type: undefined] [Datasource: RenderCloud] [GET /api/assets]
+  - getAssetCategories [Type: undefined] [Datasource: RenderCloud] [GET /api/assets/categories]
+  - GetAssetAccounts [Type: undefined] [Datasource: RenderCloud] [GET /api/assets/accounts]
+  - CreateAsset [Type: undefined] [Datasource: RenderCloud] [POST /api/assets]
+  - getUnconsumedDebits [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/unconsumed-debits]
+  - getBanksGen [Type: undefined] [Datasource: RenderCloud] [GET /api/master/banks]
+  - RecordAssetPayment [Type: undefined] [Datasource: RenderCloud] [POST /api/assets/payment]
+  - SellAssets [Type: undefined] [Datasource: RenderCloud] [POST /api/assets/{{tblAssets.triggeredRow.id}}/sale]
+  - getMe [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile]
+  - getUnconsumedCredits [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/unconsumed-credits]
+  - RecordAssetSalesPayment [Type: undefined] [Datasource: RenderCloud] [POST /api/assets/{{tblAssets.triggeredRow.id}}/sale-payment]
+  - getDepreciation [Type: undefined] [Datasource: RenderCloud] [GET /api/assets/depreciations]
+  - runAutoDep [Type: undefined] [Datasource: RenderCloud] [POST /api/assets/auto-depreciate]
+  - Asset_Entity_Ledger [Type: undefined] [Datasource: RenderCloud] [GET /api/asset-entities/{{tblAssetEntities.triggeredRow.id}}/ledger]
+Page: Cheque Management
+  - getCheques [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/cheques]
+  - getUnconsumedCredits [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/unconsumed-credits]
+  - getUnconsumedDebits [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/unconsumed-debits]
+  - getBanks [Type: undefined] [Datasource: RenderCloud] [GET /api/bank-accounts]
+  - BulkClearCheques [Type: undefined] [Datasource: RenderCloud] [POST /api/finance/cheques/bulk-clear]
+  - BounceCheque [Type: undefined] [Datasource: RenderCloud] [POST /api/finance/cheques/{{ tblCheques.triggeredRow.id }}/bounce]
+  - getMe [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile]
+  - apiUnclearCheque [Type: undefined] [Datasource: RenderCloud] [POST /api/finance/cheques/{{tblCheques.triggeredRow.id}}/unclear]
+Page: Transactions
+  - getIncomeEntity [Type: undefined] [Datasource: RenderCloud] [GET /api/entities/income]
+  - createIncomeEntity [Type: undefined] [Datasource: RenderCloud] [POST /api/entities/income]
+  - getBanksGen [Type: undefined] [Datasource: RenderCloud] [GET /api/master/banks]
+  - getExpensesEntity [Type: undefined] [Datasource: RenderCloud] [GET /api/entities/expense]
+  - createExpensesEntity [Type: undefined] [Datasource: RenderCloud] [POST /api/entities/expense]
+  - getExpenses [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/expenses]
+  - getIncome [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/other-income]
+  - getExpensesCat [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/expenses/categories]
+  - getBanks [Type: undefined] [Datasource: RenderCloud] [GET /api/bank-accounts]
+  - getUnconsumedDebits [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/unconsumed-debits]
+  - createExpenses [Type: undefined] [Datasource: RenderCloud] [POST /api/finance/expenses]
+  - getIncomeCat [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/other-income/categories]
+  - getUnconsumedCredits [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/unconsumed-credits]
+  - createIncome [Type: undefined] [Datasource: RenderCloud] [POST /api/finance/other-income]
+  - getMe [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile]
+  - getTransfer [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/transfers]
+  - createTransfer [Type: undefined] [Datasource: RenderCloud] [POST /api/finance/transfers]
+  - handleTransfer [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getTotalSum [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getApiObject [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - initializeTable [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - onCellEdit [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - handleTransfer [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - Income_Entity_Ledger [Type: undefined] [Datasource: RenderCloud] [GET //api/entities/income/{{tblIncomeEntity.triggeredRow.id}}/ledger]
+  - Expense_Entity_Ledger [Type: undefined] [Datasource: RenderCloud] [GET /api/entities/expense/{{tblExpenseEntity.triggeredRow.id}}/ledger]
+  - DeleteExpenseApi [Type: undefined] [Datasource: RenderCloud] [DELETE /api/finance/expenses/{{tblExpenseTransaction.triggeredRow.id}}]
+  - DeleteOtherIncomeApi [Type: undefined] [Datasource: RenderCloud] [DELETE /api/finance/other-income/{{tblIncometransaction.triggeredRow.id}}]
+  - DeleteTransferApi [Type: undefined] [Datasource: RenderCloud] [DELETE /api/finance/transfers/{{tblInternalTransfer.triggeredRow.id}}]
+Page: Reports
+  - AttendanceReport [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/attendance/details]
+  - RecievablesList [Type: undefined] [Datasource: RenderCloud] [GET /api/payments/dse-pending-invoices]
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getLogo [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getEmployees [Type: undefined] [Datasource: RenderCloud] [GET /api/employees]
+  - getOpeneningBalance [Type: undefined] [Datasource: RenderCloud] [GET /api/migration/opening-capital]
+  - downloadReceivablesPDF [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getBankStatement [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/list]
+  - getBanks [Type: undefined] [Datasource: RenderCloud] [GET /api/bank-accounts]
+  - Api_UploadStatement [Type: undefined] [Datasource: RenderCloud] [POST /api/finance/reconciliation/bank/upload]
+  - uploadStatement [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - AuditView [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/audit-view]
+  - journalEntries [Type: undefined] [Datasource: RenderCloud] [GET /api/journal-entries]
+  - saleReport [Type: undefined] [Datasource: RenderCloud] [GET /api/analytics/sales-fy-report]
+  - getPnL [Type: undefined] [Datasource: RenderCloud] [GET /api/analytics/reports/p-and-l]
+  - cashFlow [Type: undefined] [Datasource: RenderCloud] [GET /api/analytics/reports/cash-flow]
+  - balanceSheet [Type: undefined] [Datasource: RenderCloud] [GET /api/analytics/reports/balance-sheet]
+  - bankBalance [Type: undefined] [Datasource: RenderCloud] [GET /api/analytics/reports/fy-operating-balances]
+  - getSalesLines [Type: undefined] [Datasource: RenderCloud] [GET /api/analytics/reports/sales-lines]
+  - getJournalLines [Type: undefined] [Datasource: RenderCloud] [GET /api/general-ledger]
+  - AccountStatement [Type: undefined] [Datasource: RenderCloud] [GET /api/accounting/unified-liquid-ledger]
+  - custPayment [Type: undefined] [Datasource: RenderCloud] [GET /api/payments/allocations]
+  - getQuarterOptions [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getFYOptions [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getMonthOptions [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - previewPnL [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawStatBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - fetch_source_transactions [Type: undefined] [Datasource: RenderCloud] [GET /api/accounting/source-transactions]
+  - getRunningStatement [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - Api1 [Type: undefined] [Datasource: RenderCloud] [GET /api/analytics/reports/integrity-audit]
+  - getProducts [Type: undefined] [Datasource: RenderCloud] [GET /api/products]
+  - getBrands [Type: undefined] [Datasource: RenderCloud] [GET /api/master/brands]
+  - getVendors [Type: undefined] [Datasource: RenderCloud] [GET /api/vendors]
+  - getMe [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile]
+  - previewStockReport [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getDSEDashboard [Type: undefined] [Datasource: RenderCloud] [GET /api/analytics/employees/{{sltDseDash.selectedOptionValue}}/dashboard]
+  - getSalesSummary [Type: undefined] [Datasource: RenderCloud] [GET /api/analytics/reports/sales-summary-detailed]
+  - getSalary [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/salary-payment-headers]
+  - get_salary_details_api [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/salary-payment-details/{{tblSalary.triggeredRow.id}}]
+  - forensicAPI [Type: undefined] [Datasource: RenderCloud] [GET /api/accounting/forensic-snapshot]
+  - getCashFlow [Type: undefined] [Datasource: RenderCloud] [GET /api/accounting/cash-flow]
+  - _drawStatBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - exportForensicReport [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - generatePayslip [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getPurchaseLines [Type: undefined] [Datasource: RenderCloud] [GET /api/purchase-invoices/lines]
+  - GetSalesLinesPaginated [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/invoice-lines]
+  - GetAllSalesLinesForDownload [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/invoice-lines]
+  - getCustomers [Type: undefined] [Datasource: RenderCloud] [GET /api/customers]
+Page: HR
+  - getDesignations [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/designations]
+  - getBanksGen [Type: undefined] [Datasource: RenderCloud] [GET /api/master/banks]
+  - createEmployee [Type: undefined] [Datasource: RenderCloud] [POST /api/employees]
+  - getMe [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile]
+  - saveEmployee [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getEmployeeList [Type: undefined] [Datasource: RenderCloud] [GET /api/employees]
+  - getSalaryHistory [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/{{tblEmployees.triggeredRow.id}}/salary-history]
+  - updateSalary [Type: undefined] [Datasource: RenderCloud] [POST /api/employees/{{ JSONFormUpdateSalary.formData.employee_id }}/salary-update]
+  - handleSalaryUpdate [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - bulkSalaryUpdate [Type: undefined] [Datasource: RenderCloud] [POST /api/employees/bulk-salary-update]
+  - bulkAttendanceAPI [Type: undefined] [Datasource: RenderCloud] [POST /api/employees/bulk-attendance]
+  - EmployeeAttendanceHistory [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/{{tblEmployees.triggeredRow.id}}/attendance]
+  - getAccounts [Type: undefined] [Datasource: RenderCloud] [GET /api/bank-accounts]
+  - getUnconsumedDebits [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/unconsumed-debits]
+  - bulkAdvanceAPI [Type: undefined] [Datasource: RenderCloud] [POST /api/employees/bulk-salary-advance]
+  - getPayload [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - saveAdvances [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getBulkPayload [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getSalaryPreview [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/salary-preview]
+  - bulkSalaryPayment [Type: undefined] [Datasource: RenderCloud] [POST /api/employees/bulk-salary-payment]
+  - bulkBonusPost [Type: undefined] [Datasource: RenderCloud] [POST /api/employees/bulk-bonus]
+  - markResignedAPI [Type: undefined] [Datasource: RenderCloud] [POST //api/employees/{{tblEmployees.triggeredRow.id}}/resign]
+  - getInvoices [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/invoices/lookup]
+  - apiCreateLiability [Type: undefined] [Datasource: RenderCloud] [POST /api/employees/liabilities]
+  - get_employee_profile_api [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile/{{tblEmployees.triggeredRow.id}}]
+  - getSalaryAdvance [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/advances]
+  - deleteAdvance [Type: undefined] [Datasource: RenderCloud] [DELETE /api/employees/advances/{{tblEmployeeAdvances.triggeredRow.id}}]
+Page: Payment Settlement
+  - getPendingReports [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/list]
+  - getReportDetails [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/{{ tblPendingDSR.triggeredRow.report_id }}/details]
+  - getSyncExpenses [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/expenses]
+  - processExpenseAPI [Type: undefined] [Datasource: RenderCloud] [POST /api/finance/reconciliation/expenses/{{ tblExpenses.triggeredRow.id }}/process]
+  - getMe [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile]
+  - bulkUpdateAPI [Type: undefined] [Datasource: RenderCloud] [POST /api/finance/reconciliation/bulk-update]
+  - getUnconsumedCredits [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/unconsumed-credits]
+  - getMergedData [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - syncEdit [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getSummaryStats [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getCashRequirement [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - isCashMatching [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getEnteredCashTotal [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - approveRow [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getCategoryStats [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - stageCategory [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - canApproveOnline [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+Page: Settings
+  - triggerBackup [Type: undefined] [Datasource: RenderCloud] [POST /api/backups/trigger]
+  - apiManualSync [Type: undefined] [Datasource: RenderCloud] [POST /api/dse/eod-sync]
+  - runBackup [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - downloadBackup [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - apiListBackups [Type: undefined] [Datasource: RenderCloud] [GET /api/backups/list]
+  - init [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - setTheme [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getThemeOptions [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+Page: Incentives
+  - _API_GetIncentivePlans [Type: undefined] [Datasource: RenderCloud] [GET /api/targets/plans]
+  - Api1 [Type: undefined] [Datasource: RenderCloud] [GET /api/products]
+  - getBankStatement [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/reconciliation/bank/list]
+  - Api2 [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/loans]
+Page: Supply Chain Management
+  - getTrips [Type: undefined] [Datasource: RenderCloud] [GET /api/delivery/trips]
+  - getPickList [Type: undefined] [Datasource: RenderCloud] [GET /api/delivery/trips/{{ tblTripList.triggeredRow.id}}/picklist-web]
+  - getDeliveryTeam [Type: undefined] [Datasource: RenderCloud] [GET /api/delivery/teams]
+  - getDeliveryList [Type: undefined] [Datasource: RenderCloud] [GET /api/delivery/trips/{{ tblTripList.triggeredRow.id }}/manifest-web]
+  - getPendingInvoices [Type: undefined] [Datasource: RenderCloud] [GET /api/delivery/invoices-pool]
+  - updateTrip [Type: undefined] [Datasource: RenderCloud] [PUT /api/delivery/trips/{{ tblTripList.triggeredRow.id }}]
+  - deleteTrip [Type: undefined] [Datasource: RenderCloud] [DELETE /api/delivery/trips/{{tblTripList.triggeredRow.id}}]
+  - getSyncLogs [Type: undefined] [Datasource: RenderCloud] [GET /api/delivery/sync-logs]
+  - getSyncDetails [Type: undefined] [Datasource: RenderCloud] [GET /api/delivery/sync/{{tblSyncLogs.triggeredRow.id}}/details]
+  - initSyncDetails [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - settle [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - handleManifestEdit [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - handleReturnEdit [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - settleSyncAPI [Type: undefined] [Datasource: RenderCloud] [POST /api/delivery/verify/settle]
+  - getMe [Type: undefined] [Datasource: RenderCloud] [GET /api/employees/profile]
+  - createTrip [Type: undefined] [Datasource: RenderCloud] [POST /api/delivery/trips]
+  - getVerfiedTrips [Type: undefined] [Datasource: RenderCloud] [GET /api/delivery/sync-logs/history]
+  - verifiedTripHistory [Type: undefined] [Datasource: RenderCloud] [GET /api/delivery/sync/{{tblVerfiedTrips.triggeredRow.id}}/history]
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getLogo [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getUnifiedInvoiceDetail [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/unified/{{this.params.id}}]
+  - getBankDetails [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/bank-details/3]
+  - prepareEditMode [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - generateDeliveryList [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - downloadTripReports [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - generatePickList [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getCombinedInvoices [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - downloadBulkInvoices [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - downloadAllTripInvoices [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - previewInvoice [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - downloadBulkInvoices [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - previewInvoice [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - downloadAllTripInvoices [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getMergedData [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - mark_self_collected_api [Type: undefined] [Datasource: RenderCloud] [POST /api/delivery/mark-self-collected]
+  - get_delivery_details [Type: undefined] [Datasource: RenderCloud] [GET /api/delivery/invoices/{{tblSales.triggeredRow.invoice_id}}/delivery-cycle]
+  - getInvoices [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/unified]
+  - timeline [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - latestStatus [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - pickListBD [Type: undefined] [Datasource: RenderCloud] [GET /api/delivery/trips/{{tblTripList.triggeredRow.id}}/product-breakdown]
+  - picklistDelivered [Type: undefined] [Datasource: RenderCloud] [GET //api/delivery/trips/{{ tblVerfiedTrips.triggeredRow.trip_id}}/picklist-web]
+Page: Credit Note
+  - getCreditNote [Type: undefined] [Datasource: RenderCloud] [GET /api/sales-returns]
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getLogo [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - onPageLoad [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getCustomersInvoice [Type: undefined] [Datasource: RenderCloud] [GET //api/customers/{{selCustomer.selectedOptionValue}}/pending-bills]
+  - get_existing_returns [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/returns]
+  - getCustomers [Type: undefined] [Datasource: RenderCloud] [GET /api/customers]
+  - getProducts [Type: undefined] [Datasource: RenderCloud] [GET /api/products]
+  - save_manual_cn [Type: undefined] [Datasource: RenderCloud] [POST /api/sales/returns/manual]
+  - getBatch [Type: undefined] [Datasource: RenderCloud] [GET /api/products/batches]
+  - deleteCN [Type: undefined] [Datasource: RenderCloud] [DELETE /api/sales-returns/{{tblCreditNote.triggeredRow.id}}]
+  - loadInvoiceItems [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - loadAllProducts [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - updateRow [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getTaxSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getFinalItems [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - previewCreditNote [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getTaxSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getFinalItems [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - loadInvoiceItems [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - updateRow [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - loadAllProducts [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+Page: GST
+  - getGstr1 [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/gst/gstr1]
+  - getGstr3b [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/gst/gstr3b]
+  - handleExport [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getHsnSummary [Type: undefined] [Datasource: RenderCloud] [GET /api/finance/gst/hsn-summary]
+  - downloadPortalJson [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+Page: Letterhead Editor
+  - apiGetLetters [Type: undefined] [Datasource: RenderCloud] [GET /api/letters]
+  - apiSendLetter [Type: undefined] [Datasource: RenderCloud] [POST /api/letters/send]
+Page: Page1
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getLogo [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - downloadTemplate [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - groupRows [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - normalizeRow [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _blankCustomer [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - generateInvoicesFromFile [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - previewInvoice [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getSummary [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - _drawSimpleBox [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getCustomerDetails [Type: undefined] [Datasource: UNUSED_DATASOURCE] 
+  - getBankDetails [Type: undefined] [Datasource: RenderCloud] [GET /api/sales/bank-details/3]
+
+--- PAGE WIDGETS SUMMARY ---
+Page: Inventory
+  Widgets counts: {}
+Page: Vendor
+  Widgets counts: {}
+Page: Debit Notes
+  Widgets counts: {}
+Page: Items
+  Widgets counts: {}
+Page: Sales Order
+  Widgets counts: {}
+Page: Invoice
+  Widgets counts: {}
+Page: Schemes
+  Widgets counts: {}
+Page: Customer
+  Widgets counts: {}
+Page: Migration Setup
+  Widgets counts: {}
+Page: Loan
+  Widgets counts: {}
+Page: Assets
+  Widgets counts: {}
+Page: Cheque Management
+  Widgets counts: {}
+Page: Transactions
+  Widgets counts: {}
+Page: Reports
+  Widgets counts: {}
+Page: HR
+  Widgets counts: {}
+Page: Payment Settlement
+  Widgets counts: {}
+Page: Settings
+  Widgets counts: {}
+Page: Incentives
+  Widgets counts: {}
+Page: Supply Chain Management
+  Widgets counts: {}
+Page: Credit Note
+  Widgets counts: {}
+Page: GST
+  Widgets counts: {}
+Page: Login
+  Widgets counts: {}
+Page: Letterhead Editor
+  Widgets counts: {}
+Page: Page1
+  Widgets counts: {}
