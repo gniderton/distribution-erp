@@ -423,7 +423,7 @@ export default function VendorPage() {
           const logoData = companySettings.logo.startsWith('data:image') 
             ? companySettings.logo 
             : `data:image/png;base64,${companySettings.logo}`;
-          doc.addImage(logoData, 'PNG', 40, 20, 75, 25)
+          doc.addImage(logoData, 'PNG', margin, 30, 110, 35)
         }
       } catch (e) {}
 
