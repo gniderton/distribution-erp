@@ -34,6 +34,18 @@ export function useCategories() {
   return useQuery({ queryKey: ['categories'], queryFn: itemsApi.categories })
 }
 
+export function useHsn() {
+  return useQuery({ queryKey: ['hsn'], queryFn: itemsApi.hsn })
+}
+
+export function useTaxes() {
+  return useQuery({ queryKey: ['taxes'], queryFn: itemsApi.taxes })
+}
+
+export function useVendors() {
+  return useQuery({ queryKey: ['vendors'], queryFn: itemsApi.vendors })
+}
+
 export function useCreateProduct() {
   const qc = useQueryClient()
   return useMutation({

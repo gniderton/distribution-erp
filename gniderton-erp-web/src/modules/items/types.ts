@@ -25,6 +25,11 @@ export interface Product {
   description?: string
   tax_name?: string
   tax_percentage?: string
+  vendor_id?: string | number
+  brand_id?: string | number
+  category_id?: string | number
+  hsn_id?: string | number
+  tax_id?: string | number
 }
 
 export interface Batch {

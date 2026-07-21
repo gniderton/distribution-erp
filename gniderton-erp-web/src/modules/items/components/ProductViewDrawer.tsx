@@ -6,7 +6,7 @@ import { DataTable } from '@/components/shared/DataTable'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useProductBatches, useInventoryLedger, useUpdateProduct, useCreateProduct } from '../hooks'
+import { useProductBatches, useInventoryLedger, useUpdateProduct, useCreateProduct, useBrands, useCategories, useHsn, useTaxes, useVendors } from '../hooks'
 import type { Product } from '../types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -15,10 +15,11 @@ const productSchema = z.object({
   product_name: z.string().min(1, 'Product Name is required'),
   product_code: z.string().optional(),
   ean_code: z.string().optional(),
-  brand_name: z.string().optional(),
-  category_name: z.string().optional(),
-  hsn_code: z.string().optional(),
-  tax_name: z.string().optional(),
+  vendor_id: z.coerce.string().min(1, 'Vendor is required'),
+  brand_id: z.coerce.string().min(1, 'Brand is required'),
+  category_id: z.coerce.string().min(1, 'Category is required'),
+  hsn_id: z.coerce.string().optional(),
+  tax_id: z.coerce.string().optional(),
   mrp: z.coerce.number().optional(),
   retail_rate: z.coerce.number().optional(),
   wholesale_rate: z.coerce.number().optional(),
@@ -57,6 +58,12 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
   
   const createProduct = useCreateProduct()
   const updateProduct = useUpdateProduct()
+  
+  const { data: brands } = useBrands()
+  const { data: categories } = useCategories()
+  const { data: hsn } = useHsn()
+  const { data: taxes } = useTaxes()
+  const { data: vendors } = useVendors()
 
   const { register, handleSubmit, reset, control, formState: { errors } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema) as any,
@@ -67,9 +74,9 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
 
   useEffect(() => {
     if (open && product) {
-      reset({ ...product })
+      reset({ ...product } as any)
     } else if (open && !product) {
-      reset({ is_active: true })
+      reset({ is_active: true } as any)
     }
   }, [open, product, reset])
 
@@ -130,11 +137,42 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
             <FormGroup label="Product Name" error={errors.product_name?.message}>
               <Input {...register('product_name')} />
             </FormGroup>
-            <FormGroup label="Product Code"><Input {...register('product_code')} /></FormGroup>
-            <FormGroup label="Brand"><Input {...register('brand_name')} /></FormGroup>
-            <FormGroup label="Category"><Input {...register('category_name')} /></FormGroup>
+            {isEditing ? (
+              <FormGroup label="Product Code"><Input {...register('product_code')} disabled /></FormGroup>
+            ) : (
+              <div className="flex flex-col justify-center text-sm text-ink-500">Product Code will be auto-generated upon creation.</div>
+            )}
+            <FormGroup label="Vendor" error={errors.vendor_id?.message}>
+              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" {...register('vendor_id')}>
+                <option value="">-- Select Vendor --</option>
+                {vendors?.map((v: any) => <option key={v.id} value={v.id}>{v.vendor_name}</option>)}
+              </select>
+            </FormGroup>
+            <FormGroup label="Brand" error={errors.brand_id?.message}>
+              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" {...register('brand_id')}>
+                <option value="">-- Select Brand --</option>
+                {brands?.map((b: any) => <option key={b.id} value={b.id}>{b.brand_name}</option>)}
+              </select>
+            </FormGroup>
+            <FormGroup label="Category" error={errors.category_id?.message}>
+              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" {...register('category_id')}>
+                <option value="">-- Select Category --</option>
+                {categories?.map((c: any) => <option key={c.id} value={c.id}>{c.category_name}</option>)}
+              </select>
+            </FormGroup>
             <FormGroup label="EAN / Barcode"><Input {...register('ean_code')} /></FormGroup>
-            <FormGroup label="HSN Code"><Input {...register('hsn_code')} /></FormGroup>
+            <FormGroup label="HSN Code" error={errors.hsn_id?.message}>
+              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" {...register('hsn_id')}>
+                <option value="">-- Select HSN --</option>
+                {hsn?.map((h: any) => <option key={h.id} value={h.id}>{h.hsn_code}</option>)}
+              </select>
+            </FormGroup>
+            <FormGroup label="Tax Rate" error={errors.tax_id?.message}>
+              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" {...register('tax_id')}>
+                <option value="">-- Select Tax --</option>
+                {taxes?.map((t: any) => <option key={t.id} value={t.id}>{t.tax_name} ({t.tax_percentage}%)</option>)}
+              </select>
+            </FormGroup>
           </div>
 
           <h3 className="text-sm font-semibold text-ink-900 pt-4 border-t border-border-subtle">Pricing & Rates</h3>
