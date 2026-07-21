@@ -73,10 +73,10 @@ export function InvoiceViewModal({ invoice, onClose }: { invoice: Invoice, onClo
     const product = products.find(p => p.id.toString() === newProductId)
     if (!product) return
     
-    const rate = product.price || 0
+    const rate = parseFloat(product.retail_rate || product.mrp || 0)
     const newLine: InvoiceLine = {
       product_id: product.id,
-      product_name: product.name,
+      product_name: product.product_name,
       ordered_qty: newQty,
       rate: rate,
       gross_amount: newQty * rate,
@@ -275,7 +275,7 @@ export function InvoiceViewModal({ invoice, onClose }: { invoice: Invoice, onClo
                     >
                       <option value="">-- Select Product --</option>
                       {products.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
+                        <option key={p.id} value={p.id}>{p.product_name}</option>
                       ))}
                     </select>
                   </div>
