@@ -184,7 +184,7 @@ export const generateInvoicePDF = async (invoiceData: Invoice) => {
         Number(row.scheme_amount || 0).toFixed(2), (row.discount_percent || 0) + "%", Number(row.discount_amount || 0).toFixed(2),
         Number(row.taxable_amount || 0).toFixed(2), (row.tax_percent || 0) + "%", Number(row.tax_amount || 0).toFixed(2), Number(row.amount || 0).toFixed(2)
       ];
-    }),
+    }).map(row => row.map(cell => String(cell || ""))),
     didDrawPage: (data: any) => {
       drawMainHeader(data.pageNumber, (doc as any).internal.getNumberOfPages());
     },
@@ -245,11 +245,16 @@ export const generateInvoicePDF = async (invoiceData: Invoice) => {
     startY: currentY,
     margin: { left: margin },
     head: [["TAX SUMMARY", "PCS", "GROSS", "SCH", "DISC", "TAXABLE", "TAX", "NET"]],
-    body: summaryData.map(row => [row.PARTICULARS, row.Pcs, row.Gross, row.Sch, row.Disc, row.Taxable, row.Tax, row.Net]),
+    body: summaryData.map(row => [row.PARTICULARS, row.Pcs, row.Gross, row.Sch, row.Disc, row.Taxable, row.Tax, row.Net].map(String)),
     theme: 'grid',
     styles: { fontSize: 8.5, cellPadding: 2, lineColor: [0, 0, 0], lineWidth: 0.5, textColor: [0, 0, 0] },
     headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold' },
-    bodyStyles: (row: any) => row.raw[0].includes('Total') ? { fontStyle: 'bold', fillColor: [250, 250, 250] } : {}
+    didParseCell: (data: any) => {
+      if (data.section === 'body' && data.row.raw[0] && data.row.raw[0].includes('Total')) {
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fillColor = [250, 250, 250];
+      }
+    }
   });
 
   if (schemeLines.length > 0) {
@@ -257,7 +262,7 @@ export const generateInvoicePDF = async (invoiceData: Invoice) => {
       startY: (doc as any).lastAutoTable.finalY + 10,
       margin: { left: margin },
       head: [["PRODUCT NAME", "SCHEMES / TIER APPLIED", "SCHEME AMT"]],
-      body: schemeLines,
+      body: schemeLines as string[][],
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.5, textColor: [0, 0, 0] },
       headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold' },
