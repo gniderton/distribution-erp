@@ -32,6 +32,9 @@ export const itemsApi = {
     api.put<Product>(`/api/products/${id}`, payload).then((r) => r.data),
   updateBatch: (batchId: string | number, payload: any) =>
     api.put(`/api/products/batches/${batchId}`, payload).then((r) => r.data),
+
+  productDashboard: (productId: string | number) =>
+    api.get(`/api/analytics/products/${productId}/profile`).then((r) => r.data),
   bulkStatus: (payload: { ids: (string | number)[]; status: string }) =>
     api.post('/api/products/bulk-status', payload).then((r) => r.data),
   bulkUpdate: (payload: any) => api.post('/api/products/bulk-update', payload).then((r) => r.data),

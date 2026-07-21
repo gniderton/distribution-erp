@@ -14,6 +14,14 @@ export function useProductBatches(productId: string | number | null) {
   })
 }
 
+export function useProductDashboard(productId: string | number | null) {
+  return useQuery({
+    queryKey: ['products', productId, 'dashboard'],
+    queryFn: () => itemsApi.productDashboard(productId as string | number),
+    enabled: !!productId,
+  })
+}
+
 export function useAllBatches() {
   return useQuery({ queryKey: ['products', 'batches', 'all'], queryFn: itemsApi.allBatches })
 }
@@ -65,5 +73,13 @@ export function useUpdateProduct() {
 export function useCreateStockAdjustment() {
   return useMutation({
     mutationFn: (payload: Partial<StockAdjustment>) => itemsApi.createStockAdjustment(payload),
+  })
+}
+
+export function useUpdateBatch() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string | number; payload: any }) => itemsApi.updateBatch(id, payload),
+    onSuccess: (_, variables) => qc.invalidateQueries({ queryKey: ['products'] }), // Invalidate all products and their batches
   })
 }
