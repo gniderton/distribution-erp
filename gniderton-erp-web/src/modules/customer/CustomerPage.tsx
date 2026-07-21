@@ -95,8 +95,8 @@ export default function CustomerPage() {
   }).length
 
   return (
-    <div className="flex h-full flex-col bg-ink-50/30">
-      <div className="px-6 py-4">
+    <div className="space-y-6 w-full h-full flex flex-col">
+      <div>
         <PageHeader
           eyebrow="CUS · People"
           title="Customers"
@@ -142,7 +142,7 @@ export default function CustomerPage() {
         </div>
       </div>
 
-      <div className="flex-1 px-6 pb-6 overflow-hidden flex flex-col space-y-4">
+      <div className="flex-1 overflow-hidden flex flex-col space-y-4">
         <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm flex items-center w-full">
           <div className="relative w-full max-w-md">
             <Search className="absolute left-3.5 top-2.5 text-ink-600" size={15} />
