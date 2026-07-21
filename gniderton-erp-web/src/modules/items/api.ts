@@ -1,9 +1,12 @@
 import { api } from '@/lib/axios'
-import type { Product } from './types'
+import type { Product, Batch, StockAdjustment } from './types'
 
-/** Full endpoint surface for the Items module (Build Spec §8.3). */
 export const itemsApi = {
-  list: () => api.get<Product[]>('/api/products').then((r) => r.data),
+  list: async () => {
+    const res = await api.get('/api/products')
+    // API returns { data: Product[], pagination: ... } or just Product[]
+    return Array.isArray(res.data) ? res.data : (res.data?.data || [])
+  },
   templateData: () => api.get('/api/products/template-data').then((r) => r.data),
   batches: (productId: string | number) => api.get(`/api/products/${productId}/batches`).then((r) => r.data),
 

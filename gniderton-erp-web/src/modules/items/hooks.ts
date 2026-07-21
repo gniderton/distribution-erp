@@ -1,9 +1,25 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { itemsApi } from './api'
-import type { Product } from './types'
+import type { Product, StockAdjustment } from './types'
 
 export function useProducts() {
   return useQuery({ queryKey: ['products'], queryFn: itemsApi.list })
+}
+
+export function useProductBatches(productId: string | number | null) {
+  return useQuery({
+    queryKey: ['products', productId, 'batches'],
+    queryFn: () => itemsApi.batches(productId as string | number),
+    enabled: !!productId,
+  })
+}
+
+export function useInventoryLedger(productId: string | number | null) {
+  return useQuery({
+    queryKey: ['inventory-ledger', productId],
+    queryFn: () => itemsApi.inventoryLedger(productId as string | number),
+    enabled: !!productId,
+  })
 }
 
 export function useCreateProduct() {
@@ -19,5 +35,11 @@ export function useUpdateProduct() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string | number; payload: Partial<Product> }) => itemsApi.update(id, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['products'] }),
+  })
+}
+
+export function useCreateStockAdjustment() {
+  return useMutation({
+    mutationFn: (payload: Partial<StockAdjustment>) => itemsApi.createStockAdjustment(payload),
   })
 }
