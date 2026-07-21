@@ -19,7 +19,15 @@ export function BulkStatusModal({ open, onClose, products }: Props) {
   const qc = useQueryClient()
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(false)
-  const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all')
+
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      if (filterStatus === 'active') return p.is_active
+      if (filterStatus === 'inactive') return !p.is_active
+      return true
+    })
+  }, [products, filterStatus])
 
   const columns = useMemo<ColumnDef<Product>[]>(
     () => [
@@ -64,8 +72,8 @@ export function BulkStatusModal({ open, onClose, products }: Props) {
   const selectedIdsList = Object.keys(selectedIds).filter(k => selectedIds[k])
   const selectedCount = selectedIdsList.length
   
-  // Determine smart action based on selected products (using row index)
-  const selectedProducts = selectedIdsList.map(index => products[parseInt(index)])
+  // Determine smart action based on selected products (using row index from the filtered array)
+  const selectedProducts = selectedIdsList.map(index => filteredProducts[parseInt(index)])
   const hasActive = selectedProducts.some(p => p?.is_active)
   const targetAction = hasActive ? 'inactive' : 'active'
   const buttonText = hasActive ? 'Deactivate Selected' : 'Activate Selected'
@@ -93,23 +101,34 @@ export function BulkStatusModal({ open, onClose, products }: Props) {
     <Dialog open={open} onClose={onClose} title="Bulk Status Edit" widthClass="max-w-4xl">
       <div className="mb-4 text-sm text-ink-600 flex justify-between items-center">
         <span>Select products below to bulk activate or deactivate them.</span>
-        <input 
-          type="text"
-          placeholder="Filter products..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border border-border-subtle rounded-md px-3 py-1.5 text-sm w-64 focus:ring-1 focus:ring-brand-500 outline-none"
-        />
+        <div className="flex bg-ink-100 rounded-lg p-1">
+          <button 
+            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${filterStatus === 'all' ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'}`}
+            onClick={() => setFilterStatus('all')}
+          >
+            All
+          </button>
+          <button 
+            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${filterStatus === 'active' ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'}`}
+            onClick={() => setFilterStatus('active')}
+          >
+            Active
+          </button>
+          <button 
+            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${filterStatus === 'inactive' ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'}`}
+            onClick={() => setFilterStatus('inactive')}
+          >
+            Inactive
+          </button>
+        </div>
       </div>
       
       <div className="max-h-[50vh] overflow-auto border border-border-subtle rounded-lg">
         <DataTable
-          data={products}
+          data={filteredProducts}
           columns={columns}
           rowSelection={selectedIds}
           onRowSelectionChange={setSelectedIds}
-          globalFilter={search}
-          onGlobalFilterChange={setSearch}
         />
       </div>
 
