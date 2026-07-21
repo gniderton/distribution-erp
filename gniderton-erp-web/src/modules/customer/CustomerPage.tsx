@@ -71,6 +71,11 @@ export default function CustomerPage() {
       { accessorKey: 'customer_phone', header: 'Phone', cell: (c) => c.getValue() || '—' },
       { accessorKey: 'channel_name', header: 'Channel', cell: (c) => c.getValue() || '—' },
       { accessorKey: 'route_name', header: 'Route', cell: (c) => c.getValue() || '—' },
+      { accessorKey: 'gstin', header: 'GST No', cell: (c) => <span className="font-mono-figures text-xs">{c.getValue() as string || '—'}</span> },
+      { accessorKey: 'credit_limit', header: 'Credit Limit', cell: (c) => {
+        const val = c.getValue() as number;
+        return val ? <span className="font-mono-figures text-ink-900 font-medium">₹{val.toLocaleString('en-IN')}</span> : '—';
+      }},
       {
         accessorKey: 'verification_status',
         header: 'Status',
