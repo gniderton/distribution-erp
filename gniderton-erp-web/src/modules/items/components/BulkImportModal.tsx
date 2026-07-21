@@ -31,20 +31,18 @@ export function BulkImportModal({ open, onClose }: { open: boolean, onClose: () 
 
   const handleDownloadTemplate = () => {
     const headers = [
-      'Product Name', 'Product Code', 'Brand', 'Category', 
-      'Base Unit', 'Alternate Unit', 'Conversion', 
-      'HSN', 'Tax', 
-      'MRP', 'Retail Rate', 'Wholesale Rate', 'Dealer Rate', 'Distributor Rate', 'Purchase Rate', 
-      'Opening Stock'
+      'Product ID', 'Product Name', 'Brand Name', 'Category Name', 'Vendor Name', 
+      'MRP', 'Purchase Rate', 'Distributor Rate', 'Wholesale Rate', 'Dealer Rate', 'Retail Rate', 
+      'Tax Name', 'HSN Code', 'EAN', 'Case Qty', 'UOM', 'Model Number', 
+      'Min Stock', 'Length(cm)', 'Width(cm)', 'Height(cm)', 'Weight(kg)', 'Description'
     ]
     
-    // Add one sample row
+    // Add one sample row (Product ID left empty for new products)
     const sampleRow = [
-      'Sample Item 240ML', 'SAMP-001', 'Sample Brand', 'Beverages',
-      'PCS', 'BOX', '10',
-      '2202', '18',
-      '100', '95', '85', '85', '80', '60',
-      '50'
+      '', 'Sample Item 240ML', 'Sample Brand', 'Beverages', 'Sample Vendor',
+      '100', '60', '80', '85', '85', '95',
+      'GST 18%', '2202', '1234567890123', '10', 'PCS', 'MOD-123',
+      '50', '10', '10', '20', '0.5', 'A sample description'
     ]
 
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), sampleRow.join(',')].join('\n')
