@@ -14,6 +14,7 @@ const schema = z.object({
   adjusted_qty: z.coerce.number().refine(v => v !== 0, 'Quantity cannot be zero'),
   reason: z.string().min(1, 'Reason is required'),
   reference: z.string().optional(),
+  date: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -84,8 +85,13 @@ export function StockAdjustModal({ open, onClose }: { open: boolean, onClose: ()
           <FormGroup label="Adjustment Qty" error={errors.adjusted_qty?.message} description="Use negative values to reduce stock.">
             <Input type="number" placeholder="+10 or -5" {...register('adjusted_qty')} />
           </FormGroup>
-          <div>
-            <Label>Reason</Label>
+          <FormGroup label="Adjustment Date (Optional)" error={errors.date?.message}>
+            <Input type="date" {...register('date')} />
+          </FormGroup>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormGroup label="Reason" error={errors.reason?.message}>
             <Select {...register('reason')}>
               <option value="Physical Count Discrepancy">Physical Count Discrepancy</option>
               <option value="Damage/Spoilage">Damage / Spoilage</option>
@@ -93,13 +99,11 @@ export function StockAdjustModal({ open, onClose }: { open: boolean, onClose: ()
               <option value="Internal Use">Internal Use</option>
               <option value="Other">Other</option>
             </Select>
-            {errors.reason && <p className="mt-1 text-xs text-danger-600">{errors.reason?.message}</p>}
-          </div>
+          </FormGroup>
+          <FormGroup label="Reference / Notes">
+            <Input placeholder="E.g. Approved by Manager" {...register('reference')} />
+          </FormGroup>
         </div>
-
-        <FormGroup label="Reference / Notes">
-          <Input placeholder="E.g. Approved by Manager" {...register('reference')} />
-        </FormGroup>
 
         <div className="mt-6 flex justify-end gap-3">
           <Button variant="secondary" onClick={onClose} type="button">Cancel</Button>

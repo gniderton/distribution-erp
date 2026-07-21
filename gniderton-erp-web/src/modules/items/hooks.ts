@@ -22,6 +22,14 @@ export function useInventoryLedger(productId: string | number | null) {
   })
 }
 
+export function useBrands() {
+  return useQuery({ queryKey: ['brands'], queryFn: itemsApi.brands })
+}
+
+export function useCategories() {
+  return useQuery({ queryKey: ['categories'], queryFn: itemsApi.categories })
+}
+
 export function useCreateProduct() {
   const qc = useQueryClient()
   return useMutation({

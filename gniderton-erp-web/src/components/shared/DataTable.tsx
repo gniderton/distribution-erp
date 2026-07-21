@@ -26,6 +26,8 @@ interface DataTableProps<T> {
   searchPlaceholder?: string
   globalFilter?: string
   onGlobalFilterChange?: (value: string) => void
+  rowSelection?: Record<string, boolean>
+  onRowSelectionChange?: (value: Record<string, boolean>) => void
 }
 
 /**
@@ -44,13 +46,21 @@ export function DataTable<T>({
   searchPlaceholder,
   globalFilter,
   onGlobalFilterChange,
+  rowSelection,
+  onRowSelectionChange,
 }: DataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>([])
 
   const table = useReactTable({
     data: data ?? [],
     columns,
-    state: { sorting, globalFilter },
+    state: {
+      sorting,
+      globalFilter,
+      rowSelection,
+    },
+    enableRowSelection: true,
+    onRowSelectionChange: onRowSelectionChange as any,
     onSortingChange: setSorting,
     onGlobalFilterChange,
     getCoreRowModel: getCoreRowModel(),
