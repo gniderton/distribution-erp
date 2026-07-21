@@ -26,9 +26,7 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
     return <div className="p-8 text-center text-ink-500">Failed to load dashboard data.</div>
   }
 
-  const { productInfo, purchaseHistory, salesHistory, returnHistory, performance, topCustomers, trend } = dashboard
-
-  const currentPerformance = performance?.[0] || {}
+  const { product, analytics, inventory, history } = dashboard
 
   return (
     <div className="space-y-6">
@@ -39,8 +37,8 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
             <CardTitle className="text-sm font-medium text-ink-500">Total Stock</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono-figures">{productInfo?.[0]?.total_stock || 0}</div>
-            <p className="text-xs text-ink-500 mt-1">Across {productInfo?.[0]?.batch_count || 0} active batches</p>
+            <div className="text-2xl font-bold font-mono-figures">{inventory?.total_stock || 0}</div>
+            <p className="text-xs text-ink-500 mt-1">Across {inventory?.batch_count || 0} active batches</p>
           </CardContent>
         </Card>
         <Card>
@@ -48,18 +46,19 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
             <CardTitle className="text-sm font-medium text-ink-500">Sales (This Month)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono-figures">{currentPerformance.qty || 0}</div>
-            <p className="text-xs text-ink-500 mt-1">Prev Month: {currentPerformance.prev_month_qty || 0}</p>
+            <div className="text-2xl font-bold font-mono-figures">{analytics?.monthly_qty || 0}</div>
+            <p className="text-xs text-ink-500 mt-1">MoM Growth: {analytics?.growth?.mom_pct || 0}%</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-ink-500">Returns (This Month)</CardTitle>
+            <CardTitle className="text-sm font-medium text-ink-500">Return Rate</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold font-mono-figures ${(currentPerformance.return_qty || 0) > 0 ? 'text-danger-600' : ''}`}>
-              {currentPerformance.return_qty || 0}
+            <div className={`text-2xl font-bold font-mono-figures ${(analytics?.return_rate_pct || 0) > 0 ? 'text-danger-600' : ''}`}>
+              {analytics?.return_rate_pct || 0}%
             </div>
+            <p className="text-xs text-ink-500 mt-1">Of shipped qty</p>
           </CardContent>
         </Card>
         <Card>
@@ -67,7 +66,8 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
             <CardTitle className="text-sm font-medium text-ink-500">Avg Selling Rate</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono-figures">{formatCurrency(currentPerformance.avg_rate || 0)}</div>
+            <div className="text-2xl font-bold font-mono-figures">{formatCurrency(analytics?.avg_sales_rate || 0)}</div>
+            <p className="text-xs text-ink-500 mt-1">Margin: {analytics?.margin_pct || 0}%</p>
           </CardContent>
         </Card>
       </div>
@@ -80,7 +80,7 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
           </CardHeader>
           <CardContent>
             <DataTable 
-              data={topCustomers || []}
+              data={analytics?.top_customers || []}
               columns={[
                 { accessorKey: 'customer_name', header: 'Customer' },
                 { accessorKey: 'total_qty', header: 'Total Qty', cell: c => <span className="font-mono-figures">{c.getValue() as number}</span> },
@@ -97,7 +97,7 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
           </CardHeader>
           <CardContent>
             <DataTable 
-              data={purchaseHistory || []}
+              data={history?.purchases || []}
               columns={[
                 { accessorKey: 'invoice_date', header: 'Date', cell: c => formatDate(c.getValue() as string) },
                 { accessorKey: 'vendor_name', header: 'Vendor' },
@@ -114,7 +114,7 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
           </CardHeader>
           <CardContent>
             <DataTable 
-              data={salesHistory || []}
+              data={history?.sales || []}
               columns={[
                 { accessorKey: 'invoice_date', header: 'Date', cell: c => formatDate(c.getValue() as string) },
                 { accessorKey: 'customer_name', header: 'Customer' },
@@ -131,7 +131,7 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
           </CardHeader>
           <CardContent>
             <DataTable 
-              data={returnHistory || []}
+              data={history?.returns || []}
               columns={[
                 { accessorKey: 'return_date', header: 'Date', cell: c => formatDate(c.getValue() as string) },
                 { accessorKey: 'customer_name', header: 'Customer' },
