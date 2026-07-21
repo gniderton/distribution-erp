@@ -39,11 +39,32 @@ export default function InvoicePage() {
 
   const stats = useMemo(() => {
     const list = filteredData
-    const total = list.reduce((s, i) => s + (Number(i.display_amount) || 0), 0)
+    
+    // Taxable logic: fallback to display_amount if invoice_taxable_amount is missing
+    const getTaxable = (i: Invoice) => Number(i.invoice_taxable_amount) || Number(i.display_amount) || 0
+    
+    const totalTaxable = list.reduce((s, i) => s + getTaxable(i), 0)
     const count = list.length
+    
+    // Current month calculations
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+    
+    const currentMonthList = list.filter(i => {
+      const d = i.invoice_date || i.order_date
+      if (!d) return false
+      const date = new Date(d)
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear
+    })
+    
+    const currentMonthCount = currentMonthList.length
+    const currentMonthTaxable = currentMonthList.reduce((s, i) => s + getTaxable(i), 0)
+
     const paidCount = list.filter(i => ['paid', 'fully paid'].includes((i.invoice_status || '').toLowerCase())).length
     const unpaidCount = list.filter(i => ['unpaid', 'partially paid'].includes((i.invoice_status || '').toLowerCase())).length
-    return { count, total, paidCount, unpaidCount }
+    
+    return { count, totalTaxable, currentMonthCount, currentMonthTaxable, paidCount, unpaidCount }
   }, [filteredData])
 
   const handleDownloadPDF = async (invoiceData: Invoice) => {
@@ -111,9 +132,11 @@ export default function InvoicePage() {
     <div>
       <PageHeader eyebrow="INV · Sell" title="Invoices" description="Unified view of all sales invoices." />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
         <StatCard label="Total Invoices" value={String(stats.count)} icon={FileText} />
-        <StatCard label="Total Value" value={formatCurrency(stats.total)} icon={FileText} />
+        <StatCard label="Total Value (Taxable)" value={formatCurrency(stats.totalTaxable)} icon={FileText} />
+        <StatCard label="This Month Invoices" value={String(stats.currentMonthCount)} icon={FileText} tone="success" />
+        <StatCard label="This Month Value (Taxable)" value={formatCurrency(stats.currentMonthTaxable)} icon={CheckCircle2} tone="success" />
         <StatCard label="Paid Invoices" value={String(stats.paidCount)} icon={CheckCircle2} tone="success" />
         <StatCard label="Unpaid Invoices" value={String(stats.unpaidCount)} icon={AlertTriangle} tone={stats.unpaidCount > 0 ? 'danger' : 'neutral'} />
       </div>
