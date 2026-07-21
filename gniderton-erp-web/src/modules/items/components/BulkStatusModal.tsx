@@ -19,6 +19,7 @@ export function BulkStatusModal({ open, onClose, products }: Props) {
   const qc = useQueryClient()
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(false)
+  const [search, setSearch] = useState('')
 
   const columns = useMemo<ColumnDef<Product>[]>(
     () => [
@@ -43,6 +44,11 @@ export function BulkStatusModal({ open, onClose, products }: Props) {
       },
       { accessorKey: 'product_name', header: 'Product Name' },
       { accessorKey: 'brand_name', header: 'Brand' },
+      { 
+        accessorKey: 'purchase_rate', 
+        header: 'Purchase Price',
+        cell: (c) => `₹${Number(c.getValue() || 0).toFixed(2)}`
+      },
       {
         accessorKey: 'is_active',
         header: 'Current Status',
@@ -58,18 +64,21 @@ export function BulkStatusModal({ open, onClose, products }: Props) {
   const selectedIdsList = Object.keys(selectedIds).filter(k => selectedIds[k])
   const selectedCount = selectedIdsList.length
   
-  // Determine smart action based on selected products
-  const selectedProducts = products.filter(p => selectedIdsList.includes(String(p.id)))
-  const hasActive = selectedProducts.some(p => p.is_active)
+  // Determine smart action based on selected products (using row index)
+  const selectedProducts = selectedIdsList.map(index => products[parseInt(index)])
+  const hasActive = selectedProducts.some(p => p?.is_active)
   const targetAction = hasActive ? 'inactive' : 'active'
   const buttonText = hasActive ? 'Deactivate Selected' : 'Activate Selected'
-
+  
   const handleToggle = async () => {
     if (selectedCount === 0) return
     
+    // We need the actual product IDs to send to the backend
+    const actualIds = selectedProducts.map(p => p.id)
+    
     setLoading(true)
     try {
-      await itemsApi.bulkStatus({ ids: selectedIdsList, status: targetAction })
+      await itemsApi.bulkStatus({ ids: actualIds, status: targetAction })
       toast.success(`Successfully marked ${selectedCount} products as ${targetAction}`)
       qc.invalidateQueries({ queryKey: ['products'] })
       onClose()
@@ -82,8 +91,15 @@ export function BulkStatusModal({ open, onClose, products }: Props) {
 
   return (
     <Dialog open={open} onClose={onClose} title="Bulk Status Edit" widthClass="max-w-4xl">
-      <div className="mb-4 text-sm text-ink-600">
-        Select products below to bulk activate or deactivate them. This will affect their visibility across the system (e.g. Sales Orders, Invoices).
+      <div className="mb-4 text-sm text-ink-600 flex justify-between items-center">
+        <span>Select products below to bulk activate or deactivate them.</span>
+        <input 
+          type="text"
+          placeholder="Filter products..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="border border-border-subtle rounded-md px-3 py-1.5 text-sm w-64 focus:ring-1 focus:ring-brand-500 outline-none"
+        />
       </div>
       
       <div className="max-h-[50vh] overflow-auto border border-border-subtle rounded-lg">
@@ -92,6 +108,8 @@ export function BulkStatusModal({ open, onClose, products }: Props) {
           columns={columns}
           rowSelection={selectedIds}
           onRowSelectionChange={setSelectedIds}
+          globalFilter={search}
+          onGlobalFilterChange={setSearch}
         />
       </div>
 
