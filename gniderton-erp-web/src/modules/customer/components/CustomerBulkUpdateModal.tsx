@@ -9,8 +9,11 @@ export function CustomerBulkUpdateModal({ open, onClose, selectedIds, onClearSel
   const [dseId, setDseId] = useState<string>('')
   const [routeId, setRouteId] = useState<string>('')
 
-  const { data: routes } = useQuery({ queryKey: ['routes'], queryFn: customerApi.routes })
-  const { data: employees } = useQuery({ queryKey: ['employees'], queryFn: customerApi.employees })
+  const { data: routesData } = useQuery({ queryKey: ['routes'], queryFn: customerApi.routes })
+  const { data: employeesData } = useQuery({ queryKey: ['employees'], queryFn: customerApi.employees })
+
+  const routes = Array.isArray(routesData) ? routesData : routesData?.data || []
+  const employees = Array.isArray(employeesData) ? employeesData : employeesData?.data || []
 
   const updateMutation = useMutation({
     mutationFn: (payload: any) => customerApi.bulkEdit(payload),
@@ -50,15 +53,15 @@ export function CustomerBulkUpdateModal({ open, onClose, selectedIds, onClearSel
         </p>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-ink-700">Assign New Delivery Executive</label>
+          <label className="text-sm font-medium text-ink-700">Assign New Executive</label>
           <select 
             className="w-full h-10 px-3 rounded-md border border-border bg-white"
             value={dseId}
             onChange={(e) => setDseId(e.target.value)}
           >
             <option value="">-- No Change --</option>
-            {employees?.map((emp: any) => (
-              <option key={emp.id} value={emp.id}>{emp.name || emp.username}</option>
+            {employees.map((emp: any) => (
+              <option key={emp.id} value={emp.id}>{emp.name || emp.username || emp.employee_name || emp.id}</option>
             ))}
           </select>
         </div>
@@ -71,7 +74,7 @@ export function CustomerBulkUpdateModal({ open, onClose, selectedIds, onClearSel
             onChange={(e) => setRouteId(e.target.value)}
           >
             <option value="">-- No Change --</option>
-            {routes?.map((route: any) => (
+            {routes.map((route: any) => (
               <option key={route.id} value={route.id}>{route.route_name}</option>
             ))}
           </select>

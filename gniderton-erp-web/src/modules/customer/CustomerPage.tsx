@@ -103,6 +103,9 @@ export default function CustomerPage() {
           description="Retail and wholesale accounts, routes, channels, and outstanding balances."
           actions={
             <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => setVerifyModalOpen(true)} className="shadow-sm">
+                Verify Pending
+              </Button>
               {Object.keys(rowSelection).length > 0 && (
                 <Button variant="secondary" onClick={() => setBulkUpdateOpen(true)} className="shadow-sm">
                   Bulk Update ({Object.keys(rowSelection).length})
