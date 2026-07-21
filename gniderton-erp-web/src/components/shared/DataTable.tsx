@@ -28,6 +28,7 @@ interface DataTableProps<T> {
   onGlobalFilterChange?: (value: string) => void
   rowSelection?: Record<string, boolean>
   onRowSelectionChange?: (value: Record<string, boolean>) => void
+  hideSearchBar?: boolean
 }
 
 /**
@@ -48,6 +49,7 @@ export function DataTable<T>({
   onGlobalFilterChange,
   rowSelection,
   onRowSelectionChange,
+  hideSearchBar,
 }: DataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>([])
 
@@ -71,7 +73,7 @@ export function DataTable<T>({
 
   return (
     <div className="glass-card rounded-xl border border-border-subtle overflow-hidden w-full shadow-sm bg-white">
-      {onGlobalFilterChange && (
+      {onGlobalFilterChange && !hideSearchBar && (
         <div className="border-b border-border-subtle px-4 py-3">
           <div className="relative max-w-xs">
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-ink-600/40" />
