@@ -20,8 +20,6 @@ export function BulkStatusModal({ open, onClose, products }: Props) {
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(false)
 
-  const selectedCount = Object.keys(selectedIds).filter(k => selectedIds[k]).length
-
   const columns = useMemo<ColumnDef<Product>[]>(
     () => [
       {
@@ -57,14 +55,22 @@ export function BulkStatusModal({ open, onClose, products }: Props) {
     []
   )
 
-  const handleToggle = async (status: 'active' | 'inactive') => {
+  const selectedIdsList = Object.keys(selectedIds).filter(k => selectedIds[k])
+  const selectedCount = selectedIdsList.length
+  
+  // Determine smart action based on selected products
+  const selectedProducts = products.filter(p => selectedIdsList.includes(String(p.id)))
+  const hasActive = selectedProducts.some(p => p.is_active)
+  const targetAction = hasActive ? 'inactive' : 'active'
+  const buttonText = hasActive ? 'Deactivate Selected' : 'Activate Selected'
+
+  const handleToggle = async () => {
     if (selectedCount === 0) return
-    const ids = Object.keys(selectedIds).filter(k => selectedIds[k])
     
     setLoading(true)
     try {
-      await itemsApi.bulkStatus({ ids, status })
-      toast.success(`Successfully marked ${ids.length} products as ${status}`)
+      await itemsApi.bulkStatus({ ids: selectedIdsList, status: targetAction })
+      toast.success(`Successfully marked ${selectedCount} products as ${targetAction}`)
       qc.invalidateQueries({ queryKey: ['products'] })
       onClose()
     } catch (err: any) {
@@ -96,17 +102,10 @@ export function BulkStatusModal({ open, onClose, products }: Props) {
         <div className="flex gap-3">
           <Button variant="secondary" onClick={onClose} disabled={loading}>Cancel</Button>
           <Button 
-            variant="secondary" 
-            onClick={() => handleToggle('inactive')} 
+            onClick={handleToggle} 
             disabled={loading || selectedCount === 0}
           >
-            Mark Inactive
-          </Button>
-          <Button 
-            onClick={() => handleToggle('active')} 
-            disabled={loading || selectedCount === 0}
-          >
-            Mark Active
+            {buttonText}
           </Button>
         </div>
       </div>

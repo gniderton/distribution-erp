@@ -23,6 +23,7 @@ export default function ItemsPage() {
   const [search, setSearch] = useState('')
   const [selectedBrand, setSelectedBrand] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
 
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [adjustModalOpen, setAdjustModalOpen] = useState(false)
@@ -37,9 +38,10 @@ export default function ItemsPage() {
     return allProducts.filter((p: Product) => {
       const matchBrand = selectedBrand ? p.brand_name === selectedBrand : true
       const matchCat = selectedCategory ? p.category_name === selectedCategory : true
-      return matchBrand && matchCat
+      const matchStatus = statusFilter === 'all' ? true : statusFilter === 'active' ? p.is_active : !p.is_active
+      return matchBrand && matchCat && matchStatus
     })
-  }, [allProducts, selectedBrand, selectedCategory])
+  }, [allProducts, selectedBrand, selectedCategory, statusFilter])
 
   const stockValuation = useMemo(() => {
     if (!filteredProducts) return 0
@@ -123,7 +125,15 @@ export default function ItemsPage() {
         
         <div className="md:col-span-2 flex items-center gap-4 bg-white p-5 rounded-xl border border-border-subtle shadow-sm">
           <div className="flex-1">
-            <label className="block text-xs font-medium text-ink-700 mb-1">Filter by Brand</label>
+            <label className="block text-xs font-medium text-ink-700 mb-1">Status</label>
+            <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}>
+              <option value="all">All Statuses</option>
+              <option value="active">Active Only</option>
+              <option value="inactive">Inactive Only</option>
+            </Select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-ink-700 mb-1">Brand</label>
             <Select value={selectedBrand} onChange={e => setSelectedBrand(e.target.value)}>
               <option value="">All Brands</option>
               {(brandsList?.data || []).map((b: any) => (
@@ -132,7 +142,7 @@ export default function ItemsPage() {
             </Select>
           </div>
           <div className="flex-1">
-            <label className="block text-xs font-medium text-ink-700 mb-1">Filter by Category</label>
+            <label className="block text-xs font-medium text-ink-700 mb-1">Category</label>
             <Select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
               <option value="">All Categories</option>
               {(categoriesList?.data || []).map((c: any) => (
