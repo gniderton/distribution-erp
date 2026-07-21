@@ -124,7 +124,7 @@ export function CustomerLedgerTab({ customer }: { customer: any }) {
         </div>
       </div>
       
-      <div className="bg-white rounded-lg shadow-sm border border-border overflow-hidden">
+      <div className="glass-card rounded-xl shadow-sm border border-border-subtle overflow-hidden bg-white">
         <DataTable 
           data={filteredLedgerData.ledger}
           columns={[

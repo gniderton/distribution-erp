@@ -1,10 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQuery } from '@tanstack/react-query'
 import { Input, Label, Select } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { Edit2 } from 'lucide-react'
 import { useCreateCustomer, useUpdateCustomer } from '../hooks'
 import { customerApi } from '../api'
 import type { Customer } from '../types'
@@ -38,8 +39,13 @@ const schema = z.object({
 })
 type FormValues = z.infer<typeof schema>
 
+const STATES = ['Kerala', 'Tamil Nadu', 'Karnataka', 'Maharashtra']
+const KERALA_DISTRICTS = ['Thiruvananthapuram', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam', 'Thrissur', 'Palakkad', 'Malappuram', 'Kozhikode', 'Wayanad', 'Kannur', 'Kasaragod']
+
 export function CustomerDetailsTab({ customer, onClose }: { customer?: Customer | null; onClose: () => void }) {
   const isEdit = !!customer
+  const [isEditing, setIsEditing] = useState(!isEdit) // editable by default if new customer
+  
   const create = useCreateCustomer()
   const update = useUpdateCustomer()
   
@@ -163,14 +169,19 @@ export function CustomerDetailsTab({ customer, onClose }: { customer?: Customer 
   return (
     <form className="max-w-4xl" onSubmit={handleSubmit(onSubmit)}>
       <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle bg-white">
-        <h3 className="font-semibold text-ink-900">{isEdit ? 'Edit Customer Profile' : 'New Customer Profile'}</h3>
+        <h3 className="font-semibold text-ink-900">{isEdit ? 'Customer Profile' : 'New Customer Profile'}</h3>
         <div className="flex gap-3">
-          {!isEdit && <Button variant="secondary" onClick={onClose} type="button">Cancel</Button>}
-          <Button loading={saving} type="submit">{isEdit ? 'Save Changes' : 'Create Customer'}</Button>
+          {isEdit && !isEditing && (
+            <Button variant="secondary" onClick={() => setIsEditing(true)} type="button">
+              <Edit2 className="w-4 h-4 mr-2" /> Edit Details
+            </Button>
+          )}
+          {(!isEdit || isEditing) && <Button variant="secondary" onClick={onClose} type="button">Cancel</Button>}
+          {(!isEdit || isEditing) && <Button loading={saving} type="submit">{isEdit ? 'Save Changes' : 'Create Customer'}</Button>}
         </div>
       </div>
       
-      <div className="p-6 space-y-8 bg-surface overflow-y-auto" style={{ maxHeight: 'calc(100vh - 140px)' }}>
+      <fieldset disabled={!isEditing} className="p-6 space-y-8 bg-surface overflow-y-auto" style={{ maxHeight: 'calc(100vh - 140px)' }}>
         
         {/* Basic Info */}
         <div className="bg-white p-5 rounded-xl border border-border-subtle shadow-sm space-y-4">
@@ -287,12 +298,18 @@ export function CustomerDetailsTab({ customer, onClose }: { customer?: Customer 
               <Input {...register('address_line2')} placeholder="Landmark, Area" />
             </div>
             <div>
-              <Label>City</Label>
-              <Input {...register('city')} />
+              <Label>State</Label>
+              <Select {...register('state')}>
+                <option value="">Select State...</option>
+                {STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              </Select>
             </div>
             <div>
-              <Label>State</Label>
-              <Input {...register('state')} defaultValue="Kerala" />
+              <Label>City / District</Label>
+              <Select {...register('city')}>
+                <option value="">Select City/District...</option>
+                {KERALA_DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
+              </Select>
             </div>
             <div>
               <Label>Pincode</Label>
@@ -311,7 +328,7 @@ export function CustomerDetailsTab({ customer, onClose }: { customer?: Customer 
           </div>
         </div>
 
-      </div>
+      </fieldset>
     </form>
   )
 }

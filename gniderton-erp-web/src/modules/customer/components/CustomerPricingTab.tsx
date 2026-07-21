@@ -61,11 +61,11 @@ export function CustomerPricingTab({ customerId }: { customerId: string | number
       </div>
       
       {/* Add New Rule Form */}
-      <div className="bg-white p-4 rounded-xl border border-border flex items-end gap-4 shadow-sm">
+      <div className="glass-card bg-white p-4 rounded-xl border border-border-subtle flex items-end gap-4 shadow-sm">
         <div className="flex-1">
           <Label>Brand</Label>
           <select 
-            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             value={brandId} 
             onChange={(e) => setBrandId(e.target.value)} 
           >
@@ -78,7 +78,7 @@ export function CustomerPricingTab({ customerId }: { customerId: string | number
         <div className="flex-1">
           <Label>Channel</Label>
           <select 
-            className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             value={channelId} 
             onChange={(e) => setChannelId(e.target.value)} 
           >

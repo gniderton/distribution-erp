@@ -70,7 +70,7 @@ export function DataTable<T>({
   })
 
   return (
-    <div className="rounded-card border border-border-subtle bg-white overflow-hidden">
+    <div className="glass-card rounded-xl border border-border-subtle overflow-hidden w-full shadow-sm bg-white">
       {onGlobalFilterChange && (
         <div className="border-b border-border-subtle px-4 py-3">
           <div className="relative max-w-xs">
