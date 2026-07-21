@@ -43,6 +43,9 @@ export default function CustomerPage() {
   const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false)
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
   const [editing, setEditing] = useState<Customer | null>(null)
+  const [filterDSE, setFilterDSE] = useState('')
+  const [filterRoute, setFilterRoute] = useState('')
+  const [filterChannel, setFilterChannel] = useState('')
 
   const columns = useMemo<ColumnDef<Customer>[]>(
     () => [
@@ -71,6 +74,7 @@ export default function CustomerPage() {
       { accessorKey: 'customer_phone', header: 'Phone', cell: (c) => c.getValue() || '—' },
       { accessorKey: 'channel_name', header: 'Channel', cell: (c) => c.getValue() || '—' },
       { accessorKey: 'route_name', header: 'Route', cell: (c) => c.getValue() || '—' },
+      { id: 'dse', accessorFn: (c: any) => c.dse_name || c.employee_name || '—', header: 'DSE', cell: (c) => c.getValue() },
       { accessorKey: 'gstin', header: 'GST No', cell: (c) => <span className="font-mono-figures text-xs">{c.getValue() as string || '—'}</span> },
       { accessorKey: 'credit_limit', header: 'Credit Limit', cell: (c) => {
         const val = c.getValue() as number;
@@ -89,12 +93,28 @@ export default function CustomerPage() {
   )
 
   const customers = Array.isArray(data) ? data : []
-  const total = customers.length
-  const verified = customers.filter(c => {
+  
+  // Extract unique options for filters
+  const dses = Array.from(new Set(customers.map((c: any) => c.dse_name || c.employee_name).filter(Boolean))) as string[]
+  const routes = Array.from(new Set(customers.map(c => c.route_name).filter(Boolean))) as string[]
+  const channels = Array.from(new Set(customers.map(c => c.channel_name).filter(Boolean))) as string[]
+
+  // Apply filters
+  const filteredCustomers = useMemo(() => {
+    return customers.filter((c: any) => {
+      const matchDSE = filterDSE ? (c.dse_name === filterDSE || c.employee_name === filterDSE) : true
+      const matchRoute = filterRoute ? c.route_name === filterRoute : true
+      const matchChannel = filterChannel ? c.channel_name === filterChannel : true
+      return matchDSE && matchRoute && matchChannel
+    })
+  }, [customers, filterDSE, filterRoute, filterChannel])
+
+  const total = filteredCustomers.length
+  const verified = filteredCustomers.filter(c => {
     const v = c.verification_status?.toLowerCase()
     return v === 'active' || v === 'verified'
   }).length
-  const pending = customers.filter(c => {
+  const pending = filteredCustomers.filter(c => {
     const v = c.verification_status?.toLowerCase()
     return v === 'pending'
   }).length
@@ -148,8 +168,8 @@ export default function CustomerPage() {
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col space-y-4">
-        <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm flex items-center w-full">
-          <div className="relative w-full max-w-md">
+        <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm flex items-center gap-4 w-full flex-wrap">
+          <div className="relative w-full max-w-sm">
             <Search className="absolute left-3.5 top-2.5 text-ink-600" size={15} />
             <input 
               type="text" 
@@ -159,10 +179,39 @@ export default function CustomerPage() {
               className="w-full bg-surface border border-border-subtle rounded-lg pl-10 pr-4 py-2 text-xs focus:outline-none focus:border-brand-400 text-ink-900 placeholder:text-ink-600"
             />
           </div>
+          
+          <div className="flex gap-2">
+            <select 
+              value={filterDSE} 
+              onChange={e => setFilterDSE(e.target.value)}
+              className="bg-surface border border-border-subtle rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-brand-400 text-ink-900"
+            >
+              <option value="">All DSEs</option>
+              {dses.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            
+            <select 
+              value={filterRoute} 
+              onChange={e => setFilterRoute(e.target.value)}
+              className="bg-surface border border-border-subtle rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-brand-400 text-ink-900"
+            >
+              <option value="">All Routes</option>
+              {routes.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            
+            <select 
+              value={filterChannel} 
+              onChange={e => setFilterChannel(e.target.value)}
+              className="bg-surface border border-border-subtle rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-brand-400 text-ink-900"
+            >
+              <option value="">All Channels</option>
+              {channels.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
         </div>
         
         <DataTable
-          data={data}
+          data={filteredCustomers}
           columns={columns}
           isLoading={isLoading}
           isError={isError}
