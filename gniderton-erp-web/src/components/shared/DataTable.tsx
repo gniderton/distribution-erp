@@ -86,7 +86,7 @@ export function DataTable<T>({
       )}
 
       <div className="overflow-x-auto scrollbar-thin">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs">
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b border-border-subtle">

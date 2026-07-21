@@ -143,22 +143,20 @@ export default function CustomerPage() {
       </div>
 
       <div className="flex-1 px-6 pb-6 overflow-hidden flex flex-col">
-        <div className="flex-1 bg-white rounded-xl shadow-sm overflow-hidden">
-          <DataTable
-            data={data}
-            columns={columns}
-            isLoading={isLoading}
-            isError={isError}
-            emptyTitle="No customers yet"
-            emptyDescription="Add your first customer to start creating sales orders."
-            onRowClick={(row) => { setEditing(row); setDrawerOpen(true) }}
-            globalFilter={search}
-            onGlobalFilterChange={setSearch}
-            searchPlaceholder="Search customers by name, phone, or route..."
-            rowSelection={rowSelection}
-            onRowSelectionChange={setRowSelection}
-          />
-        </div>
+        <DataTable
+          data={data}
+          columns={columns}
+          isLoading={isLoading}
+          isError={isError}
+          emptyTitle="No customers yet"
+          emptyDescription="Add your first customer to start creating sales orders."
+          onRowClick={(row) => { setEditing(row); setDrawerOpen(true) }}
+          globalFilter={search}
+          onGlobalFilterChange={setSearch}
+          searchPlaceholder="Search customers by name, phone, or route..."
+          rowSelection={rowSelection}
+          onRowSelectionChange={setRowSelection}
+        />
       </div>
 
       <CustomerViewDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} customer={editing} />

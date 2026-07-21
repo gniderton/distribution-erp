@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
+import { LayoutDashboard, User, BookOpen, FileText, Tag } from 'lucide-react'
 import type { Customer } from '../types'
 import { CustomerDashboardTab } from './CustomerDashboardTab'
 import { CustomerDetailsTab } from './CustomerDetailsTab'
@@ -13,34 +14,44 @@ export function CustomerViewDrawer({ open, onClose, customer }: { open: boolean;
   const isEdit = !!customer
 
   // If we are creating a new customer, we only show the Details tab
-  const tabs = isEdit 
-    ? ['dashboard', 'details', 'ledger', 'bills', 'pricing'] as const 
-    : ['details'] as const
+  const tabsConfig = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'details', label: 'Details', icon: User },
+    { id: 'ledger', label: 'Ledger', icon: BookOpen },
+    { id: 'bills', label: 'Bills', icon: FileText },
+    { id: 'pricing', label: 'Pricing', icon: Tag }
+  ]
+
+  const activeTabsConfig = isEdit ? tabsConfig : [tabsConfig.find(t => t.id === 'details')!]
 
   return (
     <Drawer
       open={open}
       onClose={onClose}
       title={isEdit ? customer.customer_name : 'New customer'}
-      widthClass="max-w-4xl"
+      widthClass="max-w-6xl"
     >
       <div className="flex h-full flex-col">
         {isEdit && (
-          <div className="border-b border-border bg-white px-6">
+          <div className="border-b border-border-subtle bg-white px-6">
             <nav className="-mb-px flex space-x-6 overflow-x-auto">
-              {tabs.map((tab) => (
-                <button
-                  key={tab}
-                  className={`whitespace-nowrap px-1 py-3 text-sm font-medium transition-colors border-b-2 ${
-                    activeTab === tab 
-                      ? 'border-brand-500 text-brand-600' 
-                      : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300'
-                  }`}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1).replace('-', ' ')}
-                </button>
-              ))}
+              {activeTabsConfig.map((tab) => {
+                const Icon = tab.icon
+                return (
+                  <button
+                    key={tab.id}
+                    className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold transition-all border-b-2 ${
+                      activeTab === tab.id 
+                        ? 'border-brand-600 text-brand-600' 
+                        : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300'
+                    }`}
+                    onClick={() => setActiveTab(tab.id as any)}
+                  >
+                    <Icon size={14} />
+                    {tab.label}
+                  </button>
+                )
+              })}
             </nav>
           </div>
         )}
