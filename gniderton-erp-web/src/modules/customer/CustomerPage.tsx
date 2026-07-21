@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/Button'
 import { Plus, Users, CheckCircle2, Clock } from 'lucide-react'
 import { useCustomers } from './hooks'
 import { CustomerViewDrawer } from './components/CustomerViewDrawer'
+import { CustomerVerifyModal } from './components/CustomerVerifyModal'
+import { CustomerBulkUpdateModal } from './components/CustomerBulkUpdateModal'
 import type { Customer } from './types'
 
 const statusTone: Record<string, 'success' | 'warn' | 'neutral'> = {
@@ -15,9 +17,12 @@ const statusTone: Record<string, 'success' | 'warn' | 'neutral'> = {
   inactive: 'neutral',
 }
 
-function StatCard({ title, value, icon: Icon, colorClass }: { title: string, value: string | number, icon: any, colorClass: string }) {
+function StatCard({ title, value, icon: Icon, colorClass, onClick }: { title: string, value: string | number, icon: any, colorClass: string, onClick?: () => void }) {
   return (
-    <div className={`relative rounded-xl border border-white/20 bg-white/60 backdrop-blur-md shadow-sm overflow-hidden p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-md ${colorClass}`}>
+    <div 
+      className={`relative rounded-xl border border-white/20 bg-white/60 backdrop-blur-md shadow-sm overflow-hidden p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-md ${colorClass} ${onClick ? 'cursor-pointer' : ''}`}
+      onClick={onClick}
+    >
       <div className="flex justify-between items-start mb-2">
         <span className="font-medium text-ink-600">{title}</span>
         <div className="p-2 rounded-lg bg-white/50 backdrop-blur-sm shadow-sm">
@@ -34,10 +39,34 @@ export default function CustomerPage() {
   const { data, isLoading, isError } = useCustomers()
   const [search, setSearch] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [verifyModalOpen, setVerifyModalOpen] = useState(false)
+  const [bulkUpdateOpen, setBulkUpdateOpen] = useState(false)
+  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({})
   const [editing, setEditing] = useState<Customer | null>(null)
 
   const columns = useMemo<ColumnDef<Customer>[]>(
     () => [
+      {
+        id: 'select',
+        header: ({ table }) => (
+          <input
+            type="checkbox"
+            className="rounded border-ink-300 w-4 h-4 cursor-pointer"
+            checked={table.getIsAllPageRowsSelected()}
+            onChange={table.getToggleAllPageRowsSelectedHandler()}
+          />
+        ),
+        cell: ({ row }) => (
+          <div onClick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              className="rounded border-ink-300 w-4 h-4 cursor-pointer"
+              checked={row.getIsSelected()}
+              onChange={row.getToggleSelectedHandler()}
+            />
+          </div>
+        ),
+      },
       { accessorKey: 'customer_name', header: 'Customer', cell: (c) => <span className="font-semibold text-ink-900">{c.getValue() as string}</span> },
       { accessorKey: 'customer_phone', header: 'Phone', cell: (c) => c.getValue() || '—' },
       { accessorKey: 'channel_name', header: 'Channel', cell: (c) => c.getValue() || '—' },
@@ -73,9 +102,16 @@ export default function CustomerPage() {
           title="Customers"
           description="Retail and wholesale accounts, routes, channels, and outstanding balances."
           actions={
-            <Button onClick={() => { setEditing(null); setDrawerOpen(true) }} className="shadow-md hover:shadow-lg transition-shadow">
-              <Plus className="h-4 w-4 mr-2" /> New customer
-            </Button>
+            <div className="flex gap-2">
+              {Object.keys(rowSelection).length > 0 && (
+                <Button variant="secondary" onClick={() => setBulkUpdateOpen(true)} className="shadow-sm">
+                  Bulk Update ({Object.keys(rowSelection).length})
+                </Button>
+              )}
+              <Button onClick={() => { setEditing(null); setDrawerOpen(true) }} className="shadow-md hover:shadow-lg transition-shadow">
+                <Plus className="h-4 w-4 mr-2" /> New customer
+              </Button>
+            </div>
           }
         />
         
@@ -97,13 +133,14 @@ export default function CustomerPage() {
             title="Pending Verification" 
             value={pending} 
             icon={Clock} 
-            colorClass="bg-gradient-to-br from-amber-50 to-orange-100/50 border-amber-200 text-amber-600" 
+            colorClass="bg-gradient-to-br from-amber-50 to-orange-100/50 border-amber-200 text-amber-600 hover:border-amber-400 hover:ring-2 hover:ring-amber-200" 
+            onClick={() => setVerifyModalOpen(true)}
           />
         </div>
       </div>
 
       <div className="flex-1 px-6 pb-6 overflow-hidden flex flex-col">
-        <div className="flex-1 bg-white rounded-xl shadow-sm border border-border overflow-hidden">
+        <div className="flex-1 bg-white rounded-xl shadow-sm overflow-hidden">
           <DataTable
             data={data}
             columns={columns}
@@ -115,11 +152,20 @@ export default function CustomerPage() {
             globalFilter={search}
             onGlobalFilterChange={setSearch}
             searchPlaceholder="Search customers by name, phone, or route..."
+            rowSelection={rowSelection}
+            onRowSelectionChange={setRowSelection}
           />
         </div>
       </div>
 
       <CustomerViewDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} customer={editing} />
+      <CustomerVerifyModal open={verifyModalOpen} onClose={() => setVerifyModalOpen(false)} />
+      <CustomerBulkUpdateModal 
+        open={bulkUpdateOpen} 
+        onClose={() => setBulkUpdateOpen(false)} 
+        selectedIds={Object.keys(rowSelection).map(idx => data?.[parseInt(idx)]?.id).filter(Boolean) as (string | number)[]}
+        onClearSelection={() => setRowSelection({})}
+      />
     </div>
   )
 }
