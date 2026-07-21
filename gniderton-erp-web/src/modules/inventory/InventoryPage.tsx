@@ -1090,7 +1090,7 @@ export default function InventoryPage() {
         head: [["S.N", "ITEM NAME", "BATCH", "EXPIRY", "MRP", "QTY", "PRICE", "GROSS", "SCH", "D%", "D.AMT", "TXBL", "GST%", "GST$", "NET$"]],
         body,
         didDrawPage: (data: any) => {
-          const totalPages = doc.internal.getNumberOfPages()
+          const totalPages = (doc.internal as any).getNumberOfPages()
           drawMainHeader(data.pageNumber, totalPages)
         },
         theme: 'grid',
@@ -1112,8 +1112,13 @@ export default function InventoryPage() {
         theme: 'grid',
         styles: { fontSize: 8, cellPadding: 2.5, lineColor: [0, 0, 0], lineWidth: 0.5, textColor: [0, 0, 0] },
         headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.5 },
-        bodyStyles: (row: any) => (row.raw[0] === 'Total' ? { fontStyle: 'bold', fillColor: [250, 250, 250] } : {})
-      })
+        didParseCell: (data: any) => {
+          if (data.section === 'body' && data.row.raw[0] === 'Total') {
+            data.cell.styles.fontStyle = 'bold'
+            data.cell.styles.fillColor = [250, 250, 250]
+          }
+        }
+      } as any)
 
       const wordsY = (doc as any).lastAutoTable.finalY + 20
       doc.setFontSize(12)
