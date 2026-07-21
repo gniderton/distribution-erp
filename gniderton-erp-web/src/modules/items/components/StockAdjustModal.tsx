@@ -11,8 +11,8 @@ import toast from 'react-hot-toast'
 const schema = z.object({
   product_id: z.string().min(1, 'Product is required'),
   batch_id: z.string().optional(),
-  adjusted_qty: z.coerce.number().refine(v => v !== 0, 'Quantity cannot be zero'),
-  reason: z.string().min(1, 'Reason is required'),
+  adjusted_qty: z.coerce.number().refine(v => v > 0, 'Quantity must be greater than zero'),
+  reason: z.enum(['Found', 'Damage', 'Expiry', 'Lost']),
   reference: z.string().optional(),
   date: z.string().optional(),
 })
@@ -37,7 +37,7 @@ export function StockAdjustModal({ open, onClose }: { open: boolean, onClose: ()
   const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema) as any,
     defaultValues: {
-      reason: 'Physical Count Discrepancy'
+      reason: 'Damage'
     }
   })
 
@@ -46,7 +46,22 @@ export function StockAdjustModal({ open, onClose }: { open: boolean, onClose: ()
 
   const onSubmit = async (data: FormValues) => {
     try {
-      await adjustMutation.mutateAsync(data)
+      const selectedBatch = batches?.find((b: any) => b.id === data.batch_id || b.batch_code === data.batch_id)
+      
+      const payload = {
+        date: data.date,
+        notes: data.reference,
+        items: [
+          {
+            product_id: data.product_id,
+            qty: data.adjusted_qty,
+            reason: data.reason,
+            batch_code: selectedBatch ? selectedBatch.batch_code : undefined
+          }
+        ]
+      }
+
+      await adjustMutation.mutateAsync(payload)
       toast.success('Stock adjusted successfully')
       reset()
       onClose()
@@ -75,15 +90,15 @@ export function StockAdjustModal({ open, onClose }: { open: boolean, onClose: ()
             <Select {...register('batch_id')}>
               <option value="">-- Select Batch (Optional) --</option>
               {batches.map((b: any) => (
-                <option key={b.id} value={b.id}>{b.batch_number} (Qty: {b.stock_qty})</option>
+                <option key={b.id} value={b.batch_code}>{b.batch_code} (Qty: {b.quantity_remaining})</option>
               ))}
             </Select>
           </div>
         )}
 
         <div className="grid grid-cols-2 gap-4">
-          <FormGroup label="Adjustment Qty" error={errors.adjusted_qty?.message} description="Use negative values to reduce stock.">
-            <Input type="number" placeholder="+10 or -5" {...register('adjusted_qty')} />
+          <FormGroup label="Adjustment Qty" error={errors.adjusted_qty?.message} description="Use positive values only. Reason determines direction.">
+            <Input type="number" placeholder="10" {...register('adjusted_qty')} />
           </FormGroup>
           <FormGroup label="Adjustment Date (Optional)" error={errors.date?.message}>
             <Input type="date" {...register('date')} />
@@ -93,11 +108,10 @@ export function StockAdjustModal({ open, onClose }: { open: boolean, onClose: ()
         <div className="grid grid-cols-2 gap-4">
           <FormGroup label="Reason" error={errors.reason?.message}>
             <Select {...register('reason')}>
-              <option value="Physical Count Discrepancy">Physical Count Discrepancy</option>
-              <option value="Damage/Spoilage">Damage / Spoilage</option>
-              <option value="Theft/Loss">Theft / Loss</option>
-              <option value="Internal Use">Internal Use</option>
-              <option value="Other">Other</option>
+              <option value="Found">Found (Increases Stock)</option>
+              <option value="Damage">Damage (Moves to Damaged Stock)</option>
+              <option value="Expiry">Expiry (Moves to Expired Stock)</option>
+              <option value="Lost">Lost / Theft (Books Financial Loss)</option>
             </Select>
           </FormGroup>
           <FormGroup label="Reference / Notes">
