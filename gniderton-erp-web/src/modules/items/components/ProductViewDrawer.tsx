@@ -280,7 +280,7 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
       {activeTab === 'ledger' && (
         <div className="space-y-4">
           <DataTable 
-            data={ledger || []}
+            data={ledger?.movements || []}
             isLoading={ledgerLoading}
             columns={[
               { accessorKey: 'date', header: 'Date', cell: (c) => formatDate(c.getValue() as string) },
@@ -290,7 +290,7 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
                 const val = c.getValue() as number
                 return <span className={`font-mono-figures font-bold ${val > 0 ? 'text-success-600' : 'text-danger-600'}`}>{val > 0 ? `+${val}` : val}</span>
               }},
-              { accessorKey: 'balance', header: 'Closing Stock' }
+              { accessorKey: 'running_balance', header: 'Closing Stock' }
             ]}
           />
         </div>
