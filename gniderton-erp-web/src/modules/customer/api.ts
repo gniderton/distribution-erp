@@ -7,6 +7,7 @@ export const customerApi = {
   ledger: (id: string | number) => api.get(`/api/customers/${id}/ledger`).then((r) => r.data),
   pricing: (id: string | number) => api.get(`/api/customers/${id}/pricing`).then((r) => r.data),
   setPricing: (id: string | number, payload: any) => api.post(`/api/customers/${id}/pricing`, payload).then((r) => r.data),
+  customerDashboard: (id: string | number) => api.get(`/api/analytics/customers/${id}/dashboard`).then((r) => r.data),
   pendingBills: (id: string | number) => api.get(`/api/customers/${id}/pending-bills`).then((r) => r.data),
 
   channels: () => api.get('/api/channels').then((r) => r.data),

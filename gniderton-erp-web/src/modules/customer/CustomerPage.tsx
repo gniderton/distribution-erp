@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Plus } from 'lucide-react'
 import { useCustomers } from './hooks'
-import { CustomerFormDrawer } from './components/CustomerFormDrawer'
+import { CustomerViewDrawer } from './components/CustomerViewDrawer'
 import type { Customer } from './types'
 import { formatCurrency } from '@/lib/utils'
 
@@ -71,7 +71,7 @@ export default function CustomerPage() {
         searchPlaceholder="Search customers…"
       />
 
-      <CustomerFormDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} customer={editing} />
+      <CustomerViewDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} customer={editing} />
     </div>
   )
 }
