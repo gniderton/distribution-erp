@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { itemsApi } from '../api'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { UploadCloud } from 'lucide-react'
+import { UploadCloud, Download } from 'lucide-react'
 
 export function BulkImportModal({ open, onClose }: { open: boolean, onClose: () => void }) {
   const qc = useQueryClient()
@@ -29,12 +29,44 @@ export function BulkImportModal({ open, onClose }: { open: boolean, onClose: () 
     }
   }
 
+  const handleDownloadTemplate = () => {
+    const headers = [
+      'Product Name', 'Product Code', 'Brand', 'Category', 
+      'Base Unit', 'Alternate Unit', 'Conversion', 
+      'HSN', 'Tax', 
+      'MRP', 'Retail Rate', 'Wholesale Rate', 'Dealer Rate', 'Distributor Rate', 'Purchase Rate', 
+      'Opening Stock'
+    ]
+    
+    // Add one sample row
+    const sampleRow = [
+      'Sample Item 240ML', 'SAMP-001', 'Sample Brand', 'Beverages',
+      'PCS', 'BOX', '10',
+      '2202', '18',
+      '100', '95', '85', '85', '80', '60',
+      '50'
+    ]
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), sampleRow.join(',')].join('\n')
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute("download", "product_import_template.csv")
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
     <Dialog open={open} onClose={onClose} title="Import Products">
       <div className="space-y-4">
-        <div className="text-sm text-ink-600 mb-4">
-          Upload an Excel (.xlsx) or CSV file containing your product catalog.
-          Ensure columns match the standard template (Product Name, Brand, Category, MRP, etc).
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-ink-600">
+            Upload an Excel (.xlsx) or CSV file containing your product catalog.
+          </div>
+          <Button variant="secondary" size="sm" onClick={handleDownloadTemplate} className="text-xs">
+            <Download className="w-4 h-4 mr-1" /> Template
+          </Button>
         </div>
 
         <div className="border-2 border-dashed border-border-subtle rounded-xl p-8 text-center bg-ink-50 hover:bg-ink-100 transition-colors cursor-pointer relative">
