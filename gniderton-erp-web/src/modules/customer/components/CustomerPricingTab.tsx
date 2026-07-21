@@ -11,7 +11,7 @@ export function CustomerPricingTab({ customerId }: { customerId: string | number
   const setPricing = useSetCustomerPricing()
   
   const [brandId, setBrandId] = useState('')
-  const [discountPercent, setDiscountPercent] = useState('')
+  const [channelId, setChannelId] = useState('')
 
   if (isLoading) {
     return <div className="p-8 text-center text-ink-500 animate-pulse">Loading pricing rules...</div>
@@ -20,7 +20,7 @@ export function CustomerPricingTab({ customerId }: { customerId: string | number
   const rules = Array.isArray(pricingRules) ? pricingRules : pricingRules?.rules || []
 
   const handleAddRule = async () => {
-    if (!brandId || !discountPercent) {
+    if (!brandId || !channelId) {
       toast.error('Please fill in both fields')
       return
     }
@@ -30,12 +30,12 @@ export function CustomerPricingTab({ customerId }: { customerId: string | number
         id: customerId,
         payload: {
           brand_id: parseInt(brandId),
-          discount_percent: parseFloat(discountPercent)
+          channel_id: parseInt(channelId)
         }
       })
       toast.success('Pricing rule added!')
       setBrandId('')
-      setDiscountPercent('')
+      setChannelId('')
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to add rule')
     }
@@ -69,12 +69,12 @@ export function CustomerPricingTab({ customerId }: { customerId: string | number
           />
         </div>
         <div className="flex-1">
-          <Label>Discount %</Label>
+          <Label>Channel ID</Label>
           <Input 
             type="number" 
-            placeholder="e.g. 15.5" 
-            value={discountPercent} 
-            onChange={(e) => setDiscountPercent(e.target.value)} 
+            placeholder="e.g. 2" 
+            value={channelId} 
+            onChange={(e) => setChannelId(e.target.value)} 
           />
         </div>
         <Button onClick={handleAddRule} loading={setPricing.isPending} className="mb-[2px]">
@@ -88,7 +88,7 @@ export function CustomerPricingTab({ customerId }: { customerId: string | number
         emptyDescription="This customer uses standard system pricing."
         columns={[
           { accessorKey: 'brand_name', header: 'Brand' },
-          { accessorKey: 'discount_percent', header: 'Discount (%)', cell: c => <span className="font-mono-figures font-medium text-brand-600">{c.getValue() as number}%</span> },
+          { accessorKey: 'override_channel', header: 'Assigned Channel', cell: c => <span className="font-medium text-brand-600">{c.getValue() as string}</span> },
           { 
             id: 'actions', 
             header: '', 

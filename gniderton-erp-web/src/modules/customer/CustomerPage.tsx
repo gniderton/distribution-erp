@@ -24,17 +24,12 @@ export default function CustomerPage() {
 
   const columns = useMemo<ColumnDef<Customer>[]>(
     () => [
-      { accessorKey: 'name', header: 'Customer' },
-      { accessorKey: 'phone', header: 'Phone', cell: (c) => c.getValue() || '—' },
-      { accessorKey: 'channel', header: 'Channel', cell: (c) => c.getValue() || '—' },
-      { accessorKey: 'route', header: 'Route', cell: (c) => c.getValue() || '—' },
+      { accessorKey: 'customer_name', header: 'Customer' },
+      { accessorKey: 'customer_phone', header: 'Phone', cell: (c) => c.getValue() || '—' },
+      { accessorKey: 'channel_name', header: 'Channel', cell: (c) => c.getValue() || '—' },
+      { accessorKey: 'route_name', header: 'Route', cell: (c) => c.getValue() || '—' },
       {
-        accessorKey: 'balance',
-        header: 'Balance',
-        cell: (c) => <span className="font-mono-figures">{formatCurrency(c.getValue() as number)}</span>,
-      },
-      {
-        accessorKey: 'status',
+        accessorKey: 'verification_status',
         header: 'Status',
         cell: (c) => {
           const v = ((c.getValue() as string) || 'active').toLowerCase()
