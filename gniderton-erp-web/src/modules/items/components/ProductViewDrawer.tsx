@@ -3,7 +3,7 @@ import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Input, Label } from '@/components/ui/Input'
 import { DataTable } from '@/components/shared/DataTable'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, Controller, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useProductBatches, useInventoryLedger, useUpdateProduct, useCreateProduct, useBrands, useCategories, useHsn, useTaxes, useVendors } from '../hooks'
@@ -39,7 +39,7 @@ interface Props {
   product: Product | null
 }
 
-function FormGroup({ label, error, children }: { label: string, error?: string, children: React.ReactNode }) {
+function FormGroup({ label, error, children }: { label: React.ReactNode | string, error?: string, children: React.ReactNode }) {
   return (
     <div>
       <Label>{label}</Label>
@@ -71,6 +71,18 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
       is_active: true
     }
   })
+
+  const purchaseRate = useWatch({ control, name: 'purchase_rate' })
+  const retailRate = useWatch({ control, name: 'retail_rate' })
+  const wholesaleRate = useWatch({ control, name: 'wholesale_rate' })
+  const dealerRate = useWatch({ control, name: 'dealer_rate' })
+  const distributorRate = useWatch({ control, name: 'distributor_rate' })
+
+  const calculateMargin = (price: number | undefined) => {
+    if (!purchaseRate || !price || purchaseRate === 0) return null
+    const margin = (((price - purchaseRate) / purchaseRate) * 100)
+    return <span className={`ml-2 text-xs font-mono font-bold ${margin > 0 ? 'text-success-600' : 'text-danger-600'}`}>{margin.toFixed(2)}%</span>
+  }
 
   useEffect(() => {
     if (open && product) {
@@ -179,10 +191,10 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
           <div className="grid grid-cols-3 gap-4">
             <FormGroup label="MRP"><Input type="number" step="0.01" {...register('mrp')} /></FormGroup>
             <FormGroup label="Purchase Rate"><Input type="number" step="0.01" {...register('purchase_rate')} /></FormGroup>
-            <FormGroup label="Retail Rate"><Input type="number" step="0.01" {...register('retail_rate')} /></FormGroup>
-            <FormGroup label="Wholesale Rate"><Input type="number" step="0.01" {...register('wholesale_rate')} /></FormGroup>
-            <FormGroup label="Dealer Rate"><Input type="number" step="0.01" {...register('dealer_rate')} /></FormGroup>
-            <FormGroup label="Distributor Rate"><Input type="number" step="0.01" {...register('distributor_rate')} /></FormGroup>
+            <FormGroup label={<div className="flex items-center">Retail Rate {calculateMargin(retailRate)}</div>}><Input type="number" step="0.01" {...register('retail_rate')} /></FormGroup>
+            <FormGroup label={<div className="flex items-center">Wholesale Rate {calculateMargin(wholesaleRate)}</div>}><Input type="number" step="0.01" {...register('wholesale_rate')} /></FormGroup>
+            <FormGroup label={<div className="flex items-center">Dealer Rate {calculateMargin(dealerRate)}</div>}><Input type="number" step="0.01" {...register('dealer_rate')} /></FormGroup>
+            <FormGroup label={<div className="flex items-center">Distributor Rate {calculateMargin(distributorRate)}</div>}><Input type="number" step="0.01" {...register('distributor_rate')} /></FormGroup>
           </div>
 
           <h3 className="text-sm font-semibold text-ink-900 pt-4 border-t border-border-subtle">Settings</h3>
