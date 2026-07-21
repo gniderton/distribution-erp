@@ -61,3 +61,11 @@ export function useSetCustomerPricing() {
     onSuccess: (_, variables) => qc.invalidateQueries({ queryKey: ['customers', variables.id, 'pricing'] }),
   })
 }
+
+export function useBrands() {
+  return useQuery({ queryKey: ['brands'], queryFn: customerApi.brands })
+}
+
+export function useChannels() {
+  return useQuery({ queryKey: ['channels'], queryFn: customerApi.channels })
+}

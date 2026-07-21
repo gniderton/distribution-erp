@@ -12,7 +12,7 @@ export function CustomerLedgerTab({ customerId }: { customerId: string | number 
   // The ledger API returns { metrics: { ... }, movements: [...] }
   // We need to check what /api/customers/:id/ledger returns exactly.
   // Assuming it returns an array of movements directly based on `useCustomerLedger` definition
-  const movements = Array.isArray(ledger) ? ledger : ledger?.movements || []
+  const movements = Array.isArray(ledger) ? ledger : ledger?.ledger || []
 
   return (
     <div className="space-y-4">
