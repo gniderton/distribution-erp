@@ -3,10 +3,9 @@ import { DataTable } from '@/components/shared/DataTable'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { Download, FileText } from 'lucide-react'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { generateLedgerPDF } from '../utils/pdfGenerator'
 
-export function CustomerLedgerTab({ customerId }: { customerId: string | number }) {
+export function CustomerLedgerTab({ customerId, customerName, customerPhone }: { customerId: string | number, customerName: string, customerPhone: string }) {
   const { data: ledger, isLoading } = useCustomerLedger(customerId)
 
   if (isLoading) {
@@ -16,24 +15,7 @@ export function CustomerLedgerTab({ customerId }: { customerId: string | number 
   const movements = Array.isArray(ledger) ? ledger : ledger?.ledger || []
 
   const handleExportPDF = () => {
-    const doc = new jsPDF()
-    doc.setFontSize(16)
-    doc.text(`Customer Ledger`, 14, 20)
-    
-    autoTable(doc, {
-      startY: 30,
-      head: [['Date', 'Type', 'Reference', 'Debit (Dr)', 'Credit (Cr)', 'Balance']],
-      body: movements.map((m: any) => [
-        formatDate(m.date),
-        m.type,
-        m.reference_number || '-',
-        m.debit_amount ? m.debit_amount.toString() : '-',
-        m.credit_amount ? m.credit_amount.toString() : '-',
-        m.running_balance ? m.running_balance.toString() : '-'
-      ])
-    })
-    
-    doc.save(`Customer_${customerId}_Ledger.pdf`)
+    generateLedgerPDF(customerName, customerPhone, ledger)
   }
 
   const handleExportExcel = () => {
