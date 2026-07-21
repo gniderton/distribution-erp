@@ -51,11 +51,7 @@ export function CustomerViewDrawer({ open, onClose, customer }: { open: boolean;
           )}
           {isEdit && activeTab === 'dashboard' && <CustomerDashboardTab customerId={customer.id} />}
           {isEdit && activeTab === 'ledger' && (
-            <CustomerLedgerTab 
-              customerId={customer.id} 
-              customerName={customer.customer_name} 
-              customerPhone={customer.customer_phone || ''} 
-            />
+            <CustomerLedgerTab customer={customer} />
           )}
           {isEdit && activeTab === 'bills' && <CustomerPendingBillsTab customerId={customer.id} />}
           {isEdit && activeTab === 'pricing' && <CustomerPricingTab customerId={customer.id} />}

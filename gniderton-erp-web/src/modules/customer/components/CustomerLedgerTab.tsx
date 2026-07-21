@@ -3,47 +3,24 @@ import { DataTable } from '@/components/shared/DataTable'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { Download, FileText } from 'lucide-react'
-import { generateLedgerPDF } from '../utils/pdfGenerator'
+import { generateLedgerPDF, exportLedgerToExcel } from '../utils/pdfGenerator'
 
-export function CustomerLedgerTab({ customerId, customerName, customerPhone }: { customerId: string | number, customerName: string, customerPhone: string }) {
-  const { data: ledger, isLoading } = useCustomerLedger(customerId)
+export function CustomerLedgerTab({ customer }: { customer: any }) {
+  const { data: ledger, isLoading } = useCustomerLedger(customer?.id)
 
   if (isLoading) {
     return <div className="p-8 text-center text-ink-500 animate-pulse">Loading ledger...</div>
   }
 
-  const movements = Array.isArray(ledger) ? ledger : ledger?.ledger || []
-
   const handleExportPDF = () => {
-    generateLedgerPDF(customerName, customerPhone, ledger)
+    generateLedgerPDF(customer, ledger)
   }
 
   const handleExportExcel = () => {
-    // Generate CSV string
-    const headers = ['Date', 'Type', 'Reference', 'Debit', 'Credit', 'Balance']
-    const rows = movements.map((m: any) => [
-      formatDate(m.date),
-      m.type,
-      m.reference_number || '-',
-      m.debit_amount || '0',
-      m.credit_amount || '0',
-      m.running_balance || '0'
-    ])
-    
-    const csvContent = [
-      headers.join(','),
-      ...rows.map((row: any[]) => row.join(','))
-    ].join('\n')
-
-    // Trigger download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.setAttribute('download', `Customer_${customerId}_Ledger.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    exportLedgerToExcel(customer, ledger)
   }
+
+  const movements = Array.isArray(ledger) ? ledger : ledger?.ledger || []
 
   return (
     <div className="space-y-4">
