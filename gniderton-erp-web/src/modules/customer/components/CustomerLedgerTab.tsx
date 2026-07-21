@@ -4,16 +4,25 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { Download, FileText } from 'lucide-react'
 import { generateLedgerPDF, exportLedgerToExcel } from '../utils/pdfGenerator'
+import { api } from '@/lib/axios'
+import { useState, useEffect } from 'react'
 
 export function CustomerLedgerTab({ customer }: { customer: any }) {
   const { data: ledger, isLoading } = useCustomerLedger(customer?.id)
+  const [companySettings, setCompanySettings] = useState<any>(null)
+
+  useEffect(() => {
+    api.get('/api/company-settings')
+      .then(res => setCompanySettings(res.data))
+      .catch(err => console.error('Failed loading company settings:', err))
+  }, [])
 
   if (isLoading) {
     return <div className="p-8 text-center text-ink-500 animate-pulse">Loading ledger...</div>
   }
 
   const handleExportPDF = () => {
-    generateLedgerPDF(customer, ledger)
+    generateLedgerPDF(customer, ledger, undefined, undefined, companySettings)
   }
 
   const handleExportExcel = () => {
