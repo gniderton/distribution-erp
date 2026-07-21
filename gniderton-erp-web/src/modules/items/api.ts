@@ -15,7 +15,7 @@ export const itemsApi = {
   categories: () => api.get('/api/master/categories').then((r) => r.data),
   hsn: () => api.get('/api/master/hsn').then((r) => r.data),
   taxes: () => api.get('/api/master/taxes').then((r) => r.data),
-  vendors: () => api.get('/api/vendors').then((r) => r.data),
+  vendors: () => api.get('/api/vendors').then((r) => Array.isArray(r.data) ? r.data : (r.data?.data || [])),
 
   stockAdjustments: () => api.get('/api/stock/adjust').then((r) => r.data),
   stockAdjustBatches: (productId: string | number) =>
