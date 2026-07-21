@@ -14,6 +14,10 @@ export function useProductBatches(productId: string | number | null) {
   })
 }
 
+export function useAllBatches() {
+  return useQuery({ queryKey: ['products', 'batches', 'all'], queryFn: itemsApi.allBatches })
+}
+
 export function useInventoryLedger(productId: string | number | null) {
   return useQuery({
     queryKey: ['inventory-ledger', productId],

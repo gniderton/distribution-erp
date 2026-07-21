@@ -12,6 +12,7 @@ import { StockAdjustModal } from './components/StockAdjustModal'
 import { BulkStatusModal } from './components/BulkStatusModal'
 import { BulkPriceEditModal } from './components/BulkPriceEditModal'
 import { BulkImportModal } from './components/BulkImportModal'
+import { BulkStockAdjustModal } from './components/BulkStockAdjustModal'
 import type { Product } from './types'
 import { formatCurrency } from '@/lib/utils'
 
@@ -28,6 +29,7 @@ export default function ItemsPage() {
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false)
   const [bulkPriceOpen, setBulkPriceOpen] = useState(false)
   const [bulkImportOpen, setBulkImportOpen] = useState(false)
+  const [bulkAdjustOpen, setBulkAdjustOpen] = useState(false)
 
   const [editing, setEditing] = useState<Product | null>(null)
 
@@ -115,6 +117,9 @@ export default function ItemsPage() {
             <Button variant="secondary" onClick={() => setBulkImportOpen(true)}>
               <Upload className="h-4 w-4 mr-2" /> Import
             </Button>
+            <Button variant="secondary" onClick={() => setBulkAdjustOpen(true)}>
+              <SlidersHorizontal className="h-4 w-4 mr-2" /> Bulk Adjust
+            </Button>
             <Button variant="secondary" onClick={() => setAdjustModalOpen(true)}>
               <SlidersHorizontal className="h-4 w-4 mr-2" /> Adjust Stock
             </Button>
@@ -190,6 +195,10 @@ export default function ItemsPage() {
       )}
       {bulkImportOpen && (
         <BulkImportModal open={bulkImportOpen} onClose={() => setBulkImportOpen(false)} />
+      )}
+
+      {bulkAdjustOpen && (
+        <BulkStockAdjustModal open={bulkAdjustOpen} onClose={() => setBulkAdjustOpen(false)} products={filteredProducts} />
       )}
     </div>
   )

@@ -9,6 +9,7 @@ export const itemsApi = {
   },
   templateData: () => api.get('/api/products/template-data').then((r) => r.data),
   batches: (productId: string | number) => api.get(`/api/products/${productId}/batches`).then((r) => r.data),
+  allBatches: () => api.get('/api/products/batches').then((r) => r.data),
 
   brands: () => api.get('/api/master/brands').then((r) => r.data),
   categories: () => api.get('/api/master/categories').then((r) => r.data),
