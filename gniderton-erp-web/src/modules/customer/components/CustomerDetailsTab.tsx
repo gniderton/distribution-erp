@@ -26,16 +26,22 @@ export function CustomerDetailsTab({ customer, onClose }: { customer?: Customer 
 
   useEffect(() => {
     reset({
-      name: customer?.name ?? '',
-      phone: customer?.phone ?? '',
-      channel: customer?.channel ?? '',
-      route: customer?.route ?? '',
+      name: customer?.customer_name ?? '',
+      phone: customer?.customer_phone ?? '',
+      channel: customer?.channel_name ?? '', // Or maybe channel_id if it was supported as input, but for now we map channel_name
+      route: customer?.route_name ?? '',
     })
   }, [customer, reset])
 
   async function onSubmit(values: FormValues) {
-    if (isEdit && customer) await update.mutateAsync({ id: customer.id, payload: values })
-    else await create.mutateAsync(values)
+    const payload = {
+      customer_name: values.name,
+      customer_phone: values.phone,
+      channel_name: values.channel,
+      route_name: values.route
+    }
+    if (isEdit && customer) await update.mutateAsync({ id: customer.id, payload })
+    else await create.mutateAsync(payload)
     onClose()
   }
 

@@ -21,7 +21,7 @@ export function CustomerViewDrawer({ open, onClose, customer }: { open: boolean;
     <Drawer
       open={open}
       onClose={onClose}
-      title={isEdit ? customer.name : 'New customer'}
+      title={isEdit ? customer.customer_name : 'New customer'}
       widthClass="max-w-4xl"
     >
       <div className="flex h-full flex-col">
