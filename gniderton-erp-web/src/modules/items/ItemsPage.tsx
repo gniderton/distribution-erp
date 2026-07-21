@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/Input'
 import { Plus, Upload, SlidersHorizontal, CheckSquare, Edit3 } from 'lucide-react'
-import { useProducts, useBrands, useCategories } from './hooks'
+import { useProducts } from './hooks'
 import { ProductViewDrawer } from './components/ProductViewDrawer'
 import { StockAdjustModal } from './components/StockAdjustModal'
 import { BulkStatusModal } from './components/BulkStatusModal'
@@ -17,8 +17,6 @@ import { formatCurrency } from '@/lib/utils'
 
 export default function ItemsPage() {
   const { data: allProducts, isLoading, isError } = useProducts()
-  const { data: brandsList } = useBrands()
-  const { data: categoriesList } = useCategories()
 
   const [search, setSearch] = useState('')
   const [selectedBrand, setSelectedBrand] = useState('')
@@ -45,8 +43,20 @@ export default function ItemsPage() {
 
   const stockValuation = useMemo(() => {
     if (!filteredProducts) return 0
-    return filteredProducts.reduce((sum: number, p: Product) => sum + (Number(p.current_stock) || 0) * (Number(p.retail_rate) || 0), 0)
+    return filteredProducts.reduce((sum: number, p: Product) => sum + (Number(p.current_stock) || 0) * (Number(p.purchase_rate) || 0), 0)
   }, [filteredProducts])
+
+  const uniqueBrands = useMemo(() => {
+    if (!allProducts) return []
+    const brands = new Set<string>(allProducts.map((p: Product) => p.brand_name).filter(Boolean) as string[])
+    return Array.from(brands).sort()
+  }, [allProducts])
+
+  const uniqueCategories = useMemo(() => {
+    if (!allProducts) return []
+    const categories = new Set<string>(allProducts.map((p: Product) => p.category_name).filter(Boolean) as string[])
+    return Array.from(categories).sort()
+  }, [allProducts])
 
   const columns = useMemo<ColumnDef<Product>[]>(
     () => [
@@ -118,7 +128,7 @@ export default function ItemsPage() {
       {/* Analytics & Filters */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="bg-white p-5 rounded-xl border border-border-subtle shadow-sm flex flex-col justify-center">
-          <p className="text-sm text-ink-600 font-medium mb-1">Total Stock Valuation (Retail)</p>
+          <p className="text-sm text-ink-600 font-medium mb-1">Total Stock Valuation (Purchase)</p>
           <p className="text-2xl font-bold text-ink-900 font-mono-figures">{formatCurrency(stockValuation)}</p>
           <p className="text-xs text-ink-500 mt-1">For {filteredProducts.length} filtered items</p>
         </div>
@@ -136,8 +146,8 @@ export default function ItemsPage() {
             <label className="block text-xs font-medium text-ink-700 mb-1">Brand</label>
             <Select value={selectedBrand} onChange={e => setSelectedBrand(e.target.value)}>
               <option value="">All Brands</option>
-              {(brandsList?.data || []).map((b: any) => (
-                <option key={b.id} value={b.brand_name}>{b.brand_name}</option>
+              {uniqueBrands.map((brand: string) => (
+                <option key={brand} value={brand}>{brand}</option>
               ))}
             </Select>
           </div>
@@ -145,8 +155,8 @@ export default function ItemsPage() {
             <label className="block text-xs font-medium text-ink-700 mb-1">Category</label>
             <Select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
               <option value="">All Categories</option>
-              {(categoriesList?.data || []).map((c: any) => (
-                <option key={c.id} value={c.category_name}>{c.category_name}</option>
+              {uniqueCategories.map((cat: string) => (
+                <option key={cat} value={cat}>{cat}</option>
               ))}
             </Select>
           </div>
