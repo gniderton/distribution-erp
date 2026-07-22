@@ -28,6 +28,13 @@ export function CustomerVerifyModal({ open, onClose }: { open: boolean; onClose:
   const columns = [
     { accessorKey: 'customer_name', header: 'Customer', cell: (c: any) => <span className="font-semibold text-ink-900">{c.getValue() as string}</span> },
     { accessorKey: 'customer_phone', header: 'Phone', cell: (c: any) => c.getValue() || '—' },
+    { accessorKey: 'gstin', header: 'GST No', cell: (c: any) => <span className="font-mono-figures text-xs">{c.getValue() as string || '—'}</span> },
+    { id: 'location', header: 'Location', cell: ({ row }: any) => {
+      const lat = row.original.location_lat || row.original.latitude;
+      const lng = row.original.location_lng || row.original.longitude;
+      if (lat && lng) return <span className="font-mono-figures text-xs">{lat}, {lng}</span>;
+      return '—';
+    }},
     { accessorKey: 'route_name', header: 'Route', cell: (c: any) => c.getValue() || '—' },
     {
       id: 'actions',
