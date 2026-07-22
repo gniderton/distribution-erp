@@ -1,0 +1,1 @@
+const { pool } = require('./config/db'); async function test() { try { const res = await pool.query('SELECT * FROM customers LIMIT 1'); console.log(Object.keys(res.rows[0])); } finally { process.exit(); } } test();  

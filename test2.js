@@ -1,0 +1,1 @@
+const { pool } = require('./config/db'); async function test() { const res = await pool.query('SELECT p.*, COALESCE((SELECT SUM(quantity_remaining) FROM inventory_batches WHERE product_id = p.id AND is_active = true), 0) as total_stock FROM products p WHERE p.id = 169'); console.log(res.rows); process.exit(0); } test();  

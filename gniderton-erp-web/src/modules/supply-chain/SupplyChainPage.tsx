@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useTrips, useSyncLogs, useSyncLogsHistory } from './hooks'
 import { SyncVerificationModal } from './components/SyncVerificationModal'
+import { SyncHistoryModal } from './components/SyncHistoryModal'
 import { CreateTripModal } from './components/CreateTripModal'
 import { ActiveTripDetailsModal } from './components/ActiveTripDetailsModal'
 import { format } from 'date-fns'
@@ -20,6 +21,7 @@ export default function SupplyChainPage() {
   const { data: historyData, isLoading: historyLoading } = useSyncLogsHistory()
 
   const [selectedSyncId, setSelectedSyncId] = useState<number | null>(null)
+  const [selectedHistorySyncId, setSelectedHistorySyncId] = useState<number | null>(null)
   const [isCreateTripOpen, setIsCreateTripOpen] = useState(false)
   const [editTripId, setEditTripId] = useState<number | null>(null)
   
@@ -170,6 +172,7 @@ export default function SupplyChainPage() {
           isLoading={historyLoading}
           emptyTitle="No Settlement History"
           emptyDescription="Historical verified syncs will appear here."
+          onRowClick={(row) => setSelectedHistorySyncId(row.id)}
         />
       )}
 
@@ -177,6 +180,12 @@ export default function SupplyChainPage() {
         open={!!selectedSyncId}
         onClose={() => setSelectedSyncId(null)}
         syncId={selectedSyncId}
+      />
+
+      <SyncHistoryModal
+        open={!!selectedHistorySyncId}
+        onClose={() => setSelectedHistorySyncId(null)}
+        syncId={selectedHistorySyncId}
       />
 
       <CreateTripModal 

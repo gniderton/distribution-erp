@@ -27,7 +27,15 @@ export function useSyncDetails(id: string | number | null) {
   return useQuery({
     queryKey: ['delivery-sync-details', id],
     queryFn: () => supply_chainApi.getDeliverySyncDetails(id!),
-    enabled: !!id
+    enabled: !!id,
+  })
+}
+
+export function useSyncHistoryDetails(id: string | number | null) {
+  return useQuery({
+    queryKey: ['delivery-sync-history-details', id],
+    queryFn: () => supply_chainApi.getDeliverySyncHistory(id!),
+    enabled: !!id,
   })
 }
 
