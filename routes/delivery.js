@@ -529,7 +529,7 @@ router.get('/trips/:id/manifest-web', async (req, res) => {
         `, [req.params.id]);
 
         const tripInfoRes = await pool.query(`
-            SELECT dt.id as trip_id, dt.trip_number, dt.created_at as "date", dt.vehicle_number,
+            SELECT dt.id as trip_id, dt.team_id, dt.trip_number, dt.created_at as "date", dt.vehicle_number,
                    e.full_name as driver_name, t.name as team_name
             FROM delivery_trips dt
             LEFT JOIN employees e ON dt.driver_id = e.id

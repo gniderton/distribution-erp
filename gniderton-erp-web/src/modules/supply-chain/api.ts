@@ -14,7 +14,8 @@ export const supply_chainApi = {
   getDeliveryTripsManifestWeb: (id: string | number) => api.get(`/api/delivery/trips/${id}/manifest-web`).then((r) => r.data),
   getDeliveryTripsPicklistWeb: (id: string | number) => api.get(`/api/delivery/trips/${id}/picklist-web`).then((r) => r.data),
   getDeliveryTripsPicklistWeb2: (tripid: string | number) => api.get(`/api/delivery/trips/${tripid}/picklist-web`).then((r) => r.data),
-  getDeliveryTripsProductBreakdown: (id: string | number) => api.get(`/api/delivery/trips/${id}/product-breakdown`).then((r) => r.data),
+  getDeliveryTripsProductBreakdown: (id: string | number, productId: number, mrp: number) => 
+    api.get(`/api/delivery/trips/${id}/product-breakdown`, { params: { product_id: productId, mrp } }).then((r) => r.data),
   getEmployeesProfile: () => api.get('/api/employees/profile').then((r) => r.data),
   getSalesBankDetails3: () => api.get('/api/sales/bank-details/3').then((r) => r.data),
   getSalesUnified: () => api.get('/api/sales/unified').then((r) => r.data),
