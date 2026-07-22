@@ -61,7 +61,7 @@ export function CustomerBulkUpdateModal({ open, onClose, selectedIds, onClearSel
           >
             <option value="">-- No Change --</option>
             {employees.map((emp: any) => (
-              <option key={emp.id} value={emp.id}>{emp.name || emp.username || emp.employee_name || emp.id}</option>
+              <option key={emp.id} value={emp.id}>{emp.full_name || emp.name || emp.username || emp.employee_name || emp.id}</option>
             ))}
           </select>
         </div>
