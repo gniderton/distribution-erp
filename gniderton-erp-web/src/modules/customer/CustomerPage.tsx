@@ -19,20 +19,19 @@ const statusTone: Record<string, 'success' | 'warn' | 'neutral'> = {
   inactive: 'neutral',
 }
 
-function StatCard({ title, value, icon: Icon, colorClass, onClick }: { title: string, value: string | number, icon: any, colorClass: string, onClick?: () => void }) {
+function StatCard({ title, value, icon: Icon, wrapperClass = 'bg-white border-border text-ink-900', iconClass = 'bg-surface border-border-subtle text-ink-600', onClick }: { title: string, value: string | number, icon: any, wrapperClass?: string, iconClass?: string, onClick?: () => void }) {
   return (
     <div 
-      className={`relative rounded-lg border border-white/20 bg-white/60 backdrop-blur-md shadow-sm overflow-hidden p-3 transition-all duration-300 hover:shadow-md flex items-center gap-3 ${colorClass} ${onClick ? 'cursor-pointer' : ''}`}
+      className={`relative rounded-lg border shadow-sm overflow-hidden p-3 transition-all duration-300 hover:shadow-md flex items-center gap-3 ${wrapperClass} ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
     >
-      <div className="p-2 rounded-md bg-white/50 backdrop-blur-sm shadow-sm flex-shrink-0">
+      <div className={`p-2 rounded-md border shadow-sm flex-shrink-0 ${iconClass}`}>
         <Icon className="w-4 h-4" />
       </div>
       <div>
         <div className="text-xs font-medium text-ink-600 mb-0.5">{title}</div>
-        <div className="text-lg font-bold font-mono-figures text-ink-900">{value}</div>
+        <div className="text-lg font-bold font-mono-figures">{value}</div>
       </div>
-      <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-white/30 rounded-full blur-lg"></div>
     </div>
   )
 }
@@ -152,21 +151,24 @@ export default function CustomerPage() {
             title="Total Customers" 
             value={total} 
             icon={Users} 
-            colorClass="bg-gradient-to-br from-blue-50 to-indigo-100/50 border-blue-200" 
+            iconClass="bg-blue-50 text-blue-600 border-blue-100"
           />
           <StatCard 
             title="Active / Verified" 
             value={verified} 
             icon={CheckCircle2} 
-            colorClass="bg-gradient-to-br from-emerald-50 to-teal-100/50 border-emerald-200 text-emerald-600" 
+            iconClass="bg-emerald-50 text-emerald-600 border-emerald-100"
           />
           <StatCard 
             title={pendingCount > 0 ? "Action Required" : "Pending Verification"}
             value={pendingCount} 
             icon={pendingCount > 0 ? Bell : Clock} 
-            colorClass={pendingCount > 0 
-              ? "bg-gradient-to-br from-rose-50 to-red-100/60 border-rose-300 text-rose-600 shadow-md shadow-rose-200/50 animate-pulse hover:animate-none hover:border-rose-400"
-              : "bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200 text-gray-500"} 
+            wrapperClass={pendingCount > 0 
+              ? "bg-rose-50 border-rose-300 text-rose-700 shadow-md animate-pulse hover:animate-none"
+              : "bg-white border-border text-ink-900"} 
+            iconClass={pendingCount > 0 
+              ? "bg-rose-100 text-rose-700 border-rose-200" 
+              : "bg-amber-50 text-amber-600 border-amber-100"}
             onClick={() => setVerifyModalOpen(true)}
           />
         </div>
