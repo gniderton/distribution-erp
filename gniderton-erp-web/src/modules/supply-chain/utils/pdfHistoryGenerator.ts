@@ -18,6 +18,25 @@ const getCompanySettings = async () => {
   }
 }
 
+const drawSimpleBox = (doc: any, x: number, y: number, width: number, height: number, rows: (string | null)[][]) => {
+  doc.setDrawColor(200, 200, 200)
+  doc.setFillColor(250, 250, 250)
+  doc.setLineWidth(0.5)
+  doc.roundedRect(x, y, width, height, 3, 3, 'FD')
+  let rowY = y + 14
+  rows.forEach(r => {
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(100, 100, 100)
+    doc.text(String(r[0]), x + 6, rowY)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(0, 0, 0)
+    const val = String(r[1] || "0.00")
+    doc.text(val, x + width - 6, rowY, { align: 'right' })
+    rowY += 12
+  })
+}
+
 export const generateTripHistoryPDF = async (syncId: number | string, data: any) => {
   const doc = new jsPDF('p', 'pt', 'a4')
   const margin = 15
@@ -44,7 +63,23 @@ export const generateTripHistoryPDF = async (syncId: number | string, data: any)
   doc.text(`Company: ${brand.regt_name}`, margin, currentY + 40)
   doc.text(`Date: ${format(new Date(), "dd MMM yyyy hh:mm a")}`, pageWidth - margin, currentY + 40, { align: 'right' })
 
-  currentY += 50
+  // Dashboard KPI Boxes
+  const totalDelivered = data.delivered?.reduce((acc: number, val: any) => acc + Number(val.grand_total), 0) || 0
+  const collectedCash = data.payments?.reduce((acc: number, val: any) => acc + Number(val.amount), 0) || 0
+  const tripExpenses = data.expenses?.reduce((acc: number, val: any) => acc + Number(val.amount), 0) || 0
+  const netSettled = collectedCash - tripExpenses
+
+  const gap = 10
+  const boxWidth = (pageWidth - (margin * 2) - (gap * 3)) / 4
+  const boxHeight = 35
+  const boxY = currentY + 50
+  
+  drawSimpleBox(doc, margin, boxY, boxWidth, boxHeight, [["TOTAL DELIVERED", `Rs. ${totalDelivered.toFixed(2)}`]])
+  drawSimpleBox(doc, margin + boxWidth + gap, boxY, boxWidth, boxHeight, [["COLLECTED CASH", `Rs. ${collectedCash.toFixed(2)}`]])
+  drawSimpleBox(doc, margin + (boxWidth * 2) + (gap * 2), boxY, boxWidth, boxHeight, [["TRIP EXPENSES", `Rs. ${tripExpenses.toFixed(2)}`]])
+  drawSimpleBox(doc, margin + (boxWidth * 3) + (gap * 3), boxY, boxWidth, boxHeight, [["NET SETTLED", `Rs. ${netSettled.toFixed(2)}`]])
+
+  currentY = boxY + boxHeight + 20
 
   const themeStyles = {
     theme: 'grid' as const,
@@ -81,11 +116,23 @@ export const generateTripHistoryPDF = async (syncId: number | string, data: any)
     autoTable(doc, {
       ...themeStyles,
       startY: currentY,
-      head: [["Product Picklist (Summary)", "MRP", "Delivered Qty", "Returned Qty"]],
+      head: [["Product Delivery Summary", "MRP", "Delivered Qty", "Returned Qty"]],
       body: data.delivered_summary.map((s: any) => {
           const ret = data.returns_summary?.find((rs: any) => rs.product_name === s.product_name);
           return [s.product_name, `Rs. ${Number(s.mrp).toFixed(2)}`, s.total_qty, ret?.total_qty || 0]
       })
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 15;
+  }
+
+  // 3.5 Products from Undelivered Invoices
+  const undeliveredSummary = [...(data.rejected_summary || []), ...(data.undelivered_summary || [])]
+  if (undeliveredSummary.length > 0) {
+    autoTable(doc, {
+      ...themeStyles,
+      startY: currentY,
+      head: [["Products from Undelivered / Rejected Invoices", "MRP", "Undelivered Qty"]],
+      body: undeliveredSummary.map((m: any) => [m.product_name, `Rs. ${Number(m.mrp).toFixed(2)}`, m.total_qty])
     });
     currentY = (doc as any).lastAutoTable.finalY + 15;
   }

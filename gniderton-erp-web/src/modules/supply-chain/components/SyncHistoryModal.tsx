@@ -131,6 +131,34 @@ export function SyncHistoryModal({ open, onClose, syncId }: { open: boolean, onC
                     </table>
                   </div>
                 </div>
+                <div className="glass-card rounded-xl border border-border-subtle overflow-hidden bg-white shadow-sm mt-6">
+                  <div className="px-4 py-3 border-b border-border-subtle bg-surface/30 font-medium text-sm text-ink-900">
+                    Products from Undelivered / Rejected Invoices
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-surface/50 text-ink-600 text-[10px] uppercase tracking-wider font-semibold">
+                        <tr>
+                          <th className="px-4 py-3">Product Name</th>
+                          <th className="px-4 py-3">MRP</th>
+                          <th className="px-4 py-3 text-right">Undelivered Qty</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border-subtle">
+                        {[...(data.rejected_summary || []), ...(data.undelivered_summary || [])].map((m: any, idx: number) => (
+                          <tr key={idx} className="bg-white hover:bg-surface/30 transition-colors">
+                            <td className="px-4 py-3 font-medium text-ink-900">{m.product_name}</td>
+                            <td className="px-4 py-3 text-ink-600">₹{Number(m.mrp).toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right font-medium text-danger-600">{m.total_qty}</td>
+                          </tr>
+                        ))}
+                        {(!data.rejected_summary?.length && !data.undelivered_summary?.length) && (
+                          <tr><td colSpan={3} className="px-4 py-8 text-center text-ink-500 text-xs">No products from undelivered invoices.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
 
