@@ -17,7 +17,7 @@ export const customerApi = {
   employees: () => api.get('/api/employees').then((r) => r.data),
 
   pendingVerification: () => api.get('/api/verify-requests/pending').then((r) => r.data),
-  approveVerification: (id: string | number) => api.post(`/api/verify-requests/${id}/approve`).then((r) => r.data),
+  approveVerification: (id: string | number, payload?: any) => api.post(`/api/verify-requests/${id}/approve`, payload).then((r) => r.data),
   rejectVerification: (id: string | number) => api.post(`/api/verify-requests/${id}/reject`).then((r) => r.data),
   verifyCustomer: (id: string | number, payload: any) => api.post(`/api/customers/${id}/verify`, payload).then((r) => r.data),
 
