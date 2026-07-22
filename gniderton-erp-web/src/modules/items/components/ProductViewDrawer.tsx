@@ -12,7 +12,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { BatchEditModal } from './BatchEditModal'
 import { ProductDashboardTab } from './ProductDashboardTab'
-import { Pencil } from 'lucide-react'
+import { Pencil, LayoutDashboard, FileText, Package, ListOrdered } from 'lucide-react'
 
 const productSchema = z.object({
   product_name: z.string().min(1, 'Product Name is required'),
@@ -134,36 +134,45 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
         </div>
       }
     >
-      {isEditing && (
-        <div className="flex space-x-1 mt-4 border-b border-border-subtle overflow-x-auto">
-          {product && (
-            <button 
-              onClick={() => setActiveTab('dashboard')}
-              className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'dashboard' ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-500 hover:text-ink-700'}`}
-            >
-              Dashboard
-            </button>
-          )}
-          <button 
-            className={`px-4 py-2 border-b-2 text-sm font-medium transition-colors ${activeTab === 'details' ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
-            onClick={() => setActiveTab('details')}
-          >
-            Details
-          </button>
-          <button 
-            className={`px-4 py-2 border-b-2 text-sm font-medium transition-colors ${activeTab === 'batches' ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
-            onClick={() => setActiveTab('batches')}
-          >
-            Batches
-          </button>
-          <button 
-            className={`px-4 py-2 border-b-2 text-sm font-medium transition-colors ${activeTab === 'ledger' ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
-            onClick={() => setActiveTab('ledger')}
-          >
-            Inventory Ledger
-          </button>
-        </div>
-      )}
+      <div className="flex h-full flex-col">
+        {isEditing && (
+          <div className="border-b border-border-subtle bg-white px-6">
+            <nav className="-mb-px flex space-x-6 overflow-x-auto">
+              {product && (
+                <button 
+                  onClick={() => setActiveTab('dashboard')}
+                  className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold transition-all border-b-2 ${activeTab === 'dashboard' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300'}`}
+                >
+                  <LayoutDashboard size={14} />
+                  Dashboard
+                </button>
+              )}
+              <button 
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold transition-all border-b-2 ${activeTab === 'details' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300'}`}
+                onClick={() => setActiveTab('details')}
+              >
+                <FileText size={14} />
+                Details
+              </button>
+              <button 
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold transition-all border-b-2 ${activeTab === 'batches' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300'}`}
+                onClick={() => setActiveTab('batches')}
+              >
+                <Package size={14} />
+                Batches
+              </button>
+              <button 
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold transition-all border-b-2 ${activeTab === 'ledger' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300'}`}
+                onClick={() => setActiveTab('ledger')}
+              >
+                <ListOrdered size={14} />
+                Inventory Ledger
+              </button>
+            </nav>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto p-6 bg-ink-50/30">
 
       {activeTab === 'dashboard' && product && (
         <div className="py-4">
@@ -296,13 +305,15 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
         </div>
       )}
 
-      {editingBatch && (
-        <BatchEditModal 
-          open={!!editingBatch} 
-          onClose={() => setEditingBatch(null)} 
-          batch={editingBatch} 
-        />
-      )}
+        </div>
+        {editingBatch && (
+          <BatchEditModal 
+            open={!!editingBatch} 
+            onClose={() => setEditingBatch(null)} 
+            batch={editingBatch} 
+          />
+        )}
+      </div>
     </Drawer>
   )
 }

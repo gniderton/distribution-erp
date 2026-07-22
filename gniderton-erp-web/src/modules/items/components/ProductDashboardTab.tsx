@@ -6,7 +6,7 @@ import { Package, TrendingUp, RotateCcw, IndianRupee, Users, ShoppingCart, Activ
 // Beautiful Glassmorphic Card
 function Card({ children, className = '' }: { children: React.ReactNode, className?: string }) {
   return (
-    <div className={`rounded-xl border border-white/20 bg-white/50 backdrop-blur-md shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md ${className}`}>
+    <div className={`rounded-xl border border-border-subtle bg-white shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md flex flex-col ${className}`}>
       {children}
     </div>
   )
@@ -102,11 +102,11 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Customers */}
-        <Card className="col-span-1 border-t-4 border-t-purple-500">
+        <Card className="col-span-1 border-t-4 border-t-purple-500 h-full">
           <CardHeader>
             <CardTitle className="text-ink-900"><Users className="w-5 h-5 text-purple-500" /> Top Customers (All Time)</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-auto">
             {(!analytics?.top_customers || analytics.top_customers.length === 0) ? (
               <div className="p-8 text-center text-ink-400">No customer data yet.</div>
             ) : (
@@ -123,11 +123,11 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
         </Card>
 
         {/* Recent Purchases */}
-        <Card className="col-span-1 border-t-4 border-t-blue-500">
+        <Card className="col-span-1 border-t-4 border-t-blue-500 h-full">
           <CardHeader>
             <CardTitle className="text-ink-900"><Package className="w-5 h-5 text-blue-500" /> Recent Vendor Restocks</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-auto">
             {(!history?.purchases || history.purchases.length === 0) ? (
               <div className="p-8 text-center text-ink-400">No purchase history yet.</div>
             ) : (
@@ -144,11 +144,11 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
         </Card>
 
         {/* Recent Sales */}
-        <Card className="col-span-1 border-t-4 border-t-emerald-500">
+        <Card className="col-span-1 border-t-4 border-t-emerald-500 h-full">
           <CardHeader>
             <CardTitle className="text-ink-900"><ShoppingCart className="w-5 h-5 text-emerald-500" /> Recent Sales</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-auto">
             {(!history?.sales || history.sales.length === 0) ? (
               <div className="p-8 text-center text-ink-400">No sales history yet.</div>
             ) : (
@@ -165,11 +165,11 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
         </Card>
 
         {/* Return History */}
-        <Card className="col-span-1 border-t-4 border-t-rose-500">
+        <Card className="col-span-1 border-t-4 border-t-rose-500 h-full">
           <CardHeader>
             <CardTitle className="text-ink-900"><RotateCcw className="w-5 h-5 text-rose-500" /> Recent Returns</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-auto">
             {(!history?.returns || history.returns.length === 0) ? (
               <div className="p-8 text-center text-ink-400">No returns yet! (That's good)</div>
             ) : (
