@@ -23,7 +23,7 @@ function CardContent({ children, className = '' }: { children: React.ReactNode, 
 
 function KpiWidget({ title, value, subtitle, icon: Icon, colorClass }: { title: string, value: string | number, subtitle?: string, icon: any, colorClass: string }) {
   return (
-    <div className={`relative rounded-xl overflow-hidden p-6 bg-white border border-border shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md`}>
+    <div className={`relative rounded-xl overflow-hidden p-6 bg-white border border-border-subtle shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md`}>
       <div className="relative z-10 flex flex-col h-full">
         <div className="flex justify-between items-start mb-4">
           <span className="font-medium text-ink-600">{title}</span>

@@ -19,7 +19,7 @@ const statusTone: Record<string, 'success' | 'warn' | 'neutral'> = {
   inactive: 'neutral',
 }
 
-function StatCard({ title, value, icon: Icon, wrapperClass = 'bg-white border-border text-ink-900', iconClass = 'bg-surface border-border-subtle text-ink-600', onClick }: { title: string, value: string | number, icon: any, wrapperClass?: string, iconClass?: string, onClick?: () => void }) {
+function StatCard({ title, value, icon: Icon, wrapperClass = 'bg-white border-border-subtle text-ink-900', iconClass = 'bg-surface border-border-subtle text-ink-600', onClick }: { title: string, value: string | number, icon: any, wrapperClass?: string, iconClass?: string, onClick?: () => void }) {
   return (
     <div 
       className={`relative rounded-lg border shadow-sm overflow-hidden p-3 transition-all duration-300 hover:shadow-md flex items-center gap-3 ${wrapperClass} ${onClick ? 'cursor-pointer' : ''}`}
@@ -165,7 +165,7 @@ export default function CustomerPage() {
             icon={pendingCount > 0 ? Bell : Clock} 
             wrapperClass={pendingCount > 0 
               ? "bg-rose-50 border-rose-300 text-rose-700 shadow-md animate-pulse hover:animate-none"
-              : "bg-white border-border text-ink-900"} 
+              : "bg-white border-border-subtle text-ink-900"} 
             iconClass={pendingCount > 0 
               ? "bg-rose-100 text-rose-700 border-rose-200" 
               : "bg-amber-50 text-amber-600 border-amber-100"}
