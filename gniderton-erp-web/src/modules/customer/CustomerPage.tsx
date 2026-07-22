@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { DataTable } from '@/components/shared/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Plus, Users, CheckCircle2, Clock, Search } from 'lucide-react'
+import { Plus, Users, CheckCircle2, Clock, Search, Bell } from 'lucide-react'
 import { useCustomers } from './hooks'
+import { customerApi } from './api'
 import { CustomerViewDrawer } from './components/CustomerViewDrawer'
 import { CustomerVerifyModal } from './components/CustomerVerifyModal'
 import { CustomerBulkUpdateModal } from './components/CustomerBulkUpdateModal'
@@ -37,6 +39,12 @@ function StatCard({ title, value, icon: Icon, colorClass, onClick }: { title: st
 
 export default function CustomerPage() {
   const { data, isLoading, isError } = useCustomers()
+  
+  const { data: pendingRequests } = useQuery({
+    queryKey: ['customers', 'pending'],
+    queryFn: () => customerApi.pendingVerification()
+  })
+  
   const [search, setSearch] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [verifyModalOpen, setVerifyModalOpen] = useState(false)
@@ -114,10 +122,8 @@ export default function CustomerPage() {
     const v = c.verification_status?.toLowerCase()
     return v === 'active' || v === 'verified'
   }).length
-  const pending = filteredCustomers.filter(c => {
-    const v = c.verification_status?.toLowerCase()
-    return v === 'pending'
-  }).length
+  
+  const pendingCount = pendingRequests?.length || 0;
 
   return (
     <div className="space-y-6 w-full h-full flex flex-col">
@@ -128,9 +134,6 @@ export default function CustomerPage() {
           description="Retail and wholesale accounts, routes, channels, and outstanding balances."
           actions={
             <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setVerifyModalOpen(true)} className="shadow-sm">
-                Verify Pending
-              </Button>
               {Object.keys(rowSelection).length > 0 && (
                 <Button variant="secondary" onClick={() => setBulkUpdateOpen(true)} className="shadow-sm">
                   Bulk Update ({Object.keys(rowSelection).length})
@@ -158,10 +161,12 @@ export default function CustomerPage() {
             colorClass="bg-gradient-to-br from-emerald-50 to-teal-100/50 border-emerald-200 text-emerald-600" 
           />
           <StatCard 
-            title="Pending Verification" 
-            value={pending} 
-            icon={Clock} 
-            colorClass="bg-gradient-to-br from-amber-50 to-orange-100/50 border-amber-200 text-amber-600 hover:border-amber-400 hover:ring-2 hover:ring-amber-200" 
+            title={pendingCount > 0 ? "Action Required" : "Pending Verification"}
+            value={pendingCount} 
+            icon={pendingCount > 0 ? Bell : Clock} 
+            colorClass={pendingCount > 0 
+              ? "bg-gradient-to-br from-rose-50 to-red-100/60 border-rose-300 text-rose-600 shadow-md shadow-rose-200/50 animate-pulse hover:animate-none hover:border-rose-400"
+              : "bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200 text-gray-500"} 
             onClick={() => setVerifyModalOpen(true)}
           />
         </div>
