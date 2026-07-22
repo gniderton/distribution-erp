@@ -21,24 +21,21 @@ function CardContent({ children, className = '' }: { children: React.ReactNode, 
   return <div className={`p-5 ${className}`}>{children}</div>
 }
 
-// KPI Widget Component
-function KpiWidget({ title, value, subtitle, icon: Icon, gradient }: { title: string, value: string | number, subtitle?: string, icon: any, gradient: string }) {
+function KpiWidget({ title, value, subtitle, icon: Icon, colorClass }: { title: string, value: string | number, subtitle?: string, icon: any, colorClass: string }) {
   return (
-    <div className={`relative rounded-xl overflow-hidden p-6 text-white shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${gradient}`}>
+    <div className={`relative rounded-xl overflow-hidden p-6 bg-white border border-border-subtle shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md`}>
       <div className="relative z-10 flex flex-col h-full">
         <div className="flex justify-between items-start mb-4">
-          <span className="font-medium text-white/80">{title}</span>
-          <div className="p-2 rounded-lg bg-white/20 backdrop-blur-sm">
-            <Icon className="w-5 h-5 text-white" />
+          <span className="font-medium text-ink-600">{title}</span>
+          <div className={`p-2 rounded-lg bg-surface border border-border-subtle ${colorClass}`}>
+            <Icon className="w-5 h-5" />
           </div>
         </div>
         <div className="mt-auto">
-          <div className="text-3xl font-bold font-mono-figures mb-1">{value}</div>
-          {subtitle && <div className="text-sm text-white/70 font-medium">{subtitle}</div>}
+          <div className="text-3xl font-bold font-mono-figures mb-1 text-ink-900">{value}</div>
+          {subtitle && <div className="text-sm text-ink-500 font-medium">{subtitle}</div>}
         </div>
       </div>
-      {/* Decorative background element */}
-      <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
     </div>
   )
 }
@@ -78,28 +75,28 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
           value={inventory?.total_stock || 0} 
           subtitle={`Across ${inventory?.batch_count || 0} active batches`}
           icon={Package}
-          gradient="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500"
+          colorClass="text-brand-600"
         />
         <KpiWidget 
           title="Sales (This Month)" 
           value={analytics?.monthly_qty || 0} 
           subtitle={`MoM Growth: ${analytics?.growth?.mom_pct || 0}%`}
           icon={TrendingUp}
-          gradient="bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-400"
+          colorClass="text-sky-600"
         />
         <KpiWidget 
           title="Return Rate" 
           value={`${analytics?.return_rate_pct || 0}%`} 
           subtitle="Of shipped quantity"
           icon={RotateCcw}
-          gradient="bg-gradient-to-br from-rose-500 via-red-500 to-orange-500"
+          colorClass="text-rose-600"
         />
         <KpiWidget 
           title="Avg Selling Rate" 
           value={formatCurrency(analytics?.avg_sales_rate || 0)} 
           subtitle={`Margin: ${analytics?.margin_pct || 0}%`}
           icon={IndianRupee}
-          gradient="bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500"
+          colorClass="text-emerald-600"
         />
       </div>
 

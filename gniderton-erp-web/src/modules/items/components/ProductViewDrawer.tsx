@@ -117,7 +117,7 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
       open={open} 
       onClose={onClose} 
       title={isEditing ? `Product: ${product.product_name}` : 'New Product'}
-      widthClass="max-w-3xl"
+      widthClass="max-w-5xl"
       footer={
         <div className="flex justify-between items-center gap-3 w-full">
           <div>
