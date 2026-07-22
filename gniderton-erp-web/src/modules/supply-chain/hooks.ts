@@ -147,3 +147,17 @@ export function useInvoiceDetails(salesOrderId: number | null) {
     enabled: !!salesOrderId
   })
 }
+  
+export function useMarkSelfCollected() {  
+  const queryClient = useQueryClient()  
+  return useMutation({  
+    mutationFn: (payload: any) => supply_chainApi.createDeliveryMarkSelfCollected(payload),  
+    onSuccess: () => {  
+      toast.success('Invoice marked as collected.')  
+      queryClient.invalidateQueries({ queryKey: ['delivery-invoices-pool'] })  
+    },  
+    onError: (err: any) => {  
+      toast.error(err?.response?.data?.error || 'Failed to mark as collected')  
+    }  
+  })  
+} 

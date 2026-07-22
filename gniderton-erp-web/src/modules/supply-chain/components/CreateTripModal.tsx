@@ -3,7 +3,8 @@ import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { useTeams, useInvoicesPool, useCreateTrip, useUpdateTrip, useTripManifest } from '../hooks'
 import { format } from 'date-fns'
-import { FileText, IndianRupee } from 'lucide-react'
+import { FileText, IndianRupee, Store } from 'lucide-react'
+import { PickupAtOfficeModal } from './PickupAtOfficeModal'
 
 export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, onClose: () => void, editTripId?: number | null }) {
   const { data: teamsData, isLoading: teamsLoading } = useTeams()
@@ -15,6 +16,7 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
   
   const [selectedTeamId, setSelectedTeamId] = useState<string>('')
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<number>>(new Set())
+  const [pickupInvoice, setPickupInvoice] = useState<any | null>(null)
 
   useEffect(() => {
     if (editTripId && manifestData && open) {
@@ -253,6 +255,7 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
                     <th className="px-4 py-3">DSE</th>
                     <th className="px-4 py-3">Route</th>
                     <th className="px-4 py-3 text-right">Amount</th>
+                    <th className="px-4 py-3 w-32 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-subtle">
@@ -283,6 +286,20 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
                         <td className="px-4 py-3 text-ink-600">{inv.dse_name || '-'}</td>
                         <td className="px-4 py-3 text-ink-600">{inv.route_name || '-'}</td>
                         <td className="px-4 py-3 text-right font-medium">₹{Number(inv.grand_total).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-center">
+                          <Button 
+                            variant="secondary" 
+                            size="sm"
+                            className="text-xs h-7 px-2 border-brand-200 text-brand-700 bg-brand-50 hover:bg-brand-100"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setPickupInvoice(inv)
+                            }}
+                          >
+                            <Store size={12} className="mr-1" />
+                            Pick Up
+                          </Button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -292,6 +309,12 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
           </div>
         </div>
       </div>
+      
+      <PickupAtOfficeModal 
+        open={!!pickupInvoice} 
+        onClose={() => setPickupInvoice(null)} 
+        invoice={pickupInvoice} 
+      />
     </Drawer>
   )
 }
