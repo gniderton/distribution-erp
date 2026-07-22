@@ -67,9 +67,10 @@ export function CustomerVerifyModal({ open, onClose }: { open: boolean; onClose:
             {isNew ? (
               <Button 
                 size="sm" 
-                variant="secondary"
-                className="text-brand-600 border-brand-200 hover:bg-brand-50"
+                variant="secondary" 
+                className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"
                 onClick={() => setAssigningRow(row.original)}
+                loading={approveMutation.isPending && row.original.id === assigningRow?.id}
                 disabled={approveMutation.isPending || rejectMutation.isPending}
               >
                 <PlusCircle className="w-4 h-4 mr-1" /> Assign & Verify
@@ -77,20 +78,22 @@ export function CustomerVerifyModal({ open, onClose }: { open: boolean; onClose:
             ) : (
               <Button 
                 size="sm" 
-                variant="secondary"
-                className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                variant="secondary" 
+                className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200"
                 onClick={() => approveMutation.mutate({ id: row.original.id })}
                 disabled={approveMutation.isPending || rejectMutation.isPending}
+                loading={approveMutation.isPending && !assigningRow}
               >
                 <CheckCircle2 className="w-4 h-4 mr-1" /> Verify
               </Button>
             )}
             <Button 
               size="sm" 
-              variant="secondary"
-              className="text-rose-600 border-rose-200 hover:bg-rose-50"
+              variant="secondary" 
+              className="bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200"
               onClick={() => rejectMutation.mutate(row.original.id)}
               disabled={approveMutation.isPending || rejectMutation.isPending}
+              loading={rejectMutation.isPending}
             >
               <XCircle className="w-4 h-4 mr-1" /> Reject
             </Button>
@@ -153,8 +156,8 @@ function AssignDetailsModal({ row, onClose, onConfirm, isPending, channels, rout
   const footer = (
     <>
       <Button variant="secondary" onClick={onClose} disabled={isPending}>Cancel</Button>
-      <Button onClick={handleSubmit} disabled={isPending || !routeId || !channelId}>
-        {isPending ? 'Verifying...' : 'Assign & Verify'}
+      <Button onClick={handleSubmit} disabled={!routeId || !channelId} loading={isPending}>
+        Assign & Verify
       </Button>
     </>
   )

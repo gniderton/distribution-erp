@@ -141,6 +141,7 @@ export function BulkStatusModal({ open, onClose, products }: Props) {
           <Button 
             onClick={handleToggle} 
             disabled={loading || selectedCount === 0}
+            loading={loading}
           >
             {buttonText}
           </Button>

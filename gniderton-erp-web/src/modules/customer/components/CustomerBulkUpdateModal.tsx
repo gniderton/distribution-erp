@@ -38,9 +38,10 @@ export function CustomerBulkUpdateModal({ open, onClose, selectedIds, onClearSel
       <Button variant="secondary" onClick={onClose}>Cancel</Button>
       <Button 
         onClick={handleUpdate} 
-        disabled={(!dseId && !routeId) || updateMutation.isPending}
+        disabled={(!dseId && !routeId)}
+        loading={updateMutation.isPending}
       >
-        {updateMutation.isPending ? 'Updating...' : 'Update Customers'}
+        Update Customers
       </Button>
     </>
   )

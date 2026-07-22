@@ -270,8 +270,8 @@ export function BulkPriceEditModal({ open, onClose, products }: Props) {
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button onClick={handleSave} disabled={loading || Object.keys(edits).length === 0}>
-            Save Changes
+          <Button onClick={handleSave} disabled={loading || Object.keys(edits).length === 0} loading={loading}>
+            Update Prices
           </Button>
         </div>
       </div>

@@ -128,7 +128,7 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
           <div className="flex gap-3">
             <Button variant="secondary" onClick={onClose}>Close</Button>
             {isEditMode && (
-              <Button onClick={handleSubmit(onSubmit as any)}>Save Changes</Button>
+              <Button onClick={handleSubmit(onSubmit as any)} loading={createProduct.isPending || updateProduct.isPending}>Save Changes</Button>
             )}
           </div>
         </div>

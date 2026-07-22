@@ -256,8 +256,8 @@ export function BulkStockAdjustModal({ open, onClose, products }: Props) {
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button onClick={handleSave} disabled={loading || Object.values(edits).filter(e => e.qty !== '' && Number(e.qty) > 0).length === 0}>
-            Save Adjustments
+          <Button onClick={handleSave} disabled={loading || Object.values(edits).filter(e => e.qty !== '' && Number(e.qty) > 0).length === 0} loading={loading}>
+            Apply Adjustments
           </Button>
         </div>
       </div>

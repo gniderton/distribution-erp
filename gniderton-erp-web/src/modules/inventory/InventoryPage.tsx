@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Button } from '@/components/ui/Button'
 import { 
   usePurchaseOrders, 
   usePurchaseInvoices, 
@@ -1556,18 +1557,18 @@ export default function InventoryPage() {
               </div>
               {poMode !== 'VIEW' && (
                 <div className="flex gap-2">
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={() => setShowPODrawer(false)}
-                    className="border border-border-subtle hover:bg-ink-100 text-ink-700 px-4 py-2 rounded-lg text-xs font-semibold transition"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={handleSavePO}
-                    className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2 rounded-lg text-xs font-semibold transition"
+                    loading={poMode === 'CREATE' ? createPOMutation.isPending : updatePOMutation.isPending}
                   >
                     {poMode === 'CREATE' ? 'Save Purchase Order' : 'Update Purchase Order'}
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -1838,23 +1839,18 @@ export default function InventoryPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="secondary"
                   onClick={() => setShowGRNModal(false)}
-                  className="border border-border-subtle hover:bg-ink-100 text-ink-700 px-4 py-2 rounded-lg text-xs font-semibold transition"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleSaveGRN}
-                  disabled={!vendorInvoiceNo || !invoiceDate || !receivedDate}
-                  className={`px-6 py-2 rounded-lg text-xs font-semibold transition shadow-sm ${
-                    (!vendorInvoiceNo || !invoiceDate || !receivedDate)
-                      ? 'bg-ink-200 text-ink-400 cursor-not-allowed'
-                      : 'bg-brand-600 hover:bg-brand-700 text-white'
-                  }`}
+                  loading={createGRNMutation.isPending}
                 >
-                  Post Goods Receipt (GRN)
-                </button>
+                  Confirm GRN
+                </Button>
               </div>
             </div>
           </div>
@@ -1978,18 +1974,19 @@ export default function InventoryPage() {
                     This will delete all stock entries associated with this Goods Received Note and adjust vendor balances. This action is irreversible.
                   </p>
                   <div className="flex gap-2 justify-end">
-                    <button
+                    <Button
+                      variant="secondary"
                       onClick={() => setShowReverseConfirm(false)}
-                      className="border border-border-subtle hover:bg-ink-50 text-ink-700 px-4 py-2 rounded-lg text-xs font-semibold transition"
                     >
-                      Close
-                    </button>
-                    <button
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="danger"
                       onClick={handleConfirmReverseGRN}
-                      className="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 rounded-lg text-xs font-semibold transition shadow-sm"
+                      loading={reverseGRNMutation.isPending}
                     >
                       Confirm Reversal
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>

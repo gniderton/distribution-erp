@@ -125,7 +125,7 @@ export function BatchEditModal({ open, onClose, batch }: Props) {
 
         <div className="flex justify-end gap-3 mt-8">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit">Save Changes</Button>
+          <Button type="submit" loading={updateBatch.isPending}>Save Changes</Button>
         </div>
       </form>
     </Dialog>
