@@ -434,18 +434,21 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                                       <tr key={d.note} className="border-b border-border-subtle/50 last:border-0">
                                         <td className="py-2">₹{d.note}</td>
                                         <td className="py-2 text-center w-24">
-                                          <input 
-                                            type="number" 
-                                            min={0}
-                                            disabled={isSettled}
-                                            value={d.count || ''} 
-                                            onChange={e => {
-                                              const newDenoms = [...cashDenominations]
-                                              newDenoms[i].count = parseInt(e.target.value) || 0
-                                              setCashDenominations(newDenoms)
-                                            }}
-                                            className="w-16 px-2 py-1 text-center bg-white border border-border-subtle rounded-md text-xs focus:outline-none focus:border-brand-500 disabled:bg-surface"
-                                          />
+                                          {isSettled ? (
+                                            <span className="font-semibold text-ink-900">{d.count || '-'}</span>
+                                          ) : (
+                                            <input 
+                                              type="number" 
+                                              min={0}
+                                              value={d.count || ''} 
+                                              onChange={e => {
+                                                const newDenoms = [...cashDenominations]
+                                                newDenoms[i].count = parseInt(e.target.value) || 0
+                                                setCashDenominations(newDenoms)
+                                              }}
+                                              className="w-16 px-2 py-1 text-center bg-white border border-border-subtle rounded-md text-xs focus:outline-none focus:border-brand-500"
+                                            />
+                                          )}
                                         </td>
                                         <td className="py-2 font-bold">₹{(d.note * d.count).toFixed(2)}</td>
                                       </tr>
@@ -497,14 +500,17 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                                      <td className="px-4 py-2 bg-brand-50/30">
                                        {!group.allRejected ? (
                                          <div className="flex items-center gap-2">
-                                            <input 
-                                              type="number"
-                                              disabled={isSettled}
-                                              value={chequeAmounts[chkNo] || ''}
-                                              onChange={e => setChequeAmounts({...chequeAmounts, [chkNo]: e.target.value})}
-                                              className={`w-24 px-2 py-1 bg-white border rounded-md text-xs focus:outline-none disabled:bg-surface ${entered > 0 ? (isMatch ? 'border-emerald-300 focus:border-emerald-500' : 'border-rose-300 focus:border-rose-500') : 'border-border-subtle focus:border-brand-500'}`}
-                                              placeholder="0.00"
-                                            />
+                                            {isSettled ? (
+                                              <span className="font-bold text-ink-900 px-2 py-1 w-24 border border-transparent">₹{entered.toFixed(2)}</span>
+                                            ) : (
+                                              <input 
+                                                type="number"
+                                                value={chequeAmounts[chkNo] || ''}
+                                                onChange={e => setChequeAmounts({...chequeAmounts, [chkNo]: e.target.value})}
+                                                className={`w-24 px-2 py-1 bg-white border rounded-md text-xs focus:outline-none ${entered > 0 ? (isMatch ? 'border-emerald-300 focus:border-emerald-500' : 'border-rose-300 focus:border-rose-500') : 'border-border-subtle focus:border-brand-500'}`}
+                                                placeholder="0.00"
+                                              />
+                                            )}
                                             {entered > 0 && isMatch && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                                             {entered > 0 && !isMatch && <AlertCircle className="w-4 h-4 text-rose-500" />}
                                          </div>
@@ -560,12 +566,15 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                                    <td className="px-4 py-2">{p.transaction_reference}</td>
                                    <td className="px-4 py-2 font-bold">₹{Number(p.amount).toFixed(2)}</td>
                                    <td className="px-4 py-2">
-                                     {!isSettled && p.verification_status !== 'Rejected' && (
+                                     {isSettled ? (
+                                       <span className="font-semibold text-ink-900 px-2 py-1">
+                                         {p._bank_stmt_id ? `Mapped to Bank ID: ${p._bank_stmt_id}` : p.verification_status === 'Rejected' ? 'Rejected' : 'Unmapped'}
+                                       </span>
+                                     ) : p.verification_status !== 'Rejected' ? (
                                        <select
-                                         disabled={isSettled}
                                          value={p._bank_stmt_id || ''}
                                          onChange={(e) => handleOnlineBankMap(p.id, e.target.value)}
-                                         className={`w-full px-2 py-1 bg-white border rounded-md text-xs focus:outline-none disabled:bg-surface ${p._bank_stmt_id ? 'border-emerald-300' : 'border-rose-300'}`}
+                                         className={`w-full px-2 py-1 bg-white border rounded-md text-xs focus:outline-none ${p._bank_stmt_id ? 'border-emerald-300' : 'border-rose-300'}`}
                                        >
                                          <option value="">-- Select Bank Credit --</option>
                                          {bankCredits?.map((c:any) => {
@@ -580,7 +589,7 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                                            )
                                          })}
                                        </select>
-                                     )}
+                                     ) : null}
                                      {p.verification_status === 'Rejected' && <span className="text-ink-500 italic">Rejected</span>}
                                    </td>
                                    <td className="px-4 py-2">

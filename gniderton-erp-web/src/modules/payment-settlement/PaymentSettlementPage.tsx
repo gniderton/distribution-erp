@@ -34,7 +34,7 @@ export default function PaymentSettlementPage() {
       <div className="bg-white rounded-xl shadow-sm border border-border-subtle">
         <div className="p-4 border-b border-border-subtle flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
           <div className="flex bg-surface rounded-lg p-1 border border-border-subtle">
-            {['Pending', 'Settled', 'All'].map(s => (
+            {['Pending', 'Settled'].map(s => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
