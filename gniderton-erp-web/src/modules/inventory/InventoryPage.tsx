@@ -724,12 +724,19 @@ export default function InventoryPage() {
       return
     }
 
+    const total_net = validLines.reduce((sum, l) => sum + (l.taxable || 0), 0)
+    const tax_amount = validLines.reduce((sum, l) => sum + (l.gst_amt || 0), 0)
+    const grand_total = validLines.reduce((sum, l) => sum + (l.net || 0), 0)
+
     const payload = {
       vendor_id: parseInt(grnVendorId),
       purchase_order_id: grnPOId ? parseInt(grnPOId) : null,
       invoice_number: vendorInvoiceNo,
       invoice_date: invoiceDate,
       received_date: receivedDate,
+      total_net,
+      tax_amount,
+      grand_total,
       lines: validLines.map(l => ({
         product_id: l._product_id,
         accepted_qty: l.qty,
