@@ -47,8 +47,6 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
     }
   }, [reportId])
 
-  if (!reportId) return null
-
   const isSettled = data?.summary?.settlement_status === 'Settled'
 
   // --- Handlers ---
@@ -137,6 +135,8 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
       onSuccess: onClose
     })
   }
+
+  if (!reportId) return null
 
   return (
     <>
