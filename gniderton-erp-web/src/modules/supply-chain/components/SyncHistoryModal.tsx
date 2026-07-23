@@ -265,7 +265,7 @@ export function SyncHistoryModal({ open, onClose, syncId }: { open: boolean, onC
                           <tr key={c.id} className="bg-white hover:bg-surface/30 transition-colors">
                             <td className="px-4 py-3 font-medium text-ink-900">{c.return_number}</td>
                             <td className="px-4 py-3 text-ink-700">{c.customer_name}</td>
-                            <td className="px-4 py-3 text-right font-medium">₹{Number(c.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="px-4 py-3 text-right font-medium">₹{Number(c.grand_total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         ))}
                         {data.credit_notes?.length === 0 && (

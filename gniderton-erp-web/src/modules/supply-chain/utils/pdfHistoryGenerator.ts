@@ -204,7 +204,7 @@ export const generateTripHistoryPDF = async (syncId: number | string, data: any)
       ...themeStyles,
       startY: currentY,
       head: [["Credit Note Number", "Customer Name", "Amount"]],
-      body: data.credit_notes.map((c: any) => [c.return_number, c.customer_name, `Rs. ${Number(c.total_amount).toFixed(2)}`])
+      body: data.credit_notes.map((c: any) => [c.return_number, c.customer_name, `Rs. ${Number(c.grand_total).toFixed(2)}`])
     });
     currentY = (doc as any).lastAutoTable.finalY + 20;
   }
