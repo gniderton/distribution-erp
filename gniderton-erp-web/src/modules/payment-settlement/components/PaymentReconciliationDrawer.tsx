@@ -16,7 +16,7 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
   const [localExpenses, setLocalExpenses] = useState<any[]>([])
   const [cashDenominations, setCashDenominations] = useState<{note: number, count: number}[]>([
     {note: 500, count: 0}, {note: 200, count: 0}, {note: 100, count: 0}, 
-    {note: 50, count: 0}, {note: 20, count: 0}, {note: 10, count: 0}
+    {note: 50, count: 0}, {note: 20, count: 0}, {note: 10, count: 0}, {note: 1, count: 0}
   ])
   const [chequeAmounts, setChequeAmounts] = useState<Record<string, string>>({})
 
@@ -25,9 +25,11 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
       setLocalPayments(data?.payments?.map((p:any) => ({ ...p, _bank_stmt_id: null })) || [])
       setLocalExpenses(data?.expenses || [])
       if (data?.denominations && data?.denominations?.length > 0) {
-        const denoms = data?.denominations?.map((d:any) => ({ note: Number(d.note_value), count: Number(d.note_count) }))
+        const denoms = data?.denominations
+          ?.map((d:any) => ({ note: Number(d.note_value), count: Number(d.note_count) }))
+          ?.filter((d:any) => !isNaN(d.note) && d.note > 0) || []
         // Fill in missing notes
-        const defaultNotes = [500, 200, 100, 50, 20, 10]
+        const defaultNotes = [500, 200, 100, 50, 20, 10, 1]
         defaultNotes.forEach(n => {
           if (!denoms.find((d:any) => d.note === n)) denoms.push({ note: n, count: 0 })
         })
@@ -67,7 +69,8 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
 
   // --- Validations ---
   const cashPayments = localPayments.filter(p => p.payment_mode === 'Cash' && p.verification_status !== 'Rejected')
-  const totalExpectedCash = cashPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+  const approvedExpenses = localExpenses.filter(e => e.status === 'Approved')
+  const totalExpectedCash = cashPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0) - approvedExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)
   const totalEnteredCash = cashDenominations.reduce((sum, d) => sum + (d.note * d.count), 0)
   const isCashTallyValid = cashPayments.length === 0 || Math.abs(totalExpectedCash - totalEnteredCash) < 0.1
 
@@ -335,12 +338,12 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                           </button>
                         ))}
                      </div>
-                     <div className="p-4">
+                     <div className="p-4 flex-1 overflow-y-auto">
                        {settlementSubTab === 'Cash' && (
                          <div className="grid grid-cols-2 gap-6">
                            <div>
                              <h4 className="text-sm font-bold text-ink-900 mb-4 flex items-center gap-2"><Wallet className="w-4 h-4"/> Cash System Entries</h4>
-                             <table className="w-full text-left text-xs divide-y divide-border-subtle border">
+                             <table className="w-full text-left text-xs divide-y divide-border-subtle">
                                <thead className="bg-surface">
                                  <tr>
                                    <th className="px-4 py-2">Customer</th>
@@ -424,7 +427,7 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                                All Matches: {isChequeValid ? 'Yes' : 'No'}
                              </span>
                            </h4>
-                           <table className="w-full text-left text-xs divide-y divide-border-subtle border">
+                           <table className="w-full text-left text-xs divide-y divide-border-subtle">
                              <thead className="bg-surface">
                                <tr>
                                  <th className="px-4 py-2">Customer</th>
@@ -478,7 +481,7 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                                All Mapped & Within Limit: {isOnlineValid ? 'Yes' : 'No'}
                              </span>
                            </h4>
-                           <table className="w-full text-left text-xs divide-y divide-border-subtle border">
+                           <table className="w-full text-left text-xs divide-y divide-border-subtle">
                              <thead className="bg-surface">
                                <tr>
                                  <th className="px-4 py-2">Customer</th>
