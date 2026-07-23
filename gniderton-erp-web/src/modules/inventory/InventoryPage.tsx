@@ -269,7 +269,7 @@ export default function InventoryPage() {
       try {
         const text = event.target?.result as string
         const linesStr = text.split('\n')
-        const header = linesStr[0].split(',').map(h => h.replace(/^"|"$/g, '').trim())
+        const header = linesStr[0].split(',').map(h => h.replace(/^"|"₹/g, '').trim())
 
         const idIdx = header.findIndex(h => h.toLowerCase().includes('id') || h.toLowerCase() === 'product_id')
         const codeIdx = header.findIndex(h => h.toLowerCase().includes('ean') || h.toLowerCase().includes('code'))
@@ -285,7 +285,7 @@ export default function InventoryPage() {
 
         const linesMap = new Map<string, any>()
         for (let i = 1; i < linesStr.length; i++) {
-          const row = linesStr[i].split(',').map(cell => cell.replace(/^"|"$/g, '').trim())
+          const row = linesStr[i].split(',').map(cell => cell.replace(/^"|"₹/g, '').trim())
           if (row.length <= 1) continue
           const key = idIdx !== -1 ? row[idIdx] : row[codeIdx]
           const qty = parseInt(row[qtyIdx] || '0')
@@ -341,7 +341,7 @@ export default function InventoryPage() {
       try {
         const text = event.target?.result as string
         const linesStr = text.split('\n')
-        const header = linesStr[0].split(',').map(h => h.replace(/^"|"$/g, '').trim())
+        const header = linesStr[0].split(',').map(h => h.replace(/^"|"₹/g, '').trim())
 
         const idIdx = header.findIndex(h => h.toLowerCase().includes('id') || h.toLowerCase() === 'product_id')
         const codeIdx = header.findIndex(h => h.toLowerCase().includes('ean') || h.toLowerCase().includes('code'))
@@ -359,7 +359,7 @@ export default function InventoryPage() {
 
         const linesMap = new Map<string, any>()
         for (let i = 1; i < linesStr.length; i++) {
-          const row = linesStr[i].split(',').map(cell => cell.replace(/^"|"$/g, '').trim())
+          const row = linesStr[i].split(',').map(cell => cell.replace(/^"|"₹/g, '').trim())
           if (row.length <= 1) continue
           const key = idIdx !== -1 ? row[idIdx] : row[codeIdx]
           const qty = parseInt(row[qtyIdx] || '0')
@@ -834,7 +834,7 @@ export default function InventoryPage() {
       const toWords = (num: number) => {
         const a = ['','One ','Two ','Three ','Four ', 'Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen ']
         const b = ['', '', 'Twenty','Thirty','Forty','Fifty', 'Sixty','Seventy','Eighty','Ninety']
-        const n = ("000000000" + Math.floor(num)).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/)
+        const n = ("000000000" + Math.floor(num)).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})₹/)
         if (!n) return ''
         let str = ''
         str += (Number(n[1]) !== 0) ? (a[Number(n[1])] || b[Number(n[1][0])] + ' ' + a[Number(n[1][1])]) + 'Crore ' : ''
@@ -931,7 +931,7 @@ export default function InventoryPage() {
       autoTable(doc, {
         startY: margin + 40 + 60 + 8,
         margin: { left: margin, right: margin, top: margin + 120 },
-        head: [["S.N", "EAN", "CODE", "ITEM NAME", "MRP", "QTY", "PRICE", "GROSS", "SCH", "D%", "D.AMT", "TXBL", "GST%", "GST$", "NET$"]],
+        head: [["S.N", "EAN", "CODE", "ITEM NAME", "MRP", "QTY", "PRICE", "GROSS", "SCH", "D%", "D.AMT", "TXBL", "GST%", "GST₹", "NET₹"]],
         body,
         didDrawPage: (data) => {
           drawMainHeader(data.pageNumber, doc.getNumberOfPages())
@@ -993,7 +993,7 @@ export default function InventoryPage() {
       const toWords = (num: number) => {
         const a = ['','One ','Two ','Three ','Four ', 'Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen ']
         const b = ['', '', 'Twenty','Thirty','Forty','Fifty', 'Sixty','Seventy','Eighty','Ninety']
-        const n = ("000000000" + Math.floor(num)).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/)
+        const n = ("000000000" + Math.floor(num)).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})₹/)
         if (!n) return ''
         let str = ''
         str += (Number(n[1]) !== 0) ? (a[Number(n[1])] || b[Number(n[1][0])] + ' ' + a[Number(n[1][1])]) + 'Crore ' : ''
@@ -1095,7 +1095,7 @@ export default function InventoryPage() {
       autoTable(doc, {
         startY: margin + 40 + 70 + 10,
         margin: { left: margin, right: margin, top: margin + 140 },
-        head: [["S.N", "ITEM NAME", "BATCH", "EXPIRY", "MRP", "QTY", "PRICE", "GROSS", "SCH", "D%", "D.AMT", "TXBL", "GST%", "GST$", "NET$"]],
+        head: [["S.N", "ITEM NAME", "BATCH", "EXPIRY", "MRP", "QTY", "PRICE", "GROSS", "SCH", "D%", "D.AMT", "TXBL", "GST%", "GST₹", "NET₹"]],
         body,
         didDrawPage: (data: any) => {
           const totalPages = (doc.internal as any).getNumberOfPages()
@@ -1238,8 +1238,8 @@ export default function InventoryPage() {
                 <th className="px-6 py-3.5">PO Date</th>
                 <th className="px-6 py-3.5">Vendor</th>
                 <th className="px-6 py-3.5">Quantity</th>
-                <th className="px-6 py-3.5">Net ($)</th>
-                <th className="px-6 py-3.5">Grand Total ($)</th>
+                <th className="px-6 py-3.5">Net (₹)</th>
+                <th className="px-6 py-3.5">Grand Total (₹)</th>
                 <th className="px-6 py-3.5">Status</th>
                 <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
@@ -1310,9 +1310,9 @@ export default function InventoryPage() {
                 <th className="px-6 py-3.5">Received Date</th>
                 <th className="px-6 py-3.5">PO Ref</th>
                 <th className="px-6 py-3.5">Vendor</th>
-                <th className="px-6 py-3.5">Grand Total ($)</th>
-                <th className="px-6 py-3.5">Paid Amount ($)</th>
-                <th className="px-6 py-3.5">Balance ($)</th>
+                <th className="px-6 py-3.5">Grand Total (₹)</th>
+                <th className="px-6 py-3.5">Paid Amount (₹)</th>
+                <th className="px-6 py-3.5">Balance (₹)</th>
                 <th className="px-6 py-3.5">Status</th>
                 <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
@@ -1695,20 +1695,20 @@ export default function InventoryPage() {
                   <table className="w-full text-left text-xs divide-y divide-border-subtle min-w-max">
                     <thead className="bg-surface text-ink-600 font-semibold uppercase text-[9px] tracking-wider">
                       <tr>
-                        <th className="px-4 py-2 min-w-[200px]">Item Name</th>
-                        <th className="px-4 py-2 min-w-[80px]">MRP</th>
-                        <th className="px-4 py-2 min-w-[100px]">Rate</th>
-                        <th className="px-4 py-2 min-w-[100px]">Inward Qty</th>
-                        <th className="px-4 py-2 min-w-[100px]">Gross $</th>
-                        <th className="px-4 py-2 min-w-[100px]">Scheme</th>
-                        <th className="px-4 py-2 min-w-[80px]">Disc %</th>
-                        <th className="px-4 py-2 min-w-[100px]">Disc. $</th>
-                        <th className="px-4 py-2 min-w-[120px]">Taxable $</th>
-                        <th className="px-4 py-2 min-w-[80px]">Tax %</th>
-                        <th className="px-4 py-2 min-w-[100px]">Tax $</th>
-                        <th className="px-4 py-2 min-w-[150px]">Batch No</th>
-                        <th className="px-4 py-2 min-w-[150px]">Expiry</th>
-                        <th className="px-4 py-2 min-w-[120px] text-right">Net $</th>
+                        <th className="px-4 py-2 min-w-[180px]">Item Name</th>
+                        <th className="px-4 py-2 min-w-[70px]">MRP</th>
+                        <th className="px-4 py-2 min-w-[80px]">Rate</th>
+                        <th className="px-4 py-2 min-w-[80px]">Inward Qty</th>
+                        <th className="px-4 py-2 min-w-[80px]">Gross ₹</th>
+                        <th className="px-4 py-2 min-w-[80px]">Scheme</th>
+                        <th className="px-4 py-2 min-w-[60px]">Disc %</th>
+                        <th className="px-4 py-2 min-w-[80px]">Disc. ₹</th>
+                        <th className="px-4 py-2 min-w-[90px]">Taxable ₹</th>
+                        <th className="px-4 py-2 min-w-[60px]">Tax %</th>
+                        <th className="px-4 py-2 min-w-[80px]">Tax ₹</th>
+                        <th className="px-4 py-2 min-w-[100px]">Batch No</th>
+                        <th className="px-4 py-2 min-w-[120px]">Expiry</th>
+                        <th className="px-4 py-2 min-w-[90px] text-right">Net ₹</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-subtle text-ink-800">
@@ -1797,12 +1797,12 @@ export default function InventoryPage() {
                         <tr>
                           <th className="px-4 py-2">Particulars</th>
                           <th className="px-4 py-2">Pcs</th>
-                          <th className="px-4 py-2">Gross ($)</th>
-                          <th className="px-4 py-2">Scheme ($)</th>
-                          <th className="px-4 py-2">Disc ($)</th>
-                          <th className="px-4 py-2">Taxable ($)</th>
-                          <th className="px-4 py-2">Tax ($)</th>
-                          <th className="px-4 py-2 text-right">Net ($)</th>
+                          <th className="px-4 py-2">Gross (₹)</th>
+                          <th className="px-4 py-2">Scheme (₹)</th>
+                          <th className="px-4 py-2">Disc (₹)</th>
+                          <th className="px-4 py-2">Taxable (₹)</th>
+                          <th className="px-4 py-2">Tax (₹)</th>
+                          <th className="px-4 py-2 text-right">Net (₹)</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border-subtle text-ink-800">
