@@ -1231,7 +1231,7 @@ export default function InventoryPage() {
       {/* TAB 1: PO LISTING */}
       {activeTab === 'po' && (
         <div className="bg-white border border-border-subtle rounded-xl overflow-hidden shadow-sm">
-          <table className="w-full text-left text-xs divide-y divide-border-subtle">
+          <table className="text-left text-xs divide-y divide-border-subtle">
             <thead className="bg-surface text-ink-600 font-semibold uppercase text-[10px] tracking-wider">
               <tr>
                 <th className="px-6 py-3.5">PO Number</th>
@@ -1260,9 +1260,8 @@ export default function InventoryPage() {
                     <td className="px-6 py-3.5">{p.po_date?.split('T')[0]}</td>
                     <td className="px-6 py-3.5 font-medium">{p.vendor_name}</td>
                     <td className="px-6 py-3.5">{p.total_qty || 0}</td>
-                    <td className="px-6 py-3.5">${Number(p.total_net || 0).toFixed(2)}</td>
-                    <td className="px-6 py-3.5 font-bold">
-                      ${Number(parseFloat(p.total_net || 0) > 0 ? p.total_net : p.grand_total || 0).toFixed(2)}
+                    <td className="px-6 py-3.5">₹{Number(p.total_net || 0).toFixed(2)}</td>
+                    <td className="px-6 py-3.5 font-bold">₹{Number(parseFloat(p.total_net || 0) > 0 ? p.total_net : p.grand_total || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-3.5">
                       <span className={`px-2 py-1 rounded-full text-[9px] font-semibold uppercase ${
@@ -1303,7 +1302,7 @@ export default function InventoryPage() {
       {/* TAB 2: GRN LISTING */}
       {activeTab === 'grn' && (
         <div className="bg-white border border-border-subtle rounded-xl overflow-hidden shadow-sm">
-          <table className="w-full text-left text-xs divide-y divide-border-subtle">
+          <table className="text-left text-xs divide-y divide-border-subtle">
             <thead className="bg-surface text-ink-600 font-semibold uppercase text-[10px] tracking-wider">
               <tr>
                 <th className="px-6 py-3.5">Invoice #</th>
@@ -1333,9 +1332,9 @@ export default function InventoryPage() {
                     <td className="px-6 py-3.5">{g.received_date?.split('T')[0]}</td>
                     <td className="px-6 py-3.5 font-mono text-ink-500">{g.po_number || '-'}</td>
                     <td className="px-6 py-3.5 font-medium">{g.vendor_name}</td>
-                    <td className="px-6 py-3.5 font-bold">${Number(g.grand_total || 0).toFixed(2)}</td>
-                    <td className="px-6 py-3.5 text-emerald-600">${Number(g.paid_amount || 0).toFixed(2)}</td>
-                    <td className="px-6 py-3.5 text-rose-600 font-bold">${Number(g.balance || 0).toFixed(2)}</td>
+                    <td className="px-6 py-3.5 font-bold">₹{Number(g.grand_total || 0).toFixed(2)}</td>
+                    <td className="px-6 py-3.5 text-emerald-600">₹{Number(g.paid_amount || 0).toFixed(2)}</td>
+                    <td className="px-6 py-3.5 text-rose-600 font-bold">₹{Number(g.balance || 0).toFixed(2)}</td>
                     <td className="px-6 py-3.5">
                       <span className={`px-2 py-1 rounded-full text-[9px] font-semibold uppercase ${
                         g.status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 
@@ -1468,7 +1467,7 @@ export default function InventoryPage() {
                 <div className="text-center py-20 text-ink-500">Please choose a Vendor above to edit Purchase Order lines.</div>
               ) : (
                 <div className="border border-border-subtle rounded-xl overflow-hidden bg-white shadow-sm">
-                  <table className="w-full text-left text-xs divide-y divide-border-subtle">
+                  <table className="text-left text-xs divide-y divide-border-subtle">
                     <thead className="bg-surface text-ink-600 font-semibold uppercase text-[9px] tracking-wider">
                       <tr>
                         <th className="px-4 py-2">Item Name</th>
@@ -1490,7 +1489,7 @@ export default function InventoryPage() {
                             <span className="text-[10px] text-ink-500 font-mono">{line.ean_code}</span>
                           </td>
                           <td className="px-4 py-2 font-semibold text-ink-600">{line.current_stock}</td>
-                          <td className="px-4 py-2 font-medium">${line.mrp.toFixed(2)}</td>
+                          <td className="px-4 py-2 font-medium">₹{line.mrp.toFixed(2)}</td>
                           <td className="px-4 py-2">
                             <input 
                               type="number"
@@ -1533,7 +1532,7 @@ export default function InventoryPage() {
                             />
                           </td>
                           <td className="px-4 py-2 font-mono text-ink-500">{line.gst_pct}%</td>
-                          <td className="px-4 py-2 text-right font-extrabold text-ink-900">${line.net.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right font-extrabold text-ink-900">₹{line.net.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1547,19 +1546,19 @@ export default function InventoryPage() {
               <div className="flex gap-6">
                 <div>
                   <span className="text-[9px] text-ink-600 block uppercase font-semibold">Total Gross</span>
-                  <span className="text-sm font-bold text-ink-955">${poTotals.gross.toFixed(2)}</span>
+                  <span className="text-sm font-bold text-ink-955">₹{poTotals.gross.toFixed(2)}</span>
                 </div>
                 <div>
                   <span className="text-[9px] text-ink-600 block uppercase font-semibold">Total Taxable</span>
-                  <span className="text-sm font-bold text-ink-955">${poTotals.taxable.toFixed(2)}</span>
+                  <span className="text-sm font-bold text-ink-955">₹{poTotals.taxable.toFixed(2)}</span>
                 </div>
                 <div>
                   <span className="text-[9px] text-ink-600 block uppercase font-semibold">Total GST</span>
-                  <span className="text-sm font-bold text-ink-955">${poTotals.gst.toFixed(2)}</span>
+                  <span className="text-sm font-bold text-ink-955">₹{poTotals.gst.toFixed(2)}</span>
                 </div>
                 <div>
                   <span className="text-[9px] text-ink-600 block uppercase font-semibold">Grand Net Total</span>
-                  <span className="text-base font-extrabold text-brand-600">${poTotals.net.toFixed(2)}</span>
+                  <span className="text-base font-extrabold text-brand-600">₹{poTotals.net.toFixed(2)}</span>
                 </div>
               </div>
               {poMode !== 'VIEW' && (
@@ -1692,23 +1691,23 @@ export default function InventoryPage() {
                 <div className="text-center py-20 text-ink-500">Please choose a Vendor or PO above to populate goods receipt lines.</div>
               ) : (
                 <div className="border border-border-subtle rounded-xl overflow-x-auto bg-white shadow-sm">
-                  <table className="w-full text-left text-xs divide-y divide-border-subtle min-w-max">
+                  <table className="text-left text-xs divide-y divide-border-subtle min-w-max">
                     <thead className="bg-surface text-ink-600 font-semibold uppercase text-[9px] tracking-wider">
                       <tr>
-                        <th className="px-4 py-2 min-w-[180px]">Item Name</th>
-                        <th className="px-4 py-2 min-w-[70px]">MRP</th>
-                        <th className="px-4 py-2 min-w-[80px]">Rate</th>
-                        <th className="px-4 py-2 min-w-[80px]">Inward Qty</th>
-                        <th className="px-4 py-2 min-w-[80px]">Gross ₹</th>
-                        <th className="px-4 py-2 min-w-[80px]">Scheme</th>
+                        <th className="px-4 py-2 min-w-[140px]">Item Name</th>
+                        <th className="px-4 py-2 min-w-[60px]">MRP</th>
+                        <th className="px-4 py-2 min-w-[60px]">Rate</th>
+                        <th className="px-4 py-2 min-w-[60px]">Inward Qty</th>
+                        <th className="px-4 py-2 min-w-[60px]">Gross ₹</th>
+                        <th className="px-4 py-2 min-w-[60px]">Scheme</th>
                         <th className="px-4 py-2 min-w-[60px]">Disc %</th>
-                        <th className="px-4 py-2 min-w-[80px]">Disc. ₹</th>
-                        <th className="px-4 py-2 min-w-[90px]">Taxable ₹</th>
+                        <th className="px-4 py-2 min-w-[60px]">Disc. ₹</th>
+                        <th className="px-4 py-2 min-w-[70px]">Taxable ₹</th>
                         <th className="px-4 py-2 min-w-[60px]">Tax %</th>
-                        <th className="px-4 py-2 min-w-[80px]">Tax ₹</th>
-                        <th className="px-4 py-2 min-w-[100px]">Batch No</th>
-                        <th className="px-4 py-2 min-w-[120px]">Expiry</th>
-                        <th className="px-4 py-2 min-w-[90px] text-right">Net ₹</th>
+                        <th className="px-4 py-2 min-w-[60px]">Tax ₹</th>
+                        <th className="px-4 py-2 min-w-[80px]">Batch No</th>
+                        <th className="px-4 py-2 min-w-[100px]">Expiry</th>
+                        <th className="px-4 py-2 min-w-[70px] text-right">Net ₹</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-subtle text-ink-800">
@@ -1718,7 +1717,7 @@ export default function InventoryPage() {
                             <span className="font-semibold block">{line.product_name}</span>
                             <span className="text-[10px] text-ink-500 font-mono">{line.ean_code}</span>
                           </td>
-                          <td className="px-4 py-2">${line.mrp.toFixed(2)}</td>
+                          <td className="px-4 py-2">₹{line.mrp.toFixed(2)}</td>
                           <td className="px-4 py-2">
                             <input 
                               type="number"
@@ -1738,7 +1737,7 @@ export default function InventoryPage() {
                               }`}
                             />
                           </td>
-                          <td className="px-4 py-2">${(line.gross || 0).toFixed(2)}</td>
+                          <td className="px-4 py-2">₹{(line.gross || 0).toFixed(2)}</td>
                           <td className="px-4 py-2">
                             <input 
                               type="number"
@@ -1757,10 +1756,10 @@ export default function InventoryPage() {
                               className="w-full bg-surface border border-border-subtle rounded px-2 py-1 text-xs"
                             />
                           </td>
-                          <td className="px-4 py-2">${(line.disc_amt || 0).toFixed(2)}</td>
-                          <td className="px-4 py-2">${(line.taxable || 0).toFixed(2)}</td>
+                          <td className="px-4 py-2">₹{(line.disc_amt || 0).toFixed(2)}</td>
+                          <td className="px-4 py-2">₹{(line.taxable || 0).toFixed(2)}</td>
                           <td className="px-4 py-2">{line.gst_pct || 5}%</td>
-                          <td className="px-4 py-2 text-rose-500">${(line.gst_amt || 0).toFixed(2)}</td>
+                          <td className="px-4 py-2 text-rose-500">₹{(line.gst_amt || 0).toFixed(2)}</td>
                           <td className="px-4 py-2">
                             <input 
                               type="text"
@@ -1779,7 +1778,7 @@ export default function InventoryPage() {
                               className="w-full bg-surface border border-border-subtle rounded px-2 py-0.5 text-[10px]"
                             />
                           </td>
-                          <td className="px-4 py-2 text-right font-extrabold">${line.net.toFixed(2)}</td>
+                          <td className="px-4 py-2 text-right font-extrabold">₹{line.net.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1792,7 +1791,7 @@ export default function InventoryPage() {
                 <div className="space-y-2">
                   <h4 className="text-[10px] text-ink-600 font-extrabold uppercase tracking-wider">GST Tax Summary Breakup</h4>
                   <div className="border border-border-subtle rounded-xl overflow-hidden bg-surface/20 shadow-sm">
-                    <table className="w-full text-left text-xs divide-y divide-border-subtle">
+                    <table className="text-left text-xs divide-y divide-border-subtle">
                       <thead className="bg-surface text-ink-600 font-bold uppercase text-[9px]">
                         <tr>
                           <th className="px-4 py-2">Particulars</th>
@@ -1810,12 +1809,12 @@ export default function InventoryPage() {
                           <tr key={row.particulars} className="hover:bg-white/40">
                             <td className="px-4 py-2 font-semibold">{row.particulars}</td>
                             <td className="px-4 py-2">{row.pcs}</td>
-                            <td className="px-4 py-2">${row.gross.toFixed(2)}</td>
-                            <td className="px-4 py-2">${row.sch.toFixed(2)}</td>
-                            <td className="px-4 py-2">${row.disc.toFixed(2)}</td>
-                            <td className="px-4 py-2">${row.taxable.toFixed(2)}</td>
-                            <td className="px-4 py-2 text-rose-500 font-medium">${row.tax.toFixed(2)}</td>
-                            <td className="px-4 py-2 text-right font-bold">${row.net.toFixed(2)}</td>
+                            <td className="px-4 py-2">₹{row.gross.toFixed(2)}</td>
+                            <td className="px-4 py-2">₹{row.sch.toFixed(2)}</td>
+                            <td className="px-4 py-2">₹{row.disc.toFixed(2)}</td>
+                            <td className="px-4 py-2">₹{row.taxable.toFixed(2)}</td>
+                            <td className="px-4 py-2 text-rose-500 font-medium">₹{row.tax.toFixed(2)}</td>
+                            <td className="px-4 py-2 text-right font-bold">₹{row.net.toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1834,15 +1833,15 @@ export default function InventoryPage() {
                 </div>
                 <div>
                   <span className="text-[9px] text-ink-600 block uppercase font-semibold">Invoice Taxable</span>
-                  <span className="text-sm font-bold text-ink-955">${grnTotals.taxable.toFixed(2)}</span>
+                  <span className="text-sm font-bold text-ink-955">₹{grnTotals.taxable.toFixed(2)}</span>
                 </div>
                 <div>
                   <span className="text-[9px] text-ink-600 block uppercase font-semibold">Invoice GST</span>
-                  <span className="text-sm font-bold text-ink-955">${grnTotals.gst.toFixed(2)}</span>
+                  <span className="text-sm font-bold text-ink-955">₹{grnTotals.gst.toFixed(2)}</span>
                 </div>
                 <div>
                   <span className="text-[9px] text-ink-600 block uppercase font-semibold">Invoice Total Value</span>
-                  <span className="text-base font-extrabold text-brand-600">${grnTotals.net.toFixed(2)}</span>
+                  <span className="text-base font-extrabold text-brand-600">₹{grnTotals.net.toFixed(2)}</span>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -1921,7 +1920,7 @@ export default function InventoryPage() {
             {/* Items Listing */}
             <div className="flex-1 overflow-auto p-6 space-y-6">
               <div className="border border-border-subtle rounded-xl overflow-hidden bg-white shadow-sm">
-                <table className="w-full text-left text-xs divide-y divide-border-subtle">
+                <table className="text-left text-xs divide-y divide-border-subtle">
                   <thead className="bg-surface text-ink-600 font-semibold uppercase text-[9px] tracking-wider">
                     <tr>
                       <th className="px-4 py-2">Item Name</th>
@@ -1939,10 +1938,10 @@ export default function InventoryPage() {
                         <td className="px-4 py-2 font-semibold">{l.product_name}</td>
                         <td className="px-4 py-2 font-mono text-[10px] text-ink-500">{l.ean_code}</td>
                         <td className="px-4 py-2 font-bold">{l.qty}</td>
-                        <td className="px-4 py-2">${Number(l.price).toFixed(2)}</td>
+                        <td className="px-4 py-2">₹{Number(l.price).toFixed(2)}</td>
                         <td className="px-4 py-2 font-mono">{l.batch_no}</td>
                         <td className="px-4 py-2">{l.expiry}</td>
-                        <td className="px-4 py-2 text-right font-extrabold text-ink-900">${l.net.toFixed(2)}</td>
+                        <td className="px-4 py-2 text-right font-extrabold text-ink-900">₹{l.net.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1955,15 +1954,15 @@ export default function InventoryPage() {
                   <h4 className="text-[10px] text-ink-600 font-extrabold uppercase">Payment Reconciliation Status</h4>
                   <div className="flex justify-between items-center text-xs">
                     <span>Total Bill Value:</span>
-                    <span className="font-bold">${Number(selectedGRN.grand_total).toFixed(2)}</span>
+                    <span className="font-bold">₹{Number(selectedGRN.grand_total).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
                     <span>Paid Amount:</span>
-                    <span className="font-semibold text-emerald-600">${Number(selectedGRN.paid_amount || 0).toFixed(2)}</span>
+                    <span className="font-semibold text-emerald-600">₹{Number(selectedGRN.paid_amount || 0).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs border-t border-border-subtle pt-2">
                     <span className="font-semibold">Remaining Balance:</span>
-                    <span className="font-extrabold text-rose-600">${Number(selectedGRN.balance || 0).toFixed(2)}</span>
+                    <span className="font-extrabold text-rose-600">₹{Number(selectedGRN.balance || 0).toFixed(2)}</span>
                   </div>
                 </div>
               </div>
