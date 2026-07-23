@@ -106,7 +106,10 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
   if (bankCredits) {
     Object.keys(bankStmtUsage).forEach(stmtId => {
       const credit = bankCredits.find((c:any) => String(c.id) === stmtId)
-      if (credit && bankStmtUsage[stmtId] > Number(credit.balance_amount)) isOnlineValid = false
+      if (credit) {
+        const balance = Number(credit.credit_amount) - Number(credit.consumed_amount)
+        if (bankStmtUsage[stmtId] > balance) isOnlineValid = false
+      }
     })
   }
 
@@ -501,9 +504,11 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                                        {bankCredits?.map((c:any) => {
                                          const mappedTotal = bankStmtUsage[c.id] || 0
                                          const isCurrent = p._bank_stmt_id === String(c.id)
+                                         const balance = Number(c.credit_amount) - Number(c.consumed_amount)
+                                         const isOverUsed = mappedTotal > balance
                                          return (
-                                           <option key={c.id} value={c.id}>
-                                             Balance: ₹{c.balance_amount} ({c.id}) {mappedTotal > Number(c.balance_amount) ? '⚠ Exceeds limit' : ''}
+                                           <option key={c.id} value={c.id} disabled={isOverUsed && !isCurrent}>
+                                             [ID: {c.id}] Amt: ₹{c.credit_amount} | Bal: ₹{balance.toFixed(2)} | Ref: {c.bank_ref_id || c.particulars}
                                            </option>
                                          )
                                        })}
