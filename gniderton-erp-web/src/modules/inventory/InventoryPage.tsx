@@ -1691,24 +1691,24 @@ export default function InventoryPage() {
               {grnVendorId === '' ? (
                 <div className="text-center py-20 text-ink-500">Please choose a Vendor or PO above to populate goods receipt lines.</div>
               ) : (
-                <div className="border border-border-subtle rounded-xl overflow-hidden bg-white shadow-sm">
-                  <table className="w-full text-left text-xs divide-y divide-border-subtle">
+                <div className="border border-border-subtle rounded-xl overflow-x-auto bg-white shadow-sm">
+                  <table className="w-full text-left text-xs divide-y divide-border-subtle min-w-max">
                     <thead className="bg-surface text-ink-600 font-semibold uppercase text-[9px] tracking-wider">
                       <tr>
-                        <th className="px-4 py-2">Item Name</th>
-                        <th className="px-4 py-2 w-20">MRP</th>
-                        <th className="px-4 py-2 w-20">Rate</th>
-                        <th className="px-4 py-2 w-20">Inward Qty</th>
-                        <th className="px-4 py-2 w-20">Gross $</th>
-                        <th className="px-4 py-2 w-16">Scheme</th>
-                        <th className="px-4 py-2 w-16">Disc %</th>
-                        <th className="px-4 py-2 w-20">Disc. $</th>
-                        <th className="px-4 py-2 w-20">Taxable $</th>
-                        <th className="px-4 py-2 w-16">Tax %</th>
-                        <th className="px-4 py-2 w-20">Tax $</th>
-                        <th className="px-4 py-2 w-28">Batch No</th>
-                        <th className="px-4 py-2 w-32">Expiry</th>
-                        <th className="px-4 py-2 w-24 text-right">Net</th>
+                        <th className="px-4 py-2 min-w-[200px]">Item Name</th>
+                        <th className="px-4 py-2 min-w-[80px]">MRP</th>
+                        <th className="px-4 py-2 min-w-[100px]">Rate</th>
+                        <th className="px-4 py-2 min-w-[100px]">Inward Qty</th>
+                        <th className="px-4 py-2 min-w-[100px]">Gross $</th>
+                        <th className="px-4 py-2 min-w-[100px]">Scheme</th>
+                        <th className="px-4 py-2 min-w-[80px]">Disc %</th>
+                        <th className="px-4 py-2 min-w-[100px]">Disc. $</th>
+                        <th className="px-4 py-2 min-w-[120px]">Taxable $</th>
+                        <th className="px-4 py-2 min-w-[80px]">Tax %</th>
+                        <th className="px-4 py-2 min-w-[100px]">Tax $</th>
+                        <th className="px-4 py-2 min-w-[150px]">Batch No</th>
+                        <th className="px-4 py-2 min-w-[150px]">Expiry</th>
+                        <th className="px-4 py-2 min-w-[120px] text-right">Net $</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-subtle text-ink-800">
