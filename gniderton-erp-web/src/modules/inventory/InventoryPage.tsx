@@ -1231,7 +1231,7 @@ export default function InventoryPage() {
       {/* TAB 1: PO LISTING */}
       {activeTab === 'po' && (
         <div className="bg-white border border-border-subtle rounded-xl overflow-hidden shadow-sm">
-          <table className="text-left text-xs divide-y divide-border-subtle">
+          <table className="w-full text-left text-xs divide-y divide-border-subtle">
             <thead className="bg-surface text-ink-600 font-semibold uppercase text-[10px] tracking-wider">
               <tr>
                 <th className="px-6 py-3.5">PO Number</th>
@@ -1302,7 +1302,7 @@ export default function InventoryPage() {
       {/* TAB 2: GRN LISTING */}
       {activeTab === 'grn' && (
         <div className="bg-white border border-border-subtle rounded-xl overflow-hidden shadow-sm">
-          <table className="text-left text-xs divide-y divide-border-subtle">
+          <table className="w-full text-left text-xs divide-y divide-border-subtle">
             <thead className="bg-surface text-ink-600 font-semibold uppercase text-[10px] tracking-wider">
               <tr>
                 <th className="px-6 py-3.5">Invoice #</th>
@@ -1467,7 +1467,7 @@ export default function InventoryPage() {
                 <div className="text-center py-20 text-ink-500">Please choose a Vendor above to edit Purchase Order lines.</div>
               ) : (
                 <div className="border border-border-subtle rounded-xl overflow-hidden bg-white shadow-sm">
-                  <table className="text-left text-xs divide-y divide-border-subtle">
+                  <table className="w-full text-left text-xs divide-y divide-border-subtle">
                     <thead className="bg-surface text-ink-600 font-semibold uppercase text-[9px] tracking-wider">
                       <tr>
                         <th className="px-4 py-2">Item Name</th>
@@ -1791,7 +1791,7 @@ export default function InventoryPage() {
                 <div className="space-y-2">
                   <h4 className="text-[10px] text-ink-600 font-extrabold uppercase tracking-wider">GST Tax Summary Breakup</h4>
                   <div className="border border-border-subtle rounded-xl overflow-hidden bg-surface/20 shadow-sm">
-                    <table className="text-left text-xs divide-y divide-border-subtle">
+                    <table className="w-full text-left text-xs divide-y divide-border-subtle">
                       <thead className="bg-surface text-ink-600 font-bold uppercase text-[9px]">
                         <tr>
                           <th className="px-4 py-2">Particulars</th>
@@ -1920,7 +1920,7 @@ export default function InventoryPage() {
             {/* Items Listing */}
             <div className="flex-1 overflow-auto p-6 space-y-6">
               <div className="border border-border-subtle rounded-xl overflow-hidden bg-white shadow-sm">
-                <table className="text-left text-xs divide-y divide-border-subtle">
+                <table className="w-full text-left text-xs divide-y divide-border-subtle">
                   <thead className="bg-surface text-ink-600 font-semibold uppercase text-[9px] tracking-wider">
                     <tr>
                       <th className="px-4 py-2">Item Name</th>
