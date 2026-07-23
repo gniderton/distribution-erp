@@ -136,11 +136,13 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
       payments: localPayments.map(p => ({
         ...p,
         bank_stmt_id: p._bank_stmt_id || p.bank_stmt_id,
-        type: 'payment'
+        type: 'payment',
+        action: p.verification_status === 'Rejected' ? 'Rejected' : 'Verified'
       })),
       expenses: localExpenses.map(e => ({
         ...e,
-        type: 'expense'
+        type: 'expense',
+        action: e.status === 'Rejected' ? 'Rejected' : 'Verified'
       })),
       denominations: cashDenominations.reduce((acc, d) => {
         if (d.note === 500) acc.note_500 = d.count
