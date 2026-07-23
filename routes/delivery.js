@@ -837,12 +837,44 @@ router.get('/sync/:id/details', async (req, res) => {
             SELECT * FROM dse_expenses WHERE sync_id = $1
         `, [syncId]);
 
+        // Helpers for Product Aggregation
+        const getSummary = async (list) => {
+            if (!list || list.length === 0) return [];
+            const ids = list.map(i => i.invoice_id);
+            const res = await pool.query(`
+                SELECT p.product_name, sil.mrp, SUM(sil.shipped_qty) as total_qty, SUM(sil.amount) as total_amount
+                FROM sales_invoice_lines sil
+                JOIN products p ON sil.product_id = p.id
+                WHERE sil.invoice_id = ANY($1)
+                GROUP BY p.product_name, sil.mrp
+                ORDER BY p.product_name
+            `, [ids]);
+            return res.rows;
+        };
+
+        const getReturnSummary = (list) => {
+            const groups = {};
+            list.forEach(r => {
+                const key = r.product_name;
+                if (!groups[key]) groups[key] = { product_name: r.product_name, total_qty: 0 };
+                groups[key].total_qty += Number(r.qty);
+            });
+            return Object.values(groups);
+        };
+
+        const allInvoices = manifest.rows;
+        const rejected = allInvoices.filter(r => r.delivery_status === 'Returned' || r.verification_status === 'Rejected');
+        const undelivered = allInvoices.filter(r => r.delivery_status !== 'Delivered' && r.delivery_status !== 'Returned');
+
         res.json({
             header: header.rows[0],
-            manifest: manifest.rows, // Back to the original flat list for approval
+            manifest: allInvoices, // Back to the original flat list for approval
             returns: returns.rows,
             payments: payments.rows,
-            expenses: expenses.rows
+            expenses: expenses.rows,
+            rejected_summary: await getSummary(rejected),
+            undelivered_summary: await getSummary(undelivered),
+            returns_summary: getReturnSummary(returns.rows)
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
