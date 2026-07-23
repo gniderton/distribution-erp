@@ -16,6 +16,13 @@ export function useReconciliationDetails(reportId: string | number | null) {
   })
 }
 
+export function useUnconsumedCredits() {
+  return useQuery({
+    queryKey: ['payment-settlement', 'unconsumed-credits'],
+    queryFn: payment_settlementApi.getFinanceReconciliationBankUnconsumedCredits
+  })
+}
+
 export function useBulkUpdateReconciliation() {
   const qc = useQueryClient()
   return useMutation({
