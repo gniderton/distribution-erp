@@ -444,7 +444,7 @@ router.post('/bulk-update', async (req, res) => {
                     RETURNING *
                 `, [itemAction, itemReason, user_id, item.id]);
 
-                if (resExp.rows.length > 0 && itemAction === 'Verified') {
+                if (resExp.rows.length > 0 && (itemAction === 'Verified' || itemAction === 'Approved')) {
                     const exp = resExp.rows[0];
 
                     // Map Expense Type to GL Code
