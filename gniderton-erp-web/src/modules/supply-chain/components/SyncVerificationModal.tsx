@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { FileText, PackageX, IndianRupee, FileDown, Box, AlertCircle } from 'lucide-react'
+import { FileText, PackageX, IndianRupee, FileDown, Box, AlertCircle, Download } from 'lucide-react'
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { useSyncDetails, useVerifySettle } from '../hooks'
+import { generateVehicleInventoryPDF } from '../utils/pdfHistoryGenerator'
 
 export function SyncVerificationModal({ open, onClose, syncId }: { open: boolean, onClose: () => void, syncId: number | null }) {
   const { data, isLoading } = useSyncDetails(syncId)
@@ -255,6 +256,13 @@ export function SyncVerificationModal({ open, onClose, syncId }: { open: boolean
             )}
             {activeTab === 'inventory' && (
               <div className="space-y-6">
+                <div className="flex justify-end mb-2">
+                  <Button size="sm" onClick={() => generateVehicleInventoryPDF(syncId!, data)}>
+                    <Download size={14} className="mr-1.5" />
+                    Download PDF
+                  </Button>
+                </div>
+                
                 <div className="glass-card rounded-xl border border-border-subtle overflow-hidden bg-white shadow-sm">
                   <div className="px-4 py-3 border-b border-border-subtle bg-surface/30 font-medium text-sm text-ink-900">
                     Products from Undelivered & Rejected Invoices

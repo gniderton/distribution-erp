@@ -223,3 +223,81 @@ export const generateTripHistoryPDF = async (syncId: number | string, data: any)
 
   doc.save(`Trip_History_Report_${syncId}.pdf`)
 }
+
+export const generateVehicleInventoryPDF = async (syncId: number | string, data: any) => {
+  const doc = new jsPDF('p', 'pt', 'a4')
+  const margin = 15
+  const pageWidth = doc.internal.pageSize.width
+  
+  const brand = await getCompanySettings()
+
+  let currentY = 0 
+
+  doc.setFillColor(242, 123, 34) 
+  doc.rect(0, currentY, pageWidth, 50, 'F')
+  
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(14)
+  doc.setTextColor(255, 255, 255) 
+  doc.text(`VEHICLE INVENTORY REPORT #${syncId}`, margin, currentY + 30)
+
+  currentY += 50
+  doc.setFillColor(242, 235, 226) 
+  doc.rect(0, currentY, pageWidth, 50, 'F')
+  
+  doc.setFontSize(9)
+  doc.setFont("helvetica", "bold")
+  doc.setTextColor(0, 0, 0)
+  doc.text(String(brand.regt_name), margin, currentY + 20)
+  
+  doc.setFont("helvetica", "normal")
+  doc.text(`Generated: ${format(new Date(), 'dd MMM yyyy HH:mm')}`, margin, currentY + 35)
+
+  currentY += 70
+
+  const themeStyles = {
+    theme: 'grid' as const,
+    styles: { fontSize: 8, cellPadding: 3, textColor: [0, 0, 0] as [number, number, number], lineColor: [0, 0, 0] as [number, number, number], lineWidth: 0.1 },
+    headStyles: { fillColor: [240, 240, 240] as [number, number, number], textColor: [0, 0, 0] as [number, number, number], fontStyle: 'bold' as const, lineWidth: 0.1, lineColor: [0, 0, 0] as [number, number, number] }
+  }
+
+  if (data.undelivered_summary?.length > 0 || data.rejected_summary?.length > 0) {
+    doc.setFontSize(11)
+    doc.setFont("helvetica", "bold")
+    doc.text("Products from Undelivered & Rejected Invoices", margin, currentY)
+    currentY += 10
+    
+    let body: any[] = []
+    if (data.undelivered_summary) {
+      body = [...body, ...data.undelivered_summary.map((p: any) => [p.product_name, `Rs. ${Number(p.mrp).toFixed(2)}`, p.total_qty, `Rs. ${Number(p.total_amount).toFixed(2)}`])]
+    }
+    if (data.rejected_summary) {
+      body = [...body, ...data.rejected_summary.map((p: any) => [p.product_name, `Rs. ${Number(p.mrp).toFixed(2)}`, p.total_qty, `Rs. ${Number(p.total_amount).toFixed(2)}`])]
+    }
+
+    autoTable(doc, {
+      ...themeStyles,
+      startY: currentY,
+      head: [["Product", "MRP", "Qty in Vehicle", "Total Value"]],
+      body: body
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 30;
+  }
+
+  if (data.returns_summary?.length > 0) {
+    doc.setFontSize(11)
+    doc.setFont("helvetica", "bold")
+    doc.text("Partial Returns / Expiry / Damage from Doorstep", margin, currentY)
+    currentY += 10
+    
+    autoTable(doc, {
+      ...themeStyles,
+      startY: currentY,
+      head: [["Product", "Returned Qty"]],
+      body: data.returns_summary.map((p: any) => [p.product_name, p.total_qty])
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 30;
+  }
+
+  doc.save(`Vehicle_Inventory_${syncId}.pdf`)
+}
