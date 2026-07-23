@@ -6,19 +6,21 @@ import PaymentReconciliationDrawer from './components/PaymentReconciliationDrawe
 import dayjs from 'dayjs'
 
 export default function PaymentSettlementPage() {
-  const { data: rawData, isLoading, isError } = useList()
   const [selectedReportId, setSelectedReportId] = useState<string | number | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('Pending')
+  const { data: rawData, isLoading, isError } = useList(statusFilter === 'All' ? undefined : statusFilter)
 
   const data = useMemo(() => {
     if (!rawData) return []
     return rawData.filter((r: any) => {
-      const matchStatus = statusFilter === 'All' || r.settlement_status === statusFilter
+      // Filter out syncs with NO payments AND NO expenses (as they are just orders)
+      const hasData = !(Number(r.total_payment_collection) === 0 && Number(r.pending_expense_count) === 0)
+      
       const matchSearch = r.dse_name?.toLowerCase().includes(search.toLowerCase()) || String(r.report_id).includes(search)
-      return matchStatus && matchSearch
+      return hasData && matchSearch
     })
-  }, [rawData, search, statusFilter])
+  }, [rawData, search])
 
   return (
     <div className="space-y-6">
