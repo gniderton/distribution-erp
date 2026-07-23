@@ -4,6 +4,7 @@ import { useList } from './hooks'
 import { Search, Loader2 } from 'lucide-react'
 import PaymentReconciliationDrawer from './components/PaymentReconciliationDrawer'
 import dayjs from 'dayjs'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 export default function PaymentSettlementPage() {
   const [selectedReportId, setSelectedReportId] = useState<string | number | null>(null)
@@ -133,10 +134,12 @@ export default function PaymentSettlementPage() {
         </div>
       </div>
 
-      <PaymentReconciliationDrawer 
-        reportId={selectedReportId} 
-        onClose={() => setSelectedReportId(null)} 
-      />
+      <ErrorBoundary>
+        <PaymentReconciliationDrawer 
+          reportId={selectedReportId} 
+          onClose={() => setSelectedReportId(null)} 
+        />
+      </ErrorBoundary>
     </div>
   )
 }
