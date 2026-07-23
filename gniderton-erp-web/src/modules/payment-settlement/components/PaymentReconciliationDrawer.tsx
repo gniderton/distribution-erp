@@ -22,10 +22,10 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
 
   useEffect(() => {
     if (data) {
-      setLocalPayments(data.payments.map((p:any) => ({ ...p, _bank_stmt_id: null })))
-      setLocalExpenses(data.expenses)
-      if (data.denominations && data.denominations.length > 0) {
-        const denoms = data.denominations.map((d:any) => ({ note: Number(d.note_value), count: Number(d.note_count) }))
+      setLocalPayments(data?.payments?.map((p:any) => ({ ...p, _bank_stmt_id: null })) || [])
+      setLocalExpenses(data?.expenses || [])
+      if (data?.denominations && data?.denominations?.length > 0) {
+        const denoms = data?.denominations?.map((d:any) => ({ note: Number(d.note_value), count: Number(d.note_count) }))
         // Fill in missing notes
         const defaultNotes = [500, 200, 100, 50, 20, 10]
         defaultNotes.forEach(n => {
