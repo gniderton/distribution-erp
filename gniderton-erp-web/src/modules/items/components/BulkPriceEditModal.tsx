@@ -56,7 +56,7 @@ export function BulkPriceEditModal({ open, onClose, products }: Props) {
 
     setLoading(true)
     try {
-      await itemsApi.bulkUpdate({ updates })
+      await itemsApi.bulkUpdate({ items: updates })
       toast.success(`Successfully updated ${updates.length} products`)
       qc.invalidateQueries({ queryKey: ['products'] })
       onClose()
@@ -177,16 +177,16 @@ export function BulkPriceEditModal({ open, onClose, products }: Props) {
       </div>
       
       <div className="max-h-[60vh] overflow-auto border border-border-subtle rounded-lg">
-        <table className="w-full text-left text-sm text-ink-700">
-          <thead className="sticky top-0 bg-ink-50 font-medium text-ink-900 border-b border-border-subtle shadow-sm z-10">
+        <table className="w-full text-left text-sm text-ink-700 min-w-max">
+          <thead className="sticky top-0 z-20 shadow-sm">
             <tr>
-              <th className="px-4 py-3 min-w-[200px]">Product Name</th>
-              <th className="px-4 py-3 w-28">MRP</th>
-              <th className="px-4 py-3 w-28">Purchase</th>
-              <th className="px-4 py-3 w-32">Distributor</th>
-              <th className="px-4 py-3 w-32">Wholesale</th>
-              <th className="px-4 py-3 w-32">Dealer</th>
-              <th className="px-4 py-3 w-32">Retail</th>
+              <th className="bg-ink-50 px-4 py-3 min-w-[250px] font-medium text-ink-900 border-b border-border-subtle">Product Name</th>
+              <th className="bg-ink-50 px-4 py-3 min-w-[100px] font-medium text-ink-900 border-b border-border-subtle">MRP</th>
+              <th className="bg-ink-50 px-4 py-3 min-w-[120px] font-medium text-ink-900 border-b border-border-subtle">Purchase</th>
+              <th className="bg-ink-50 px-4 py-3 min-w-[120px] font-medium text-ink-900 border-b border-border-subtle">Distributor</th>
+              <th className="bg-ink-50 px-4 py-3 min-w-[120px] font-medium text-ink-900 border-b border-border-subtle">Wholesale</th>
+              <th className="bg-ink-50 px-4 py-3 min-w-[120px] font-medium text-ink-900 border-b border-border-subtle">Dealer</th>
+              <th className="bg-ink-50 px-4 py-3 min-w-[120px] font-medium text-ink-900 border-b border-border-subtle">Retail</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subtle bg-white">
@@ -194,8 +194,8 @@ export function BulkPriceEditModal({ open, onClose, products }: Props) {
               const currentPurchase = Number(edits[p.id]?.purchase_rate ?? p.purchase_rate ?? 0)
               return (
               <tr key={p.id} className="hover:bg-ink-50/50 group">
-                <td className="px-4 py-2 truncate max-w-[200px]" title={p.product_name}>
-                  {p.product_name}
+                <td className="px-4 py-2" title={p.product_name}>
+                  <div className="font-medium truncate max-w-[250px]">{p.product_name}</div>
                   <div className="text-xs text-ink-400">{p.product_code || p.brand_name}</div>
                 </td>
                 <td className="px-4 py-2">
