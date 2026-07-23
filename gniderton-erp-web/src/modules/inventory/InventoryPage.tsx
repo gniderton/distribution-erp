@@ -1484,9 +1484,9 @@ export default function InventoryPage() {
                     <tbody className="divide-y divide-border-subtle text-ink-800">
                       {poLines.map((line, idx) => (
                         <tr key={line._product_id} className="hover:bg-surface/30 transition">
-                          <td className="px-4 py-2">
-                            <span className="font-semibold block">{line.product_name}</span>
-                            <span className="text-[10px] text-ink-500 font-mono">{line.ean_code}</span>
+                          <td className="px-4 py-2 sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                            <span className="font-semibold block truncate">{line.product_name}</span>
+                            <span className="text-[10px] text-ink-500 font-mono truncate">{line.ean_code}</span>
                           </td>
                           <td className="px-4 py-2 font-semibold text-ink-600">{line.current_stock}</td>
                           <td className="px-4 py-2 font-medium">₹{line.mrp.toFixed(2)}</td>
@@ -1691,31 +1691,31 @@ export default function InventoryPage() {
                 <div className="text-center py-20 text-ink-500">Please choose a Vendor or PO above to populate goods receipt lines.</div>
               ) : (
                 <div className="border border-border-subtle rounded-xl overflow-x-auto bg-white shadow-sm">
-                  <table className="text-left text-xs divide-y divide-border-subtle min-w-max">
+                  <table className="text-left text-xs divide-y divide-border-subtle table-fixed w-[1200px]">
                     <thead className="bg-surface text-ink-600 font-semibold uppercase text-[9px] tracking-wider">
                       <tr>
-                        <th className="px-4 py-2 min-w-[140px]">Item Name</th>
-                        <th className="px-4 py-2 min-w-[60px]">MRP</th>
-                        <th className="px-4 py-2 min-w-[60px]">Rate</th>
-                        <th className="px-4 py-2 min-w-[60px]">Inward Qty</th>
-                        <th className="px-4 py-2 min-w-[60px]">Gross ₹</th>
-                        <th className="px-4 py-2 min-w-[60px]">Scheme</th>
-                        <th className="px-4 py-2 min-w-[60px]">Disc %</th>
-                        <th className="px-4 py-2 min-w-[60px]">Disc. ₹</th>
-                        <th className="px-4 py-2 min-w-[70px]">Taxable ₹</th>
-                        <th className="px-4 py-2 min-w-[60px]">Tax %</th>
-                        <th className="px-4 py-2 min-w-[60px]">Tax ₹</th>
-                        <th className="px-4 py-2 min-w-[80px]">Batch No</th>
-                        <th className="px-4 py-2 min-w-[100px]">Expiry</th>
-                        <th className="px-4 py-2 min-w-[70px] text-right">Net ₹</th>
+                        <th className="px-4 py-2 w-[200px] sticky left-0 bg-surface z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Item Name</th>
+                        <th className="px-4 py-2 w-[70px]">MRP</th>
+                        <th className="px-4 py-2 w-[80px]">Rate</th>
+                        <th className="px-4 py-2 w-[80px]">Inward Qty</th>
+                        <th className="px-4 py-2 w-[80px]">Gross ₹</th>
+                        <th className="px-4 py-2 w-[70px]">Scheme</th>
+                        <th className="px-4 py-2 w-[70px]">Disc %</th>
+                        <th className="px-4 py-2 w-[70px]">Disc. ₹</th>
+                        <th className="px-4 py-2 w-[90px]">Taxable ₹</th>
+                        <th className="px-4 py-2 w-[60px]">Tax %</th>
+                        <th className="px-4 py-2 w-[70px]">Tax ₹</th>
+                        <th className="px-4 py-2 w-[110px]">Batch No</th>
+                        <th className="px-4 py-2 w-[110px]">Expiry</th>
+                        <th className="px-4 py-2 w-[90px] text-right">Net ₹</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-subtle text-ink-800">
                       {grnLines.map((line, idx) => (
                         <tr key={line._product_id} className="hover:bg-surface/30 transition">
-                          <td className="px-4 py-2">
-                            <span className="font-semibold block">{line.product_name}</span>
-                            <span className="text-[10px] text-ink-500 font-mono">{line.ean_code}</span>
+                          <td className="px-4 py-2 sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                            <span className="font-semibold block truncate">{line.product_name}</span>
+                            <span className="text-[10px] text-ink-500 font-mono truncate">{line.ean_code}</span>
                           </td>
                           <td className="px-4 py-2">₹{line.mrp.toFixed(2)}</td>
                           <td className="px-4 py-2">
