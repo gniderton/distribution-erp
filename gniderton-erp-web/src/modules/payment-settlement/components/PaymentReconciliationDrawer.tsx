@@ -126,9 +126,13 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
   const canSave = isCashTallyValid && isChequeValid && isOnlineValid && !isSettled
 
   const handleSave = () => {
+    const userString = localStorage.getItem('gniderton_user')
+    const user = userString ? JSON.parse(userString) : null
+
     const payload = {
       action: 'Verified', // Bulk status
       report_id: reportId,
+      user_id: user?.id || 1, // Fix Postgres undefined error for verified_by
       payments: localPayments.map(p => ({
         ...p,
         bank_stmt_id: p._bank_stmt_id || p.bank_stmt_id,
@@ -138,10 +142,16 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
         ...e,
         type: 'expense'
       })),
-      denominations: cashDenominations.filter(d => d.count > 0).map(d => ({
-        note_value: d.note,
-        note_count: d.count
-      }))
+      denominations: cashDenominations.reduce((acc, d) => {
+        if (d.note === 500) acc.note_500 = d.count
+        if (d.note === 200) acc.note_200 = d.count
+        if (d.note === 100) acc.note_100 = d.count
+        if (d.note === 50) acc.note_50 = d.count
+        if (d.note === 20) acc.note_20 = d.count
+        if (d.note === 10) acc.note_10 = d.count
+        if (d.note === 1) acc.coins = d.count
+        return acc
+      }, {} as any)
     }
 
     bulkUpdate(payload, {
