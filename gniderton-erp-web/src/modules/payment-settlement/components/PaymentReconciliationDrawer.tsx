@@ -153,7 +153,7 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
               </div>
               {data && (
                 <p className="text-sm text-ink-600 mt-1">
-                  {data.summary.dse_name} • {dayjs(data.summary.report_date).format('MMMM D, YYYY')}
+                  {data?.summary?.dse_name} • {dayjs(data?.summary?.report_date).format('MMMM D, YYYY')}
                 </p>
               )}
             </div>
@@ -168,21 +168,21 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
               <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 flex justify-between items-end">
                 <div>
                   <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Cash</div>
-                  <div className="text-xl font-black text-emerald-900">₹{Number(data.summary.total_collection_cash || 0).toFixed(2)}</div>
+                  <div className="text-xl font-black text-emerald-900">₹{Number(data?.summary?.total_collection_cash || 0).toFixed(2)}</div>
                 </div>
                 <button onClick={() => { setActiveTab('Settlement'); setSettlementSubTab('Cash'); }} className="text-emerald-700 bg-emerald-100 hover:bg-emerald-200 text-xs px-3 py-1 rounded-md font-bold transition">Verify →</button>
               </div>
               <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex justify-between items-end">
                 <div>
                   <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">Total Cheque</div>
-                  <div className="text-xl font-black text-blue-900">₹{Number(data.summary.total_collection_cheque || 0).toFixed(2)}</div>
+                  <div className="text-xl font-black text-blue-900">₹{Number(data?.summary?.total_collection_cheque || 0).toFixed(2)}</div>
                 </div>
                 <button onClick={() => { setActiveTab('Settlement'); setSettlementSubTab('Cheque'); }} className="text-blue-700 bg-blue-100 hover:bg-blue-200 text-xs px-3 py-1 rounded-md font-bold transition">Verify →</button>
               </div>
               <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-4 flex justify-between items-end">
                 <div>
                   <div className="text-[10px] font-bold text-purple-600 uppercase tracking-wider mb-1">Total Online</div>
-                  <div className="text-xl font-black text-purple-900">₹{Number(data.summary.total_collection_online || 0).toFixed(2)}</div>
+                  <div className="text-xl font-black text-purple-900">₹{Number(data?.summary?.total_collection_online || 0).toFixed(2)}</div>
                 </div>
                 <button onClick={() => { setActiveTab('Settlement'); setSettlementSubTab('Online'); }} className="text-purple-700 bg-purple-100 hover:bg-purple-200 text-xs px-3 py-1 rounded-md font-bold transition">Verify →</button>
               </div>
@@ -272,11 +272,11 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                     
                     <div className="p-4 bg-amber-50/50 border-b border-amber-100 grid grid-cols-2 gap-4 text-sm">
                        <div>
-                         <span className="text-ink-500">Daily Total:</span> <strong className="text-ink-900">₹{data.expense_stats.daily_total}</strong> 
-                         <span className="text-ink-400 text-xs ml-1">(Limit: ₹{data.expense_stats.daily_limit})</span>
+                         <span className="text-ink-500">Daily Total:</span> <strong className="text-ink-900">₹{data?.expense_stats?.daily_total || 0}</strong> 
+                         <span className="text-ink-400 text-xs ml-1">(Limit: ₹{data?.expense_stats?.daily_limit || 250})</span>
                        </div>
                        <div>
-                         <span className="text-ink-500">Weekly Total:</span> <strong className="text-ink-900">₹{data.expense_stats.weekly_total}</strong>
+                         <span className="text-ink-500">Weekly Total:</span> <strong className="text-ink-900">₹{data?.expense_stats?.weekly_total || 0}</strong>
                        </div>
                     </div>
 
