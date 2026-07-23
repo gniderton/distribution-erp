@@ -7,7 +7,7 @@ import { generatePicklistPDF, generateManifestPDF, downloadCSV } from '../utils/
 import { generateInvoicePDF } from '@/modules/invoice/utils/pdfGenerator'
 import { supply_chainApi } from '../api'
 import { format } from 'date-fns'
-import { Activity, Truck, Users, FileText, IndianRupee, ChevronDown, ChevronRight, Download, FileDown, Trash2, LayoutList } from 'lucide-react'
+import { Activity, Truck, Users, FileText, IndianRupee, ChevronDown, ChevronRight, Download, FileDown, Trash2, LayoutList, Search } from 'lucide-react'
 
 function ManifestRowExpanded({ salesOrderId }: { salesOrderId: number }) {
   const { data, isLoading } = useInvoiceDetails(salesOrderId)
@@ -93,6 +93,8 @@ export function ActiveTripDetailsModal({
   const [isPrinting, setIsPrinting] = useState(false)
   const [expandedManifest, setExpandedManifest] = useState<number | null>(null)
   const [expandedPicklist, setExpandedPicklist] = useState<number | null>(null)
+  const [manifestSearch, setManifestSearch] = useState('')
+  const [picklistSearch, setPicklistSearch] = useState('')
 
   const tripInfo = manifestData?.trip_info || {}
   
@@ -101,6 +103,17 @@ export function ActiveTripDetailsModal({
   )
   const picklist = [...(picklistData?.items || [])].sort((a, b) => 
     (a.product_name || '').localeCompare(b.product_name || '')
+  )
+
+  const filteredInvoices = invoices.filter((inv: any) => 
+    (inv.customer_name || '').toLowerCase().includes(manifestSearch.toLowerCase()) ||
+    (inv.invoice_number || '').toLowerCase().includes(manifestSearch.toLowerCase()) ||
+    (inv.address || '').toLowerCase().includes(manifestSearch.toLowerCase())
+  )
+
+  const filteredPicklist = picklist.filter((item: any) => 
+    (item.product_name || '').toLowerCase().includes(picklistSearch.toLowerCase()) ||
+    (item.batches || '').toLowerCase().includes(picklistSearch.toLowerCase())
   )
 
   const handleDownloadPicklistPDF = async () => await generatePicklistPDF(tripInfo, picklist)
@@ -249,37 +262,62 @@ export function ActiveTripDetailsModal({
       <div className="mt-4 flex-1 flex flex-col min-h-0">
         {activeTab === 'manifest' && (
           <div className="flex-1 flex flex-col space-y-4">
-            <div className="flex items-end justify-between bg-surface p-4 rounded-lg border border-border-subtle">
-              <div className="flex items-center gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-ink-700">Invoice Copy Threshold (₹)</label>
-                  <input 
-                    type="number"
-                    value={printThreshold}
-                    onChange={(e) => setPrintThreshold(Number(e.target.value))}
-                    className="h-8 px-2 w-32 border border-border-subtle rounded text-sm bg-white"
-                  />
-                  <p className="text-[10px] text-ink-500">Invoices &gt; {printThreshold} print 2 copies</p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface p-4 rounded-xl border border-border-subtle shadow-sm">
+              <div className="flex gap-6 items-center">
+                <div>
+                  <p className="text-[10px] text-ink-500 uppercase font-bold tracking-wider">Total Invoices</p>
+                  <p className="text-lg font-semibold text-ink-900">{invoices.length}</p>
                 </div>
-                <Button 
-                  size="sm" 
-                  onClick={handleDownloadInvoices} 
-                  loading={isPrinting}
-                  disabled={manifestLoading || invoices.length === 0}
-                >
-                  <FileDown size={14} className="mr-1.5" />
-                  Download Invoices
-                </Button>
+                <div>
+                  <p className="text-[10px] text-ink-500 uppercase font-bold tracking-wider">Trip Value</p>
+                  <p className="text-lg font-semibold text-ink-900">₹{invoices.reduce((sum: number, i: any) => sum + Number(i.grand_total || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="secondary" size="sm" onClick={handleDownloadManifestCSV}>
-                  <Download size={14} className="mr-1.5" />
-                  Export CSV
-                </Button>
-                <Button size="sm" onClick={handleDownloadManifestPDF}>
-                  <FileText size={14} className="mr-1.5" />
-                  Print Manifest
-                </Button>
+
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400" />
+                  <input
+                    type="text"
+                    placeholder="Search invoices..."
+                    value={manifestSearch}
+                    onChange={e => setManifestSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 w-48 text-sm border border-border-subtle rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                
+                <div className="flex items-center gap-2 border-l border-border-subtle pl-3">
+                  <div className="flex items-center gap-2 bg-white border border-border-subtle rounded-md px-2 py-1 h-[34px]">
+                    <span className="text-xs font-medium text-ink-600 whitespace-nowrap">Print Copies {'>'} ₹</span>
+                    <input 
+                      type="number"
+                      value={printThreshold}
+                      onChange={(e) => setPrintThreshold(Number(e.target.value))}
+                      className="w-16 h-6 px-1 text-sm border-none bg-surface rounded focus:ring-0 text-center font-medium"
+                    />
+                  </div>
+                  <Button 
+                    size="sm" 
+                    onClick={handleDownloadInvoices} 
+                    loading={isPrinting}
+                    disabled={manifestLoading || invoices.length === 0}
+                    className="h-[34px]"
+                  >
+                    <FileDown size={14} className="mr-1.5" />
+                    Invoices
+                  </Button>
+                </div>
+
+                <div className="flex gap-2 border-l border-border-subtle pl-3">
+                  <Button variant="secondary" size="sm" onClick={handleDownloadManifestCSV} className="h-[34px]">
+                    <Download size={14} className="mr-1.5" />
+                    CSV
+                  </Button>
+                  <Button size="sm" onClick={handleDownloadManifestPDF} className="h-[34px]">
+                    <FileText size={14} className="mr-1.5" />
+                    PDF
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -297,9 +335,9 @@ export function ActiveTripDetailsModal({
                 <tbody className="divide-y divide-border-subtle">
                   {manifestLoading ? (
                     <tr><td colSpan={4} className="p-4 text-center">Loading...</td></tr>
-                  ) : invoices.length === 0 ? (
-                    <tr><td colSpan={4} className="p-4 text-center text-ink-500">No invoices on this trip.</td></tr>
-                  ) : invoices.map((inv: any) => (
+                  ) : filteredInvoices.length === 0 ? (
+                    <tr><td colSpan={4} className="p-4 text-center text-ink-500">No invoices match your search.</td></tr>
+                  ) : filteredInvoices.map((inv: any) => (
                     <React.Fragment key={inv.invoice_id}>
                       <tr 
                         className="hover:bg-surface cursor-pointer transition-colors"
@@ -328,26 +366,40 @@ export function ActiveTripDetailsModal({
 
         {activeTab === 'picklist' && (
           <div className="flex-1 flex flex-col space-y-4">
-             <div className="flex justify-between items-center bg-surface p-4 rounded-lg border border-border-subtle">
-                <div className="flex gap-4">
+             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface p-4 rounded-xl border border-border-subtle shadow-sm">
+                <div className="flex gap-6 items-center">
                   <div>
-                    <p className="text-xs text-ink-500 uppercase font-medium tracking-wider">Unique Items</p>
+                    <p className="text-[10px] text-ink-500 uppercase font-bold tracking-wider">Unique Items</p>
                     <p className="text-lg font-semibold text-ink-900">{picklist.length}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-ink-500 uppercase font-medium tracking-wider">Total Qty To Load</p>
+                    <p className="text-[10px] text-ink-500 uppercase font-bold tracking-wider">Total Qty To Load</p>
                     <p className="text-lg font-semibold text-ink-900">{picklist.reduce((sum: number, r: any) => sum + Number(r.total_qty || 0), 0)} Units</p>
                   </div>
                 </div>
-                <div className="flex items-center justify-end gap-2 bg-surface p-4 rounded-lg border border-border-subtle shrink-0">
-                  <Button size="sm" variant="secondary" onClick={handleDownloadPicklistCSV}>
-                    <Download size={14} className="mr-1.5" />
-                    Export CSV
-                  </Button>
-                  <Button size="sm" onClick={handleDownloadPicklistPDF}>
-                    <FileText size={14} className="mr-1.5" />
-                    Print Picklist
-                  </Button>
+
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400" />
+                    <input
+                      type="text"
+                      placeholder="Search products..."
+                      value={picklistSearch}
+                      onChange={e => setPicklistSearch(e.target.value)}
+                      className="pl-8 pr-3 py-1.5 w-48 text-sm border border-border-subtle rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    />
+                  </div>
+                  
+                  <div className="flex gap-2 border-l border-border-subtle pl-3">
+                    <Button size="sm" variant="secondary" onClick={handleDownloadPicklistCSV} className="h-[34px]">
+                      <Download size={14} className="mr-1.5" />
+                      CSV
+                    </Button>
+                    <Button size="sm" onClick={handleDownloadPicklistPDF} className="h-[34px]">
+                      <FileText size={14} className="mr-1.5" />
+                      PDF
+                    </Button>
+                  </div>
                 </div>
             </div>
 
@@ -365,16 +417,16 @@ export function ActiveTripDetailsModal({
                 <tbody className="divide-y divide-border-subtle">
                   {picklistLoading ? (
                     <tr><td colSpan={4} className="p-4 text-center">Loading...</td></tr>
-                  ) : picklist.length === 0 ? (
-                    <tr><td colSpan={4} className="p-4 text-center text-ink-500">No products found.</td></tr>
-                  ) : picklist.map((row: any, i: number) => (
+                  ) : filteredPicklist.length === 0 ? (
+                    <tr><td colSpan={4} className="p-4 text-center text-ink-500">No items match your search.</td></tr>
+                  ) : filteredPicklist.map((row: any, i: number) => (
                     <React.Fragment key={i}>
                       <tr 
                         className="hover:bg-surface cursor-pointer transition-colors"
                         onClick={() => togglePicklistRow(i)}
                       >
                         <td className="px-4 py-3 text-ink-400">
-                          {expandedPicklist === i ? '▼' : '▶'}
+                          {expandedPicklist === i ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                         </td>
                         <td className="px-4 py-3 font-medium">{row.product_name}</td>
                         <td className="px-4 py-3">{row.batches || '-'}</td>
