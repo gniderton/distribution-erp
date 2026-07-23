@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { X, Loader2, CheckCircle2, XCircle, FileText, Wallet, CreditCard, Banknote, AlertCircle, Save } from 'lucide-react'
 import { useReconciliationDetails, useBulkUpdateReconciliation, useUnconsumedCredits } from '../hooks'
 import dayjs from 'dayjs'
+import toast from 'react-hot-toast'
 
 export default function PaymentReconciliationDrawer({ reportId, onClose }: { reportId: string | number | null, onClose: () => void }) {
   const { data, isLoading, isError } = useReconciliationDetails(reportId)
@@ -157,7 +158,13 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
     }
 
     bulkUpdate(payload, {
-      onSuccess: onClose
+      onSuccess: () => {
+        toast.success("Report settled successfully!")
+        onClose()
+      },
+      onError: (err: any) => {
+        toast.error("Failed to settle report: " + err.message)
+      }
     })
   }
 
