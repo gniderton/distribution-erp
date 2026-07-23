@@ -74,25 +74,32 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
   const totalEnteredCash = cashDenominations.reduce((sum, d) => sum + (d.note * d.count), 0)
   const isCashTallyValid = cashPayments.length === 0 || Math.abs(totalExpectedCash - totalEnteredCash) < 0.1
 
-  const chequePayments = localPayments.filter(p => p.payment_mode === 'Cheque' && p.verification_status !== 'Rejected')
+  const allCheques = localPayments.filter(p => p.payment_mode === 'Cheque')
   // Group system cheques
   const groupedCheques = useMemo(() => {
-    const groups: Record<string, { total: number, customer: string, bank: string, date: string, invoices: string[] }> = {}
-    chequePayments.forEach(p => {
+    const groups: Record<string, { total: number, customer: string, bank: string, date: string, invoices: string[], allRejected: boolean }> = {}
+    allCheques.forEach(p => {
       const key = p.cheque_number || 'Unknown'
-      if (!groups[key]) groups[key] = { total: 0, customer: p.customer_name, bank: p.bank_name, date: p.cheque_date || p.payment_date, invoices: [] }
-      groups[key].total += Number(p.amount)
+      if (!groups[key]) groups[key] = { total: 0, customer: p.customer_name, bank: p.bank_name, date: p.cheque_date || p.payment_date, invoices: [], allRejected: true }
+      
+      if (p.verification_status !== 'Rejected') {
+        groups[key].total += Number(p.amount)
+        groups[key].allRejected = false
+      }
+      
       if (p.selected_invoices) groups[key].invoices.push(p.selected_invoices)
     })
     return groups
-  }, [chequePayments])
+  }, [allCheques])
 
   let isChequeValid = true
   Object.keys(groupedCheques).forEach(chkNo => {
-    const entered = Number(chequeAmounts[chkNo] || 0)
-    if (Math.abs(entered - groupedCheques[chkNo].total) > 0.1) isChequeValid = false
+    if (!groupedCheques[chkNo].allRejected) {
+      const entered = Number(chequeAmounts[chkNo] || 0)
+      if (Math.abs(entered - groupedCheques[chkNo].total) > 0.1) isChequeValid = false
+    }
   })
-  if (chequePayments.length === 0) isChequeValid = true
+  if (allCheques.filter(c => c.verification_status !== 'Rejected').length === 0) isChequeValid = true
 
   const onlinePayments = localPayments.filter(p => ['UPI', 'NEFT/RTGS', 'Bank Transfer'].includes(p.payment_mode))
   let isOnlineValid = true
@@ -435,6 +442,7 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                                  <th className="px-4 py-2">Bank</th>
                                  <th className="px-4 py-2">Expected Amount</th>
                                  <th className="px-4 py-2 bg-brand-50/50">Entered Amount</th>
+                                 <th className="px-4 py-2">Action</th>
                                </tr>
                              </thead>
                              <tbody className="divide-y divide-border-subtle">
@@ -450,18 +458,35 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                                      <td className="px-4 py-2">{group.bank}</td>
                                      <td className="px-4 py-2 font-bold text-ink-600">₹{group.total.toFixed(2)}</td>
                                      <td className="px-4 py-2 bg-brand-50/30">
-                                       <div className="flex items-center gap-2">
-                                          <input 
-                                            type="number"
-                                            disabled={isSettled}
-                                            value={chequeAmounts[chkNo] || ''}
-                                            onChange={e => setChequeAmounts({...chequeAmounts, [chkNo]: e.target.value})}
-                                            className={`w-24 px-2 py-1 bg-white border rounded-md text-xs focus:outline-none disabled:bg-surface ${entered > 0 ? (isMatch ? 'border-emerald-300 focus:border-emerald-500' : 'border-rose-300 focus:border-rose-500') : 'border-border-subtle focus:border-brand-500'}`}
-                                            placeholder="0.00"
-                                          />
-                                          {entered > 0 && isMatch && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                                          {entered > 0 && !isMatch && <AlertCircle className="w-4 h-4 text-rose-500" />}
-                                       </div>
+                                       {!group.allRejected ? (
+                                         <div className="flex items-center gap-2">
+                                            <input 
+                                              type="number"
+                                              disabled={isSettled}
+                                              value={chequeAmounts[chkNo] || ''}
+                                              onChange={e => setChequeAmounts({...chequeAmounts, [chkNo]: e.target.value})}
+                                              className={`w-24 px-2 py-1 bg-white border rounded-md text-xs focus:outline-none disabled:bg-surface ${entered > 0 ? (isMatch ? 'border-emerald-300 focus:border-emerald-500' : 'border-rose-300 focus:border-rose-500') : 'border-border-subtle focus:border-brand-500'}`}
+                                              placeholder="0.00"
+                                            />
+                                            {entered > 0 && isMatch && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                                            {entered > 0 && !isMatch && <AlertCircle className="w-4 h-4 text-rose-500" />}
+                                         </div>
+                                       ) : (
+                                         <span className="text-ink-500 italic">Rejected</span>
+                                       )}
+                                     </td>
+                                     <td className="px-4 py-2">
+                                       {!isSettled && (
+                                         <button onClick={() => {
+                                            const paymentsInGroup = localPayments.filter(p => p.payment_mode === 'Cheque' && (p.cheque_number || 'Unknown') === chkNo)
+                                            paymentsInGroup.forEach(p => {
+                                              updatePaymentStatus(p.id, group.allRejected ? 'Pending' : 'Rejected')
+                                            })
+                                         }} className="text-[10px] font-bold text-rose-500 hover:underline">
+                                           {group.allRejected ? 'Undo Reject' : 'Reject'}
+                                         </button>
+                                       )}
+                                       {isSettled && group.allRejected && 'Rejected'}
                                      </td>
                                    </tr>
                                  )
@@ -488,34 +513,46 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                                  <th className="px-4 py-2">Ref ID</th>
                                  <th className="px-4 py-2">Amount</th>
                                  <th className="px-4 py-2">Map to Bank Statement</th>
+                                 <th className="px-4 py-2">Action</th>
                                </tr>
                              </thead>
                              <tbody className="divide-y divide-border-subtle">
                                {onlinePayments.map((p:any) => (
-                                 <tr key={p.id}>
+                                 <tr key={p.id} className={p.verification_status === 'Rejected' ? 'opacity-50 line-through' : ''}>
                                    <td className="px-4 py-2">{p.customer_name}</td>
                                    <td className="px-4 py-2">{p.transaction_reference}</td>
                                    <td className="px-4 py-2 font-bold">₹{Number(p.amount).toFixed(2)}</td>
                                    <td className="px-4 py-2">
-                                     <select
-                                       disabled={isSettled}
-                                       value={p._bank_stmt_id || ''}
-                                       onChange={(e) => handleOnlineBankMap(p.id, e.target.value)}
-                                       className={`w-full px-2 py-1 bg-white border rounded-md text-xs focus:outline-none disabled:bg-surface ${p._bank_stmt_id ? 'border-emerald-300' : 'border-rose-300'}`}
-                                     >
-                                       <option value="">-- Select Bank Credit --</option>
-                                       {bankCredits?.map((c:any) => {
-                                         const mappedTotal = bankStmtUsage[c.id] || 0
-                                         const isCurrent = p._bank_stmt_id === String(c.id)
-                                         const balance = Number(c.credit_amount) - Number(c.consumed_amount)
-                                         const isOverUsed = mappedTotal > balance
-                                         return (
-                                           <option key={c.id} value={c.id} disabled={isOverUsed && !isCurrent}>
-                                             [ID: {c.id}] Amt: ₹{c.credit_amount} | Bal: ₹{balance.toFixed(2)} | Ref: {c.bank_ref_id || c.particulars}
-                                           </option>
-                                         )
-                                       })}
-                                     </select>
+                                     {!isSettled && p.verification_status !== 'Rejected' && (
+                                       <select
+                                         disabled={isSettled}
+                                         value={p._bank_stmt_id || ''}
+                                         onChange={(e) => handleOnlineBankMap(p.id, e.target.value)}
+                                         className={`w-full px-2 py-1 bg-white border rounded-md text-xs focus:outline-none disabled:bg-surface ${p._bank_stmt_id ? 'border-emerald-300' : 'border-rose-300'}`}
+                                       >
+                                         <option value="">-- Select Bank Credit --</option>
+                                         {bankCredits?.map((c:any) => {
+                                           const mappedTotal = bankStmtUsage[c.id] || 0
+                                           const isCurrent = p._bank_stmt_id === String(c.id)
+                                           const balance = Number(c.credit_amount) - Number(c.consumed_amount)
+                                           const isOverUsed = mappedTotal > balance
+                                           return (
+                                             <option key={c.id} value={c.id} disabled={isOverUsed && !isCurrent}>
+                                               [ID: {c.id}] Amt: ₹{c.credit_amount} | Bal: ₹{balance.toFixed(2)} | Ref: {c.bank_ref_id || c.particulars}
+                                             </option>
+                                           )
+                                         })}
+                                       </select>
+                                     )}
+                                     {p.verification_status === 'Rejected' && <span className="text-ink-500 italic">Rejected</span>}
+                                   </td>
+                                   <td className="px-4 py-2">
+                                     {!isSettled && (
+                                       <button onClick={() => updatePaymentStatus(p.id, p.verification_status === 'Rejected' ? 'Pending' : 'Rejected')} className="text-[10px] font-bold text-rose-500 hover:underline">
+                                         {p.verification_status === 'Rejected' ? 'Undo Reject' : 'Reject'}
+                                       </button>
+                                     )}
+                                     {isSettled && p.verification_status}
                                    </td>
                                  </tr>
                                ))}
