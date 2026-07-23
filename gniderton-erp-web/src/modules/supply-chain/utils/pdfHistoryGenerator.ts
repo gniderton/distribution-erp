@@ -3,6 +3,23 @@ import autoTable from 'jspdf-autotable'
 import { format } from 'date-fns'
 import { api } from '@/lib/axios'
 
+const drawSimpleBox = (doc: any, x: number, y: number, width: number, height: number, rows: (string | null)[][]) => {
+  doc.setDrawColor(0, 0, 0)
+  doc.setLineWidth(0.5)
+  doc.rect(x, y, width, height)
+  let rowY = y + 12 
+  rows.forEach(r => {
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "bold")
+    doc.text(String(r[0]) + ":", x + 5, rowY)
+    doc.setFont("helvetica", "normal")
+    const val = String(r[1] || "-")
+    const splitVal = doc.splitTextToSize(val, width - 75)
+    doc.text(splitVal, x + 70, rowY)
+    rowY += (splitVal.length * 10) + 1
+  })
+}
+
 const getCompanySettings = async () => {
   try {
     const res = await api.get('/api/company-settings')
@@ -11,10 +28,11 @@ const getCompanySettings = async () => {
       address: res.data?.address || "-",
       contact_no: res.data?.contact_no || "-",
       email: res.data?.email || "-",
+      gst: res.data?.gstin || "-",
       logo: res.data?.logo || null
     }
   } catch (err) {
-    return { regt_name: "Company", address: "-", contact_no: "-", email: "-", logo: null }
+    return { regt_name: "Company", address: "-", contact_no: "-", email: "-", gst: "-", logo: null }
   }
 }
 
@@ -25,34 +43,40 @@ export const generateTripHistoryPDF = async (syncId: number | string, data: any)
   
   const brand = await getCompanySettings()
 
-  let currentY = 0 // We will start right from the top edge
-
-  // 1. TOP ORANGE BANNER
-  doc.setFillColor(242, 123, 34) // Orange color matching reference
-  doc.rect(0, currentY, pageWidth, 50, 'F')
+  let currentY = margin + 5
   
+  try {
+    if (brand.logo) {
+      const logoData = brand.logo.startsWith('data:image') ? brand.logo : `data:image/png;base64,${brand.logo}`;
+      doc.addImage(logoData, 'PNG', margin, currentY, 80, 25)
+    }
+  } catch(e) {}
+
+  doc.setTextColor(0, 0, 0)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(14)
-  doc.setTextColor(255, 255, 255) // White text
-  doc.text(`TRIP HISTORY SETTLEMENT REPORT #${syncId}`, margin, currentY + 30)
+  doc.text("TRIP SETTLEMENT REPORT", pageWidth / 2, currentY + 15, { align: "center" })
 
-  // 2. COMPANY DETAILS BLOCK (Light Beige)
-  currentY += 50
-  doc.setFillColor(242, 235, 226) // Light Beige
-  doc.rect(0, currentY, pageWidth, 70, 'F')
-  
-  doc.setFontSize(9)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(0, 0, 0)
-  doc.text(String(brand.regt_name), margin, currentY + 20)
-  
-  doc.setFont("helvetica", "normal")
-  doc.text(String(brand.address), margin, currentY + 35)
-  doc.text(`Email: ${brand.email}`, margin, currentY + 50)
-  doc.text(`Generated: ${format(new Date(), "dd MMM yyyy hh:mm a")}`, pageWidth - margin, currentY + 20, { align: 'right' })
+  currentY += 35
+  const gap = 10
+  const boxWidth = (pageWidth - (margin * 2) - gap) / 2
+  const boxHeight = 55
 
-  // 3. KPI DARK BLUE BLOCK
-  currentY += 70 + 10 // Added a small gap
+  drawSimpleBox(doc, margin, currentY, boxWidth, boxHeight, [
+    ["COMPANY", String(brand.regt_name)],
+    ["GST", String(brand.gst)],
+    ["CONTACT", String(brand.contact_no)],
+    ["EMAIL", String(brand.email)]
+  ])
+
+  drawSimpleBox(doc, margin + boxWidth + gap, currentY, boxWidth, boxHeight, [
+    ["SYNC ID", String(syncId)],
+    ["DATE", data.header?.created_at ? format(new Date(data.header.created_at), "dd MMM yyyy HH:mm") : "-"],
+    ["TOTAL DELIVERED", `${data.delivered?.length || 0} Invoices`],
+    ["TOTAL RETURNED", `${data.rejected?.length || 0} Invoices`]
+  ])
+
+  currentY += boxHeight + 10 // Added a small gap
   const kpiHeight = 50
   doc.setFillColor(43, 51, 120) // Dark Blue
   doc.roundedRect(margin, currentY, pageWidth - (margin * 2), kpiHeight, 6, 6, 'F')
@@ -231,29 +255,40 @@ export const generateVehicleInventoryPDF = async (syncId: number | string, data:
   
   const brand = await getCompanySettings()
 
-  let currentY = 0 
-
-  doc.setFillColor(242, 123, 34) 
-  doc.rect(0, currentY, pageWidth, 50, 'F')
+  let currentY = margin + 5
   
+  try {
+    if (brand.logo) {
+      const logoData = brand.logo.startsWith('data:image') ? brand.logo : `data:image/png;base64,${brand.logo}`;
+      doc.addImage(logoData, 'PNG', margin, currentY, 80, 25)
+    }
+  } catch(e) {}
+
+  doc.setTextColor(0, 0, 0)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(14)
-  doc.setTextColor(255, 255, 255) 
-  doc.text(`VEHICLE INVENTORY REPORT #${syncId}`, margin, currentY + 30)
+  doc.text("VEHICLE INVENTORY REPORT", pageWidth / 2, currentY + 15, { align: "center" })
 
-  currentY += 50
-  doc.setFillColor(242, 235, 226) 
-  doc.rect(0, currentY, pageWidth, 50, 'F')
-  
-  doc.setFontSize(9)
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(0, 0, 0)
-  doc.text(String(brand.regt_name), margin, currentY + 20)
-  
-  doc.setFont("helvetica", "normal")
-  doc.text(`Generated: ${format(new Date(), 'dd MMM yyyy HH:mm')}`, margin, currentY + 35)
+  currentY += 35
+  const gap = 10
+  const boxWidth = (pageWidth - (margin * 2) - gap) / 2
+  const boxHeight = 55
 
-  currentY += 70
+  drawSimpleBox(doc, margin, currentY, boxWidth, boxHeight, [
+    ["COMPANY", String(brand.regt_name)],
+    ["GST", String(brand.gst)],
+    ["CONTACT", String(brand.contact_no)],
+    ["EMAIL", String(brand.email)]
+  ])
+
+  drawSimpleBox(doc, margin + boxWidth + gap, currentY, boxWidth, boxHeight, [
+    ["SYNC ID", String(syncId)],
+    ["DATE", data.header?.created_at ? format(new Date(data.header.created_at), "dd MMM yyyy HH:mm") : format(new Date(), 'dd MMM yyyy HH:mm')],
+    ["UNDELIVERED", `${data.undelivered_summary?.length || 0} Items`],
+    ["REJECTED", `${data.rejected_summary?.length || 0} Items`]
+  ])
+
+  currentY += boxHeight + 15
 
   const themeStyles = {
     theme: 'grid' as const,
