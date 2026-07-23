@@ -255,21 +255,39 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                         {localPayments.length === 0 && (
                           <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-500">No payments found.</td></tr>
                         )}
-                        {localPayments.map((p: any) => (
-                          <tr key={p.id} className="hover:bg-surface/50 transition">
-                            <td className="px-4 py-2 font-medium">{p.customer_name}</td>
-                            <td className="px-4 py-2 font-bold">₹{Number(p.amount).toFixed(2)}</td>
-                            <td className="px-4 py-2">{p.payment_mode}</td>
-                            <td className="px-4 py-2 text-[10px] text-ink-500">{p.selected_invoices || '-'}</td>
-                            <td className="px-4 py-2">
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                                p.verification_status === 'Verified' ? 'bg-emerald-100 text-emerald-800' :
-                                p.verification_status === 'Rejected' ? 'bg-rose-100 text-rose-800' :
-                                'bg-amber-100 text-amber-800'
-                              }`}>{p.verification_status}</span>
-                            </td>
-                          </tr>
-                        ))}
+                        {localPayments.map((p: any) => {
+                          let displayStatus = p.verification_status
+                          if (displayStatus === 'Pending') {
+                            if (p.payment_mode === 'Cash' && isCashTallyValid && totalExpectedCash > 0) {
+                               displayStatus = 'Verified'
+                            } else if (p.payment_mode === 'Cheque') {
+                               const chkNo = p.cheque_number || 'Unknown'
+                               const group = groupedCheques[chkNo]
+                               if (group && !group.allRejected) {
+                                 const entered = Number(chequeAmounts[chkNo] || 0)
+                                 if (entered > 0 && Math.abs(entered - group.total) < 0.1) {
+                                   displayStatus = 'Verified'
+                                 }
+                               }
+                            }
+                          }
+
+                          return (
+                            <tr key={p.id} className="hover:bg-surface/50 transition">
+                              <td className="px-4 py-2 font-medium">{p.customer_name}</td>
+                              <td className="px-4 py-2 font-bold">₹{Number(p.amount).toFixed(2)}</td>
+                              <td className="px-4 py-2">{p.payment_mode}</td>
+                              <td className="px-4 py-2 text-[10px] text-ink-500">{p.selected_invoices || '-'}</td>
+                              <td className="px-4 py-2">
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                                  displayStatus === 'Verified' ? 'bg-emerald-100 text-emerald-800' :
+                                  displayStatus === 'Rejected' ? 'bg-rose-100 text-rose-800' :
+                                  'bg-amber-100 text-amber-800'
+                                }`}>{displayStatus}</span>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
