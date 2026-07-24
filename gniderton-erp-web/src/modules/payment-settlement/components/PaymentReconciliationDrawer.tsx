@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Loader2, CheckCircle2, XCircle, FileText, Wallet, CreditCard, Banknote, AlertCircle, Save } from 'lucide-react'
+import { X, Loader2, CheckCircle2, XCircle, FileText, Wallet, CreditCard, Banknote, AlertCircle, Save, Receipt, ShieldCheck } from 'lucide-react'
 import { useReconciliationDetails, useBulkUpdateReconciliation, useUnconsumedCredits } from '../hooks'
 import dayjs from 'dayjs'
 import toast from 'react-hot-toast'
@@ -237,15 +237,22 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
             <>
               {/* Tabs */}
               <div className="flex px-6 pt-4 gap-6 border-b border-border-subtle bg-white">
-                {['Payments', 'Expenses', 'Settlement'].map(tab => (
+                {(isSettled ? [
+                  { name: 'Payments', icon: <FileText className="w-4 h-4" /> },
+                  { name: 'Expenses', icon: <Receipt className="w-4 h-4" /> }
+                ] : [
+                  { name: 'Payments', icon: <FileText className="w-4 h-4" /> },
+                  { name: 'Expenses', icon: <Receipt className="w-4 h-4" /> },
+                  { name: 'Settlement', icon: <ShieldCheck className="w-4 h-4" /> }
+                ]).map(tab => (
                   <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab as any)}
-                    className={`pb-3 text-sm font-bold border-b-2 transition-colors ${
-                      activeTab === tab ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-500 hover:text-ink-700'
+                    key={tab.name}
+                    onClick={() => setActiveTab(tab.name as any)}
+                    className={`pb-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+                      activeTab === tab.name ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-500 hover:text-ink-700'
                     }`}
                   >
-                    {tab}
+                    {tab.icon} {tab.name}
                   </button>
                 ))}
               </div>
