@@ -7,7 +7,7 @@ import {
 } from './hooks'
 import { 
   Eye, RefreshCw, CheckCircle2, AlertTriangle, 
-  X, AlertCircle, Package, Send, Search, Filter, RefreshCcw, DollarSign, MapPin, Users, ShoppingCart, Plus, HelpCircle
+  X, AlertCircle, Package, Send, Search, Filter, RefreshCcw, DollarSign, MapPin, Users, ShoppingCart, Plus, HelpCircle, Download
 } from 'lucide-react'
 
 interface OrderLine {
@@ -346,6 +346,66 @@ export default function SalesOrderPage() {
     } catch (e: any) {
       setAlertMsg({ type: 'error', text: e?.response?.data?.message || 'Failed to generate bulk invoices.' })
     }
+  };
+
+  const handleDownloadShortfallReport = () => {
+    const selectedOrders = salesOrders.filter(o => selectedOrderIds.includes(o.id));
+    
+    // Create a mutable copy of total available stock per product
+    const availableStockMap: Record<string, number> = {};
+    demandAnalysis.forEach(item => {
+      availableStockMap[item.item_id] = item.total_avail;
+    });
+
+    const reportRows: Array<{ customer_name: string; so_number: string; product_name: string; shortfall_qty: number }> = [];
+
+    // Simulate FIFO allocation to determine which customers are short
+    selectedOrders.forEach(order => {
+      let lines: OrderLine[] = [];
+      try {
+        lines = typeof order.lines === 'string' ? JSON.parse(order.lines) : order.lines || [];
+      } catch (e) {}
+
+      lines.forEach(line => {
+        const pid = String(line.product_id);
+        const qty = Number(line.qty || 0);
+        
+        if (availableStockMap[pid] !== undefined) {
+          const available = availableStockMap[pid];
+          if (available < qty) {
+            const shortfall = qty - available;
+            reportRows.push({
+              customer_name: order.customer_name || 'Unknown',
+              so_number: order.so_number || `SO-${order.id}`,
+              product_name: line.product_name || `Product ${pid}`,
+              shortfall_qty: shortfall
+            });
+          }
+          availableStockMap[pid] = Math.max(0, available - qty);
+        }
+      });
+    });
+
+    if (reportRows.length === 0) {
+      setAlertMsg({ type: 'success', text: 'No shortfalls found! All stock can be allocated.' });
+      return;
+    }
+
+    // Convert to CSV
+    const headers = ['Customer Name', 'SO Number', 'Product Name', 'Shortfall Qty'];
+    const csvContent = [
+      headers.join(','),
+      ...reportRows.map(row => 
+        `"${row.customer_name}","${row.so_number}","${row.product_name}",${row.shortfall_qty}`
+      )
+    ].join('\n');
+
+    // Download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Shortfall_Report_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
   };
 
   // Stock Allocation metrics cards (from Input1 & Input2 in Appsmith modalStockAllocation)
@@ -757,14 +817,23 @@ export default function SalesOrderPage() {
                 <Plus size={14} />
                 Allocate Transit Stock
               </button>
-              <button
-                onClick={handleGenerateInvoices}
-                disabled={generateInvoicesMutation.isPending}
-                className="flex items-center gap-1.5 bg-success-600 text-white hover:bg-success-500 text-xs font-semibold px-5 py-2.5 rounded-lg transition disabled:opacity-50"
-              >
-                {generateInvoicesMutation.isPending ? <RefreshCw className="animate-spin" size={14} /> : <Send size={14} />}
-                Generate Invoices
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownloadShortfallReport}
+                  className="flex items-center gap-1.5 border border-danger-200 bg-danger-50 text-danger-700 hover:bg-danger-100 text-xs font-semibold px-5 py-2.5 rounded-lg transition"
+                >
+                  <Download size={14} />
+                  Shortfall Report
+                </button>
+                <button
+                  onClick={handleGenerateInvoices}
+                  disabled={generateInvoicesMutation.isPending}
+                  className="flex items-center gap-1.5 bg-success-600 text-white hover:bg-success-500 text-xs font-semibold px-5 py-2.5 rounded-lg transition disabled:opacity-50"
+                >
+                  {generateInvoicesMutation.isPending ? <RefreshCw className="animate-spin" size={14} /> : <Send size={14} />}
+                  Generate Invoices
+                </button>
+              </div>
             </div>
           </div>
         </div>
