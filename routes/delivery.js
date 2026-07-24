@@ -471,6 +471,21 @@ router.get('/trips/:id/manifest', async (req, res) => {
 router.get('/invoices/:id/delivery-cycle', async (req, res) => {
     try {
         const { id } = req.params;
+        
+        // Fetch invoice details first to get customer name
+        const invQuery = await pool.query(`
+            SELECT si.id, si.invoice_number, c.customer_name 
+            FROM sales_invoices si 
+            JOIN customers c ON si.customer_id = c.id 
+            WHERE si.id::text = $1 OR si.invoice_number = $1
+        `, [id]);
+
+        if (invQuery.rows.length === 0) {
+            return res.status(404).json({ error: 'Invoice not found' });
+        }
+        
+        const invoiceDetails = invQuery.rows[0];
+
         const result = await pool.query(`
             SELECT 
                 ti.delivery_status as attempt_status,
@@ -486,27 +501,19 @@ router.get('/invoices/:id/delivery-cycle', async (req, res) => {
             FROM trip_invoices ti
             JOIN delivery_trips dt ON ti.trip_id = dt.id
             LEFT JOIN employees e ON dt.driver_id = e.id
-            JOIN sales_invoices si ON ti.invoice_id = si.id
-            WHERE (ti.invoice_id::text = $1 OR si.invoice_number = $1)
+            WHERE ti.invoice_id = $1
             ORDER BY ti.id ASC -- Chronological order of attempts
-        `, [id]);
-
-        if (result.rows.length === 0) {
-            // Check if invoice exists but hasn't been assigned to any trip
-            const invCheck = await pool.query('SELECT id FROM sales_invoices WHERE id = $1', [id]);
-            if (invCheck.rows.length === 0) {
-                return res.status(404).json({ error: 'Invoice not found' });
-            }
-            return res.json({ message: 'No delivery attempts found for this invoice', timeline: [] });
-        }
+        `, [invoiceDetails.id]);
 
         res.json({
-            invoice_id: id,
+            invoice_id: invoiceDetails.id,
+            invoice_number: invoiceDetails.invoice_number,
+            customer_name: invoiceDetails.customer_name,
             attempt_count: result.rows.length,
             timeline: result.rows
         });
     } catch (err) {
-        console.error('Delivery Cycle API Error:', err);
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });

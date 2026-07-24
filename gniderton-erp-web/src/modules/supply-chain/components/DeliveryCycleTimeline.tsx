@@ -45,7 +45,15 @@ export default function DeliveryCycleTimeline({ invoiceId }: DeliveryCycleTimeli
 
   return (
     <div className="space-y-6">
-      <h3 className="text-sm font-bold text-ink-900 uppercase tracking-wider mb-4 border-b border-border-subtle pb-2">Delivery Lifecycle</h3>
+      <div className="flex justify-between items-end mb-4 border-b border-border-subtle pb-2">
+        <h3 className="text-sm font-bold text-ink-900 uppercase tracking-wider">Delivery Lifecycle</h3>
+        {data?.customer_name && (
+          <div className="text-xs text-ink-500 text-right">
+            Customer<br/>
+            <span className="text-ink-900 font-bold text-sm">{data.customer_name}</span>
+          </div>
+        )}
+      </div>
       <div className="relative pl-6 border-l-2 border-border-subtle space-y-8">
         {timeline.map((event: any, idx: number) => {
           const isDelivered = event.attempt_status === 'Delivered'
