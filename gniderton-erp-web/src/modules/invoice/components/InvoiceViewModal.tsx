@@ -7,7 +7,7 @@ import { api } from '@/lib/axios'
 import type { Invoice, InvoiceLine } from '../types'
 import { formatCurrency } from '@/lib/utils'
 import toast from 'react-hot-toast'
-import { Trash2, Plus } from 'lucide-react'
+import { Trash2, Plus, List, Truck, Edit3 } from 'lucide-react'
 import { differenceInDays } from 'date-fns'
 import { Input } from '@/components/ui/Input'
 import DeliveryCycleTimeline from '@/modules/supply-chain/components/DeliveryCycleTimeline'
@@ -198,24 +198,27 @@ export function InvoiceViewModal({ invoice, onClose }: { invoice: Invoice, onClo
 
         {/* Custom Tabs */}
         <div>
-          <div className="flex border-b border-border-subtle mt-4 mb-4">
+          <div className="flex border-y border-border-subtle mt-4 mb-4">
             <button
-              className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all ${activeTab === 'original' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
+              className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 -mb-[2px] transition-all ${activeTab === 'original' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
               onClick={() => setActiveTab('original')}
             >
+              <List size={14} />
               Original Lines
             </button>
             <button
-              className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all ${activeTab === 'delivery' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
+              className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 -mb-[2px] transition-all ${activeTab === 'delivery' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
               onClick={() => setActiveTab('delivery')}
             >
+              <Truck size={14} />
               Delivery Cycle
             </button>
             {isEditMode && (
               <button
-                className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all ${activeTab === 'edit' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 -mb-[2px] transition-all ${activeTab === 'edit' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
                 onClick={() => setActiveTab('edit')}
               >
+                <Edit3 size={14} />
                 Editable Lines
               </button>
             )}
