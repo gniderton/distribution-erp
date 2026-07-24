@@ -103,7 +103,10 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
   })
   if (allCheques.filter(c => c.verification_status !== 'Rejected').length === 0) isChequeValid = true
 
-  const onlinePayments = localPayments.filter(p => ['UPI', 'NEFT/RTGS', 'Bank Transfer'].includes(p.payment_mode))
+  const onlinePayments = localPayments.filter(p => {
+    const mode = p.payment_mode?.toLowerCase()?.trim() || ''
+    return ['upi', 'neft/rtgs', 'bank transfer', 'neft', 'rtgs', 'imps', 'online'].includes(mode)
+  })
   let isOnlineValid = true
   const bankStmtUsage: Record<string, number> = {}
   onlinePayments.forEach(p => {
