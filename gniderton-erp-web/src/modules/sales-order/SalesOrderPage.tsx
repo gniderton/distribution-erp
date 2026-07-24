@@ -544,40 +544,55 @@ export default function SalesOrderPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredOrders.map((o) => (
-                    <tr key={o.id} className="hover:bg-surface/30 transition-colors">
-                      <td className="p-3 text-center">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedOrderIds.includes(o.id)}
-                          onChange={() => toggleSelectOrder(o.id)}
-                          className="rounded text-brand-600 focus:ring-brand-400"
-                        />
-                      </td>
-                      <td className="p-3 font-semibold text-ink-900">{o.so_number || `SO-${o.id}`}</td>
-                      <td className="p-3 font-medium text-ink-900">{o.customer_name}</td>
-                      <td className="p-3 text-ink-600">{o.route_name || 'N/A'}</td>
-                      <td className="p-3 text-ink-600">{o.dse_name || 'N/A'}</td>
-                      <td className="p-3 text-ink-600">{o.order_date?.split('T')[0]}</td>
-                      <td className="p-3 text-right font-semibold text-ink-900">
-                        ${parseFloat(String(o.total_amount || 0)).toFixed(2)}
-                      </td>
-                      <td className="p-3">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-brand-500/10 text-brand-700">
-                          {o.status || 'Confirmed'}
-                        </span>
-                      </td>
-                      <td className="p-3 text-center">
-                        <button 
-                          onClick={() => handleOpenViewLines(o)}
-                          className="p-1.5 rounded hover:bg-ink-100 text-ink-700 transition"
-                          title="Inspect Order Lines"
-                        >
-                          <Eye size={13} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  filteredOrders.map((o) => {
+                    const isSelected = selectedOrderIds.includes(o.id);
+                    return (
+                      <tr 
+                        key={o.id} 
+                        className={`transition-colors cursor-pointer ${isSelected ? 'bg-brand-50 hover:bg-brand-100/50' : 'hover:bg-surface/30'}`}
+                        onClick={(e) => {
+                          const target = e.target as HTMLElement;
+                          if (target.tagName !== 'INPUT' && target.tagName !== 'BUTTON' && !target.closest('button')) {
+                            toggleSelectOrder(o.id);
+                          }
+                        }}
+                      >
+                        <td className="p-3 text-center">
+                          <input 
+                            type="checkbox" 
+                            checked={isSelected}
+                            onChange={() => toggleSelectOrder(o.id)}
+                            className="rounded text-brand-600 focus:ring-brand-400 cursor-pointer"
+                          />
+                        </td>
+                        <td className="p-3 font-semibold text-ink-900">{o.so_number || `SO-${o.id}`}</td>
+                        <td className="p-3 font-medium text-ink-900">{o.customer_name}</td>
+                        <td className="p-3 text-ink-600">{o.route_name || 'N/A'}</td>
+                        <td className="p-3 text-ink-600">{o.dse_name || 'N/A'}</td>
+                        <td className="p-3 text-ink-600">{o.order_date?.split('T')[0]}</td>
+                        <td className="p-3 text-right font-semibold text-ink-900">
+                          ${parseFloat(String(o.total_amount || 0)).toFixed(2)}
+                        </td>
+                        <td className="p-3">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-brand-500/10 text-brand-700">
+                            {o.status || 'Confirmed'}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenViewLines(o);
+                            }}
+                            className="p-1.5 rounded hover:bg-ink-100 text-ink-700 transition"
+                            title="Inspect Order Lines"
+                          >
+                            <Eye size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
