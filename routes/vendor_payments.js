@@ -60,7 +60,7 @@ router.post('/', async (req, res) => {
         // Resolve Bank Account & UTR ref dynamically if Online mode with Statement Entry selected
         let resolvedBankAccountId = bank_account_id;
         let resolvedTransactionRef = transaction_ref;
-        if (mode && mode.toUpperCase() === 'ONLINE' && bank_statement_entry_id) {
+        if (mode && ['ONLINE', 'BANK TRANSFER', 'NEFT', 'UPI', 'RTGS', 'IMPS', 'NEFT/RTGS'].includes(mode.toUpperCase()) && bank_statement_entry_id) {
             const bseRes = await client.query('SELECT bank_account_id, bank_ref_id FROM bank_statement_entries WHERE id = $1', [bank_statement_entry_id]);
             if (bseRes.rows.length === 0) {
                 await client.query('ROLLBACK');
@@ -181,7 +181,7 @@ router.post('/', async (req, res) => {
         }
 
         // 5. Handle Bank Statement Consumption (Online Mode)
-        if (mode && mode.toUpperCase() === 'ONLINE' && bank_statement_entry_id) {
+        if (mode && ['ONLINE', 'BANK TRANSFER', 'NEFT', 'UPI', 'RTGS', 'IMPS', 'NEFT/RTGS'].includes(mode.toUpperCase()) && bank_statement_entry_id) {
             await client.query(`
                 UPDATE bank_statement_entries 
                 SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
