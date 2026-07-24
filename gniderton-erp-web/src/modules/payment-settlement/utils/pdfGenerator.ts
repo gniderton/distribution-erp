@@ -23,7 +23,7 @@ const drawSimpleBox = (doc: any, x: number, y: number, width: number, height: nu
   });
 }
 
-export const generatePaymentSettlementPDF = async (reportData: any) => {
+export const generatePaymentSettlementPDF = async (reportData: any, explicitReportId?: string | number) => {
   if (!reportData || !reportData.summary) throw new Error("No report data selected.");
   
   const doc = new jsPDF('p', 'pt', 'a4');
@@ -68,7 +68,8 @@ export const generatePaymentSettlementPDF = async (reportData: any) => {
     doc.setFontSize(16);
     doc.text("PAYMENT SETTLEMENT REPORT", pageWidth / 2, headerY + 15, { align: "center" });
     doc.setFontSize(11);
-    doc.text(`Report #${summary.report_id}`, pageWidth / 2, headerY + 30, { align: "center" });
+    const finalReportId = summary.report_id || explicitReportId || "N/A";
+    doc.text(`Report #${finalReportId}`, pageWidth / 2, headerY + 30, { align: "center" });
     
     const boxesY = headerY + 40;
     const gap = 8;
@@ -84,7 +85,7 @@ export const generatePaymentSettlementPDF = async (reportData: any) => {
     ]);
     
     drawSimpleBox(doc, margin + boxWidth + gap, boxesY, boxWidth, boxHeight, [
-      ["Report ID", String(summary.report_id || "-")],
+      ["Report ID", String(finalReportId)],
       ["Report Date", summary.report_date ? dayjs(summary.report_date).format('DD/MM/YYYY') : "-"],
       ["DSE Name", String(summary.dse_name || "-")],
       ["Status", String(summary.settlement_status || "-")],
@@ -96,6 +97,16 @@ export const generatePaymentSettlementPDF = async (reportData: any) => {
   drawMainHeader(1, 1);
   let currentY = margin + 40 + 70 + 20;
 
+  const cashPayments = payments.filter((p:any) => p.payment_mode === 'Cash')
+  const chequePayments = payments.filter((p:any) => p.payment_mode === 'Cheque')
+  const onlinePayments = payments.filter((p:any) => !['Cash', 'Cheque'].includes(p.payment_mode))
+
+  const approvedExpenses = expenses.filter((e:any) => e.status !== 'Rejected')
+
+  const totalExpectedCash = cashPayments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0) - approvedExpenses.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0)
+  const totalExpectedCheque = chequePayments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+  const totalExpectedOnline = onlinePayments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+
   // Expected vs Actual Summary Table
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
@@ -105,24 +116,18 @@ export const generatePaymentSettlementPDF = async (reportData: any) => {
   autoTable(doc as any, {
     startY: currentY,
     margin: { left: margin, right: margin },
-    head: [["MODE", "EXPECTED (₹)", "ACTUAL (₹)", "DIFFERENCE"]],
+    head: [["MODE", "AMOUNT (Rs.)"]],
     body: [
-      ["Cash", Number(summary.expected_cash || 0).toFixed(2), Number(summary.actual_cash || 0).toFixed(2), (Number(summary.actual_cash || 0) - Number(summary.expected_cash || 0)).toFixed(2)],
-      ["Cheque", Number(summary.expected_cheque || 0).toFixed(2), Number(summary.actual_cheque || 0).toFixed(2), (Number(summary.actual_cheque || 0) - Number(summary.expected_cheque || 0)).toFixed(2)],
-      ["Online", Number(summary.expected_neft_rtgs || 0).toFixed(2), Number(summary.actual_neft_rtgs || 0).toFixed(2), (Number(summary.actual_neft_rtgs || 0) - Number(summary.expected_neft_rtgs || 0)).toFixed(2)],
-      ["Total", 
-        (Number(summary.expected_cash || 0) + Number(summary.expected_cheque || 0) + Number(summary.expected_neft_rtgs || 0)).toFixed(2), 
-        (Number(summary.actual_cash || 0) + Number(summary.actual_cheque || 0) + Number(summary.actual_neft_rtgs || 0)).toFixed(2),
-        ((Number(summary.actual_cash || 0) + Number(summary.actual_cheque || 0) + Number(summary.actual_neft_rtgs || 0)) - (Number(summary.expected_cash || 0) + Number(summary.expected_cheque || 0) + Number(summary.expected_neft_rtgs || 0))).toFixed(2)
-      ]
+      ["Cash", totalExpectedCash.toFixed(2)],
+      ["Cheque", totalExpectedCheque.toFixed(2)],
+      ["Online", totalExpectedOnline.toFixed(2)],
+      ["Total", (totalExpectedCash + totalExpectedCheque + totalExpectedOnline).toFixed(2)]
     ],
     theme: 'grid',
     styles: { fontSize: 8.5, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.5, textColor: [0, 0, 0] },
     headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
     columnStyles: {
-      1: { halign: 'right' },
-      2: { halign: 'right' },
-      3: { halign: 'right' }
+      1: { halign: 'right' }
     },
     didParseCell: (data: any) => {
       if (data.section === 'body' && data.row.raw[0] === 'Total') {
@@ -144,7 +149,7 @@ export const generatePaymentSettlementPDF = async (reportData: any) => {
     autoTable(doc as any, {
       startY: currentY,
       margin: { left: margin, right: margin },
-      head: [["S.N", "CUSTOMER", "INVOICES", "MODE", "REF / CHEQUE", "STATUS", "AMOUNT (₹)"]],
+      head: [["S.N", "CUSTOMER", "INVOICES", "MODE", "REF / CHEQUE", "STATUS", "AMOUNT (Rs.)"]],
       body: payments.map((row: any, index: number) => {
         return [
           index + 1,
@@ -176,7 +181,7 @@ export const generatePaymentSettlementPDF = async (reportData: any) => {
     autoTable(doc as any, {
       startY: currentY,
       margin: { left: margin, right: margin },
-      head: [["S.N", "EXPENSE TYPE", "VERIFIED BY", "STATUS", "AMOUNT (₹)"]],
+      head: [["S.N", "EXPENSE TYPE", "VERIFIED BY", "STATUS", "AMOUNT (Rs.)"]],
       body: expenses.map((row: any, index: number) => {
         return [
           index + 1,
@@ -217,7 +222,7 @@ export const generatePaymentSettlementPDF = async (reportData: any) => {
       autoTable(doc as any, {
         startY: currentY,
         margin: { left: margin, right: margin },
-        head: [["NOTE (₹)", "COUNT", "TOTAL (₹)"]],
+        head: [["NOTE (Rs.)", "COUNT", "TOTAL (Rs.)"]],
         body: denomRows.map((row: any) => {
           return [
             row.note,
@@ -251,6 +256,6 @@ export const generatePaymentSettlementPDF = async (reportData: any) => {
     );
   }
 
-  const fileName = `Payment_Settlement_${summary.report_id}.pdf`;
+  const fileName = `Payment_Settlement_${summary.report_id || explicitReportId || "Report"}.pdf`;
   doc.save(fileName);
 }

@@ -194,7 +194,7 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
               <button 
                 onClick={() => {
                   try {
-                    generatePaymentSettlementPDF(data)
+                    generatePaymentSettlementPDF(data, reportId || undefined)
                   } catch(e) {
                     toast.error("Failed to generate PDF")
                   }
