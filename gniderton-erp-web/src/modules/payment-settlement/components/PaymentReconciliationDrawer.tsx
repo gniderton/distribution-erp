@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Loader2, CheckCircle2, XCircle, FileText, Wallet, CreditCard, Banknote, AlertCircle, Save, Receipt, ShieldCheck } from 'lucide-react'
+import { X, Loader2, CheckCircle2, XCircle, FileText, Wallet, CreditCard, Banknote, AlertCircle, Save, Receipt, ShieldCheck, Download } from 'lucide-react'
 import { useReconciliationDetails, useBulkUpdateReconciliation, useUnconsumedCredits } from '../hooks'
 import dayjs from 'dayjs'
 import toast from 'react-hot-toast'
+import { generatePaymentSettlementPDF } from '../utils/pdfGenerator'
 
 export default function PaymentReconciliationDrawer({ reportId, onClose }: { reportId: string | number | null, onClose: () => void }) {
   const { data, isLoading, isError } = useReconciliationDetails(reportId)
@@ -189,9 +190,23 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                 </p>
               )}
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-surface rounded-lg transition text-ink-500">
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => {
+                  try {
+                    generatePaymentSettlementPDF(data)
+                  } catch(e) {
+                    toast.error("Failed to generate PDF")
+                  }
+                }} 
+                className="flex items-center gap-2 p-2 hover:bg-surface rounded-lg transition text-brand-600 font-semibold text-sm"
+              >
+                <Download className="w-4 h-4" /> <span className="hidden sm:inline">Download</span>
+              </button>
+              <button onClick={onClose} className="p-2 hover:bg-surface rounded-lg transition text-ink-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Statboxes */}
