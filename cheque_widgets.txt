@@ -1,0 +1,120 @@
+MainContainer (CANVAS_WIDGET) - text/label: 
+navHeader (CONTAINER_WIDGET) - text/label: 
+Canvas_x4dk6wq4w3 (CANVAS_WIDGET) - text/label: 
+txtHeaderTitle (TEXT_WIDGET) - text/label: GNIDERTON ERP - Cheque Management
+btnGroupPageNav (BUTTON_GROUP_WIDGET) - text/label: 
+btnHeaderLogout (BUTTON_WIDGET) - text/label: Logout
+tblCheques (TABLE_WIDGET_V2) - text/label: Data
+selType (SELECT_WIDGET) - text/label: 
+selStatus (SELECT_WIDGET) - text/label: 
+Button1 (BUTTON_WIDGET) - text/label: Clear Selected Cheques
+ModalClearCheques (MODAL_WIDGET) - text/label: 
+Canvas1 (CANVAS_WIDGET) - text/label: 
+IconButton1 (ICON_BUTTON_WIDGET) - text/label: 
+List1 (LIST_WIDGET_V2) - text/label: 
+Canvas2 (CANVAS_WIDGET) - text/label: 
+Container1 (CONTAINER_WIDGET) - text/label: 
+Canvas3 (CANVAS_WIDGET) - text/label: 
+DatePicker1 (DATE_PICKER_WIDGET2) - text/label: Cheque Date
+Input1 (INPUT_WIDGET_V2) - text/label: Reference No
+Input2 (INPUT_WIDGET_V2) - text/label: Customer/Vendor
+Input3 (INPUT_WIDGET_V2) - text/label: Bank
+selStatementEntry (SELECT_WIDGET) - text/label: 
+Input4 (INPUT_WIDGET_V2) - text/label: Amount
+selClearBank (SELECT_WIDGET) - text/label: 
+dateClearance (DATE_PICKER_WIDGET2) - text/label: Date
+txtClearRemarks (INPUT_WIDGET_V2) - text/label: Remarks
+Statbox1 (STATBOX_WIDGET) - text/label: 
+Canvas4 (CANVAS_WIDGET) - text/label: 
+Text1 (TEXT_WIDGET) - text/label: Cheques
+Text2 (TEXT_WIDGET) - text/label: {{ tblCheques.selectedRows.length }} Cheques Selected
+
+Text3 (TEXT_WIDGET) - text/label: Total Amount: ₹{{ 
+  tblCheques.selectedRows.reduce((sum, row) => sum + Number(row.amount), 0).toLocaleString('en-IN') 
+}}
+
+Button3 (BUTTON_WIDGET) - text/label: Clear Cheque
+ModalBounceCheque (MODAL_WIDGET) - text/label: 
+Canvas5 (CANVAS_WIDGET) - text/label: 
+IconButton3 (ICON_BUTTON_WIDGET) - text/label: 
+Text4 (TEXT_WIDGET) - text/label: Cheque Bounce
+dateBounce (DATE_PICKER_WIDGET2) - text/label: Date
+selBounceReason (SELECT_WIDGET) - text/label: 
+selBounceEntry (SELECT_WIDGET) - text/label: 
+selDepositEntry (SELECT_WIDGET) - text/label: 
+numBankCharges (INPUT_WIDGET_V2) - text/label: Bank Charges
+numCustomerPenalty (INPUT_WIDGET_V2) - text/label: {{tblCheques.triggeredRow.party_type}} Bounce Charges
+Button2 (BUTTON_WIDGET) - text/label: Submit
+mdlChequeRev (MODAL_WIDGET) - text/label: 
+Canvas6 (CANVAS_WIDGET) - text/label: 
+IconButton4 (ICON_BUTTON_WIDGET) - text/label: 
+Text5 (TEXT_WIDGET) - text/label: Chq No:{{tblCheques.triggeredRow.cheque_number}} dated {{tblCheques.triggeredRow.cheque_date}} of the Customer {{tblCheques.triggeredRow.party_name}} will be reverted.
+
+Reverts Status: Changes the cheque status from CLEARED back to PENDING.
+
+Clears Metadata: Removes the clearance_date and bank_account_id from the cheque record.
+
+Accounting Reversal: Automatically deletes the journal entry that was created during the clearance process, ensuring your ledger remains accurate.
+
+Bank Statement Restore: It identifies the linked bank statement entry and restores the consumed amount. If the statement entry was "Exhausted," it will move back to "Available" (or "Partially Consumed" if other cheques are still linked to it).
+Button5 (BUTTON_WIDGET) - text/label: Confirm
+MainContainer (CANVAS_WIDGET) - text/label: 
+navHeader (CONTAINER_WIDGET) - text/label: 
+Canvas_x4dk6wq4w3 (CANVAS_WIDGET) - text/label: 
+txtHeaderTitle (TEXT_WIDGET) - text/label: GNIDERTON ERP - Cheque Management
+btnGroupPageNav (BUTTON_GROUP_WIDGET) - text/label: 
+btnHeaderLogout (BUTTON_WIDGET) - text/label: Logout
+tblCheques (TABLE_WIDGET_V2) - text/label: Data
+selType (SELECT_WIDGET) - text/label: 
+selStatus (SELECT_WIDGET) - text/label: 
+Button1 (BUTTON_WIDGET) - text/label: Clear Selected Cheques
+ModalClearCheques (MODAL_WIDGET) - text/label: 
+Canvas1 (CANVAS_WIDGET) - text/label: 
+IconButton1 (ICON_BUTTON_WIDGET) - text/label: 
+List1 (LIST_WIDGET_V2) - text/label: 
+Canvas2 (CANVAS_WIDGET) - text/label: 
+Container1 (CONTAINER_WIDGET) - text/label: 
+Canvas3 (CANVAS_WIDGET) - text/label: 
+DatePicker1 (DATE_PICKER_WIDGET2) - text/label: Cheque Date
+Input1 (INPUT_WIDGET_V2) - text/label: Reference No
+Input2 (INPUT_WIDGET_V2) - text/label: Customer/Vendor
+Input3 (INPUT_WIDGET_V2) - text/label: Bank
+selStatementEntry (SELECT_WIDGET) - text/label: 
+Input4 (INPUT_WIDGET_V2) - text/label: Amount
+selClearBank (SELECT_WIDGET) - text/label: 
+dateClearance (DATE_PICKER_WIDGET2) - text/label: Date
+txtClearRemarks (INPUT_WIDGET_V2) - text/label: Remarks
+Statbox1 (STATBOX_WIDGET) - text/label: 
+Canvas4 (CANVAS_WIDGET) - text/label: 
+Text1 (TEXT_WIDGET) - text/label: Cheques
+Text2 (TEXT_WIDGET) - text/label: {{ tblCheques.selectedRows.length }} Cheques Selected
+
+Text3 (TEXT_WIDGET) - text/label: Total Amount: ₹{{ 
+  tblCheques.selectedRows.reduce((sum, row) => sum + Number(row.amount), 0).toLocaleString('en-IN') 
+}}
+
+Button3 (BUTTON_WIDGET) - text/label: Clear Cheque
+ModalBounceCheque (MODAL_WIDGET) - text/label: 
+Canvas5 (CANVAS_WIDGET) - text/label: 
+IconButton3 (ICON_BUTTON_WIDGET) - text/label: 
+Text4 (TEXT_WIDGET) - text/label: Cheque Bounce
+dateBounce (DATE_PICKER_WIDGET2) - text/label: Date
+selBounceReason (SELECT_WIDGET) - text/label: 
+selBounceEntry (SELECT_WIDGET) - text/label: 
+selDepositEntry (SELECT_WIDGET) - text/label: 
+numBankCharges (INPUT_WIDGET_V2) - text/label: Bank Charges
+numCustomerPenalty (INPUT_WIDGET_V2) - text/label: {{tblCheques.triggeredRow.party_type}} Bounce Charges
+Button2 (BUTTON_WIDGET) - text/label: Submit
+mdlChequeRev (MODAL_WIDGET) - text/label: 
+Canvas6 (CANVAS_WIDGET) - text/label: 
+IconButton4 (ICON_BUTTON_WIDGET) - text/label: 
+Text5 (TEXT_WIDGET) - text/label: Chq No:{{tblCheques.triggeredRow.cheque_number}} dated {{tblCheques.triggeredRow.cheque_date}} of the Customer {{tblCheques.triggeredRow.party_name}} will be reverted.
+
+Reverts Status: Changes the cheque status from CLEARED back to PENDING.
+
+Clears Metadata: Removes the clearance_date and bank_account_id from the cheque record.
+
+Accounting Reversal: Automatically deletes the journal entry that was created during the clearance process, ensuring your ledger remains accurate.
+
+Bank Statement Restore: It identifies the linked bank statement entry and restores the consumed amount. If the statement entry was "Exhausted," it will move back to "Available" (or "Partially Consumed" if other cheques are still linked to it).
+Button5 (BUTTON_WIDGET) - text/label: Confirm

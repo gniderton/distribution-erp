@@ -1,13 +1,36 @@
-import { api } from '@/lib/axios'
+import { api } from '@/lib/axios';
+import type { Cheque, ChequeFilter, ClearChequePayload, BulkClearChequePayload, BounceChequePayload } from './types';
 
-/** Full endpoint surface for the Cheque Management module — extracted from the source app (Build Spec §8). */
-export const cheque_managementApi = {
-  getBankAccounts: () => api.get('/api/bank-accounts').then((r) => r.data),
-  getEmployeesProfile: () => api.get('/api/employees/profile').then((r) => r.data),
-  getFinanceCheques: () => api.get('/api/finance/cheques').then((r) => r.data),
-  getFinanceReconciliationBankUnconsumedCredits: () => api.get('/api/finance/reconciliation/bank/unconsumed-credits').then((r) => r.data),
-  getFinanceReconciliationBankUnconsumedDebits: () => api.get('/api/finance/reconciliation/bank/unconsumed-debits').then((r) => r.data),
-  createFinanceChequesBulkClear: (payload: any) => api.post('/api/finance/cheques/bulk-clear', payload).then((r) => r.data),
-  createFinanceChequesBounce: (id: string | number, payload: any = {}) => api.post(`/api/finance/cheques/${id}/bounce`, payload).then((r) => r.data),
-  createFinanceChequesUnclear: (id: string | number, payload: any = {}) => api.post(`/api/finance/cheques/${id}/unclear`, payload).then((r) => r.data),
-}
+export const chequeApi = {
+  list: async (filters?: ChequeFilter) => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.type) params.append('type', filters.type);
+    if (filters?.party_type) params.append('party_type', filters.party_type);
+    if (filters?.start_date) params.append('start_date', filters.start_date);
+    if (filters?.end_date) params.append('end_date', filters.end_date);
+    
+    const { data } = await api.get<Cheque[]>(`/cheques?${params.toString()}`);
+    return data;
+  },
+
+  clear: async (id: number | string, payload: ClearChequePayload) => {
+    const { data } = await api.post(`/cheques/${id}/clear`, payload);
+    return data;
+  },
+
+  bulkClear: async (payload: BulkClearChequePayload) => {
+    const { data } = await api.post(`/cheques/bulk-clear`, payload);
+    return data;
+  },
+
+  bounce: async (id: number | string, payload: BounceChequePayload) => {
+    const { data } = await api.post(`/cheques/${id}/bounce`, payload);
+    return data;
+  },
+
+  revert: async (id: number | string) => {
+    const { data } = await api.post(`/cheques/${id}/revert`);
+    return data;
+  }
+};
