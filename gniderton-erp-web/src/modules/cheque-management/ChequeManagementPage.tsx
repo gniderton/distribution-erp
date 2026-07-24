@@ -12,8 +12,13 @@ import RevertChequeModal from './components/RevertChequeModal';
 export default function ChequeManagementPage() {
   const [filters, setFilters] = useState<ChequeFilter>({});
   const [search, setSearch] = useState('');
+  const apiFilters = useMemo(() => {
+    const f = { ...filters };
+    delete f.status; // Fetch all statuses to compute global stats
+    return f;
+  }, [filters]);
   
-  const { data: cheques = [], isLoading } = useCheques(filters);
+  const { data: cheques = [], isLoading } = useCheques(apiFilters);
 
   // Group Cheques
   const groupedCheques = useMemo(() => {
@@ -47,6 +52,12 @@ export default function ChequeManagementPage() {
 
   const filteredGroups = useMemo(() => {
     let result = groupedCheques;
+    
+    // Apply local status filter if selected
+    if (filters.status) {
+      result = result.filter((g: GroupedCheque) => g.status === filters.status);
+    }
+    
     if (search) {
       const q = search.toLowerCase();
       result = result.filter((g: GroupedCheque) => 
@@ -56,7 +67,7 @@ export default function ChequeManagementPage() {
       );
     }
     return result;
-  }, [groupedCheques, search]);
+  }, [groupedCheques, search, filters.status]);
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
