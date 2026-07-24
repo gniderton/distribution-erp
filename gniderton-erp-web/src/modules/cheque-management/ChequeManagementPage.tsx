@@ -10,7 +10,10 @@ import BounceChequeModal from './components/BounceChequeModal';
 import RevertChequeModal from './components/RevertChequeModal';
 
 export default function ChequeManagementPage() {
-  const [filters, setFilters] = useState<ChequeFilter>({});
+  const [filters, setFilters] = useState<ChequeFilter>({
+    type: 'INCOMING',
+    status: 'PENDING'
+  });
   const [search, setSearch] = useState('');
   const apiFilters = useMemo(() => {
     const f = { ...filters };
