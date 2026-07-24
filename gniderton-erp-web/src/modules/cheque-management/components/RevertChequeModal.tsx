@@ -1,13 +1,14 @@
-import type { Cheque } from '../types';
+import type { GroupedCheque } from '../types';
 import { useRevertCheque } from '../hooks';
 import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
+import { formatCurrency } from '../../../lib/utils';
 import { AlertTriangle } from 'lucide-react';
 
 interface RevertChequeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  cheque: Cheque;
+  cheque: GroupedCheque;
   onSuccess?: () => void;
 }
 
@@ -15,38 +16,49 @@ export default function RevertChequeModal({ isOpen, onClose, cheque, onSuccess }
   const revertMutation = useRevertCheque();
 
   const handleRevert = async () => {
-    await revertMutation.mutateAsync(cheque.id);
-    if (onSuccess) onSuccess();
-    onClose();
+    try {
+      await Promise.all(cheque.underlyingCheques.map(uc => 
+        revertMutation.mutateAsync(uc.id)
+      ));
+      if (onSuccess) onSuccess();
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to revert some cheques. Check console.');
+    }
   };
 
-  const isPending = revertMutation.isPending;
-
   return (
-    <Dialog open={isOpen} onClose={onClose} title="Revert Cleared Cheque" widthClass="max-w-md">
-      <div className="p-6 space-y-4">
-        <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
-          <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600" />
-          <div className="space-y-2">
-            <p className="font-semibold">
-              Chq No: {cheque.cheque_number} dated {cheque.cheque_date?.split('T')[0]} of {cheque.party_name || cheque.party_type} will be reverted.
+    <Dialog open={isOpen} onClose={onClose} title="Revert Clearance" widthClass="max-w-md">
+      <div className="p-6 space-y-6">
+        
+        <div className="flex flex-col items-center justify-center text-center space-y-4">
+          <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center">
+            <AlertTriangle size={24} />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-ink-900 mb-1">Revert Cheque Clearance?</h3>
+            <p className="text-sm text-ink-600">
+              You are about to revert Cheque <strong>{cheque.cheque_number}</strong> ({formatCurrency(cheque.amount)}) back to PENDING.
             </p>
-            <ul className="list-disc pl-4 space-y-1">
-              <li>Changes the cheque status from CLEARED back to PENDING.</li>
-              <li>Removes the clearance_date and bank_account_id.</li>
-              <li>Automatically deletes the journal entry created during clearance.</li>
-              <li>Restores the consumed amount on the linked bank statement entry.</li>
-            </ul>
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <div className="bg-surface border border-border-subtle rounded-lg p-4 text-sm text-ink-600">
+          <ul className="list-disc pl-4 space-y-1">
+            <li>Associated journal entries will be reversed.</li>
+            <li>The linked Bank Statement Entry will be freed up.</li>
+          </ul>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="secondary" onClick={onClose} className="w-full">Cancel</Button>
           <Button 
             variant="primary" 
+            className="w-full bg-amber-600 hover:bg-amber-700" 
             onClick={handleRevert} 
-            loading={isPending}
-            disabled={isPending}
+            loading={revertMutation.isPending}
+            disabled={revertMutation.isPending}
           >
             Confirm Revert
           </Button>

@@ -32,5 +32,10 @@ export const chequeApi = {
   revert: async (id: number | string) => {
     const { data } = await api.post(`/api/finance/cheques/${id}/revert`);
     return data;
+  },
+
+  getBankStatementEntries: async () => {
+    const { data } = await api.get(`/api/finance/reconciliation/bank/list?status=Unreconciled`);
+    return data;
   }
 };

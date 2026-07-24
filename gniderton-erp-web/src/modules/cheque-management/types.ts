@@ -42,7 +42,7 @@ export interface BulkClearChequeMapping {
 export interface BulkClearChequePayload {
   mappings: BulkClearChequeMapping[];
   clearance_date?: string;
-  bank_account_id: number;
+  bank_account_id?: number;
   remarks?: string;
 }
 
@@ -52,4 +52,16 @@ export interface BounceChequePayload {
   bank_charges?: number;
   customer_penalty?: number;
   vendor_penalty?: number;
+}
+
+export interface GroupedCheque {
+  id: string; // composite key
+  cheque_number: string;
+  cheque_date: string;
+  amount: number;
+  type: 'INCOMING' | 'OUTGOING';
+  party_name?: string;
+  bank_name?: string;
+  status: 'PENDING' | 'CLEARED' | 'BOUNCED';
+  underlyingCheques: Cheque[];
 }

@@ -42,3 +42,10 @@ export function useRevertCheque() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cheques'] })
   });
 }
+
+export function useBankStatementEntries() {
+  return useQuery({
+    queryKey: ['bankStatementEntries'],
+    queryFn: () => chequeApi.getBankStatementEntries()
+  });
+}
