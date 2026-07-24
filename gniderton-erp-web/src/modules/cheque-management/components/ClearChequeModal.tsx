@@ -114,13 +114,10 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
             </thead>
             <tbody className="divide-y divide-border-subtle">
               {selectedCheques.map(cheque => {
-                // Filter entries: INCOMING = CREDIT, OUTGOING = DEBIT
-                // Usually bank_statement_entries have type='Credit' or 'Debit'
-                // Fallback to searching by string match if type field varies
                 const validEntries = bankStatementEntries.filter((e: any) => {
-                  const t = (e.transaction_type || '').toUpperCase();
-                  if (cheque.type === 'INCOMING') return t === 'CREDIT' || t === 'CR' || e.amount > 0;
-                  if (cheque.type === 'OUTGOING') return t === 'DEBIT' || t === 'DR' || e.amount < 0;
+                  if (e.status === 'Exhausted') return false;
+                  if (cheque.type === 'INCOMING') return Number(e.credit_amount) > 0;
+                  if (cheque.type === 'OUTGOING') return Number(e.debit_amount) > 0;
                   return true;
                 });
 

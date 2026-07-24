@@ -52,6 +52,8 @@ export interface BounceChequePayload {
   bank_charges?: number;
   customer_penalty?: number;
   vendor_penalty?: number;
+  deposit_entry_id?: number;
+  bounce_entry_id?: number;
 }
 
 export interface GroupedCheque {

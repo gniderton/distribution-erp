@@ -35,7 +35,7 @@ export const chequeApi = {
   },
 
   getBankStatementEntries: async () => {
-    const { data } = await api.get(`/api/finance/reconciliation/bank/list?status=Unreconciled`);
+    const { data } = await api.get(`/api/finance/reconciliation/bank/list`);
     return data;
   }
 };
