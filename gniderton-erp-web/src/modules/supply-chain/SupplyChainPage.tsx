@@ -142,18 +142,18 @@ export default function SupplyChainPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 mt-6 mb-6">
+      <div className="flex border-b border-border-subtle mt-6 mb-6">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all ${
               activeTab === tab.id
-                ? 'border-brand-500 text-brand-600'
-                : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-border-subtle'
+                ? 'border-brand-600 text-brand-600'
+                : 'border-transparent text-ink-600 hover:text-ink-900'
             }`}
           >
-            <tab.icon size={16} />
+            <tab.icon size={14} />
             {tab.label}
           </button>
         ))}

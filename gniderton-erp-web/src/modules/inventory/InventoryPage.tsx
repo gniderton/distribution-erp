@@ -1193,10 +1193,10 @@ export default function InventoryPage() {
       )}
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-border-subtle">
+      <div className="flex border-b border-border-subtle mt-4 mb-4">
         <button
           onClick={() => { setActiveTab('po'); setSearchTerm(''); }}
-          className={`flex items-center gap-2 px-6 py-3.5 text-xs font-bold border-b-2 -mb-[2px] transition ${
+          className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all ${
             activeTab === 'po' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'
           }`}
         >
@@ -1205,7 +1205,7 @@ export default function InventoryPage() {
         </button>
         <button
           onClick={() => { setActiveTab('grn'); setSearchTerm(''); }}
-          className={`flex items-center gap-2 px-6 py-3.5 text-xs font-bold border-b-2 -mb-[2px] transition ${
+          className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all ${
             activeTab === 'grn' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'
           }`}
         >

@@ -157,7 +157,7 @@ export function InvoiceViewModal({ invoice, onClose }: { invoice: Invoice, onClo
     >
       <div className="space-y-8 mt-2">
         {/* Header Summary */}
-        <div className="flex flex-col sm:flex-row gap-6 justify-between items-start bg-ink-50/50 p-5 rounded-xl border border-ink-100">
+        <div className="flex flex-col sm:flex-row gap-6 justify-between items-start bg-surface p-5 rounded-xl">
           <div>
             <div className="text-sm font-medium text-ink-500 mb-1">Customer</div>
             <div className="text-lg font-semibold text-ink-900">{fullInvoice?.customer_name || invoice.customer_name || '-'}</div>
@@ -178,19 +178,19 @@ export function InvoiceViewModal({ invoice, onClose }: { invoice: Invoice, onClo
 
         {/* Detailed Metrics */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="p-4 bg-white rounded-xl border border-ink-100 shadow-sm">
+          <div className="p-4 bg-surface rounded-xl">
             <div className="text-xs font-semibold text-ink-500 uppercase tracking-wider mb-1">Paid Amount</div>
             <div className="text-lg font-medium">{formatCurrency(fullInvoice?.paid_amount || 0)}</div>
           </div>
-          <div className="p-4 bg-white rounded-xl border border-ink-100 shadow-sm">
+          <div className="p-4 bg-surface rounded-xl">
             <div className="text-xs font-semibold text-ink-500 uppercase tracking-wider mb-1">Delivery Status</div>
             <div className="text-lg font-medium capitalize">{fullInvoice?.delivery_status || '-'}</div>
           </div>
-          <div className="p-4 bg-white rounded-xl border border-ink-100 shadow-sm">
+          <div className="p-4 bg-surface rounded-xl">
             <div className="text-xs font-semibold text-ink-500 uppercase tracking-wider mb-1">Invoice Date</div>
             <div className="text-lg font-medium">{fullInvoice?.invoice_date ? new Date(fullInvoice.invoice_date).toLocaleDateString() : '-'}</div>
           </div>
-          <div className="p-4 bg-white rounded-xl border border-ink-100 shadow-sm">
+          <div className="p-4 bg-surface rounded-xl">
             <div className="text-xs font-semibold text-ink-500 uppercase tracking-wider mb-1">Order Date</div>
             <div className="text-lg font-medium">{fullInvoice?.order_date ? new Date(fullInvoice.order_date).toLocaleDateString() : '-'}</div>
           </div>
@@ -198,22 +198,22 @@ export function InvoiceViewModal({ invoice, onClose }: { invoice: Invoice, onClo
 
         {/* Custom Tabs */}
         <div>
-          <div className="flex border-b border-ink-200">
+          <div className="flex border-b border-border-subtle mt-4 mb-4">
             <button
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'original' ? 'border-primary text-primary' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
+              className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all ${activeTab === 'original' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
               onClick={() => setActiveTab('original')}
             >
               Original Lines
             </button>
             <button
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'delivery' ? 'border-primary text-primary' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
+              className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all ${activeTab === 'delivery' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
               onClick={() => setActiveTab('delivery')}
             >
               Delivery Cycle
             </button>
             {isEditMode && (
               <button
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'edit' ? 'border-primary text-primary' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all ${activeTab === 'edit' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
                 onClick={() => setActiveTab('edit')}
               >
                 Editable Lines
@@ -240,7 +240,7 @@ export function InvoiceViewModal({ invoice, onClose }: { invoice: Invoice, onClo
             )}
 
             {activeTab === 'delivery' && (
-              <div className="bg-white rounded-xl border border-ink-100 p-6 shadow-sm">
+              <div className="bg-surface rounded-xl p-6">
                 <DeliveryCycleTimeline invoiceId={fullInvoice?.id || invoice.invoice_id || invoice.id} />
               </div>
             )}
