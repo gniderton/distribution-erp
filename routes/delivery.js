@@ -486,7 +486,8 @@ router.get('/invoices/:id/delivery-cycle', async (req, res) => {
             FROM trip_invoices ti
             JOIN delivery_trips dt ON ti.trip_id = dt.id
             LEFT JOIN employees e ON dt.driver_id = e.id
-            WHERE ti.invoice_id = $1
+            JOIN sales_invoices si ON ti.invoice_id = si.id
+            WHERE (ti.invoice_id::text = $1 OR si.invoice_number = $1)
             ORDER BY ti.id ASC -- Chronological order of attempts
         `, [id]);
 
