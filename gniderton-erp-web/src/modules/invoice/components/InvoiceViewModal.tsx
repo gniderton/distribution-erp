@@ -10,6 +10,7 @@ import toast from 'react-hot-toast'
 import { Trash2, Plus } from 'lucide-react'
 import { differenceInDays } from 'date-fns'
 import { Input } from '@/components/ui/Input'
+import DeliveryCycleTimeline from '@/modules/supply-chain/components/DeliveryCycleTimeline'
 
 export function InvoiceViewModal({ invoice, onClose }: { invoice: Invoice, onClose: () => void }) {
   const [fullInvoice, setFullInvoice] = useState<Invoice | null>(null)
@@ -17,7 +18,7 @@ export function InvoiceViewModal({ invoice, onClose }: { invoice: Invoice, onClo
   const [isEditMode, setIsEditMode] = useState(false)
   const [editableLines, setEditableLines] = useState<InvoiceLine[]>([])
   const [isRegenerating, setIsRegenerating] = useState(false)
-  const [activeTab, setActiveTab] = useState<'original' | 'edit'>('original')
+  const [activeTab, setActiveTab] = useState<'original' | 'edit' | 'delivery'>('original')
   
   // State for new line
   const [newProductId, setNewProductId] = useState<string>('')
@@ -204,6 +205,12 @@ export function InvoiceViewModal({ invoice, onClose }: { invoice: Invoice, onClo
             >
               Original Lines
             </button>
+            <button
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'delivery' ? 'border-primary text-primary' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
+              onClick={() => setActiveTab('delivery')}
+            >
+              Delivery Cycle
+            </button>
             {isEditMode && (
               <button
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'edit' ? 'border-primary text-primary' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
@@ -230,6 +237,12 @@ export function InvoiceViewModal({ invoice, onClose }: { invoice: Invoice, onClo
                 ]}
                 isLoading={!fullInvoice}
               />
+            )}
+
+            {activeTab === 'delivery' && (
+              <div className="bg-white rounded-xl border border-ink-100 p-6 shadow-sm">
+                <DeliveryCycleTimeline invoiceId={fullInvoice?.id || invoice.invoice_id || invoice.id} />
+              </div>
             )}
 
             {activeTab === 'edit' && isEditMode && (

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { AutoTable } from '@/components/shared/AutoTable'
 import { Badge } from '@/components/ui/Badge'
@@ -11,7 +11,10 @@ import { ActiveTripDetailsModal } from './components/ActiveTripDetailsModal'
 import { format } from 'date-fns'
 import type { ColumnDef } from '@tanstack/react-table'
 import { DataTable } from '@/components/shared/DataTable'
-import { Plus, Activity, Truck, History, CheckCircle2, ClipboardCheck, LayoutList } from 'lucide-react'
+import { Input } from '@/components/ui/Input'
+import { Dialog } from '@/components/ui/Dialog'
+import DeliveryCycleTimeline from './components/DeliveryCycleTimeline'
+import { Plus, Activity, Truck, History, CheckCircle2, ClipboardCheck, LayoutList, Search, MapPin } from 'lucide-react'
 
 export default function SupplyChainPage() {
   const [activeTab, setActiveTab] = useState<'verifications' | 'trips' | 'history'>('verifications')
@@ -28,6 +31,21 @@ export default function SupplyChainPage() {
   // State for Trip Details Modal
   const [selectedTripDetailsId, setSelectedTripDetailsId] = useState<number | null>(null)
   const [selectedTripStatus, setSelectedTripStatus] = useState<string>('')
+  
+  const [historySearch, setHistorySearch] = useState('')
+  const [trackInvoiceId, setTrackInvoiceId] = useState('')
+  const [isTrackModalOpen, setIsTrackModalOpen] = useState(false)
+  
+  const filteredHistory = useMemo(() => {
+    if (!historyData) return []
+    if (!historySearch) return historyData
+    const lower = historySearch.toLowerCase()
+    return historyData.filter((h: any) => 
+      String(h.trip_number || '').toLowerCase().includes(lower) ||
+      String(h.driver_name || '').toLowerCase().includes(lower) ||
+      String(h.status || '').toLowerCase().includes(lower)
+    )
+  }, [historyData, historySearch])
 
   const tabs = [
     { id: 'verifications', label: `Pending Verifications (${syncsData?.length || 0})`, icon: ClipboardCheck },
@@ -124,7 +142,7 @@ export default function SupplyChainPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 border-b border-border mt-6 mb-6">
+      <div className="flex space-x-1 mt-6 mb-6">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -166,14 +184,43 @@ export default function SupplyChainPage() {
       )}
 
       {activeTab === 'history' && (
-        <DataTable
-          data={historyData}
-          columns={historyCols}
-          isLoading={historyLoading}
-          emptyTitle="No Settlement History"
-          emptyDescription="Historical verified syncs will appear here."
-          onRowClick={(row) => setSelectedHistorySyncId(row.id)}
-        />
+        <>
+          <div className="mb-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3 top-2.5 text-ink-400 w-4 h-4" />
+              <Input 
+                placeholder="Search history (Trip, Driver, Status)..." 
+                className="pl-9"
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Input
+                placeholder="Enter Invoice #"
+                value={trackInvoiceId}
+                onChange={(e) => setTrackInvoiceId(e.target.value)}
+                className="w-full sm:w-48"
+              />
+              <Button 
+                variant="secondary" 
+                onClick={() => trackInvoiceId && setIsTrackModalOpen(true)}
+                className="flex items-center gap-2"
+                disabled={!trackInvoiceId}
+              >
+                <MapPin size={16} /> Track Invoice
+              </Button>
+            </div>
+          </div>
+          <DataTable
+            data={filteredHistory}
+            columns={historyCols}
+            isLoading={historyLoading}
+            emptyTitle="No History"
+            emptyDescription="Completed or rejected syncs will appear here."
+            onRowClick={(row) => setSelectedHistorySyncId(row.id)}
+          />
+        </>
       )}
 
       <SyncVerificationModal
@@ -205,6 +252,18 @@ export default function SupplyChainPage() {
           setIsCreateTripOpen(true);
         }}
       />
+
+      {/* Track Invoice Modal */}
+      <Dialog 
+        open={isTrackModalOpen} 
+        onClose={() => setIsTrackModalOpen(false)}
+        title={`Delivery Tracking: Invoice #${trackInvoiceId}`}
+        widthClass="max-w-md"
+      >
+        <div className="p-2">
+          {isTrackModalOpen && <DeliveryCycleTimeline invoiceId={trackInvoiceId} />}
+        </div>
+      </Dialog>
     </div>
   )
 }
