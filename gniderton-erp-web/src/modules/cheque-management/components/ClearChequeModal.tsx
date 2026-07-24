@@ -107,6 +107,7 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
             <thead className="bg-ink-50">
               <tr>
                 <th className="p-3 font-medium text-ink-700">Cheque No.</th>
+                <th className="p-3 font-medium text-ink-700">Party</th>
                 <th className="p-3 font-medium text-ink-700">Amount</th>
                 <th className="p-3 font-medium text-ink-700">Bank</th>
                 <th className="p-3 font-medium text-ink-700 w-1/2">Bank Statement Entry</th>
@@ -124,6 +125,7 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
                 return (
                   <tr key={cheque.id}>
                     <td className="p-3 font-medium">{cheque.cheque_number}</td>
+                    <td className="p-3 text-ink-900">{cheque.party_name}</td>
                     <td className="p-3 font-semibold">{formatCurrency(cheque.amount)}</td>
                     <td className="p-3 text-ink-600">{cheque.bank_name || 'N/A'}</td>
                     <td className="p-3">
