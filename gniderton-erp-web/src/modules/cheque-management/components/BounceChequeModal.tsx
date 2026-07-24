@@ -16,6 +16,7 @@ interface BounceChequeModalProps {
 export default function BounceChequeModal({ isOpen, onClose, cheque, onSuccess }: BounceChequeModalProps) {
   const [bounceDate, setBounceDate] = useState(new Date().toISOString().split('T')[0]);
   const [bounceReason, setBounceReason] = useState('');
+  const [customReason, setCustomReason] = useState('');
   const [bankCharges, setBankCharges] = useState('');
   const [customerPenalty, setCustomerPenalty] = useState('');
   
@@ -30,12 +31,13 @@ export default function BounceChequeModal({ isOpen, onClose, cheque, onSuccess }
 
     try {
       // Execute bounce for all underlying cheques
+      const finalReason = bounceReason === 'Other' ? customReason : bounceReason;
       await Promise.all(cheque.underlyingCheques.map((uc, index) => 
         bounceMutation.mutateAsync({
           id: uc.id,
           payload: {
             bounce_date: bounceDate,
-            bounce_reason: bounceReason,
+            bounce_reason: finalReason,
             // Apply charges and penalty ONLY to the first cheque in the group
             bank_charges: index === 0 ? (Number(bankCharges) || 0) : 0,
             customer_penalty: index === 0 ? (Number(customerPenalty) || 0) : 0,
@@ -93,12 +95,28 @@ export default function BounceChequeModal({ isOpen, onClose, cheque, onSuccess }
           </div>
           <div>
             <label className="block text-sm font-medium text-ink-700 mb-1">Reason <span className="text-rose-500">*</span></label>
-            <Input 
-              placeholder="e.g. Insufficient Funds" 
-              value={bounceReason} 
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBounceReason(e.target.value)} 
-              className="w-full"
-            />
+            <select
+              className="w-full h-9 rounded-lg border border-border-subtle text-sm px-3 outline-none focus:border-brand-500 bg-white"
+              value={bounceReason}
+              onChange={(e) => setBounceReason(e.target.value)}
+            >
+              <option value="">Select Reason...</option>
+              <option value="Insufficient Funds">Insufficient Funds</option>
+              <option value="Signature Mismatch">Signature Mismatch</option>
+              <option value="Account Closed">Account Closed</option>
+              <option value="Payment Stopped by Drawer">Payment Stopped by Drawer</option>
+              <option value="Date Issue (Post-dated/Stale)">Date Issue (Post-dated/Stale)</option>
+              <option value="Alteration requires signature">Alteration requires signature</option>
+              <option value="Other">Other</option>
+            </select>
+            {bounceReason === 'Other' && (
+              <Input 
+                className="w-full mt-2"
+                placeholder="Specify custom reason..."
+                value={customReason}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomReason(e.target.value)}
+              />
+            )}
           </div>
 
           {/* Statement Entries for Reconciliation */}
