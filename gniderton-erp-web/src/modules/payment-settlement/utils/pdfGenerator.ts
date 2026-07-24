@@ -146,11 +146,15 @@ export const generatePaymentSettlementPDF = async (reportData: any, explicitRepo
     doc.text("PAYMENTS / COLLECTIONS", margin, currentY);
     currentY += 10;
     
+    const sortedPayments = [...payments].sort((a: any, b: any) => 
+      String(a.customer_name || '').localeCompare(String(b.customer_name || ''))
+    );
+
     autoTable(doc as any, {
       startY: currentY,
       margin: { left: margin, right: margin },
       head: [["S.N", "CUSTOMER", "INVOICES", "MODE", "REF / CHEQUE", "STATUS", "AMOUNT (Rs.)"]],
-      body: payments.map((row: any, index: number) => {
+      body: sortedPayments.map((row: any, index: number) => {
         return [
           index + 1,
           row.customer_name || "-",
