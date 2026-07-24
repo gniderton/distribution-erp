@@ -4,6 +4,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { formatCurrency } from '../../../lib/utils';
 import { AlertTriangle } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface RevertChequeModalProps {
   isOpen: boolean;
@@ -21,10 +22,11 @@ export default function RevertChequeModal({ isOpen, onClose, cheque, onSuccess }
         revertMutation.mutateAsync(uc.id)
       ));
       if (onSuccess) onSuccess();
+      toast.success('Cheque reverted successfully');
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to revert some cheques. Check console.');
+      toast.error(err?.response?.data?.error || 'Failed to revert cheques.');
     }
   };
 

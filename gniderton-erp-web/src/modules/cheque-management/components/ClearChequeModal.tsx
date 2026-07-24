@@ -5,6 +5,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatCurrency } from '../../../lib/utils';
+import toast from 'react-hot-toast';
 
 interface ClearChequeModalProps {
   isOpen: boolean;
@@ -39,25 +40,25 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
     }
 
     if (payloadMappings.length === 0) {
-      return alert('Please select at least one Bank Statement Entry');
+      toast.error('Please select at least one Bank Statement Entry');
+      return;
     }
 
-    // Since we removed bankAccountId, we need to pass a dummy or 0 if backend expects it, 
-    // but the backend derives it from the statement entry. The API still requires it though:
-    // `if (!bank_account_id) { return res.status(400).json({ error: 'Bank Account is required for clearing' }); }`
-    // Wait, the backend in routes/cheques.js bulk-clear route has: `if (!bank_account_id) return res.status(400)...`
-    // But it resolves it from the statement anyway: `const resolvedBankId = bseRes.rows[0].bank_account_id;`
-    // So we can just pass a dummy value like 1, and the backend overrides it.
-    
-    await bulkClearMutation.mutateAsync({
-      mappings: payloadMappings,
-      clearance_date: clearanceDate,
-      bank_account_id: 1, // Dummy, overridden by backend
-      remarks
-    });
+    try {
+      await bulkClearMutation.mutateAsync({
+        mappings: payloadMappings,
+        clearance_date: clearanceDate,
+        bank_account_id: 1, // Dummy, overridden by backend
+        remarks
+      });
 
-    if (onSuccess) onSuccess();
-    onClose();
+      if (onSuccess) onSuccess();
+      toast.success('Cheques cleared successfully');
+      onClose();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.response?.data?.error || 'Failed to clear cheques.');
+    }
   };
 
   const isPending = clearMutation.isPending || bulkClearMutation.isPending;

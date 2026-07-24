@@ -5,6 +5,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatCurrency } from '../../../lib/utils';
+import toast from 'react-hot-toast';
 
 interface BounceChequeModalProps {
   isOpen: boolean;
@@ -49,10 +50,11 @@ export default function BounceChequeModal({ isOpen, onClose, cheque, onSuccess }
       ));
 
       if (onSuccess) onSuccess();
+      toast.success('Cheque bounced successfully');
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Failed to bounce some cheques. Check console.');
+      toast.error(err?.response?.data?.error || 'Failed to bounce cheques.');
     }
   };
 
