@@ -199,9 +199,9 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                     toast.error("Failed to generate PDF")
                   }
                 }} 
-                className="flex items-center gap-2 p-2 hover:bg-surface rounded-lg transition text-brand-600 font-semibold text-sm"
+                className="flex items-center gap-2 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 rounded-lg transition text-white font-semibold text-sm shadow-sm"
               >
-                <Download className="w-4 h-4" /> <span className="hidden sm:inline">Download</span>
+                <Download className="w-4 h-4" /> <span className="hidden sm:inline">Download PDF</span>
               </button>
               <button onClick={onClose} className="p-2 hover:bg-surface rounded-lg transition text-ink-500">
                 <X className="w-5 h-5" />
@@ -217,21 +217,21 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                   <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1">Total Cash</div>
                   <div className="text-xl font-black text-emerald-900">₹{Number(data?.summary?.total_collection_cash || 0).toFixed(2)}</div>
                 </div>
-                <button onClick={() => { setActiveTab('Settlement'); setSettlementSubTab('Cash'); }} className="text-emerald-700 bg-emerald-100 hover:bg-emerald-200 text-xs px-3 py-1 rounded-md font-bold transition">Verify →</button>
+                {!isSettled && <button onClick={() => { setActiveTab('Settlement'); setSettlementSubTab('Cash'); }} className="text-emerald-700 bg-emerald-100 hover:bg-emerald-200 text-xs px-3 py-1 rounded-md font-bold transition">Verify →</button>}
               </div>
               <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex justify-between items-end">
                 <div>
                   <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">Total Cheque</div>
                   <div className="text-xl font-black text-blue-900">₹{Number(data?.summary?.total_collection_cheque || 0).toFixed(2)}</div>
                 </div>
-                <button onClick={() => { setActiveTab('Settlement'); setSettlementSubTab('Cheque'); }} className="text-blue-700 bg-blue-100 hover:bg-blue-200 text-xs px-3 py-1 rounded-md font-bold transition">Verify →</button>
+                {!isSettled && <button onClick={() => { setActiveTab('Settlement'); setSettlementSubTab('Cheque'); }} className="text-blue-700 bg-blue-100 hover:bg-blue-200 text-xs px-3 py-1 rounded-md font-bold transition">Verify →</button>}
               </div>
               <div className="bg-purple-50/50 border border-purple-100 rounded-xl p-4 flex justify-between items-end">
                 <div>
                   <div className="text-[10px] font-bold text-purple-600 uppercase tracking-wider mb-1">Total Online</div>
                   <div className="text-xl font-black text-purple-900">₹{Number(data?.summary?.total_collection_online || 0).toFixed(2)}</div>
                 </div>
-                <button onClick={() => { setActiveTab('Settlement'); setSettlementSubTab('Online'); }} className="text-purple-700 bg-purple-100 hover:bg-purple-200 text-xs px-3 py-1 rounded-md font-bold transition">Verify →</button>
+                {!isSettled && <button onClick={() => { setActiveTab('Settlement'); setSettlementSubTab('Online'); }} className="text-purple-700 bg-purple-100 hover:bg-purple-200 text-xs px-3 py-1 rounded-md font-bold transition">Verify →</button>}
               </div>
             </div>
           )}
