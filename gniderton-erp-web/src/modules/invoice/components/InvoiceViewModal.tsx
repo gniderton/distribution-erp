@@ -244,7 +244,7 @@ export function InvoiceViewModal({ invoice, onClose }: { invoice: Invoice, onClo
 
             {activeTab === 'delivery' && (
               <div className="bg-surface rounded-xl p-6">
-                <DeliveryCycleTimeline invoiceId={fullInvoice?.id || invoice.invoice_id || invoice.id} />
+                <DeliveryCycleTimeline invoiceId={fullInvoice?.invoice_id || invoice.invoice_id || invoice.id} />
               </div>
             )}
 
