@@ -596,7 +596,7 @@ router.post('/:id/auto-verify-online', async (req, res) => {
         if (sumRes.rows.length === 0) throw new Error("Report not found");
         const { dse_id, report_date } = sumRes.rows[0];
 
-        const pays = await client.query(`SELECT id, amount, transaction_ref, payment_date, payment_number, payment_mode FROM customer_payments WHERE report_id=$1 AND payment_mode IN ('NEFT','UPI','Bank Transfer') AND verification_status='Pending'`, [id]);
+        const pays = await client.query(`SELECT id, amount, transaction_ref, payment_date, payment_number, payment_mode FROM customer_payments WHERE report_id=$1 AND payment_mode IN ('NEFT','UPI','Bank Transfer','NEFT/RTGS','IMPS','RTGS','Online') AND verification_status='Pending'`, [id]);
 
         let count = 0;
         for (let p of pays.rows) {
