@@ -14,7 +14,7 @@ export const inventoryApi = {
   getMasterHsn: () => api.get('/api/master/hsn').then((r) => r.data),
   getMasterTaxes: () => api.get('/api/master/taxes').then((r) => r.data),
   getMasterVendorAddresses: () => api.get('/api/master/vendor-addresses').then((r) => r.data),
-  getProducts: () => api.get('/api/products').then((r) => r.data),
+  getProducts: () => api.get('/api/products').then((r) => Array.isArray(r.data) ? r.data : (r.data?.data || [])),
   getProductsTemplateData: () => api.get('/api/products/template-data').then((r) => r.data),
   getPurchaseInvoices: () => api.get('/api/purchase-invoices').then((r) => r.data),
   getPurchaseOrders: () => api.get('/api/purchase-orders').then((r) => r.data),

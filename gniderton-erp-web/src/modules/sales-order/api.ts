@@ -1,7 +1,7 @@
 import { api } from '@/lib/axios'
 
 export const sales_orderApi = {
-  getProducts: () => api.get('/api/products').then((r) => r.data),
+  getProducts: () => api.get('/api/products').then((r) => Array.isArray(r.data) ? r.data : (r.data?.data || [])),
   // Filter for 'Confirmed' sales orders by default to match Appsmith getSalesOrder action
   getSalesOrders: (status = 'Confirmed') => 
     api.get('/api/sales-orders', { params: { status } }).then((r) => r.data),

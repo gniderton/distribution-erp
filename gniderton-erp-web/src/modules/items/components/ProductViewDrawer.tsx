@@ -53,7 +53,7 @@ function FormGroup({ label, error, children }: { label: React.ReactNode | string
 }
 
 export function ProductViewDrawer({ open, onClose, product }: Props) {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'details' | 'batches' | 'ledger'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'details' | 'batches' | 'ledger'>(product ? 'dashboard' : 'details')
   const isEditing = !!product
   const [isEditMode, setIsEditMode] = useState(!product)
   const [editingBatch, setEditingBatch] = useState<any | null>(null)
