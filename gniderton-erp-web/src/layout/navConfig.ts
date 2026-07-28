@@ -4,7 +4,7 @@ import {
   Package, Route,
   Landmark, Boxes, ScrollText, ArrowLeftRight, Wallet, Receipt, BarChart3,
   Users, GraduationCap, Trophy,
-  UploadCloud, Settings, PenSquare,
+  UploadCloud, Settings, PenSquare, FileSpreadsheet,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -75,6 +75,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Migration Setup', path: '/migration-setup', code: 'MIG', icon: UploadCloud },
       { label: 'Settings', path: '/settings', code: 'SET', icon: Settings },
       { label: 'Letterhead Editor', path: '/letterhead-editor', code: 'LTR', icon: PenSquare },
+      { label: 'Scratchpad', path: '/scratchpad', code: 'PAD', icon: FileSpreadsheet },
     ],
   },
 ]

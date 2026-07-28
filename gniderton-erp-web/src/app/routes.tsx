@@ -26,6 +26,7 @@ import IncentivesPage from '@/modules/incentives/IncentivesPage'
 import MigrationSetupPage from '@/modules/migration-setup/MigrationSetupPage'
 import SettingsPage from '@/modules/settings/SettingsPage'
 import LetterheadEditorPage from '@/modules/letterhead-editor/LetterheadEditorPage'
+import ScratchpadPage from '@/modules/scratchpad/ScratchpadPage'
 
 export function AppRoutes() {
   return (
@@ -64,15 +65,16 @@ export function AppRoutes() {
           <Route path="/customer" element={<CustomerPage />} />
           <Route path="/hr" element={<HrPage />} />
           <Route path="/incentives" element={<IncentivesPage />} />
-
-          {/* Admin */}
+          
+          {/* Admin / Tools */}
           <Route path="/migration-setup" element={<MigrationSetupPage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/letterhead-editor" element={<LetterheadEditorPage />} />
+          <Route path="/letterhead" element={<LetterheadEditorPage />} />
+          <Route path="/scratchpad" element={<ScratchpadPage />} />
         </Route>
       </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
 }
