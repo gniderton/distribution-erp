@@ -134,7 +134,8 @@ app.use('/api/finance/transfers', require('./routes/transfers')); // [NEW] Inter
 app.use('/api/finance/loans', require('./routes/loans')); // [NEW] Loan Management
 app.use('/api', require('./routes/accounting')); // Shorthand for /api/journal-entries
 app.use('/api/finance/gst', require('./routes/gst_reports'));
-app.use('/api/backups', require('./routes/backups')); 
+app.use('/api/backups', require('./routes/backups'));
+app.use('/api/jobs', require('./routes/jobs'));
 
 
 // [TEMP] Migration Endpoint to fix Combo Schema

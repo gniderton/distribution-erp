@@ -2,7 +2,7 @@ const { pool } = require('./config/db');
 const fs = require('fs');
 
 async function run() {
-    const sql = fs.readFileSync('./database/186_remove_dse_report_uniqueness.sql', 'utf8');
+    const sql = fs.readFileSync('./database/206_background_jobs_schema.sql', 'utf8');
     try {
         await pool.query(sql);
         console.log('Migration successful');
