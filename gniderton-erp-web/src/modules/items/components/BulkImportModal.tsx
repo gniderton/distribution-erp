@@ -5,28 +5,83 @@ import { itemsApi } from '../api'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { UploadCloud, Download } from 'lucide-react'
+import Papa from 'papaparse'
+import { useBrands, useCategories, useVendors, useTaxes, useHsn } from '../hooks'
 
 export function BulkImportModal({ open, onClose }: { open: boolean, onClose: () => void }) {
   const qc = useQueryClient()
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
 
+  const { data: brands } = useBrands()
+  const { data: categories } = useCategories()
+  const { data: vendors } = useVendors()
+  const { data: taxes } = useTaxes()
+  const { data: hsn } = useHsn()
+
   const handleUpload = async () => {
     if (!file) return
     setLoading(true)
-    const formData = new FormData()
-    formData.append('file', file)
+    
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        try {
+          const mappedItems = results.data.map((row: any, index: number) => {
+            // Find IDs by Name
+            const brand = brands?.find((b: any) => b.brand_name?.toLowerCase() === row['Brand Name']?.toLowerCase())
+            const category = categories?.find((c: any) => c.category_name?.toLowerCase() === row['Category Name']?.toLowerCase())
+            const vendor = vendors?.find((v: any) => v.vendor_name?.toLowerCase() === row['Vendor Name']?.toLowerCase())
+            const tax = taxes?.find((t: any) => t.tax_name?.toLowerCase() === row['Tax Name']?.toLowerCase())
+            const hsnRecord = hsn?.find((h: any) => h.hsn_code?.toString() === row['HSN Code']?.toString())
 
-    try {
-      await itemsApi.import(formData)
-      toast.success('Products imported successfully')
-      qc.invalidateQueries({ queryKey: ['products'] })
-      onClose()
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to import products')
-    } finally {
-      setLoading(false)
-    }
+            if (!brand) throw new Error(`Row ${index + 1}: Brand "${row['Brand Name']}" not found`)
+            if (!category) throw new Error(`Row ${index + 1}: Category "${row['Category Name']}" not found`)
+            if (!vendor) throw new Error(`Row ${index + 1}: Vendor "${row['Vendor Name']}" not found`)
+            if (!row['Product Name']) throw new Error(`Row ${index + 1}: Product Name is required`)
+
+            return {
+              brand_id: brand.id,
+              category_id: category.id,
+              vendor_id: vendor.id,
+              tax_id: tax?.id || null,
+              hsn_id: hsnRecord?.id || null,
+              product_name: row['Product Name'],
+              mrp: Number(row['MRP']) || 0,
+              purchase_rate: Number(row['Purchase Rate']) || 0,
+              distributor_rate: Number(row['Distributor Rate']) || 0,
+              wholesale_rate: Number(row['Wholesale Rate']) || 0,
+              dealer_rate: Number(row['Dealer Rate']) || 0,
+              retail_rate: Number(row['Retail Rate']) || 0,
+              ean_code: row['EAN'] || null,
+              case_quantity: Number(row['Case Qty']) || 1,
+              uom: row['UOM'] || 'Pcs',
+              model_number: row['Model Number'] || null,
+              min_stock_level: Number(row['Min Stock']) || 0,
+              box_length_cm: Number(row['Length(cm)']) || null,
+              box_width_cm: Number(row['Width(cm)']) || null,
+              box_height_cm: Number(row['Height(cm)']) || null,
+              weight_kg: Number(row['Weight(kg)']) || null,
+              description: row['Description'] || null
+            }
+          })
+
+          await itemsApi.import({ items: mappedItems })
+          toast.success('Products imported successfully')
+          qc.invalidateQueries({ queryKey: ['products'] })
+          onClose()
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to import products')
+        } finally {
+          setLoading(false)
+        }
+      },
+      error: (error) => {
+        toast.error(`CSV Parsing Error: ${error.message}`)
+        setLoading(false)
+      }
+    })
   }
 
   const handleDownloadTemplate = () => {

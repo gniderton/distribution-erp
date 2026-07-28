@@ -38,6 +38,6 @@ export const itemsApi = {
   bulkStatus: (payload: { ids: (string | number)[]; status: string }) =>
     api.post('/api/products/bulk-status', payload).then((r) => r.data),
   bulkUpdate: (payload: any) => api.post('/api/products/bulk-update', payload).then((r) => r.data),
-  import: (formData: FormData) =>
-    api.post('/api/products/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data),
+  import: (payload: { items: any[] }) =>
+    api.post('/api/products/import', payload).then((r) => r.data),
 }
