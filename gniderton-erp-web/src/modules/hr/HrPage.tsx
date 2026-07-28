@@ -1,32 +1,62 @@
 import { useState } from 'react'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { AutoTable } from '@/components/shared/AutoTable'
-import { useList } from './hooks'
+import { EmployeesTab } from './components/EmployeesTab'
+import { BulkOperationsTab } from './components/BulkOperationsTab'
+import { PayrollProcessingTab } from './components/PayrollProcessingTab'
+import { AdvancesLedgerTab } from './components/AdvancesLedgerTab'
+import { Users, Calendar, Banknote, Landmark } from 'lucide-react'
+
+type Tab = 'employees' | 'bulk' | 'payroll' | 'advances'
 
 export default function HrPage() {
-  const { data, isLoading, isError } = useList()
-  const [_selected, setSelected] = useState<any>(null)
+  const [activeTab, setActiveTab] = useState<Tab>('employees')
+
+  const tabs = [
+    { id: 'employees', label: 'Employees', icon: Users },
+    { id: 'bulk', label: 'Bulk Operations', icon: Calendar },
+    { id: 'payroll', label: 'Payroll Processing', icon: Banknote },
+    { id: 'advances', label: 'Advances & Ledger', icon: Landmark },
+  ] as const
 
   return (
-    <div>
-      <PageHeader
-        eyebrow="HRM · People"
-        title="HR"
-        description="Employee directory, attendance, and payroll."
-      />
-      <AutoTable
-        data={data}
-        isLoading={isLoading}
-        isError={isError}
-        emptyTitle="No records yet"
-        emptyDescription="Data from the connected API will appear here once available."
-        onRowClick={(row) => setSelected(row)}
-      />
-      <p className="text-xs text-ink-600/60 mt-3">
-        Read-only scaffold — see Build Spec §8 for the full endpoint list and
-        the Vendor / Items / Customer / Invoice modules for the complete
-        create/edit/drawer pattern to extend this page with.
-      </p>
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="px-6 pt-6 pb-2 shrink-0">
+        <PageHeader
+          eyebrow="HRMS & Payroll"
+          title="Human Resources"
+          description="Manage employees, attendance, payroll runs, and financial ledgers."
+        />
+        
+        <div className="flex space-x-1 border-b border-ink-200 mt-6 overflow-x-auto">
+          {tabs.map(tab => {
+            const Icon = tab.icon
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as Tab)}
+                className={`
+                  flex items-center space-x-2 px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors
+                  ${isActive 
+                    ? 'border-brand-500 text-brand-600' 
+                    : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300'
+                  }
+                `}
+              >
+                <Icon className={`w-4 h-4 ${isActive ? 'text-brand-500' : 'text-ink-400'}`} />
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto bg-ink-50/50 p-6">
+        {activeTab === 'employees' && <EmployeesTab />}
+        {activeTab === 'bulk' && <BulkOperationsTab />}
+        {activeTab === 'payroll' && <PayrollProcessingTab />}
+        {activeTab === 'advances' && <AdvancesLedgerTab />}
+      </div>
     </div>
   )
 }
