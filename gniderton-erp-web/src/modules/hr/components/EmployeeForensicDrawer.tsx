@@ -13,7 +13,7 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
   const { data, isLoading } = useEmployeeProfile(employeeId)
 
   return (
-    <Drawer isOpen={!!employeeId} onClose={onClose} title="Employee Profile" size="xl">
+    <Drawer open={!!employeeId} onClose={onClose} title="Employee Profile">
       {isLoading ? (
         <div className="p-6 text-center text-ink-500">Loading profile...</div>
       ) : data ? (
@@ -30,16 +30,16 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
                 </h3>
                 <p className="text-ink-600">{data.profile?.designation}</p>
                 <div className="flex space-x-2 mt-2">
-                  <Badge variant={data.profile?.status === 'Active' ? 'success' : 'secondary'}>
+                  <Badge tone={data.profile?.status === 'Active' ? 'success' : 'neutral'}>
                     {data.profile?.status}
                   </Badge>
-                  <Badge variant="outline">{data.profile?.department}</Badge>
+                  <Badge tone="neutral">{data.profile?.department}</Badge>
                 </div>
               </div>
             </div>
             
             <div className="flex space-x-2">
-              <Button variant="outline" size="sm">Update Salary</Button>
+              <Button variant="secondary" size="sm">Update Salary</Button>
               <Button variant="danger" size="sm">Resign</Button>
             </div>
           </div>
