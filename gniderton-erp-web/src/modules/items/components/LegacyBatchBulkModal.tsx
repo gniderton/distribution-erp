@@ -1,12 +1,13 @@
 import { Dialog } from '@/components/ui/Dialog'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useProducts, useCreateLegacyBatchesBulk } from '../hooks'
 import toast from 'react-hot-toast'
 import { Plus, Trash2 } from 'lucide-react'
+import { SearchableSelect } from '@/components/ui/SearchableSelect'
 
 const batchSchema = z.object({
   product_id: z.coerce.number().min(1, 'Product is required'),
@@ -112,18 +113,25 @@ export default function LegacyBatchBulkModal({ open, onClose }: Props) {
             <tbody className="divide-y divide-border-subtle">
               {fields.map((field, index) => (
                 <tr key={field.id} className="hover:bg-ink-50/50">
-                  <td className="p-2">
-                    <select 
-                      className={`w-full h-9 rounded-lg border text-sm px-2 outline-none focus:border-brand-500 bg-white ${errors.batches?.[index]?.product_id ? 'border-rose-500' : 'border-border-subtle'}`}
-                      {...register(`batches.${index}.product_id`)}
-                    >
-                      <option value={0}>-- Select Product --</option>
-                      {products?.map((p: any) => (
-                        <option key={p.id} value={p.id}>{p.product_name} ({p.product_code})</option>
-                      ))}
-                    </select>
+                  <td className="p-2 align-top">
+                    <Controller
+                      name={`batches.${index}.product_id`}
+                      control={control}
+                      render={({ field: { value, onChange } }) => (
+                        <SearchableSelect
+                          value={value}
+                          onChange={onChange}
+                          options={(products || []).map((p: any) => ({
+                            value: p.id,
+                            label: `${p.product_name} (${p.product_code})`
+                          }))}
+                          placeholder="-- Select Product --"
+                          className={errors.batches?.[index]?.product_id ? 'border-rose-500 rounded-lg border' : ''}
+                        />
+                      )}
+                    />
                   </td>
-                  <td className="p-2">
+                  <td className="p-2 align-top">
                     <Input className="h-9 w-full" placeholder="LEGACY-001" {...register(`batches.${index}.batch_code`)} />
                   </td>
                   <td className="p-2">
@@ -147,7 +155,7 @@ export default function LegacyBatchBulkModal({ open, onClose }: Props) {
                   <td className="p-2">
                     <Input type="number" step="0.01" className="h-9 w-full" placeholder="0.00" {...register(`batches.${index}.retail_rate`)} />
                   </td>
-                  <td className="p-2 text-center">
+                  <td className="p-2 align-top text-center">
                     <Button variant="ghost" size="sm" onClick={() => remove(index)} className="text-rose-500 hover:text-rose-600 hover:bg-rose-50" type="button">
                       <Trash2 size={16} />
                     </Button>
