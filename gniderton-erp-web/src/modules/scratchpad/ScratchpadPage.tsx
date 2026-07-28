@@ -3,7 +3,7 @@ import { Workbook, WorkbookInstance } from '@fortune-sheet/react';
 import '@fortune-sheet/react/dist/index.css';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/Button';
-import { Download, Save, Trash2 } from 'lucide-react';
+import { Download, Save, Trash2, Upload, FileJson } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as ExcelJS from 'exceljs';
 
@@ -28,6 +28,42 @@ export default function ScratchpadPage() {
     }
     setLoading(false);
   }, []);
+
+  const handleExportJson = () => {
+    if (!workbookRef.current) return;
+    const data = workbookRef.current.getAllSheets();
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Scratchpad_Draft_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Draft exported! You can email this to yourself and import it later.');
+  };
+
+  const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        if (Array.isArray(json)) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(json));
+          toast.success('Draft imported successfully!');
+          window.location.reload();
+        } else {
+          toast.error('Invalid draft format');
+        }
+      } catch (err) {
+        toast.error('Failed to parse draft file');
+      }
+    };
+    reader.readAsText(file);
+    // clear input
+    e.target.value = '';
+  };
 
   const handleSaveDraft = () => {
     if (workbookRef.current) {
@@ -98,11 +134,24 @@ export default function ScratchpadPage() {
         description="Excel-like calculations, saved locally to your browser."
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={handleClear} className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200">
-              <Trash2 className="h-4 w-4 mr-2" /> Clear
+            <Button variant="secondary" onClick={handleClear} className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200" title="Wipe Scratchpad">
+              <Trash2 className="h-4 w-4" />
             </Button>
+            
+            <div className="h-6 w-px bg-border-subtle mx-1" />
+
+            <label className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg border border-border-subtle bg-white text-ink-900 hover:bg-ink-50 cursor-pointer transition-colors shadow-sm">
+              <Upload className="h-4 w-4" /> Import Draft
+              <input type="file" accept=".json" className="hidden" onChange={handleImportJson} />
+            </label>
+            <Button variant="secondary" onClick={handleExportJson} title="Export Raw Draft (.json)">
+              <FileJson className="h-4 w-4 mr-2" /> Export Draft
+            </Button>
+
+            <div className="h-6 w-px bg-border-subtle mx-1" />
+
             <Button variant="secondary" onClick={handleSaveDraft}>
-              <Save className="h-4 w-4 mr-2" /> Save Draft
+              <Save className="h-4 w-4 mr-2" /> Save to Browser
             </Button>
             <Button variant="primary" onClick={handleExportExcel}>
               <Download className="h-4 w-4 mr-2" /> Export to Excel
