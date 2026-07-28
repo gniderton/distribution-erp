@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { calculateFreeItems } = require('../utils/schemeEngine'); // [NEW] Import
+const { runBackgroundJob } = require('../utils/jobRunner');
 
 // --- SALES ORDERS (Header/Lines) ---
 
@@ -1654,12 +1655,16 @@ router.post('/bulk-invoice-generate', async (req, res) => {
     if (typeof order_ids === 'string') order_ids = order_ids.split(',').map(s => s.trim());
     if (!Array.isArray(order_ids)) return res.status(400).json({ error: 'Invalid order_ids format' });
 
-    const results = [];
-    const client = await pool.connect();
-    const transitMap = transit_stock || {}; // { "pid": { qty, batch_code, rate } }
+    const jobId = await runBackgroundJob('bulk-invoice-generate', async (updateProgress) => {
+        const results = [];
+        const client = await pool.connect();
+        const transitMap = transit_stock || {}; // { "pid": { qty, batch_code, rate } }
 
-    try {
-        for (let orderItem of order_ids) {
+        try {
+            let index = 0;
+            for (let orderItem of order_ids) {
+                if (order_ids.length > 0) updateProgress(Math.floor((index / order_ids.length) * 100));
+                index++;
             let orderId = (typeof orderItem === 'object' && orderItem !== null && orderItem.id) ? orderItem.id : orderItem;
             try {
                 console.log(`[Bulk Invoice] Processing Order ${orderId}...`);
@@ -2061,13 +2066,16 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 results.push({ id: orderId, order_id: orderId, status: 'Failed', error: err.stack || err.message });
             }
         }
-        res.json(results);
+        return JSON.stringify(results);
     } catch (err) {
         console.error("Bulk Generation Critical Error:", err);
-        res.status(500).json({ error: err.stack || err.message });
+        throw err;
     } finally {
         client.release();
     }
+    });
+
+    res.json({ jobId });
 });
 
 // PUT /api/sales/orders/:id - Update Sales Order Lines

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { calculateDailyPoints } = require('../services/performanceService');
+const { runBackgroundJob } = require('../utils/jobRunner');
 
 // 1. List Pending DSE Reports (Dashboard)
 router.get('/list', async (req, res) => {
@@ -194,15 +195,19 @@ router.post('/bulk-update', async (req, res) => {
         return res.status(400).json({ error: "Invalid items format. Must be an array." });
     }
 
-    const client = await pool.connect();
-    try {
-        console.log(`[Bulk Update v1.2] RAW req.body:`, JSON.stringify(req.body));
-        console.log(`[Bulk Update v1.2] items type:`, typeof items, 'isArray:', Array.isArray(items));
-        console.log(`[Bulk Update v1.2] items value:`, items);
-        console.log(`[Bulk Update v1.2] Payload:`, JSON.stringify({ itemsLength: items.length, action, reason, user_id }));
-        await client.query('BEGIN');
+    const jobId = await runBackgroundJob('bulk-update', async (updateProgress) => {
+        const client = await pool.connect();
+        try {
+            console.log(`[Bulk Update v1.2] RAW req.body:`, JSON.stringify(req.body));
+            console.log(`[Bulk Update v1.2] items type:`, typeof items, 'isArray:', Array.isArray(items));
+            console.log(`[Bulk Update v1.2] items value:`, items);
+            console.log(`[Bulk Update v1.2] Payload:`, JSON.stringify({ itemsLength: items.length, action, reason, user_id }));
+            await client.query('BEGIN');
 
-        for (let item of items) {
+            let index = 0;
+            for (let item of items) {
+                if (items.length > 0) updateProgress(Math.floor((index / items.length) * 100));
+                index++;
             // [UNIFY FALLBACKS]
             const itemAction = item.action || item.status || action;
             const itemReason = item.reason || reason;
@@ -550,13 +555,16 @@ router.post('/bulk-update', async (req, res) => {
             }
         }
 
-        res.json({ success: true, count: items.length, version: "1.3", items_received: items.length, updated_records: items.map(i => i.id) });
+        return JSON.stringify({ success: true, count: items.length, version: "1.3", items_received: items.length, updated_records: items.map(i => i.id) });
     } catch (err) {
         await client.query('ROLLBACK');
-        res.status(500).json({ error: err.message });
+        throw err;
     } finally {
         client.release();
     }
+    });
+
+    res.json({ jobId });
 });
 
 // [NEW] 4. Authorize Expense Limit

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const { runBackgroundJob } = require('../utils/jobRunner');
 
 // --- A. Dispatcher Operations ---
 
@@ -999,13 +1000,19 @@ router.post('/verify/settle', async (req, res) => {
 
     if (!sync_id || !verified_by) return res.status(400).json({ error: "sync_id and verified_by are required" });
 
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
+    const jobId = await runBackgroundJob('verify-settle', async (updateProgress) => {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
 
-        // --- 1. Process Manifest Verifications ---
-        if (manifest_verifications && Array.isArray(manifest_verifications)) {
-            for (const v of manifest_verifications) {
+            const totalItems = (manifest_verifications ? manifest_verifications.length : 0) + (return_verifications ? return_verifications.length : 0);
+            let index = 0;
+
+            // --- 1. Process Manifest Verifications ---
+            if (manifest_verifications && Array.isArray(manifest_verifications)) {
+                for (const v of manifest_verifications) {
+                    if (totalItems > 0) updateProgress(Math.floor((index / totalItems) * 100));
+                    index++;
                 // A. Update Junction Status
                 // Database constraint only allows: ['Pending', 'Approved', 'Rejected']
                 let junctionStatus = (v.status === 'Approved') ? 'Approved' : 'Rejected';
@@ -1362,15 +1369,18 @@ router.post('/verify/settle', async (req, res) => {
         }
 
         await client.query('COMMIT');
-        res.json({ success: true, message: "Settlement applied successfully" });
+        return "Settlement applied successfully";
 
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Settlement Error:', err);
-        res.status(500).json({ error: err.message });
+        throw err;
     } finally {
         client.release();
     }
+    });
+
+    res.json({ jobId });
 });
 
 // 13. Verify Payments in Bulk (Bridge to existing Payment Verification system)
