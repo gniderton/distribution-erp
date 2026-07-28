@@ -76,8 +76,27 @@ export default function BounceChequeModal({ isOpen, onClose, cheque, onSuccess }
   });
 
   return (
-    <Dialog open={isOpen} onClose={onClose} title="Bounce Cheque" widthClass="max-w-xl">
-      <div className="p-6 space-y-6">
+    <Dialog 
+      open={isOpen} 
+      onClose={onClose} 
+      title="Bounce Cheque" 
+      widthClass="max-w-xl"
+      footer={
+        <div className="flex justify-end gap-3 w-full">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button 
+            variant="primary" 
+            className="bg-rose-600 hover:bg-rose-700" 
+            onClick={handleBounce} 
+            loading={bounceMutation.isPending}
+            disabled={bounceMutation.isPending}
+          >
+            Confirm Bounce
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-6">
         <div className="bg-rose-50 border border-rose-100 rounded-lg p-4">
           <p className="text-sm text-rose-800">
             You are about to bounce Cheque <strong>{cheque.cheque_number}</strong> ({formatCurrency(cheque.amount)}) from <strong>{cheque.party_name}</strong>.
@@ -183,19 +202,6 @@ export default function BounceChequeModal({ isOpen, onClose, cheque, onSuccess }
               </div>
             )}
           </div>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-4 border-t border-border-subtle">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button 
-            variant="primary" 
-            className="bg-rose-600 hover:bg-rose-700" 
-            onClick={handleBounce} 
-            loading={bounceMutation.isPending}
-            disabled={bounceMutation.isPending}
-          >
-            Confirm Bounce
-          </Button>
         </div>
       </div>
     </Dialog>

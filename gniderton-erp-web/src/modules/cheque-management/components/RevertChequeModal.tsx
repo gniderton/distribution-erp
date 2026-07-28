@@ -31,8 +31,27 @@ export default function RevertChequeModal({ isOpen, onClose, cheque, onSuccess }
   };
 
   return (
-    <Dialog open={isOpen} onClose={onClose} title="Revert Clearance" widthClass="max-w-md">
-      <div className="p-6 space-y-6">
+    <Dialog 
+      open={isOpen} 
+      onClose={onClose} 
+      title="Revert Clearance" 
+      widthClass="max-w-md"
+      footer={
+        <div className="flex justify-end gap-3 w-full">
+          <Button variant="secondary" onClick={onClose} className="w-full">Cancel</Button>
+          <Button 
+            variant="primary" 
+            className="w-full bg-amber-600 hover:bg-amber-700" 
+            onClick={handleRevert} 
+            loading={revertMutation.isPending}
+            disabled={revertMutation.isPending}
+          >
+            Confirm Revert
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-6">
         
         <div className="flex flex-col items-center justify-center text-center space-y-4">
           <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center">
@@ -51,19 +70,6 @@ export default function RevertChequeModal({ isOpen, onClose, cheque, onSuccess }
             <li>Associated journal entries will be reversed.</li>
             <li>The linked Bank Statement Entry will be freed up.</li>
           </ul>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="secondary" onClick={onClose} className="w-full">Cancel</Button>
-          <Button 
-            variant="primary" 
-            className="w-full bg-amber-600 hover:bg-amber-700" 
-            onClick={handleRevert} 
-            loading={revertMutation.isPending}
-            disabled={revertMutation.isPending}
-          >
-            Confirm Revert
-          </Button>
         </div>
       </div>
     </Dialog>

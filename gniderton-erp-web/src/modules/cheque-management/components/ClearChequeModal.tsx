@@ -67,8 +67,26 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
   const totalValue = selectedCheques.reduce((sum, c) => sum + c.amount, 0);
 
   return (
-    <Dialog open={isOpen} onClose={onClose} title={selectedCheques.length > 1 ? "Bulk Clear Cheques" : "Clear Cheque"} widthClass="max-w-4xl">
-      <div className="p-6 space-y-6">
+    <Dialog 
+      open={isOpen} 
+      onClose={onClose} 
+      title={selectedCheques.length > 1 ? "Bulk Clear Cheques" : "Clear Cheque"} 
+      widthClass="max-w-4xl"
+      footer={
+        <div className="flex justify-end gap-3 w-full">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button 
+            variant="primary" 
+            onClick={handleClear} 
+            loading={isPending}
+            disabled={isPending}
+          >
+            Confirm Clearance
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-6">
         
         {/* Summary Banner */}
         <div className="bg-brand-50 border border-brand-100 rounded-lg p-4 flex items-center justify-between">
@@ -149,18 +167,6 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
               })}
             </tbody>
           </table>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-4 border-t border-border-subtle">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button 
-            variant="primary" 
-            onClick={handleClear} 
-            loading={isPending}
-            disabled={isPending}
-          >
-            Confirm Clearance
-          </Button>
         </div>
       </div>
     </Dialog>
