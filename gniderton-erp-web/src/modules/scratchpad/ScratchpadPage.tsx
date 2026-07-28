@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Workbook, WorkbookInstance } from '@fortune-sheet/react';
+import { Workbook } from '@fortune-sheet/react';
+import type { WorkbookInstance } from '@fortune-sheet/react';
 import '@fortune-sheet/react/dist/index.css';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/Button';
