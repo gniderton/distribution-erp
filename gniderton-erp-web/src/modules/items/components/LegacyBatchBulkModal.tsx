@@ -36,7 +36,7 @@ export default function LegacyBatchBulkModal({ open, onClose }: Props) {
   const createMutation = useCreateLegacyBatchesBulk()
 
   const { register, control, handleSubmit, formState: { errors } } = useForm<BulkFormValues>({
-    resolver: zodResolver(bulkSchema),
+    resolver: zodResolver(bulkSchema) as any,
     defaultValues: {
       batches: [{
         product_id: 0,
