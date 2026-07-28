@@ -5,7 +5,7 @@ import { DataTable } from '@/components/shared/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/Input'
-import { Plus, Upload, SlidersHorizontal, CheckSquare, Edit3 } from 'lucide-react'
+import { Plus, Upload, SlidersHorizontal, CheckSquare, Edit3, Package } from 'lucide-react'
 import { useProducts } from './hooks'
 import { ProductViewDrawer } from './components/ProductViewDrawer'
 import { StockAdjustModal } from './components/StockAdjustModal'
@@ -13,6 +13,7 @@ import { BulkStatusModal } from './components/BulkStatusModal'
 import { BulkPriceEditModal } from './components/BulkPriceEditModal'
 import { BulkImportModal } from './components/BulkImportModal'
 import { BulkStockAdjustModal } from './components/BulkStockAdjustModal'
+import LegacyBatchBulkModal from './components/LegacyBatchBulkModal'
 import type { Product } from './types'
 import { formatCurrency } from '@/lib/utils'
 
@@ -30,6 +31,7 @@ export default function ItemsPage() {
   const [bulkPriceOpen, setBulkPriceOpen] = useState(false)
   const [bulkImportOpen, setBulkImportOpen] = useState(false)
   const [bulkAdjustOpen, setBulkAdjustOpen] = useState(false)
+  const [legacyBatchOpen, setLegacyBatchOpen] = useState(false)
 
   const [editing, setEditing] = useState<Product | null>(null)
 
@@ -120,6 +122,9 @@ export default function ItemsPage() {
             <Button variant="secondary" onClick={() => setBulkAdjustOpen(true)}>
               <SlidersHorizontal className="h-4 w-4 mr-2" /> Bulk Adjust
             </Button>
+            <Button variant="secondary" onClick={() => setLegacyBatchOpen(true)}>
+              <Package className="h-4 w-4 mr-2" /> Legacy Batches
+            </Button>
             <Button variant="secondary" onClick={() => setAdjustModalOpen(true)}>
               <SlidersHorizontal className="h-4 w-4 mr-2" /> Adjust Stock
             </Button>
@@ -200,6 +205,7 @@ export default function ItemsPage() {
       {bulkAdjustOpen && (
         <BulkStockAdjustModal open={bulkAdjustOpen} onClose={() => setBulkAdjustOpen(false)} products={filteredProducts} />
       )}
+      <LegacyBatchBulkModal open={legacyBatchOpen} onClose={() => setLegacyBatchOpen(false)} />
     </div>
   )
 }

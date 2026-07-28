@@ -83,3 +83,14 @@ export function useUpdateBatch() {
     onSuccess: (_, variables) => qc.invalidateQueries({ queryKey: ['products'] }), // Invalidate all products and their batches
   })
 }
+
+export const useCreateLegacyBatchesBulk = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: itemsApi.createLegacyBatchesBulk,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['products'] })
+      qc.invalidateQueries({ queryKey: ['batches'] })
+    }
+  })
+}

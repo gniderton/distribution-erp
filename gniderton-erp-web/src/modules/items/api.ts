@@ -38,6 +38,8 @@ export const itemsApi = {
   bulkStatus: (payload: { ids: (string | number)[]; status: string }) =>
     api.post('/api/products/bulk-status', payload).then((r) => r.data),
   bulkUpdate: (payload: any) => api.post('/api/products/bulk-update', payload).then((r) => r.data),
+  createLegacyBatchesBulk: (payload: { batches: any[] }) => 
+    api.post('/api/products/batches/legacy-bulk', payload).then((r) => r.data),
   import: (payload: { items: any[] }) =>
     api.post('/api/products/import', payload).then((r) => r.data),
 }

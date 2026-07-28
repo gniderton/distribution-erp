@@ -269,6 +269,57 @@ router.get('/:id/stats', async (req, res) => {
     }
 });
 
+// POST /api/products/batches/legacy-bulk - Create legacy batches with 0 quantity
+router.post('/batches/legacy-bulk', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { batches } = req.body;
+        if (!Array.isArray(batches) || batches.length === 0) {
+            return res.status(400).json({ error: "Expected an array of batches" });
+        }
+
+        await client.query('BEGIN');
+        let importedCount = 0;
+
+        for (const row of batches) {
+            await client.query(`
+                INSERT INTO inventory_batches (
+                    product_id, batch_code, expiry_date, 
+                    quantity_initial, quantity_remaining, 
+                    mrp, purchase_rate, distributor_rate, wholesale_rate, dealer_rate, retail_rate,
+                    status, created_at
+                ) VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+            `, [
+                parseInt(row.product_id, 10), 
+                row.batch_code || 'LEGACY-BATCH', 
+                row.expiry_date || null,
+                0, // HARDCODED TO 0 FOR LEGACY BATCHES
+                parseFloat(row.mrp) || 0,
+                parseFloat(row.purchase_rate) || 0,
+                parseFloat(row.distributor_rate) || 0,
+                parseFloat(row.wholesale_rate) || 0,
+                parseFloat(row.dealer_rate) || 0,
+                parseFloat(row.retail_rate) || 0,
+                'Good'
+            ]);
+            importedCount++;
+        }
+
+        await client.query('COMMIT');
+        res.json({ 
+            success: true, 
+            count: importedCount, 
+            message: `Created ${importedCount} legacy batches successfully.` 
+        });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Legacy Batch Creation Error:', err);
+        res.status(500).json({ error: err.message });
+    } finally { 
+        client.release(); 
+    }
+});
+
 // GET /api/products/batches - Global fetch for all products
 router.get('/batches', async (req, res) => {
     try {
