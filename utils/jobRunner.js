@@ -27,7 +27,7 @@ async function updateJobProgress(jobId, progress) {
 async function completeJob(jobId, result) {
     await pool.query(
         `UPDATE background_jobs SET status = 'completed', progress = 100, result = $1, updated_at = NOW() WHERE id = $2`,
-        [result, jobId]
+        [JSON.stringify(result), jobId]
     );
 }
 
