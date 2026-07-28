@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { X, Loader2, CheckCircle2, XCircle, FileText, Wallet, CreditCard, Banknote, AlertCircle, Save, Receipt, ShieldCheck, Download } from 'lucide-react'
+import { JobProgressBar } from '@/components/ui/JobProgressBar'
 import { useReconciliationDetails, useBulkUpdateReconciliation, useUnconsumedCredits } from '../hooks'
 import dayjs from 'dayjs'
 import toast from 'react-hot-toast'
@@ -12,6 +13,7 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
 
   const [activeTab, setActiveTab] = useState<'Payments' | 'Expenses' | 'Settlement'>('Payments')
   const [settlementSubTab, setSettlementSubTab] = useState<'Cash' | 'Cheque' | 'Online'>('Cash')
+  const [jobId, setJobId] = useState<string | null>(null)
   
   // Local state for edits
   const [localPayments, setLocalPayments] = useState<any[]>([])
@@ -162,12 +164,16 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
     }
 
     bulkUpdate(payload, {
-      onSuccess: () => {
-        toast.success("Report settled successfully!")
-        onClose()
+      onSuccess: (res: any) => {
+        if (res && res.jobId) {
+          setJobId(res.jobId)
+        } else {
+          toast.success("Report settled successfully!")
+          onClose()
+        }
       },
       onError: (err: any) => {
-        toast.error("Failed to settle report: " + err.message)
+        toast.error("Failed to start settlement: " + err.message)
       }
     })
   }
@@ -242,7 +248,18 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
 
         {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col bg-surface">
-          {isLoading ? (
+          {jobId ? (
+            <div className="flex-1 flex items-center justify-center min-h-[400px]">
+              <JobProgressBar 
+                jobId={jobId} 
+                title="Processing Settlement..." 
+                onComplete={() => {
+                  toast.success("Report settled successfully!")
+                  onClose()
+                }}
+              />
+            </div>
+          ) : isLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center text-ink-400">
               <Loader2 className="w-8 h-8 animate-spin mb-4" />
               <p>Loading details...</p>

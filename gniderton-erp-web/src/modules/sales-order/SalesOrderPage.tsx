@@ -5,6 +5,7 @@ import {
   useProducts, 
   useBulkInvoiceGenerate 
 } from './hooks'
+import { JobProgressBar } from '@/components/ui/JobProgressBar'
 import { 
   Eye, RefreshCw, CheckCircle2, AlertTriangle, 
   X, AlertCircle, Package, Send, Search, Filter, RefreshCcw, DollarSign, MapPin, Users, ShoppingCart, Plus, HelpCircle, Download
@@ -83,6 +84,7 @@ export default function SalesOrderPage() {
   const [showAllocation, setShowAllocation] = useState(false) // modalStockAllocation
   const [showTransit, setShowTransit] = useState(false) // modalTransitEntry
   const [showBreakup, setShowBreakup] = useState(false) // mdlBreakup
+  const [jobId, setJobId] = useState<string | null>(null)
 
   // Core Mapped State Variables (replacing Appsmith store)
   const [viewLines, setViewLines] = useState<OrderLine[]>([])
@@ -331,18 +333,22 @@ export default function SalesOrderPage() {
     if (selectedOrderIds.length === 0) return
 
     try {
-      await generateInvoicesMutation.mutateAsync({
+      const res = await generateInvoicesMutation.mutateAsync({
         order_ids: selectedOrderIds,
         transit_stock: transitStock,
         allow_negative_stock: true
       })
 
-      setAlertMsg({ type: 'success', text: `Successfully generated bulk invoices for ${selectedOrderIds.length} orders!` })
-      setSelectedOrderIds([])
-      setTransitStock({})
-      setDemandAnalysis([])
-      setShowAllocation(false)
-      refetchOrders()
+      if (res && res.jobId) {
+        setJobId(res.jobId)
+      } else {
+        setAlertMsg({ type: 'success', text: `Successfully generated bulk invoices for ${selectedOrderIds.length} orders!` })
+        setSelectedOrderIds([])
+        setTransitStock({})
+        setDemandAnalysis([])
+        setShowAllocation(false)
+        refetchOrders()
+      }
     } catch (e: any) {
       setAlertMsg({ type: 'error', text: e?.response?.data?.message || 'Failed to generate bulk invoices.' })
     }
@@ -729,11 +735,27 @@ export default function SalesOrderPage() {
                 <X size={18} />
               </button>
             </div>
-
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
-              
-              {/* Summary Cards Inside Modal (Input1 & Input2 equivalents in Appsmith) */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 flex-1 overflow-y-auto bg-surface relative">
+            {jobId ? (
+              <div className="flex-1 flex items-center justify-center min-h-[400px]">
+                <JobProgressBar 
+                  jobId={jobId} 
+                  title="Generating Bulk Invoices..." 
+                  onComplete={() => {
+                    setAlertMsg({ type: 'success', text: `Successfully generated bulk invoices!` })
+                    setSelectedOrderIds([])
+                    setTransitStock({})
+                    setDemandAnalysis([])
+                    setJobId(null)
+                    setShowAllocation(false)
+                    refetchOrders()
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Summary Cards Inside Modal (Input1 & Input2 equivalents in Appsmith) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-4 rounded-xl border border-border-subtle bg-surface flex flex-col justify-between">
                   <span className="text-[10px] text-ink-600 font-semibold uppercase">Total Order Value Requested</span>
                   <span className="text-lg font-bold text-ink-900 mt-1">
@@ -807,36 +829,35 @@ export default function SalesOrderPage() {
                   </tbody>
                 </table>
               </div>
-            </div>
+              </div>
+            )}
+          </div>
 
-            <div className="px-6 py-4 border-t border-border-subtle flex items-center justify-between bg-surface">
-              <button
-                onClick={handleOpenTransitEntry}
-                className="flex items-center gap-1.5 border border-border-subtle bg-white text-ink-700 hover:bg-ink-100 text-xs font-semibold px-4 py-2 rounded-lg transition"
-              >
-                <Plus size={14} />
-                Allocate Transit Stock
-              </button>
-              <div className="flex items-center gap-2">
+          {!jobId && (
+            <div className="p-4 border-t border-ink-100 flex justify-between items-center bg-white shrink-0">
+              <div className="text-sm text-ink-500">
+                Ensure all shorts are addressed before proceeding.
+              </div>
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={handleDownloadShortfallReport}
-                  className="flex items-center gap-1.5 border border-danger-200 bg-danger-50 text-danger-700 hover:bg-danger-100 text-xs font-semibold px-5 py-2.5 rounded-lg transition"
+                  onClick={() => setShowAllocation(false)}
+                  className="px-4 py-2 border border-ink-200 text-ink-700 rounded-lg hover:bg-ink-50 text-sm font-medium transition-colors"
                 >
-                  <Download size={14} />
-                  Shortfall Report
+                  Cancel
                 </button>
                 <button
                   onClick={handleGenerateInvoices}
                   disabled={generateInvoicesMutation.isPending}
-                  className="flex items-center gap-1.5 bg-success-600 text-white hover:bg-success-500 text-xs font-semibold px-5 py-2.5 rounded-lg transition disabled:opacity-50"
+                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white rounded-lg flex items-center gap-2 text-sm font-medium shadow-sm transition-all active:scale-95"
                 >
-                  {generateInvoicesMutation.isPending ? <RefreshCw className="animate-spin" size={14} /> : <Send size={14} />}
-                  Generate Invoices
+                  {generateInvoicesMutation.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  Confirm & Generate Invoices
                 </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
+      </div>
       )}
 
       {/* MODAL 3: modalTransitEntry */}

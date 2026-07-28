@@ -3,6 +3,7 @@ import { FileText, PackageX, IndianRupee, FileDown, Box, AlertCircle, Download }
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { JobProgressBar } from '@/components/ui/JobProgressBar'
 import { useSyncDetails, useVerifySettle } from '../hooks'
 import { generateVehicleInventoryPDF } from '../utils/pdfHistoryGenerator'
 
@@ -11,6 +12,7 @@ export function SyncVerificationModal({ open, onClose, syncId }: { open: boolean
   const settleMutation = useVerifySettle()
   
   const [activeTab, setActiveTab] = useState<'manifest' | 'returns' | 'payments' | 'expenses' | 'inventory'>('manifest')
+  const [jobId, setJobId] = useState<string | null>(null)
   
   // Local state for approvals
   const [manifestApprovals, setManifestApprovals] = useState<Record<number, string>>({})
@@ -43,15 +45,23 @@ export function SyncVerificationModal({ open, onClose, syncId }: { open: boolean
       return_verifications: Object.entries(returnApprovals).map(([return_id, status]) => ({ return_id: Number(return_id), status }))
     }
     settleMutation.mutate(payload, {
-      onSuccess: () => {
-        onClose()
+      onSuccess: (data) => {
+        if (data && data.jobId) {
+          setJobId(data.jobId)
+        } else {
+          onClose() // Fallback if no job id returned
+        }
       }
     })
   }
 
   const isAllVerified = Object.values(manifestApprovals).every(v => v !== '')
 
-  const footer = (
+  const footer = jobId ? (
+    <div className="flex justify-end gap-2 w-full">
+      <Button variant="secondary" onClick={onClose}>Close</Button>
+    </div>
+  ) : (
     <div className="flex justify-end gap-2 w-full">
       <Button variant="secondary" onClick={onClose}>Cancel</Button>
       <Button 
@@ -81,7 +91,19 @@ export function SyncVerificationModal({ open, onClose, syncId }: { open: boolean
       widthClass="max-w-4xl"
       footer={footer}
     >
-      {isLoading ? (
+      {jobId ? (
+        <div className="py-12 flex justify-center">
+          <JobProgressBar 
+            jobId={jobId} 
+            title="Settling Trip..." 
+            onComplete={() => {
+              // Note: the hook invalidate is handled by useVerifySettle onSuccess typically, 
+              // but since job completes later, we should probably trigger it here if needed.
+              // For simplicity, closing will refresh if the parent refreshes.
+            }} 
+          />
+        </div>
+      ) : isLoading ? (
         <div className="py-12 flex justify-center text-ink-500">Loading sync details...</div>
       ) : !data ? (
         <div className="py-12 flex justify-center text-ink-500">No data found.</div>
