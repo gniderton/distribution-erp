@@ -71,7 +71,7 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
       open={isOpen} 
       onClose={onClose} 
       title={selectedCheques.length > 1 ? "Bulk Clear Cheques" : "Clear Cheque"} 
-      widthClass="max-w-4xl"
+      widthClass="max-w-6xl"
       footer={
         <div className="flex justify-end gap-3 w-full">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
