@@ -72,7 +72,7 @@ export function DataTable<T>({
   })
 
   return (
-    <div className="glass-card rounded-xl border border-border-subtle overflow-hidden w-full shadow-sm bg-white">
+    <div className="glass-card flex flex-col h-full rounded-xl border border-border-subtle overflow-hidden w-full shadow-sm bg-white">
       {onGlobalFilterChange && !hideSearchBar && (
         <div className="border-b border-border-subtle px-4 py-3">
           <div className="relative max-w-xs">
@@ -87,7 +87,7 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div className="overflow-x-auto scrollbar-thin">
+      <div className="overflow-auto flex-1 scrollbar-thin">
         <table className="w-full text-xs">
           <thead>
             {table.getHeaderGroups().map((hg) => (
@@ -148,7 +148,7 @@ export function DataTable<T>({
       )}
 
       {!isLoading && !isError && (data?.length ?? 0) > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-border-subtle">
+        <div className="mt-auto shrink-0 flex items-center justify-between px-4 py-3 border-t border-border-subtle">
           <p className="text-xs text-ink-600">
             Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}
           </p>
