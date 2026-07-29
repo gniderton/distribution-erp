@@ -1,25 +1,79 @@
 import { useState, useMemo } from 'react'
-import { FileText, Calendar, Landmark } from 'lucide-react'
+import { FileText, Calendar, Landmark, Download, Loader2 } from 'lucide-react'
 import { AutoTable } from '@/components/shared/AutoTable'
+import { DataTable } from '@/components/shared/DataTable'
+import { hrApi } from '../api'
 import { useSalaryPaymentHeaders, useAttendanceReport, useEmployeeAdvances } from '../hooks'
+import { generatePayslip } from '../utils/payslip'
+import toast from 'react-hot-toast'
 
 function SalaryRegisterReport() {
     const { data, isLoading, isError } = useSalaryPaymentHeaders()
+    const [downloadingId, setDownloadingId] = useState<string | number | null>(null)
     
-    const formattedData = useMemo(() => {
-        return data?.map((r: any) => {
-            const date = new Date(r.year, r.month - 1)
-            return {
-                'Employee': `${r.full_name} (${r.employee_code})`,
-                'Payroll Period': date.toLocaleString('default', { month: 'long', year: 'numeric' }),
-                'Net Payout': `₹${Number(r.net_salary).toLocaleString()}`,
-                'Payment Mode': r.payment_mode,
-                'Source Account': r.source_account || '—',
-                'Payment Date': r.payment_date ? new Date(r.payment_date).toLocaleDateString() : '—',
-                'Processed On': new Date(r.processed_at).toLocaleString()
+    const handleDownload = async (id: string | number) => {
+        try {
+            setDownloadingId(id)
+            const details = await hrApi.getEmployeesSalaryPaymentDetails(id)
+            await generatePayslip(details)
+            toast.success('Payslip downloaded successfully')
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to download payslip')
+        } finally {
+            setDownloadingId(null)
+        }
+    }
+
+    const columns = useMemo(() => [
+        {
+            accessorKey: 'employee_code',
+            header: 'Employee',
+            cell: (c: any) => `${c.row.original.full_name} (${c.getValue()})`
+        },
+        {
+            accessorKey: 'month',
+            header: 'Payroll Period',
+            cell: (c: any) => {
+                const date = new Date(c.row.original.year, c.getValue() - 1)
+                return date.toLocaleString('default', { month: 'long', year: 'numeric' })
             }
-        })
-    }, [data])
+        },
+        {
+            accessorKey: 'net_salary',
+            header: 'Net Payout',
+            cell: (c: any) => `₹${Number(c.getValue()).toLocaleString()}`
+        },
+        {
+            accessorKey: 'payment_mode',
+            header: 'Payment Mode',
+        },
+        {
+            accessorKey: 'source_account',
+            header: 'Source Account',
+            cell: (c: any) => c.getValue() || '—'
+        },
+        {
+            accessorKey: 'payment_date',
+            header: 'Payment Date',
+            cell: (c: any) => c.getValue() ? new Date(c.getValue()).toLocaleDateString() : '—'
+        },
+        {
+            id: 'actions',
+            cell: (c: any) => {
+                const isDownloading = downloadingId === c.row.original.id
+                return (
+                    <button 
+                        onClick={() => handleDownload(c.row.original.id)}
+                        disabled={isDownloading}
+                        className="p-1 text-ink-500 hover:text-brand-600 transition-colors disabled:opacity-50"
+                        title="Download Payslip PDF"
+                    >
+                        {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    </button>
+                )
+            }
+        }
+    ], [downloadingId])
 
     return (
         <div className="h-full flex flex-col space-y-4">
@@ -28,8 +82,9 @@ function SalaryRegisterReport() {
                 <p className="text-sm text-ink-500">Detailed historical record of all individual salary payments.</p>
             </div>
             <div className="flex-1 border border-ink-200 rounded-lg overflow-hidden bg-white">
-                <AutoTable
-                    data={formattedData}
+                <DataTable
+                    data={data}
+                    columns={columns}
                     isLoading={isLoading}
                     isError={isError}
                     emptyTitle="No Salary Records"

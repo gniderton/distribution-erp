@@ -15,6 +15,7 @@ export const hrApi = {
   getEmployeesAttendanceReport: (start: string, end: string) => api.get(`/api/employees/attendance/report?start_date=${start}&end_date=${end}`).then((r) => r.data),
   getEmployeesSalaryBatchSummary: () => api.get('/api/employees/salary-batch-summary').then((r) => r.data),
   getEmployeesSalaryPaymentHeaders: () => api.get('/api/employees/salary-payment-headers').then((r) => r.data),
+  getEmployeesSalaryPaymentDetails: (id: string | number) => api.get(`/api/employees/salary-payment-details/${id}`).then((r) => r.data),
   getFinanceReconciliationBankUnconsumedDebits: () => api.get('/api/finance/reconciliation/bank/unconsumed-debits').then((r) => r.data),
   getMasterBanks: () => api.get('/api/master/banks').then((r) => r.data),
   getSalesInvoicesLookup: () => api.get('/api/sales/invoices/lookup').then((r) => r.data),
