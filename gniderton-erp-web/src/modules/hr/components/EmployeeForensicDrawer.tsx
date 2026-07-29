@@ -3,7 +3,7 @@ import { Drawer } from '@/components/ui/Drawer'
 import { useEmployeeProfile } from '../hooks'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { User, DollarSign, Clock, AlertTriangle } from 'lucide-react'
+import { User, DollarSign, Clock, AlertTriangle, Mail, Phone, Calendar as CalendarIcon, Shield, CreditCard, Banknote, CalendarDays, CheckCircle2, XCircle, Clock4 } from 'lucide-react'
 import { UpdateSalaryDialog } from './UpdateSalaryDialog'
 import { RecordLiabilityDialog } from './RecordLiabilityDialog'
 import { useEmployeeLiabilities, useDeleteLiability } from '../hooks'
@@ -59,30 +59,96 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm">
-              <div className="flex items-center space-x-2 text-ink-600 mb-2">
-                <DollarSign className="w-4 h-4" />
-                <span className="font-medium">Base Salary</span>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Identity & Contact */}
+            <div className="glass-card rounded-xl border border-border-subtle bg-white shadow-sm overflow-hidden">
+              <div className="bg-surface px-4 py-3 border-b border-border-subtle font-semibold text-ink-900 text-sm">
+                Identity & Contact
               </div>
-              <div className="text-2xl font-bold">₹{Number(profile?.current_salary || 0).toLocaleString()}</div>
+              <div className="p-4 space-y-3 text-sm">
+                <div className="flex items-center space-x-3 text-ink-700">
+                  <Mail className="w-4 h-4 text-ink-400" />
+                  <span>{profile?.email || 'N/A'}</span>
+                </div>
+                <div className="flex items-center space-x-3 text-ink-700">
+                  <Phone className="w-4 h-4 text-ink-400" />
+                  <span>{profile?.phone || 'N/A'}</span>
+                </div>
+                <div className="flex items-center space-x-3 text-ink-700">
+                  <CalendarIcon className="w-4 h-4 text-ink-400" />
+                  <span>Hire Date: {profile?.hire_date ? new Date(profile.hire_date).toLocaleDateString() : 'N/A'}</span>
+                </div>
+                <div className="flex items-center space-x-3 text-ink-700">
+                  <Shield className="w-4 h-4 text-ink-400" />
+                  <span>Role: <span className="font-medium text-ink-900">{profile?.role || 'N/A'}</span></span>
+                </div>
+              </div>
             </div>
-            <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm">
-              <div className="flex items-center space-x-2 text-ink-600 mb-2">
-                <AlertTriangle className="w-4 h-4" />
-                <span className="font-medium">Outstanding Liability</span>
+
+            {/* Attendance (30 Days) */}
+            <div className="glass-card rounded-xl border border-border-subtle bg-white shadow-sm overflow-hidden">
+              <div className="bg-surface px-4 py-3 border-b border-border-subtle font-semibold text-ink-900 text-sm">
+                Attendance (Last 30 Days)
               </div>
-              <div className="text-2xl font-bold text-red-600">
-                ₹{Number(data?.financials?.outstanding_liability || 0).toLocaleString()}
+              <div className="p-4 grid grid-cols-3 gap-2 text-center h-[calc(100%-45px)] content-center">
+                <div className="p-2 bg-success-50 rounded-lg">
+                  <CheckCircle2 className="w-5 h-5 text-success-600 mx-auto mb-1" />
+                  <div className="text-xl font-bold text-success-700">{data?.performance?.attendance_30d?.present_days || 0}</div>
+                  <div className="text-[10px] uppercase font-semibold text-success-600/70">Present</div>
+                </div>
+                <div className="p-2 bg-danger-50 rounded-lg">
+                  <XCircle className="w-5 h-5 text-danger-600 mx-auto mb-1" />
+                  <div className="text-xl font-bold text-danger-700">{data?.performance?.attendance_30d?.absent_days || 0}</div>
+                  <div className="text-[10px] uppercase font-semibold text-danger-600/70">Absent</div>
+                </div>
+                <div className="p-2 bg-warning-50 rounded-lg">
+                  <Clock4 className="w-5 h-5 text-warning-600 mx-auto mb-1" />
+                  <div className="text-xl font-bold text-warning-700">{data?.performance?.attendance_30d?.late_days || 0}</div>
+                  <div className="text-[10px] uppercase font-semibold text-warning-600/70">Late</div>
+                </div>
               </div>
             </div>
-            <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm">
-              <div className="flex items-center space-x-2 text-ink-600 mb-2">
-                <Clock className="w-4 h-4" />
-                <span className="font-medium">Attendance (30 Days)</span>
+          </div>
+
+          <div>
+            <h4 className="text-lg font-bold text-ink-900 mb-4">Financials & Payroll</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm">
+                <div className="flex items-center space-x-2 text-ink-600 mb-2 text-xs uppercase font-semibold">
+                  <DollarSign className="w-4 h-4" />
+                  <span>Base Salary</span>
+                </div>
+                <div className="text-xl font-bold text-ink-900">₹{Number(profile?.current_salary || 0).toLocaleString()}</div>
               </div>
-              <div className="text-2xl font-bold text-green-600">
-                {data?.performance?.attendance_30d?.present_days || 0} Present
+              <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm">
+                <div className="flex items-center space-x-2 text-ink-600 mb-2 text-xs uppercase font-semibold">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>Liabilities</span>
+                </div>
+                <div className="text-xl font-bold text-danger-600">
+                  ₹{Number(data?.financials?.outstanding_liability || 0).toLocaleString()}
+                </div>
+              </div>
+              <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm">
+                <div className="flex items-center space-x-2 text-ink-600 mb-2 text-xs uppercase font-semibold">
+                  <CreditCard className="w-4 h-4" />
+                  <span>Advances</span>
+                </div>
+                <div className="text-xl font-bold text-warning-600">
+                  ₹{Number(data?.financials?.pending_salary_advances || 0).toLocaleString()}
+                </div>
+              </div>
+              <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm">
+                <div className="flex items-center space-x-2 text-ink-600 mb-2 text-xs uppercase font-semibold">
+                  <Banknote className="w-4 h-4" />
+                  <span>YTD Earnings</span>
+                </div>
+                <div className="text-xl font-bold text-success-600">
+                  ₹{Number(data?.financials?.ytd_earnings || 0).toLocaleString()}
+                </div>
+                <div className="text-xs text-ink-500 mt-1">
+                  Last paid: {data?.financials?.last_salary_paid_date ? new Date(data.financials.last_salary_paid_date).toLocaleDateString() : 'Never'}
+                </div>
               </div>
             </div>
           </div>
