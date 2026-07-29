@@ -93,7 +93,7 @@ export function PendingBatchesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center bg-warning-50 p-4 rounded-lg border border-warning-200">
+      <div className="flex justify-between items-center bg-warning-50/50 p-4 rounded-lg border border-warning-100/50">
         <div className="flex items-start space-x-3 text-warning-800">
           <AlertCircle className="w-5 h-5 mt-0.5" />
           <div>
@@ -165,14 +165,15 @@ export function PendingBatchesTab() {
                       value={edits[batch.id]?.batch_code !== undefined ? edits[batch.id].batch_code : (batch.batch_code === 'UNKNOWN' || batch.batch_code === 'PENDING' ? '' : batch.batch_code)}
                       onChange={(e) => handleEdit(batch.id, 'batch_code', e.target.value)}
                       placeholder="Enter Batch Code"
-                      className="bg-transparent border-transparent hover:border-ink-200 focus:border-brand-400 focus:bg-white"
+                      className="bg-white border-ink-200 hover:border-ink-300 focus:border-brand-400"
                     />
                   </td>
                   <td className="px-4 py-2">
                     <Input 
+                      type="date"
                       value={edits[batch.id]?.expiry_date !== undefined ? edits[batch.id].expiry_date : (batch.expiry_date ? batch.expiry_date.split('T')[0] : '')}
                       onChange={(e) => handleEdit(batch.id, 'expiry_date', e.target.value)}
-                      className="bg-transparent border-transparent hover:border-ink-200 focus:border-brand-400 focus:bg-white text-ink-600"
+                      className="bg-white border-ink-200 hover:border-ink-300 focus:border-brand-400 text-ink-600"
                     />
                   </td>
                 </tr>
