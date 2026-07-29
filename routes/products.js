@@ -293,8 +293,7 @@ router.post('/batches/bulk-update', async (req, res) => {
                     retail_rate = COALESCE($5, retail_rate),
                     wholesale_rate = COALESCE($6, wholesale_rate),
                     dealer_rate = COALESCE($7, dealer_rate),
-                    distributor_rate = COALESCE($8, distributor_rate),
-                    updated_at = NOW()
+                    distributor_rate = COALESCE($8, distributor_rate)
                 WHERE id = $9
             `, [
                 row.batch_code || null,
