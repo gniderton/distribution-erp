@@ -14,10 +14,12 @@ import { BulkPriceEditModal } from './components/BulkPriceEditModal'
 import { BulkImportModal } from './components/BulkImportModal'
 import { BulkStockAdjustModal } from './components/BulkStockAdjustModal'
 import LegacyBatchBulkModal from './components/LegacyBatchBulkModal'
+import { PendingBatchesTab } from './components/PendingBatchesTab'
 import type { Product } from './types'
 import { formatCurrency } from '@/lib/utils'
 
 export default function ItemsPage() {
+  const [activeTab, setActiveTab] = useState<'products' | 'pending-batches'>('products')
   const { data: allProducts, isLoading, isError } = useProducts()
 
   const [search, setSearch] = useState('')
@@ -135,56 +137,88 @@ export default function ItemsPage() {
         }
       />
 
-      {/* Analytics & Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-white p-5 rounded-xl border border-border-subtle shadow-sm flex flex-col justify-center">
-          <p className="text-sm text-ink-600 font-medium mb-1">Total Stock Valuation (Purchase)</p>
-          <p className="text-2xl font-bold text-ink-900 font-mono-figures">{formatCurrency(stockValuation)}</p>
-          <p className="text-xs text-ink-500 mt-1">For {filteredProducts.length} filtered items</p>
-        </div>
-        
-        <div className="md:col-span-2 flex items-center gap-4 bg-white p-5 rounded-xl border border-border-subtle shadow-sm">
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-ink-700 mb-1">Status</label>
-            <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}>
-              <option value="all">All Statuses</option>
-              <option value="active">Active Only</option>
-              <option value="inactive">Inactive Only</option>
-            </Select>
-          </div>
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-ink-700 mb-1">Brand</label>
-            <Select value={selectedBrand} onChange={e => setSelectedBrand(e.target.value)}>
-              <option value="">All Brands</option>
-              {uniqueBrands.map((brand: string) => (
-                <option key={brand} value={brand}>{brand}</option>
-              ))}
-            </Select>
-          </div>
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-ink-700 mb-1">Category</label>
-            <Select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
-              <option value="">All Categories</option>
-              {uniqueCategories.map((cat: string) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </Select>
-          </div>
-        </div>
+      {/* Tabs */}
+      <div className="border-b border-border-subtle mb-6">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('products')}
+            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'products'
+                ? 'border-brand-500 text-brand-600'
+                : 'border-transparent text-ink-500 hover:text-ink-700 hover:border-ink-300'
+            }`}
+          >
+            Products Directory
+          </button>
+          <button
+            onClick={() => setActiveTab('pending-batches')}
+            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'pending-batches'
+                ? 'border-brand-500 text-brand-600'
+                : 'border-transparent text-ink-500 hover:text-ink-700 hover:border-ink-300'
+            }`}
+          >
+            Pending Batches (Action Required)
+          </button>
+        </nav>
       </div>
 
-      <DataTable
-        data={filteredProducts}
-        columns={columns}
-        isLoading={isLoading}
-        isError={isError}
-        emptyTitle="No products found"
-        emptyDescription="Add your first product or bulk import your catalog."
-        onRowClick={(row) => { setEditing(row); setDrawerOpen(true) }}
-        globalFilter={search}
-        onGlobalFilterChange={setSearch}
-        searchPlaceholder="Search by name, code, brand..."
-      />
+      {activeTab === 'products' ? (
+        <>
+          {/* Analytics & Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="bg-white p-5 rounded-xl border border-border-subtle shadow-sm flex flex-col justify-center">
+              <p className="text-sm text-ink-600 font-medium mb-1">Total Stock Valuation (Purchase)</p>
+              <p className="text-2xl font-bold text-ink-900 font-mono-figures">{formatCurrency(stockValuation)}</p>
+              <p className="text-xs text-ink-500 mt-1">For {filteredProducts.length} filtered items</p>
+            </div>
+            
+            <div className="md:col-span-2 flex items-center gap-4 bg-white p-5 rounded-xl border border-border-subtle shadow-sm">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-ink-700 mb-1">Status</label>
+                <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}>
+                  <option value="all">All Statuses</option>
+                  <option value="active">Active Only</option>
+                  <option value="inactive">Inactive Only</option>
+                </Select>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-ink-700 mb-1">Brand</label>
+                <Select value={selectedBrand} onChange={e => setSelectedBrand(e.target.value)}>
+                  <option value="">All Brands</option>
+                  {uniqueBrands.map((brand: string) => (
+                    <option key={brand} value={brand}>{brand}</option>
+                  ))}
+                </Select>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-ink-700 mb-1">Category</label>
+                <Select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}>
+                  <option value="">All Categories</option>
+                  {uniqueCategories.map((cat: string) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          <DataTable
+            data={filteredProducts}
+            columns={columns}
+            isLoading={isLoading}
+            isError={isError}
+            emptyTitle="No products found"
+            emptyDescription="Add your first product or bulk import your catalog."
+            onRowClick={(row) => { setEditing(row); setDrawerOpen(true) }}
+            globalFilter={search}
+            onGlobalFilterChange={setSearch}
+            searchPlaceholder="Search by name, code, brand..."
+          />
+        </>
+      ) : (
+        <PendingBatchesTab />
+      )}
 
       {drawerOpen && (
         <ProductViewDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} product={editing} />

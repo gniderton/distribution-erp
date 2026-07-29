@@ -94,3 +94,13 @@ export const useCreateLegacyBatchesBulk = () => {
     }
   })
 }
+
+export const useBulkUpdateBatches = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: itemsApi.bulkUpdateBatches,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['products'] })
+    }
+  })
+}

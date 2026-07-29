@@ -269,6 +269,57 @@ router.get('/:id/stats', async (req, res) => {
     }
 });
 
+// POST /api/products/batches/bulk-update - Bulk update existing batches
+router.post('/batches/bulk-update', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { batches } = req.body;
+        if (!Array.isArray(batches) || batches.length === 0) {
+            return res.status(400).json({ error: "Expected an array of batches to update" });
+        }
+
+        await client.query('BEGIN');
+
+        for (const row of batches) {
+            if (!row.id) continue;
+            
+            await client.query(`
+                UPDATE inventory_batches 
+                SET 
+                    batch_code = COALESCE($1, batch_code),
+                    expiry_date = $2,
+                    mrp = COALESCE($3, mrp),
+                    purchase_rate = COALESCE($4, purchase_rate),
+                    retail_rate = COALESCE($5, retail_rate),
+                    wholesale_rate = COALESCE($6, wholesale_rate),
+                    dealer_rate = COALESCE($7, dealer_rate),
+                    distributor_rate = COALESCE($8, distributor_rate),
+                    updated_at = NOW()
+                WHERE id = $9
+            `, [
+                row.batch_code || null,
+                row.expiry_date || null,
+                row.mrp !== undefined ? parseFloat(row.mrp) : null,
+                row.purchase_rate !== undefined ? parseFloat(row.purchase_rate) : null,
+                row.retail_rate !== undefined ? parseFloat(row.retail_rate) : null,
+                row.wholesale_rate !== undefined ? parseFloat(row.wholesale_rate) : null,
+                row.dealer_rate !== undefined ? parseFloat(row.dealer_rate) : null,
+                row.distributor_rate !== undefined ? parseFloat(row.distributor_rate) : null,
+                parseInt(row.id, 10)
+            ]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ message: "Batches bulk updated successfully" });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Bulk Batch Update Error:", err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 // POST /api/products/batches/legacy-bulk - Create legacy batches with 0 quantity
 router.post('/batches/legacy-bulk', async (req, res) => {
     const client = await pool.connect();
@@ -328,7 +379,7 @@ router.get('/batches', async (req, res) => {
         let query = `
             SELECT 
                 id, product_id, batch_code, mrp, expiry_date, quantity_remaining, purchase_rate, status,
-                distributor_rate, wholesale_rate, dealer_rate, retail_rate
+                distributor_rate, wholesale_rate, dealer_rate, retail_rate, grn_id
             FROM inventory_batches
             WHERE 1=1
         `;

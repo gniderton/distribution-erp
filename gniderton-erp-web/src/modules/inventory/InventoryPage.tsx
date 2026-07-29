@@ -8,9 +8,10 @@ import {
   useProducts, 
   useCreatePO, 
   useUpdatePO, 
-  useCreateGRN, 
+  useCreateGRN,
   useReverseGRN
 } from './hooks'
+import { GRNBatchUpdateModal } from './components/GRNBatchUpdateModal'
 import { inventoryApi } from './api'
 import { api } from '@/lib/axios'
 import { 
@@ -91,6 +92,7 @@ export default function InventoryPage() {
   const [showViewGRNModal, setShowViewGRNModal] = useState(false)
   const [selectedGRN, setSelectedGRN] = useState<any>(null)
   const [showReverseConfirm, setShowReverseConfirm] = useState(false)
+  const [showBatchUpdateModal, setShowBatchUpdateModal] = useState(false)
 
   // Dynamic Company Settings from DB company_settings table
   const [companySettings, setCompanySettings] = useState<any>(null)
@@ -1880,6 +1882,12 @@ export default function InventoryPage() {
                 >
                   <FileDown size={12} />
                   Download PDF
+                </button>
+                <button
+                  onClick={() => setShowBatchUpdateModal(true)}
+                  className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition mr-2"
+                >
+                  Update Batches
                 </button>
                 {selectedGRN.status !== 'Reversed' && (
                   <button
