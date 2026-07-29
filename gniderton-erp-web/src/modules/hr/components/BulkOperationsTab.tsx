@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Calendar, TrendingUp, Gift } from 'lucide-react'
+import { BulkSalaryGrid } from './BulkSalaryGrid'
 
 export function BulkOperationsTab() {
   const [activeSubTab, setActiveSubTab] = useState<'attendance' | 'salary' | 'bonus'>('attendance')
@@ -37,7 +38,7 @@ export function BulkOperationsTab() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 p-6 overflow-auto">
+      <div className="flex-1 p-6 overflow-hidden">
         {activeSubTab === 'attendance' && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-ink-900">Bulk Attendance Entry</h2>
@@ -52,16 +53,7 @@ export function BulkOperationsTab() {
         )}
 
         {activeSubTab === 'salary' && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold text-ink-900">Bulk Salary Revision</h2>
-            <p className="text-ink-600 text-sm">Push base salary updates to multiple employees effective immediately.</p>
-            <div className="border border-dashed border-ink-300 rounded-lg h-64 flex items-center justify-center text-ink-500">
-              [Salary Update Grid Placeholder]
-            </div>
-            <div className="flex justify-end">
-              <Button>Apply Salary Changes</Button>
-            </div>
-          </div>
+          <BulkSalaryGrid />
         )}
 
         {activeSubTab === 'bonus' && (
