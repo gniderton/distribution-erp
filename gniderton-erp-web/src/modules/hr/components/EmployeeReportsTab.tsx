@@ -1,18 +1,21 @@
 import { useState, useMemo } from 'react'
 import { FileText, Calendar, Landmark } from 'lucide-react'
 import { AutoTable } from '@/components/shared/AutoTable'
-import { useSalaryBatchSummary, useAttendanceReport, useEmployeeAdvances } from '../hooks'
+import { useSalaryPaymentHeaders, useAttendanceReport, useEmployeeAdvances } from '../hooks'
 
 function SalaryRegisterReport() {
-    const { data, isLoading, isError } = useSalaryBatchSummary()
+    const { data, isLoading, isError } = useSalaryPaymentHeaders()
     
     const formattedData = useMemo(() => {
         return data?.map((r: any) => {
             const date = new Date(r.year, r.month - 1)
             return {
+                'Employee': `${r.full_name} (${r.employee_code})`,
                 'Payroll Period': date.toLocaleString('default', { month: 'long', year: 'numeric' }),
-                'Employees Count': r.total_employees,
-                'Total Net Payout': `₹${Number(r.total_net_payout).toLocaleString()}`,
+                'Net Payout': `₹${Number(r.net_salary).toLocaleString()}`,
+                'Payment Mode': r.payment_mode,
+                'Source Account': r.source_account || '—',
+                'Payment Date': r.payment_date ? new Date(r.payment_date).toLocaleDateString() : '—',
                 'Processed On': new Date(r.processed_at).toLocaleString()
             }
         })
@@ -22,7 +25,7 @@ function SalaryRegisterReport() {
         <div className="h-full flex flex-col space-y-4">
             <div>
                 <h3 className="font-semibold text-ink-900">Salary Register</h3>
-                <p className="text-sm text-ink-500">Historical summary of all processed payroll batches.</p>
+                <p className="text-sm text-ink-500">Detailed historical record of all individual salary payments.</p>
             </div>
             <div className="flex-1 border border-ink-200 rounded-lg overflow-hidden bg-white">
                 <AutoTable
@@ -30,7 +33,7 @@ function SalaryRegisterReport() {
                     isLoading={isLoading}
                     isError={isError}
                     emptyTitle="No Salary Records"
-                    emptyDescription="No historical salary batches found."
+                    emptyDescription="No historical salary payments found."
                 />
             </div>
         </div>
