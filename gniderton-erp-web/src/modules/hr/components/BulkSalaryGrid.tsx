@@ -70,7 +70,7 @@ export function BulkSalaryGrid() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
+      <div className="glass-card flex-1 flex flex-col rounded-xl border border-border-subtle overflow-hidden shadow-sm bg-white">
         <div className="overflow-y-auto flex-1 scrollbar-thin">
           <table className="w-full text-left border-collapse">
             <thead className="bg-white sticky top-0 z-10">
@@ -110,9 +110,7 @@ export function BulkSalaryGrid() {
             </tbody>
           </table>
         </div>
-      </div>
-
-      <div className="shrink-0 flex justify-between items-center pt-4 mt-auto border-t border-border-subtle">
+      <div className="mt-auto shrink-0 flex items-center justify-between px-4 py-3 border-t border-border-subtle bg-white">
         <div className="text-sm text-ink-600">
           {Object.keys(updates).filter(k => updates[k].trim() !== '').length} employees modified
         </div>
@@ -121,5 +119,6 @@ export function BulkSalaryGrid() {
         </Button>
       </div>
     </div>
+  </div>
   )
 }
