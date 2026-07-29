@@ -12,7 +12,7 @@ export function BulkOperationsTab() {
   return (
     <div className="flex h-[calc(100vh-16rem)] overflow-hidden bg-white rounded-xl border border-border-subtle shadow-sm">
       {/* Sidebar for Sub-Tabs */}
-      <div className="w-64 border-r border-ink-200 p-4 space-y-2 shrink-0">
+      <div className="w-64 border-r border-border-subtle p-4 space-y-2 shrink-0">
         <h3 className="font-semibold text-ink-900 mb-4 px-2">Bulk Tools</h3>
         
         <button
