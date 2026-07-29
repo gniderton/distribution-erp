@@ -1472,13 +1472,13 @@ export default function InventoryPage() {
                       <tr>
                         <th className="px-4 py-2">Item Name</th>
                         <th className="px-4 py-2 w-20">Stock</th>
-                        <th className="px-4 py-2 w-28">MRP</th>
-                        <th className="px-4 py-2 w-28">Purchase Rate</th>
-                        <th className="px-4 py-2 w-24">Qty</th>
-                        <th className="px-4 py-2 w-20">Scheme</th>
-                        <th className="px-4 py-2 w-20">Disc %</th>
-                        <th className="px-4 py-2 w-20">GST %</th>
-                        <th className="px-4 py-2 w-24 text-right">Net Total</th>
+                        <th className="px-4 py-2 min-w-[100px]">MRP</th>
+                        <th className="px-4 py-2 min-w-[120px]">Purchase Rate</th>
+                        <th className="px-4 py-2 min-w-[100px]">Qty</th>
+                        <th className="px-4 py-2 min-w-[100px]">Scheme</th>
+                        <th className="px-4 py-2 min-w-[100px]">Disc %</th>
+                        <th className="px-4 py-2 min-w-[100px]">GST %</th>
+                        <th className="px-4 py-2 min-w-[120px] text-right">Net Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-subtle text-ink-800">
