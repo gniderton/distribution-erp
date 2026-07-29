@@ -3,10 +3,10 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { EmployeesTab } from './components/EmployeesTab'
 import { BulkOperationsTab } from './components/BulkOperationsTab'
 import { PayrollProcessingTab } from './components/PayrollProcessingTab'
-import { AdvancesLedgerTab } from './components/AdvancesLedgerTab'
-import { Users, Calendar, Banknote, Landmark } from 'lucide-react'
+import { EmployeeReportsTab } from './components/EmployeeReportsTab'
+import { Users, Calendar, Banknote, PieChart } from 'lucide-react'
 
-type Tab = 'employees' | 'bulk' | 'payroll' | 'advances'
+type Tab = 'employees' | 'bulk' | 'payroll' | 'reports'
 
 export default function HrPage() {
   const [activeTab, setActiveTab] = useState<Tab>('employees')
@@ -15,7 +15,7 @@ export default function HrPage() {
     { id: 'employees', label: 'Employees', icon: Users },
     { id: 'bulk', label: 'Bulk Operations', icon: Calendar },
     { id: 'payroll', label: 'Payroll Processing', icon: Banknote },
-    { id: 'advances', label: 'Advances & Ledger', icon: Landmark },
+    { id: 'reports', label: 'Reports', icon: PieChart },
   ] as const
 
   return (
@@ -55,7 +55,7 @@ export default function HrPage() {
         {activeTab === 'employees' && <EmployeesTab />}
         {activeTab === 'bulk' && <BulkOperationsTab />}
         {activeTab === 'payroll' && <PayrollProcessingTab />}
-        {activeTab === 'advances' && <AdvancesLedgerTab />}
+        {activeTab === 'reports' && <EmployeeReportsTab />}
       </div>
     </div>
   )

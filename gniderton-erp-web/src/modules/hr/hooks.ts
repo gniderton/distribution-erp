@@ -38,6 +38,17 @@ export function useEmployeeAdvances() {
   return useQuery({ queryKey: ['hr', 'advances'], queryFn: hrApi.getEmployeesAdvances })
 }
 
+export function useSalaryBatchSummary() {
+  return useQuery({ queryKey: ['hr', 'salary-batch-summary'], queryFn: hrApi.getEmployeesSalaryBatchSummary })
+}
+
+export function useAttendanceReport(start: string, end: string) {
+  return useQuery({ 
+    queryKey: ['hr', 'attendance-report', start, end], 
+    queryFn: () => hrApi.getEmployeesAttendanceReport(start, end) 
+  })
+}
+
 export function useCreateEmployee() {
   const qc = useQueryClient()
   return useMutation({
