@@ -174,7 +174,7 @@ export function PayrollProcessingTab() {
         </div>
       )}
 
-      <div className="flex-1 bg-white rounded-lg overflow-hidden flex flex-col">
+      <div className="glass-card flex-1 flex flex-col rounded-xl border border-border-subtle overflow-hidden shadow-sm bg-white">
         {isLoading ? (
             <div className="flex-1 flex items-center justify-center text-ink-500">Generating preview...</div>
         ) : isError ? (
