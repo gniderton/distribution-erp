@@ -68,7 +68,7 @@ export function BulkBonusGrid() {
             <select 
               value={bonusType}
               onChange={e => setBonusType(e.target.value)}
-              className="w-full h-[38px] px-3 rounded-lg border border-border-subtle bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400"
+              className="w-full h-[38px] px-3 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400"
             >
               <option value="FESTIVAL">Festival Bonus</option>
               <option value="PERFORMANCE">Performance Award</option>
@@ -82,7 +82,7 @@ export function BulkBonusGrid() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden border border-border-subtle rounded-lg flex flex-col">
+      <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
         <div className="overflow-y-auto flex-1 scrollbar-thin">
           <table className="w-full text-left border-collapse">
             <thead className="bg-ink-50 sticky top-0 z-10">

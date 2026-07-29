@@ -91,7 +91,7 @@ function SalaryRegisterReport() {
                 <h3 className="font-semibold text-ink-900">Salary Register</h3>
                 <p className="text-sm text-ink-500">Detailed historical record of all individual salary payments.</p>
             </div>
-            <div className="flex-1 border border-ink-200 rounded-lg overflow-hidden bg-white">
+            <div className="flex-1 rounded-lg overflow-hidden bg-white">
                 <DataTable
                     data={data}
                     columns={columns}
@@ -148,7 +148,7 @@ function AttendanceSummaryReport() {
                     />
                 </div>
             </div>
-            <div className="flex-1 border border-ink-200 rounded-lg overflow-hidden bg-white">
+            <div className="flex-1 rounded-lg overflow-hidden bg-white">
                 <AutoTable
                     data={formattedData}
                     isLoading={isLoading}
@@ -181,7 +181,7 @@ function AdvancesLedgerReport() {
                 <h3 className="font-semibold text-ink-900">Advances Ledger</h3>
                 <p className="text-sm text-ink-500">Historical log of all salary advances issued and their settlement status.</p>
             </div>
-            <div className="flex-1 border border-ink-200 rounded-lg overflow-hidden bg-white">
+            <div className="flex-1 rounded-lg overflow-hidden bg-white">
                 <AutoTable
                     data={formattedData}
                     isLoading={isLoading}

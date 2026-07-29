@@ -10,9 +10,9 @@ export function BulkOperationsTab() {
   const [activeSubTab, setActiveSubTab] = useState<'attendance' | 'salary' | 'bonus' | 'advance'>('attendance')
 
   return (
-    <div className="flex h-[calc(100vh-16rem)] border border-ink-200 rounded-lg overflow-hidden bg-white">
+    <div className="flex h-[calc(100vh-16rem)] overflow-hidden">
       {/* Sidebar for Sub-Tabs */}
-      <div className="w-64 bg-ink-50 border-r border-ink-200 p-4 space-y-2 shrink-0">
+      <div className="w-64 border-r border-ink-200 p-4 space-y-2 shrink-0">
         <h3 className="font-semibold text-ink-900 mb-4 px-2">Bulk Tools</h3>
         
         <button

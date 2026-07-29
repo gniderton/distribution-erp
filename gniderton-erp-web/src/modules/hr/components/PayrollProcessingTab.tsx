@@ -94,7 +94,7 @@ export function PayrollProcessingTab() {
 
   return (
     <div className="space-y-4 h-full flex flex-col">
-      <div className="flex flex-col gap-4 bg-white p-4 rounded-lg border border-ink-200">
+      <div className="flex flex-col gap-4 bg-white p-4 rounded-lg">
         <div className="flex justify-between items-start">
             <div>
             <h2 className="text-lg font-bold text-ink-900">Payroll Processing</h2>
@@ -128,7 +128,7 @@ export function PayrollProcessingTab() {
             </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 items-end bg-ink-50 p-3 rounded-md border border-ink-200">
+        <div className="flex flex-wrap gap-4 items-end bg-ink-50 p-3 rounded-md">
             <div className="space-y-1 w-48">
                 <Label className="text-xs">Global Payment Mode</Label>
                 <select 
@@ -165,7 +165,7 @@ export function PayrollProcessingTab() {
       </div>
 
       {jobId && (
-        <div className="bg-white p-6 rounded-lg border border-ink-200 shadow-sm">
+        <div className="bg-white p-6 rounded-lg shadow-sm">
           <JobProgressBar 
             jobId={jobId} 
             title="Processing Payroll Settlement"
@@ -174,7 +174,7 @@ export function PayrollProcessingTab() {
         </div>
       )}
 
-      <div className="flex-1 bg-white border border-ink-200 rounded-lg overflow-hidden flex flex-col">
+      <div className="flex-1 bg-white rounded-lg overflow-hidden flex flex-col">
         {isLoading ? (
             <div className="flex-1 flex items-center justify-center text-ink-500">Generating preview...</div>
         ) : isError ? (
