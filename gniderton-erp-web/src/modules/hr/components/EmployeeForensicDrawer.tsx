@@ -60,14 +60,14 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            <div className="p-4 bg-white rounded-lg border border-ink-200">
+            <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm">
               <div className="flex items-center space-x-2 text-ink-600 mb-2">
                 <DollarSign className="w-4 h-4" />
                 <span className="font-medium">Base Salary</span>
               </div>
               <div className="text-2xl font-bold">₹{Number(profile?.current_salary || 0).toLocaleString()}</div>
             </div>
-            <div className="p-4 bg-white rounded-lg border border-ink-200">
+            <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm">
               <div className="flex items-center space-x-2 text-ink-600 mb-2">
                 <AlertTriangle className="w-4 h-4" />
                 <span className="font-medium">Outstanding Liability</span>
@@ -76,7 +76,7 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
                 ₹{Number(data?.financials?.outstanding_liability || 0).toLocaleString()}
               </div>
             </div>
-            <div className="p-4 bg-white rounded-lg border border-ink-200">
+            <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm">
               <div className="flex items-center space-x-2 text-ink-600 mb-2">
                 <Clock className="w-4 h-4" />
                 <span className="font-medium">Attendance (30 Days)</span>
