@@ -101,7 +101,7 @@ export function BulkAdvanceGrid() {
                 <option value="">-- Select Transaction --</option>
                 {debits.map((d: any) => (
                   <option key={d.id} value={d.id}>
-                    {new Date(d.trans_date).toLocaleDateString()} - {d.description} (₹{Number(d.amount - d.consumed_amount).toLocaleString()})
+                    {new Date(d.transaction_date).toLocaleDateString()} - {d.particulars} (₹{Number(d.debit_amount - d.consumed_amount).toLocaleString()})
                   </option>
                 ))}
               </select>
