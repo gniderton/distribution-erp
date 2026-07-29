@@ -27,8 +27,11 @@ export function useUnconsumedDebits() {
 }
 
 
-export function useSalaryPreview() {
-  return useQuery({ queryKey: ['hr', 'salary-preview'], queryFn: hrApi.getEmployeesSalaryPreview })
+export function useSalaryPreview(month: number, year: number) {
+  return useQuery({ 
+    queryKey: ['hr', 'salary-preview', month, year], 
+    queryFn: () => hrApi.getEmployeesSalaryPreview(month, year) 
+  })
 }
 
 export function useEmployeeAdvances() {

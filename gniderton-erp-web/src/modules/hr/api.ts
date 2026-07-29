@@ -9,7 +9,7 @@ export const hrApi = {
   getEmployeesDesignations: () => api.get('/api/employees/designations').then((r) => r.data),
   getEmployeesProfile: () => api.get('/api/employees/profile').then((r) => r.data),
   getEmployeesProfile2: (id: string | number) => api.get(`/api/employees/profile/${id}`).then((r) => r.data),
-  getEmployeesSalaryPreview: () => api.get('/api/employees/salary-preview').then((r) => r.data),
+  getEmployeesSalaryPreview: (month: number, year: number) => api.get(`/api/employees/salary-preview?month=${month}&year=${year}`).then((r) => r.data),
   getEmployeesAttendance: (id: string | number) => api.get(`/api/employees/${id}/attendance`).then((r) => r.data),
   getEmployeesSalaryHistory: (id: string | number) => api.get(`/api/employees/${id}/salary-history`).then((r) => r.data),
   getFinanceReconciliationBankUnconsumedDebits: () => api.get('/api/finance/reconciliation/bank/unconsumed-debits').then((r) => r.data),

@@ -6,7 +6,11 @@ import { JobProgressBar } from '@/components/ui/JobProgressBar'
 import { Play } from 'lucide-react'
 
 export function PayrollProcessingTab() {
-  const { data = [], isLoading, isError } = useSalaryPreview()
+  const currentDate = new Date()
+  const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1)
+  const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear())
+
+  const { data = [], isLoading, isError } = useSalaryPreview(selectedMonth, selectedYear)
   const { data: debits = [] } = useUnconsumedDebits()
   const [jobId, setJobId] = useState<string | null>(null)
   
@@ -98,6 +102,25 @@ export function PayrollProcessingTab() {
             </div>
             
             <div className="flex items-center space-x-4">
+            <select 
+                value={selectedMonth}
+                onChange={e => setSelectedMonth(Number(e.target.value))}
+                className="h-8 px-2 rounded border border-ink-300 bg-white text-sm"
+            >
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                    <option key={m} value={m}>{new Date(2000, m - 1).toLocaleString('default', { month: 'long' })}</option>
+                ))}
+            </select>
+            <select 
+                value={selectedYear}
+                onChange={e => setSelectedYear(Number(e.target.value))}
+                className="h-8 px-2 rounded border border-ink-300 bg-white text-sm"
+            >
+                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
+                    <option key={y} value={y}>{y}</option>
+                ))}
+            </select>
+
             <Button onClick={handleSettlePayroll} disabled={settleMutation.isPending || !!jobId || data.length === 0}>
                 <Play className="w-4 h-4 mr-2" />
                 Settle Payroll Batch (₹{totalNetSalary.toLocaleString()})
