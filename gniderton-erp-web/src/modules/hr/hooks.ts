@@ -2,8 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { hrApi } from './api'
 import toast from 'react-hot-toast'
 
-export function useEmployees() {
-  return useQuery({ queryKey: ['hr', 'employees'], queryFn: hrApi.getEmployees })
+export function useEmployees(status?: string) {
+  return useQuery({ queryKey: ['hr', 'employees', status], queryFn: () => hrApi.getEmployees(status) })
 }
 
 export function useEmployeeProfile(id: string | number | null) {

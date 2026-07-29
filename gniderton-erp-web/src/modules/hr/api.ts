@@ -4,7 +4,7 @@ import { api } from '@/lib/axios'
 export const hrApi = {
   removeEmployeesAdvances: (id: string | number) => api.delete(`/api/employees/advances/${id}`).then((r) => r.data),
   getBankAccounts: () => api.get('/api/bank-accounts').then((r) => r.data),
-  getEmployees: () => api.get('/api/employees').then((r) => r.data),
+  getEmployees: (status?: string) => api.get(`/api/employees${status ? `?employment_status=${status}` : ''}`).then((r) => r.data),
   getEmployeesAdvances: () => api.get('/api/employees/advances').then((r) => r.data),
   getEmployeesDesignations: () => api.get('/api/employees/designations').then((r) => r.data),
   getEmployeesProfile: () => api.get('/api/employees/profile').then((r) => r.data),
