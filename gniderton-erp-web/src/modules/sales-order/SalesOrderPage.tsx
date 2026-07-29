@@ -840,6 +840,13 @@ export default function SalesOrderPage() {
               </div>
               <div className="flex items-center gap-3">
                 <button
+                  onClick={handleDownloadShortfallReport}
+                  className="px-4 py-2 border border-brand-200 text-brand-700 bg-brand-50 rounded-lg hover:bg-brand-100 text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Shortfall
+                </button>
+                <button
                   onClick={() => setShowAllocation(false)}
                   className="px-4 py-2 border border-ink-200 text-ink-700 rounded-lg hover:bg-ink-50 text-sm font-medium transition-colors"
                 >
