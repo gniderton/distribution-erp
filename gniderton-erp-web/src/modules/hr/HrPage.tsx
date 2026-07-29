@@ -19,15 +19,15 @@ export default function HrPage() {
   ] as const
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-6 pt-6 pb-2 shrink-0">
+    <div className="flex flex-col h-full overflow-hidden space-y-6">
+      <div className="shrink-0">
         <PageHeader
           eyebrow="HRMS & Payroll"
           title="Human Resources"
           description="Manage employees, attendance, payroll runs, and financial ledgers."
         />
         
-        <div className="flex border-y border-border-subtle mt-6 bg-white">
+        <div className="flex border-b border-border-subtle mt-6 bg-transparent">
           {tabs.map(tab => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -49,7 +49,7 @@ export default function HrPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-ink-50/50 p-6">
+      <div className="flex-1 overflow-auto bg-transparent">
         {activeTab === 'employees' && <EmployeesTab />}
         {activeTab === 'bulk' && <BulkOperationsTab />}
         {activeTab === 'payroll' && <PayrollProcessingTab />}
