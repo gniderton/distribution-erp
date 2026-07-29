@@ -197,7 +197,7 @@ export function PayrollProcessingTab() {
                             <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Override Statement</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-ink-100">
+                    <tbody className="divide-y divide-border-subtle">
                         {data.map((emp: any) => {
                             const rowMode = overrides[emp.id]?.payment_mode || 'Default'
                             const isOnline = rowMode === 'Online' || (rowMode === 'Default' && globalPaymentMode === 'Online')
