@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/Button'
 import { Calendar, TrendingUp, Gift } from 'lucide-react'
 import { BulkSalaryGrid } from './BulkSalaryGrid'
 import { BulkAttendanceGrid } from './BulkAttendanceGrid'
+import { BulkBonusGrid } from './BulkBonusGrid'
 
 export function BulkOperationsTab() {
   const [activeSubTab, setActiveSubTab] = useState<'attendance' | 'salary' | 'bonus'>('attendance')
@@ -49,16 +50,7 @@ export function BulkOperationsTab() {
         )}
 
         {activeSubTab === 'bonus' && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold text-ink-900">Bulk Bonuses & Allowances</h2>
-            <p className="text-ink-600 text-sm">Add one-time bonuses to the upcoming payroll batch.</p>
-            <div className="border border-dashed border-ink-300 rounded-lg h-64 flex items-center justify-center text-ink-500">
-              [Bonus Editor Grid Placeholder]
-            </div>
-            <div className="flex justify-end">
-              <Button>Submit Bonuses</Button>
-            </div>
-          </div>
+          <BulkBonusGrid />
         )}
       </div>
     </div>
