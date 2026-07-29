@@ -2008,6 +2008,16 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+
+      {/* Batch Update Modal */}
+      {showBatchUpdateModal && selectedGRN && (
+        <GRNBatchUpdateModal 
+          open={showBatchUpdateModal} 
+          onClose={() => setShowBatchUpdateModal(false)}
+          grnId={selectedGRN.id}
+          poNumber={selectedGRN.po_number}
+        />
+      )}
     </div>
   )
 }
