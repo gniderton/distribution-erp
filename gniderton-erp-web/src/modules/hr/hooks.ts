@@ -18,6 +18,10 @@ export function useDesignations() {
   return useQuery({ queryKey: ['hr', 'designations'], queryFn: hrApi.getEmployeesDesignations })
 }
 
+export function useMasterBanks() {
+  return useQuery({ queryKey: ['hr', 'banks'], queryFn: hrApi.getMasterBanks })
+}
+
 export function useSalaryPreview() {
   return useQuery({ queryKey: ['hr', 'salary-preview'], queryFn: hrApi.getEmployeesSalaryPreview })
 }
