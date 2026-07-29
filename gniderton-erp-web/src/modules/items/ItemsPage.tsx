@@ -5,7 +5,7 @@ import { DataTable } from '@/components/shared/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/Input'
-import { Plus, Upload, SlidersHorizontal, CheckSquare, Edit3, Package } from 'lucide-react'
+import { Plus, Upload, SlidersHorizontal, CheckSquare, Edit3, Package, List, AlertCircle } from 'lucide-react'
 import { useProducts } from './hooks'
 import { ProductViewDrawer } from './components/ProductViewDrawer'
 import { StockAdjustModal } from './components/StockAdjustModal'
@@ -142,22 +142,24 @@ export default function ItemsPage() {
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('products')}
-            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${
               activeTab === 'products'
                 ? 'border-brand-500 text-brand-600'
                 : 'border-transparent text-ink-500 hover:text-ink-700 hover:border-ink-300'
             }`}
           >
+            <List className="w-4 h-4" />
             Products Directory
           </button>
           <button
             onClick={() => setActiveTab('pending-batches')}
-            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors flex items-center gap-2 ${
               activeTab === 'pending-batches'
                 ? 'border-brand-500 text-brand-600'
                 : 'border-transparent text-ink-500 hover:text-ink-700 hover:border-ink-300'
             }`}
           >
+            <AlertCircle className="w-4 h-4" />
             Pending Batches (Action Required)
           </button>
         </nav>
