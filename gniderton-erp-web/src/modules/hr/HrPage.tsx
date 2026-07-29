@@ -27,7 +27,7 @@ export default function HrPage() {
           description="Manage employees, attendance, payroll runs, and financial ledgers."
         />
         
-        <div className="flex border-b border-border-subtle mt-6 overflow-x-auto">
+        <div className="flex border-y border-border-subtle mt-6 bg-white">
           {tabs.map(tab => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
