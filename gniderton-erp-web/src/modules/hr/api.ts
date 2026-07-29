@@ -28,4 +28,6 @@ export const hrApi = {
   createEmployeesLiabilities: (payload: any) => api.post('/api/employees/liabilities', payload).then((r) => r.data),
   createEmployeesSalaryUpdate: (employeeid: string | number, payload: any = {}) => api.post(`/api/employees/${employeeid}/salary-update`, payload).then((r) => r.data),
   createEmployeesResign: (id: string | number, payload: any = {}) => api.post(`/api/employees/${id}/resign`, payload).then((r) => r.data),
+  getEmployeesLiabilities: (id: string | number) => api.get(`/api/employees/${id}/liabilities`).then((r) => r.data),
+  deleteEmployeesLiability: (id: string | number) => api.delete(`/api/employees/liabilities/${id}`).then((r) => r.data),
 }

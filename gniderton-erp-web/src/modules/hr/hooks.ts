@@ -26,6 +26,10 @@ export function useUnconsumedDebits() {
   return useQuery({ queryKey: ['hr', 'unconsumed-debits'], queryFn: hrApi.getFinanceReconciliationBankUnconsumedDebits })
 }
 
+export function useSalesInvoicesLookup() {
+  return useQuery({ queryKey: ['hr', 'sales-invoices'], queryFn: hrApi.getSalesInvoicesLookup })
+}
+
 
 export function useSalaryPreview(month: number, year: number) {
   return useQuery({ 
@@ -129,5 +133,37 @@ export function useBulkSalaryAdvance() {
 export function useBulkSalaryPayment() {
   return useMutation({
     mutationFn: hrApi.createEmployeesBulkSalaryPayment,
+  })
+}
+
+export function useEmployeeLiabilities(id: string | number | null) {
+  return useQuery({
+    queryKey: ['hr', 'liabilities', id],
+    queryFn: () => hrApi.getEmployeesLiabilities(id!),
+    enabled: !!id
+  })
+}
+
+export function useCreateLiability() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: hrApi.createEmployeesLiabilities,
+    onSuccess: (_, variables) => {
+      toast.success('Liability recorded successfully')
+      qc.invalidateQueries({ queryKey: ['hr', 'liabilities', variables.employee_id] })
+      qc.invalidateQueries({ queryKey: ['hr', 'profile', variables.employee_id] })
+    }
+  })
+}
+
+export function useDeleteLiability() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: hrApi.deleteEmployeesLiability,
+    onSuccess: () => {
+      toast.success('Liability cancelled successfully')
+      qc.invalidateQueries({ queryKey: ['hr', 'liabilities'] })
+      qc.invalidateQueries({ queryKey: ['hr', 'profile'] })
+    }
   })
 }

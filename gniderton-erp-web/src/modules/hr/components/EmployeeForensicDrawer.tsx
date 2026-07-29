@@ -5,7 +5,9 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { User, DollarSign, Clock, AlertTriangle } from 'lucide-react'
 import { UpdateSalaryDialog } from './UpdateSalaryDialog'
-
+import { RecordLiabilityDialog } from './RecordLiabilityDialog'
+import { useEmployeeLiabilities, useDeleteLiability } from '../hooks'
+import { Trash2 } from 'lucide-react'
 interface Props {
   employeeId: string | null
   onClose: () => void
@@ -13,7 +15,11 @@ interface Props {
 
 export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
   const { data, isLoading } = useEmployeeProfile(employeeId)
+  const { data: liabilities, isLoading: isLiabilitiesLoading } = useEmployeeLiabilities(employeeId)
+  const { mutate: deleteLiability } = useDeleteLiability()
+  
   const [isSalaryOpen, setIsSalaryOpen] = useState(false)
+  const [isLiabilityOpen, setIsLiabilityOpen] = useState(false)
 
   // Extract the profile object from the data payload
   const profile = data?.profile
@@ -47,6 +53,7 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
             </div>
             
             <div className="flex space-x-2">
+              <Button variant="secondary" size="sm" onClick={() => setIsLiabilityOpen(true)}>Record Liability</Button>
               <Button variant="secondary" size="sm" onClick={() => setIsSalaryOpen(true)}>Update Salary</Button>
               <Button variant="danger" size="sm">Resign</Button>
             </div>
@@ -88,6 +95,56 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
               currentSalary={profile?.current_salary || 0}
             />
           )}
+
+          {employeeId && isLiabilityOpen && (
+            <RecordLiabilityDialog
+              open={isLiabilityOpen}
+              onClose={() => setIsLiabilityOpen(false)}
+              employeeId={employeeId}
+            />
+          )}
+
+          <div className="mt-8">
+            <h4 className="text-lg font-bold text-ink-900 mb-4">Pending Liabilities</h4>
+            <div className="glass-card rounded-xl border border-border-subtle overflow-hidden bg-white shadow-sm">
+              <table className="w-full text-left border-collapse whitespace-nowrap">
+                <thead className="bg-surface">
+                  <tr>
+                    <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Date</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Type</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Description</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle text-right">Amount</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-subtle">
+                  {isLiabilitiesLoading ? (
+                    <tr><td colSpan={5} className="px-4 py-4 text-center text-ink-500">Loading...</td></tr>
+                  ) : liabilities?.length === 0 ? (
+                    <tr><td colSpan={5} className="px-4 py-4 text-center text-ink-500">No pending liabilities found.</td></tr>
+                  ) : (
+                    liabilities?.map((l: any) => (
+                      <tr key={l.id} className="hover:bg-surface/50">
+                        <td className="px-4 py-3 text-sm">{new Date(l.created_at).toLocaleDateString()}</td>
+                        <td className="px-4 py-3 text-sm font-medium">{l.type}</td>
+                        <td className="px-4 py-3 text-sm text-ink-600">{l.description}</td>
+                        <td className="px-4 py-3 text-sm text-right text-red-600 font-bold">₹{Number(l.amount).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-sm text-center">
+                          <button 
+                            onClick={() => deleteLiability(l.id)}
+                            className="text-red-500 hover:text-red-700 p-1"
+                            title="Cancel Liability"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
         </div>
       ) : (
