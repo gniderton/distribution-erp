@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { FileText, Calendar, Landmark } from 'lucide-react'
 import { AutoTable } from '@/components/shared/AutoTable'
 import { useSalaryBatchSummary, useAttendanceReport, useEmployeeAdvances } from '../hooks'
@@ -6,6 +6,18 @@ import { useSalaryBatchSummary, useAttendanceReport, useEmployeeAdvances } from 
 function SalaryRegisterReport() {
     const { data, isLoading, isError } = useSalaryBatchSummary()
     
+    const formattedData = useMemo(() => {
+        return data?.map((r: any) => {
+            const date = new Date(r.year, r.month - 1)
+            return {
+                'Payroll Period': date.toLocaleString('default', { month: 'long', year: 'numeric' }),
+                'Employees Count': r.total_employees,
+                'Total Net Payout': `₹${Number(r.total_net_payout).toLocaleString()}`,
+                'Processed On': new Date(r.processed_at).toLocaleString()
+            }
+        })
+    }, [data])
+
     return (
         <div className="h-full flex flex-col space-y-4">
             <div>
@@ -14,7 +26,7 @@ function SalaryRegisterReport() {
             </div>
             <div className="flex-1 border border-ink-200 rounded-lg overflow-hidden bg-white">
                 <AutoTable
-                    data={data}
+                    data={formattedData}
                     isLoading={isLoading}
                     isError={isError}
                     emptyTitle="No Salary Records"
@@ -36,6 +48,15 @@ function AttendanceSummaryReport() {
     
     const { data, isLoading, isError } = useAttendanceReport(startDate, endDate)
     
+    const formattedData = useMemo(() => {
+        return data?.map((r: any) => ({
+            'Employee': `${r.full_name} (${r.employee_code})`,
+            'Designation': r.designation_name || '—',
+            'Full Days Absent': r.total_absent,
+            'Half Days': r.total_half_day
+        }))
+    }, [data])
+
     return (
         <div className="h-full flex flex-col space-y-4">
             <div className="flex justify-between items-start">
@@ -61,7 +82,7 @@ function AttendanceSummaryReport() {
             </div>
             <div className="flex-1 border border-ink-200 rounded-lg overflow-hidden bg-white">
                 <AutoTable
-                    data={data}
+                    data={formattedData}
                     isLoading={isLoading}
                     isError={isError}
                     emptyTitle="No Attendance Records"
@@ -75,6 +96,17 @@ function AttendanceSummaryReport() {
 function AdvancesLedgerReport() {
     const { data, isLoading, isError } = useEmployeeAdvances()
     
+    const formattedData = useMemo(() => {
+        return data?.map((r: any) => ({
+            'Employee': `${r.employee_name} (${r.employee_code})`,
+            'Advance Date': new Date(r.advance_date).toLocaleDateString(),
+            'Amount Issued': `₹${Number(r.amount).toLocaleString()}`,
+            'Payment Mode': r.payment_mode,
+            'Status': r.is_settled ? 'Settled (Recovered)' : 'Pending',
+            'Settled In Salary ID': r.salary_payment_id || '—'
+        }))
+    }, [data])
+
     return (
         <div className="h-full flex flex-col space-y-4">
             <div>
@@ -83,7 +115,7 @@ function AdvancesLedgerReport() {
             </div>
             <div className="flex-1 border border-ink-200 rounded-lg overflow-hidden bg-white">
                 <AutoTable
-                    data={data}
+                    data={formattedData}
                     isLoading={isLoading}
                     isError={isError}
                     emptyTitle="No Advances"
