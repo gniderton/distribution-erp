@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
-export async function generatePayslip(salaryData: any) {
+export async function generatePayslip(salaryData: any, companySettings: any) {
   try {
     if (!salaryData || !salaryData.header) throw new Error("No Salary/Payslip data loaded.");
 
@@ -9,13 +9,7 @@ export async function generatePayslip(salaryData: any) {
 
     const h = salaryData.header;
     const breakdown = salaryData.breakdown || {};
-    
-    // Hardcode company info for now, as Global_Assets is from Appsmith
-    const company = {
-      regt_name: "GNIDERTON INC.",
-      address: "123 Business Avenue, Tech Park",
-      gst: "29ABCDE1234F1Z5"
-    };
+    const company = companySettings;
 
     /* ── Layout constants (Very Tight Margins) ── */
     const PW   = doc.internal.pageSize.width;   // 595
@@ -179,8 +173,8 @@ export async function generatePayslip(salaryData: any) {
         [
           "—",
           "—",
-          "Miscellaneous / Other Deductions",
-          fmtN(Number(h.other_deductions).toFixed(2))
+          "Liability & Other Deductions",
+          fmtN((Number(h.other_deductions || 0) + (breakdown.deductions?.liabilities || []).reduce((acc: number, l: any) => acc + Number(l.amount || 0), 0)).toFixed(2))
         ]
       ],
       theme: "grid",
@@ -229,9 +223,10 @@ export async function generatePayslip(salaryData: any) {
     });
 
     (breakdown.deductions?.liabilities || []).forEach((l: any) => {
+        const inv = l.invoice_number ? ` (Inv: ${l.invoice_number})` : "";
         deductionRows.push([
             "-",
-            `Liability: ${l.type} - ${l.description}`,
+            `Liability: ${l.type} - ${l.description}${inv}`,
             fmtN(Number(l.amount).toFixed(2))
         ]);
     });

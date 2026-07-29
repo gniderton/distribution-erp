@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { FileText, Calendar, Landmark, Download, Loader2 } from 'lucide-react'
 import { AutoTable } from '@/components/shared/AutoTable'
 import { DataTable } from '@/components/shared/DataTable'
+import { api } from '@/lib/axios'
 import { hrApi } from '../api'
 import { useSalaryPaymentHeaders, useAttendanceReport, useEmployeeAdvances } from '../hooks'
 import { generatePayslip } from '../utils/payslip'
@@ -14,8 +15,17 @@ function SalaryRegisterReport() {
     const handleDownload = async (id: string | number) => {
         try {
             setDownloadingId(id)
-            const details = await hrApi.getEmployeesSalaryPaymentDetails(id)
-            await generatePayslip(details)
+            const [details, settingsRes] = await Promise.all([
+                hrApi.getEmployeesSalaryPaymentDetails(id),
+                api.get('/api/company-settings').catch(() => ({ data: {} }))
+            ])
+            const companySettings = {
+                regt_name: settingsRes.data?.company_name || settingsRes.data?.regt_name || "GNIDERTON INC.",
+                address: settingsRes.data?.address || "123 Business Avenue, Tech Park",
+                gst: settingsRes.data?.gstin || "29ABCDE1234F1Z5",
+                logo: settingsRes.data?.logo || null
+            }
+            await generatePayslip(details, companySettings)
             toast.success('Payslip downloaded successfully')
         } catch (err: any) {
             toast.error(err.message || 'Failed to download payslip')
