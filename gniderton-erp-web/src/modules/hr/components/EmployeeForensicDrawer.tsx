@@ -12,8 +12,8 @@ interface Props {
 export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
   const { data, isLoading } = useEmployeeProfile(employeeId)
 
-  // Extract the first item from the array since the backend wraps the profile in an array
-  const profile = data?.profile?.[0]
+  // Extract the profile object from the data payload
+  const profile = data?.profile
 
   return (
     <Drawer open={!!employeeId} onClose={onClose} title="Employee Profile">
