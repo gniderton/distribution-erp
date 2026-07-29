@@ -92,7 +92,7 @@ export function BulkAttendanceGrid() {
       <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
         <div className="overflow-y-auto flex-1 scrollbar-thin">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-ink-50 sticky top-0 z-10">
+            <thead className="bg-surface sticky top-0 z-10">
               <tr>
                 <th className="px-4 py-3 w-12 border-b border-border-subtle">
                   <input 
@@ -118,7 +118,7 @@ export function BulkAttendanceGrid() {
                 </tr>
               )}
               {activeEmployees.map((emp: any) => (
-                <tr key={emp.id} className="hover:bg-ink-50/50">
+                <tr key={emp.id} className="hover:bg-surface/50">
                   <td className="px-4 py-2">
                     <input 
                       type="checkbox"
@@ -138,7 +138,7 @@ export function BulkAttendanceGrid() {
         </div>
       </div>
 
-      <div className="shrink-0 flex justify-between items-center bg-ink-50 -mx-6 -mb-6 px-6 py-4 border-t border-border-subtle">
+      <div className="shrink-0 flex justify-between items-center pt-4 mt-auto border-t border-border-subtle">
         <div className="text-sm text-ink-600">
           {selectedIds.size} employees selected for <span className="font-semibold text-ink-900">{status}</span>
         </div>

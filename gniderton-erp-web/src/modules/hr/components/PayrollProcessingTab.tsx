@@ -105,7 +105,7 @@ export function PayrollProcessingTab() {
             <select 
                 value={selectedMonth}
                 onChange={e => setSelectedMonth(Number(e.target.value))}
-                className="h-8 px-2 rounded border border-ink-300 bg-white text-sm"
+                className="h-8 px-2 rounded border border-border-subtle bg-white text-sm"
             >
                 {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
                     <option key={m} value={m}>{new Date(2000, m - 1).toLocaleString('default', { month: 'long' })}</option>
@@ -114,7 +114,7 @@ export function PayrollProcessingTab() {
             <select 
                 value={selectedYear}
                 onChange={e => setSelectedYear(Number(e.target.value))}
-                className="h-8 px-2 rounded border border-ink-300 bg-white text-sm"
+                className="h-8 px-2 rounded border border-border-subtle bg-white text-sm"
             >
                 {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(y => (
                     <option key={y} value={y}>{y}</option>
@@ -128,7 +128,7 @@ export function PayrollProcessingTab() {
             </div>
         </div>
 
-        <div className="flex flex-wrap gap-4 items-end bg-ink-50 p-3 rounded-md">
+        <div className="flex flex-wrap gap-4 items-end bg-surface p-3 rounded-md">
             <div className="space-y-1 w-48">
                 <Label className="text-xs">Global Payment Mode</Label>
                 <select 
@@ -137,7 +137,7 @@ export function PayrollProcessingTab() {
                         setGlobalPaymentMode(e.target.value as 'Cash' | 'Online')
                         if (e.target.value === 'Cash') setGlobalBankStatementEntryId('')
                     }}
-                    className="w-full h-8 px-2 rounded border border-ink-300 bg-white text-sm"
+                    className="w-full h-8 px-2 rounded border border-border-subtle bg-white text-sm"
                 >
                     <option value="Cash">Cash</option>
                     <option value="Online">Online</option>
@@ -150,7 +150,7 @@ export function PayrollProcessingTab() {
                     <select 
                         value={globalBankStatementEntryId}
                         onChange={e => setGlobalBankStatementEntryId(e.target.value)}
-                        className="w-full h-8 px-2 rounded border border-ink-300 bg-white text-sm"
+                        className="w-full h-8 px-2 rounded border border-border-subtle bg-white text-sm"
                     >
                         <option value="">-- Select Transaction --</option>
                         {debits.map((d: any) => (
@@ -186,15 +186,15 @@ export function PayrollProcessingTab() {
         ) : (
             <div className="overflow-y-auto flex-1 scrollbar-thin">
                 <table className="w-full text-left border-collapse whitespace-nowrap">
-                    <thead className="bg-ink-50 sticky top-0 z-10">
+                    <thead className="bg-surface sticky top-0 z-10">
                         <tr>
-                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-ink-200">Employee</th>
-                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-ink-200 text-right">Base</th>
-                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-ink-200 text-right text-red-600">Deductions</th>
-                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-ink-200 text-right text-green-600">Additions</th>
-                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-ink-200 text-right font-bold">Net Salary</th>
-                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-ink-200">Override Mode</th>
-                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-ink-200">Override Statement</th>
+                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Employee</th>
+                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle text-right">Base</th>
+                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle text-right text-red-600">Deductions</th>
+                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle text-right text-green-600">Additions</th>
+                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle text-right font-bold">Net Salary</th>
+                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Override Mode</th>
+                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Override Statement</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-ink-100">
@@ -203,7 +203,7 @@ export function PayrollProcessingTab() {
                             const isOnline = rowMode === 'Online' || (rowMode === 'Default' && globalPaymentMode === 'Online')
 
                             return (
-                                <tr key={emp.id} className="hover:bg-ink-50/50">
+                                <tr key={emp.id} className="hover:bg-surface/50">
                                     <td className="px-4 py-3">
                                         <div className="font-medium text-ink-900 text-sm">{emp.full_name}</div>
                                         <div className="text-xs text-ink-500 font-mono">{emp.employee_code}</div>
@@ -217,7 +217,7 @@ export function PayrollProcessingTab() {
                                         <select 
                                             value={rowMode}
                                             onChange={e => handleOverrideChange(emp.id, 'payment_mode', e.target.value)}
-                                            className="w-28 h-8 px-2 rounded border border-ink-300 bg-white text-xs"
+                                            className="w-28 h-8 px-2 rounded border border-border-subtle bg-white text-xs"
                                         >
                                             <option value="Default">Default</option>
                                             <option value="Cash">Cash</option>
@@ -229,7 +229,7 @@ export function PayrollProcessingTab() {
                                             <select 
                                                 value={overrides[emp.id]?.bank_statement_entry_id || ''}
                                                 onChange={e => handleOverrideChange(emp.id, 'bank_statement_entry_id', e.target.value)}
-                                                className="w-full max-w-[250px] h-8 px-2 rounded border border-ink-300 bg-white text-xs"
+                                                className="w-full max-w-[250px] h-8 px-2 rounded border border-border-subtle bg-white text-xs"
                                             >
                                                 <option value="">{rowMode === 'Default' ? '(Using Global)' : '-- Select Transaction --'}</option>
                                                 {debits.map((d: any) => (

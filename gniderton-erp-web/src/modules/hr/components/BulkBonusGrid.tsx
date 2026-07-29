@@ -85,7 +85,7 @@ export function BulkBonusGrid() {
       <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
         <div className="overflow-y-auto flex-1 scrollbar-thin">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-ink-50 sticky top-0 z-10">
+            <thead className="bg-surface sticky top-0 z-10">
               <tr>
                 <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Code</th>
                 <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Name</th>
@@ -100,7 +100,7 @@ export function BulkBonusGrid() {
                 </tr>
               )}
               {activeEmployees.map((emp: any) => (
-                <tr key={emp.id} className="hover:bg-ink-50/50">
+                <tr key={emp.id} className="hover:bg-surface/50">
                   <td className="px-4 py-2 font-mono text-xs text-ink-600">{emp.employee_code}</td>
                   <td className="px-4 py-2 font-medium text-ink-900 text-sm">{emp.full_name}</td>
                   <td className="px-4 py-2 text-ink-600 text-sm">{emp.designation_name}</td>
@@ -122,7 +122,7 @@ export function BulkBonusGrid() {
         </div>
       </div>
 
-      <div className="shrink-0 flex justify-between items-center bg-ink-50 -mx-6 -mb-6 px-6 py-4 border-t border-border-subtle">
+      <div className="shrink-0 flex justify-between items-center pt-4 mt-auto border-t border-border-subtle">
         <div className="text-sm text-ink-600">
           {Object.keys(bonuses).filter(k => bonuses[k].trim() !== '' && Number(bonuses[k]) > 0).length} bonuses pending submission
         </div>
