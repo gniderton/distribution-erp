@@ -630,7 +630,15 @@ router.post('/bulk-salary-advance', async (req, res) => {
         await client.query('BEGIN');
 
         for (const adv of advances) {
-            const { employee_id, amount, payment_mode, from_account_id, bank_statement_entry_id } = adv;
+            let { employee_id, amount, payment_mode, from_account_id, bank_statement_entry_id } = adv;
+
+            // Intelligently determine from_account_id if a bank statement entry was selected
+            if (payment_mode === 'Online' && bank_statement_entry_id) {
+                const bRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [bank_statement_entry_id]);
+                if (bRes.rows.length > 0) {
+                    from_account_id = bRes.rows[0].bank_account_id;
+                }
+            }
 
             // 1. Insert Advance Record
             const advRes = await client.query(`

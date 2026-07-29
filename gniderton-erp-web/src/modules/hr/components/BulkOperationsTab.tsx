@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
-import { Calendar, TrendingUp, Gift } from 'lucide-react'
+import { Calendar, TrendingUp, Gift, Banknote } from 'lucide-react'
 import { BulkSalaryGrid } from './BulkSalaryGrid'
 import { BulkAttendanceGrid } from './BulkAttendanceGrid'
 import { BulkBonusGrid } from './BulkBonusGrid'
+import { BulkAdvanceGrid } from './BulkAdvanceGrid'
 
 export function BulkOperationsTab() {
-  const [activeSubTab, setActiveSubTab] = useState<'attendance' | 'salary' | 'bonus'>('attendance')
+  const [activeSubTab, setActiveSubTab] = useState<'attendance' | 'salary' | 'bonus' | 'advance'>('attendance')
 
   return (
     <div className="flex h-[calc(100vh-16rem)] border border-ink-200 rounded-lg overflow-hidden bg-white">
@@ -37,6 +38,14 @@ export function BulkOperationsTab() {
           <Gift className="w-4 h-4" />
           <span>Issue Bonuses</span>
         </button>
+
+        <button
+          onClick={() => setActiveSubTab('advance')}
+          className={`w-full flex items-center space-x-2 px-3 py-2 rounded-md transition-colors text-left text-sm ${activeSubTab === 'advance' ? 'bg-brand-50 text-brand-700 font-medium' : 'text-ink-600 hover:bg-ink-100'}`}
+        >
+          <Banknote className="w-4 h-4" />
+          <span>Issue Advances</span>
+        </button>
       </div>
 
       {/* Main Content Area */}
@@ -51,6 +60,10 @@ export function BulkOperationsTab() {
 
         {activeSubTab === 'bonus' && (
           <BulkBonusGrid />
+        )}
+
+        {activeSubTab === 'advance' && (
+          <BulkAdvanceGrid />
         )}
       </div>
     </div>
