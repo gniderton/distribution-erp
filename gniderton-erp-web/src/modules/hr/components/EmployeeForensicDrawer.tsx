@@ -12,28 +12,33 @@ interface Props {
 export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
   const { data, isLoading } = useEmployeeProfile(employeeId)
 
+  // Extract the first item from the array since the backend wraps the profile in an array
+  const profile = data?.profile?.[0]
+
   return (
     <Drawer open={!!employeeId} onClose={onClose} title="Employee Profile">
       {isLoading ? (
         <div className="p-6 text-center text-ink-500">Loading profile...</div>
-      ) : data ? (
+      ) : profile ? (
         <div className="p-6 space-y-8">
           
           <div className="flex items-start justify-between">
             <div className="flex items-center space-x-4">
-              <div className="w-16 h-16 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 text-2xl font-bold">
-                {data.profile?.first_name?.[0]}{data.profile?.last_name?.[0]}
+              <div className="w-16 h-16 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 text-2xl font-bold uppercase">
+                {profile?.full_name?.substring(0, 2) || '?'}
               </div>
               <div>
                 <h3 className="text-xl font-bold text-ink-900">
-                  {data.profile?.first_name} {data.profile?.last_name}
+                  {profile?.full_name || 'Unknown Employee'}
                 </h3>
-                <p className="text-ink-600">{data.profile?.designation}</p>
+                <p className="text-ink-600">{profile?.designation_name || 'No Designation'}</p>
                 <div className="flex space-x-2 mt-2">
-                  <Badge tone={data.profile?.status === 'Active' ? 'success' : 'neutral'}>
-                    {data.profile?.status}
+                  <Badge tone={profile?.employment_status === 'Active' ? 'success' : 'neutral'}>
+                    {profile?.employment_status || 'Unknown Status'}
                   </Badge>
-                  <Badge tone="neutral">{data.profile?.department}</Badge>
+                  {profile?.department_name && (
+                    <Badge tone="neutral">{profile?.department_name}</Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -50,7 +55,7 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
                 <DollarSign className="w-4 h-4" />
                 <span className="font-medium">Base Salary</span>
               </div>
-              <div className="text-2xl font-bold">₹{Number(data.profile?.base_salary).toLocaleString()}</div>
+              <div className="text-2xl font-bold">₹{Number(profile?.current_salary || 0).toLocaleString()}</div>
             </div>
             <div className="p-4 bg-white rounded-lg border border-ink-200">
               <div className="flex items-center space-x-2 text-ink-600 mb-2">
@@ -58,7 +63,7 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
                 <span className="font-medium">Outstanding Liability</span>
               </div>
               <div className="text-2xl font-bold text-red-600">
-                ₹{Number(data.financials?.outstanding_liability).toLocaleString()}
+                ₹{Number(data?.financials?.outstanding_liability || 0).toLocaleString()}
               </div>
             </div>
             <div className="p-4 bg-white rounded-lg border border-ink-200">
@@ -67,7 +72,7 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
                 <span className="font-medium">Attendance (30 Days)</span>
               </div>
               <div className="text-2xl font-bold text-green-600">
-                {data.performance?.attendance_30d?.present_days || 0} Present
+                {data?.performance?.attendance_30d?.present_days || 0} Present
               </div>
             </div>
           </div>
