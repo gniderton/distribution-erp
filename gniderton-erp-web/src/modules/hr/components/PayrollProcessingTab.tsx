@@ -37,7 +37,7 @@ export function PayrollProcessingTab() {
     if (globalPaymentMode === 'Online' && !globalBankStatementEntryId) {
         // We only require a global one if there are rows that use the default AND are online
         const needsGlobal = data.some((emp: any) => {
-            const rowMode = overrides[emp.employee_id]?.payment_mode || 'Default'
+            const rowMode = overrides[emp.id]?.payment_mode || 'Default'
             return rowMode === 'Default'
         })
         if (needsGlobal) {
@@ -47,18 +47,18 @@ export function PayrollProcessingTab() {
     }
 
     const payload = {
-      month: data.length > 0 ? data[0].month : new Date().getMonth() + 1, // Fallback to current month if no data
-      year: data.length > 0 ? data[0].year : new Date().getFullYear(),
+      month: data.length > 0 ? data[0].month : selectedMonth,
+      year: data.length > 0 ? data[0].year : selectedYear,
       payment_mode: globalPaymentMode,
       bank_statement_entry_id: globalPaymentMode === 'Online' ? parseInt(globalBankStatementEntryId) : null,
       payments: data.map((emp: any) => {
-        const rowOverride = overrides[emp.employee_id] || {}
+        const rowOverride = overrides[emp.id] || {}
         
         let rowMode = rowOverride.payment_mode === 'Default' || !rowOverride.payment_mode ? null : rowOverride.payment_mode
         let rowBankEntry = rowMode === 'Online' && rowOverride.bank_statement_entry_id ? parseInt(rowOverride.bank_statement_entry_id) : null
 
         return {
-          employee_id: emp.employee_id,
+          employee_id: emp.id,
           base_salary: emp.base_salary,
           adjusted_base_salary: emp.adjusted_base_salary,
           absent_days: emp.absent_days,
@@ -199,11 +199,11 @@ export function PayrollProcessingTab() {
                     </thead>
                     <tbody className="divide-y divide-ink-100">
                         {data.map((emp: any) => {
-                            const rowMode = overrides[emp.employee_id]?.payment_mode || 'Default'
+                            const rowMode = overrides[emp.id]?.payment_mode || 'Default'
                             const isOnline = rowMode === 'Online' || (rowMode === 'Default' && globalPaymentMode === 'Online')
 
                             return (
-                                <tr key={emp.employee_id} className="hover:bg-ink-50/50">
+                                <tr key={emp.id} className="hover:bg-ink-50/50">
                                     <td className="px-4 py-3">
                                         <div className="font-medium text-ink-900 text-sm">{emp.full_name}</div>
                                         <div className="text-xs text-ink-500 font-mono">{emp.employee_code}</div>
@@ -216,7 +216,7 @@ export function PayrollProcessingTab() {
                                     <td className="px-4 py-3">
                                         <select 
                                             value={rowMode}
-                                            onChange={e => handleOverrideChange(emp.employee_id, 'payment_mode', e.target.value)}
+                                            onChange={e => handleOverrideChange(emp.id, 'payment_mode', e.target.value)}
                                             className="w-28 h-8 px-2 rounded border border-ink-300 bg-white text-xs"
                                         >
                                             <option value="Default">Default</option>
@@ -227,8 +227,8 @@ export function PayrollProcessingTab() {
                                     <td className="px-4 py-3 min-w-[200px]">
                                         {isOnline ? (
                                             <select 
-                                                value={overrides[emp.employee_id]?.bank_statement_entry_id || ''}
-                                                onChange={e => handleOverrideChange(emp.employee_id, 'bank_statement_entry_id', e.target.value)}
+                                                value={overrides[emp.id]?.bank_statement_entry_id || ''}
+                                                onChange={e => handleOverrideChange(emp.id, 'bank_statement_entry_id', e.target.value)}
                                                 className="w-full max-w-[250px] h-8 px-2 rounded border border-ink-300 bg-white text-xs"
                                             >
                                                 <option value="">{rowMode === 'Default' ? '(Using Global)' : '-- Select Transaction --'}</option>
