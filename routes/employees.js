@@ -890,9 +890,17 @@ router.post('/bulk-salary-payment', async (req, res) => {
             totalBatchNet += Number(net_salary);
 
             // Use line-level details if provided, otherwise fallback to batch-level
-            const finalMode = p_mode || payment_mode;
-            const finalAccount = p_account || from_account_id;
+            let finalMode = p_mode || payment_mode;
+            let finalAccount = p_account || from_account_id;
             const finalBankEntry = p_bank_entry || bank_statement_entry_id;
+
+            // Intelligently determine from_account_id if a bank statement entry was selected
+            if (finalMode === 'Online' && finalBankEntry) {
+                const bRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [finalBankEntry]);
+                if (bRes.rows.length > 0) {
+                    finalAccount = bRes.rows[0].bank_account_id;
+                }
+            }
 
             // Initialize Journal Lines early (needed for both deductions and final entry)
             // 5014: Salary Expense (Use Adjusted Salary for pro-rated joiners/resigners)
