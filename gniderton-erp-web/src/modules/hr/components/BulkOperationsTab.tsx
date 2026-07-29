@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Calendar, TrendingUp, Gift } from 'lucide-react'
 import { BulkSalaryGrid } from './BulkSalaryGrid'
+import { BulkAttendanceGrid } from './BulkAttendanceGrid'
 
 export function BulkOperationsTab() {
   const [activeSubTab, setActiveSubTab] = useState<'attendance' | 'salary' | 'bonus'>('attendance')
@@ -40,16 +41,7 @@ export function BulkOperationsTab() {
       {/* Main Content Area */}
       <div className="flex-1 p-6 overflow-hidden">
         {activeSubTab === 'attendance' && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold text-ink-900">Bulk Attendance Entry</h2>
-            <p className="text-ink-600 text-sm">Select a date and quickly mark attendance for multiple employees.</p>
-            <div className="border border-dashed border-ink-300 rounded-lg h-64 flex items-center justify-center text-ink-500">
-              [Grid Component Placeholder]
-            </div>
-            <div className="flex justify-end">
-              <Button>Save Attendance</Button>
-            </div>
-          </div>
+          <BulkAttendanceGrid />
         )}
 
         {activeSubTab === 'salary' && (
