@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { Drawer } from '@/components/ui/Drawer'
 import { useEmployeeProfile } from '../hooks'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { User, DollarSign, Clock, AlertTriangle } from 'lucide-react'
+import { UpdateSalaryDialog } from './UpdateSalaryDialog'
 
 interface Props {
   employeeId: string | null
@@ -11,12 +13,13 @@ interface Props {
 
 export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
   const { data, isLoading } = useEmployeeProfile(employeeId)
+  const [isSalaryOpen, setIsSalaryOpen] = useState(false)
 
   // Extract the profile object from the data payload
   const profile = data?.profile
 
   return (
-    <Drawer open={!!employeeId} onClose={onClose} title="Employee Profile">
+    <Drawer open={!!employeeId} onClose={onClose} title="Employee Profile" widthClass="max-w-3xl w-full">
       {isLoading ? (
         <div className="p-6 text-center text-ink-500">Loading profile...</div>
       ) : profile ? (
@@ -44,7 +47,7 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
             </div>
             
             <div className="flex space-x-2">
-              <Button variant="secondary" size="sm">Update Salary</Button>
+              <Button variant="secondary" size="sm" onClick={() => setIsSalaryOpen(true)}>Update Salary</Button>
               <Button variant="danger" size="sm">Resign</Button>
             </div>
           </div>
@@ -77,12 +80,14 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-ink-200 p-4">
-            <h4 className="font-semibold text-ink-900 mb-4">Raw Data Inspector</h4>
-            <pre className="bg-ink-50 p-4 rounded text-xs overflow-auto max-h-64">
-              {JSON.stringify(data, null, 2)}
-            </pre>
-          </div>
+          {employeeId && isSalaryOpen && (
+            <UpdateSalaryDialog
+              open={isSalaryOpen}
+              onClose={() => setIsSalaryOpen(false)}
+              employeeId={employeeId}
+              currentSalary={profile?.current_salary || 0}
+            />
+          )}
 
         </div>
       ) : (
