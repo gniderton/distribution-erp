@@ -932,7 +932,7 @@ export default function VendorPage() {
                   <button
                     key={t.id}
                     onClick={() => setActiveTab(t.id as any)}
-                    className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all ${
+                    className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all -mb-px ${
                       activeTab === t.id 
                         ? 'border-brand-600 text-brand-600' 
                         : 'border-transparent text-ink-600 hover:text-ink-900'

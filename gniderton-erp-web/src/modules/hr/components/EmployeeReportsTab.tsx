@@ -199,38 +199,35 @@ export function EmployeeReportsTab() {
   const [activeReport, setActiveReport] = useState<'salary' | 'attendance' | 'advances'>('salary')
 
   return (
-    <div className="flex h-[calc(100vh-16rem)] border border-ink-200 rounded-lg overflow-hidden bg-white">
-      {/* Sidebar for Sub-Tabs */}
-      <div className="w-64 bg-ink-50 border-r border-ink-200 p-4 space-y-2 shrink-0">
-        <h3 className="font-semibold text-ink-900 mb-4 px-2">Reports</h3>
-        
-        <button
-          onClick={() => setActiveReport('salary')}
-          className={`w-full flex items-center space-x-2 px-3 py-2 rounded-md transition-colors text-left text-sm ${activeReport === 'salary' ? 'bg-brand-50 text-brand-700 font-medium' : 'text-ink-600 hover:bg-ink-100'}`}
-        >
-          <FileText className="w-4 h-4" />
-          <span>Salary Register</span>
-        </button>
-
-        <button
-          onClick={() => setActiveReport('attendance')}
-          className={`w-full flex items-center space-x-2 px-3 py-2 rounded-md transition-colors text-left text-sm ${activeReport === 'attendance' ? 'bg-brand-50 text-brand-700 font-medium' : 'text-ink-600 hover:bg-ink-100'}`}
-        >
-          <Calendar className="w-4 h-4" />
-          <span>Attendance Summary</span>
-        </button>
-
-        <button
-          onClick={() => setActiveReport('advances')}
-          className={`w-full flex items-center space-x-2 px-3 py-2 rounded-md transition-colors text-left text-sm ${activeReport === 'advances' ? 'bg-brand-50 text-brand-700 font-medium' : 'text-ink-600 hover:bg-ink-100'}`}
-        >
-          <Landmark className="w-4 h-4" />
-          <span>Advances Ledger</span>
-        </button>
+    <div className="flex flex-col h-full space-y-6">
+      {/* Horizontal Tabs */}
+      <div className="flex border-b border-ink-200">
+        {[
+          { id: 'salary', label: 'Salary Register', icon: FileText },
+          { id: 'attendance', label: 'Attendance Summary', icon: Calendar },
+          { id: 'advances', label: 'Advances Ledger', icon: Landmark }
+        ].map(t => {
+          const Icon = t.icon
+          const isActive = activeReport === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActiveReport(t.id as any)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-all -mb-px ${
+                isActive
+                  ? 'border-brand-600 text-brand-600'
+                  : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300'
+              }`}
+            >
+              <Icon size={16} />
+              {t.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 p-6 overflow-hidden">
+      <div className="flex-1 overflow-hidden">
         {activeReport === 'salary' && <SalaryRegisterReport />}
         {activeReport === 'attendance' && <AttendanceSummaryReport />}
         {activeReport === 'advances' && <AdvancesLedgerReport />}

@@ -27,7 +27,7 @@ export default function HrPage() {
           description="Manage employees, attendance, payroll runs, and financial ledgers."
         />
         
-        <div className="flex space-x-1 border-b border-ink-200 mt-6 overflow-x-auto">
+        <div className="flex space-x-4 border-b border-ink-200 mt-6 overflow-x-auto">
           {tabs.map(tab => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -36,7 +36,7 @@ export default function HrPage() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as Tab)}
                 className={`
-                  flex items-center space-x-2 px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors
+                  flex items-center space-x-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors -mb-px
                   ${isActive 
                     ? 'border-brand-500 text-brand-600' 
                     : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-ink-300'
