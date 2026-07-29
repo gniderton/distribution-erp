@@ -22,7 +22,7 @@ export function GRNBatchUpdateModal({ open, onClose, grnId, poNumber }: { open: 
         const p = products.find((prod: any) => prod.id === b.product_id)
         return {
           ...b,
-          product_name: p ? p.name : 'Unknown Product',
+          product_name: p ? (p.product_name || p.name) : 'Unknown Product',
           is_placeholder: !b.batch_code || b.batch_code === 'UNKNOWN' || b.batch_code === 'PENDING' || !b.expiry_date
         }
       })
@@ -112,7 +112,7 @@ export function GRNBatchUpdateModal({ open, onClose, grnId, poNumber }: { open: 
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-ink-500">Rate: ₹{Number(batch.purchase_rate).toFixed(2)}</div>
+                        <div className="text-xs text-ink-500">MRP: ₹{Number(batch.mrp).toFixed(2)}</div>
                       </td>
                       <td className="px-4 py-3 font-medium">{batch.quantity_initial}</td>
                       <td className="px-4 py-2">

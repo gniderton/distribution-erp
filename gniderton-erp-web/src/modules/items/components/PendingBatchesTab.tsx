@@ -21,7 +21,7 @@ export function PendingBatchesTab() {
         const p = products.find((prod: any) => prod.id === b.product_id)
         return {
           ...b,
-          product_name: p ? p.name : 'Unknown Product'
+          product_name: p ? (p.product_name || p.name) : 'Unknown Product'
         }
       })
   }, [allBatches, products])
@@ -102,7 +102,7 @@ export function PendingBatchesTab() {
               <tr>
                 <th className="px-4 py-3 font-semibold text-ink-600">Product</th>
                 <th className="px-4 py-3 font-semibold text-ink-600">Current Qty</th>
-                <th className="px-4 py-3 font-semibold text-ink-600">Purchase Rate</th>
+                <th className="px-4 py-3 font-semibold text-ink-600">MRP</th>
                 <th className="px-4 py-3 font-semibold text-ink-600 w-64">Batch Code</th>
                 <th className="px-4 py-3 font-semibold text-ink-600 w-48">Expiry Date</th>
               </tr>
@@ -115,7 +115,7 @@ export function PendingBatchesTab() {
                     <div className="text-xs text-ink-500">Batch ID: {batch.id}</div>
                   </td>
                   <td className="px-4 py-3 font-medium">{batch.quantity_remaining}</td>
-                  <td className="px-4 py-3 font-medium">₹{Number(batch.purchase_rate).toFixed(2)}</td>
+                  <td className="px-4 py-3 font-medium">₹{Number(batch.mrp).toFixed(2)}</td>
                   <td className="px-4 py-2">
                     <Input 
                       value={edits[batch.id]?.batch_code !== undefined ? edits[batch.id].batch_code : (batch.batch_code === 'UNKNOWN' || batch.batch_code === 'PENDING' ? '' : batch.batch_code)}
