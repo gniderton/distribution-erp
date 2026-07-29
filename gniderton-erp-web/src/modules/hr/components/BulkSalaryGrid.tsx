@@ -73,7 +73,7 @@ export function BulkSalaryGrid() {
       <div className="flex-1 overflow-hidden rounded-lg flex flex-col">
         <div className="overflow-y-auto flex-1 scrollbar-thin">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-surface sticky top-0 z-10">
+            <thead className="bg-white sticky top-0 z-10">
               <tr>
                 <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Code</th>
                 <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Name</th>
