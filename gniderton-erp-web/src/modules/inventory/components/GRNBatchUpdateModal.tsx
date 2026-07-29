@@ -120,7 +120,7 @@ export function GRNBatchUpdateModal({ open, onClose, grnId, poNumber }: { open: 
                           value={edits[batch.id]?.batch_code !== undefined ? edits[batch.id].batch_code : ''}
                           onChange={(e) => handleEdit(batch.id, 'batch_code', e.target.value)}
                           placeholder="Batch Code"
-                          className="bg-white border-ink-200 hover:border-ink-300 focus:border-brand-400 text-sm h-8"
+                          className="bg-white border-border-subtle hover:border-brand-300 focus:border-brand-400 text-sm h-8"
                         />
                       </td>
                       <td className="px-4 py-2">
@@ -128,7 +128,7 @@ export function GRNBatchUpdateModal({ open, onClose, grnId, poNumber }: { open: 
                           type="date"
                           value={edits[batch.id]?.expiry_date !== undefined ? edits[batch.id].expiry_date : ''}
                           onChange={(e) => handleEdit(batch.id, 'expiry_date', e.target.value)}
-                          className="bg-white border-ink-200 hover:border-ink-300 focus:border-brand-400 text-sm h-8 text-ink-600"
+                          className="bg-white border-border-subtle hover:border-brand-300 focus:border-brand-400 text-sm h-8 text-ink-600"
                         />
                       </td>
                     </tr>

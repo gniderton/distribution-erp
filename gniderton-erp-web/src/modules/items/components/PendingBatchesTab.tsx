@@ -165,7 +165,7 @@ export function PendingBatchesTab() {
                       value={edits[batch.id]?.batch_code !== undefined ? edits[batch.id].batch_code : (batch.batch_code === 'UNKNOWN' || batch.batch_code === 'PENDING' ? '' : batch.batch_code)}
                       onChange={(e) => handleEdit(batch.id, 'batch_code', e.target.value)}
                       placeholder="Enter Batch Code"
-                      className="bg-white border-ink-200 hover:border-ink-300 focus:border-brand-400"
+                      className="bg-white border-border-subtle hover:border-brand-300 focus:border-brand-400"
                     />
                   </td>
                   <td className="px-4 py-2">
@@ -173,7 +173,7 @@ export function PendingBatchesTab() {
                       type="date"
                       value={edits[batch.id]?.expiry_date !== undefined ? edits[batch.id].expiry_date : (batch.expiry_date ? batch.expiry_date.split('T')[0] : '')}
                       onChange={(e) => handleEdit(batch.id, 'expiry_date', e.target.value)}
-                      className="bg-white border-ink-200 hover:border-ink-300 focus:border-brand-400 text-ink-600"
+                      className="bg-white border-border-subtle hover:border-brand-300 focus:border-brand-400 text-ink-600"
                     />
                   </td>
                 </tr>
