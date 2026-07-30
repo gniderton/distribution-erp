@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { supply_chainApi } from '../api'
 
@@ -10,8 +10,22 @@ interface Props {
 
 export function CreateDeliveryTeamModal({ isOpen, onClose, onSuccess }: Props) {
   const [name, setName] = useState('')
+  const [driverId, setDriverId] = useState('')
+  const [vehicleId, setVehicleId] = useState('')
+  const [helperId, setHelperId] = useState('')
+  
+  const [employees, setEmployees] = useState<any[]>([])
+  const [vehicles, setVehicles] = useState<any[]>([])
+  
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      supply_chainApi.getAllEmployees().then(setEmployees).catch(console.error)
+      supply_chainApi.getDeliveryVehicles().then(setVehicles).catch(console.error)
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -25,8 +39,19 @@ export function CreateDeliveryTeamModal({ isOpen, onClose, onSuccess }: Props) {
     setLoading(true)
     setError('')
     try {
-      await supply_chainApi.createDeliveryTeam({ name: name.trim() })
+      await supply_chainApi.createDeliveryTeam({ 
+        name: name.trim(),
+        driver_id: driverId ? parseInt(driverId) : undefined,
+        vehicle_id: vehicleId ? parseInt(vehicleId) : undefined,
+        helper_ids: helperId ? [parseInt(helperId)] : undefined
+      })
+      
+      // Reset form
       setName('')
+      setDriverId('')
+      setVehicleId('')
+      setHelperId('')
+      
       onSuccess()
       onClose()
     } catch (err: any) {
@@ -59,7 +84,7 @@ export function CreateDeliveryTeamModal({ isOpen, onClose, onSuccess }: Props) {
           <div className="space-y-4">
             <div>
               <label className="block text-[11px] font-semibold text-ink-600 uppercase tracking-wider mb-1.5">
-                Team Name
+                Team Name *
               </label>
               <input
                 type="text"
@@ -70,8 +95,55 @@ export function CreateDeliveryTeamModal({ isOpen, onClose, onSuccess }: Props) {
                 autoFocus
               />
             </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-ink-600 uppercase tracking-wider mb-1.5">
+                Vehicle
+              </label>
+              <select
+                value={vehicleId}
+                onChange={(e) => setVehicleId(e.target.value)}
+                className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 text-ink-900"
+              >
+                <option value="">Select a vehicle...</option>
+                {vehicles.map(v => (
+                  <option key={v.id} value={v.id}>{v.vehicle_number} {v.vehicle_type ? `(${v.vehicle_type})` : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-ink-600 uppercase tracking-wider mb-1.5">
+                Primary Driver
+              </label>
+              <select
+                value={driverId}
+                onChange={(e) => setDriverId(e.target.value)}
+                className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 text-ink-900"
+              >
+                <option value="">Select a driver...</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>{emp.full_name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-ink-600 uppercase tracking-wider mb-1.5">
+                Teammate / Helper
+              </label>
+              <select
+                value={helperId}
+                onChange={(e) => setHelperId(e.target.value)}
+                className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 text-ink-900"
+              >
+                <option value="">Select a teammate...</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>{emp.full_name}</option>
+                ))}
+              </select>
+            </div>
             
-            {/* Note: driver_id, vehicle_id, helper_ids can be added here later */}
           </div>
 
           <div className="mt-6 flex justify-end gap-3">

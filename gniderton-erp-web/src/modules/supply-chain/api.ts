@@ -18,6 +18,8 @@ export const supply_chainApi = {
   getDeliveryTripsProductBreakdown: (id: string | number, productId: number, mrp: number) => 
     api.get(`/api/delivery/trips/${id}/product-breakdown`, { params: { product_id: productId, mrp } }).then((r) => r.data),
   getEmployeesProfile: () => api.get('/api/employees/profile').then((r) => r.data),
+  getAllEmployees: () => api.get('/api/employees').then((r) => r.data),
+  getDeliveryVehicles: () => api.get('/api/delivery/vehicles').then((r) => r.data),
   getSalesBankDetails3: () => api.get('/api/sales/bank-details/3').then((r) => r.data),
   getSalesUnified: () => api.get('/api/sales/unified').then((r) => r.data),
   getSalesUnified2: (id: string | number) => api.get(`/api/sales/unified/${id}`).then((r) => r.data),
