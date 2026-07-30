@@ -65,6 +65,38 @@ router.get('/invoices-pool', async (req, res) => {
     }
 });
 
+router.get('/vehicles', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, vehicle_number, vehicle_type FROM vehicles WHERE is_active = true');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/vehicles', async (req, res) => {
+    try {
+        const { vehicle_number, vehicle_type } = req.body;
+        
+        if (!vehicle_number) {
+            return res.status(400).json({ error: "Vehicle number is required" });
+        }
+
+        const result = await pool.query(`
+            INSERT INTO vehicles (vehicle_number, vehicle_type)
+            VALUES ($1, $2)
+            RETURNING *
+        `, [vehicle_number, vehicle_type || null]);
+        
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "A vehicle with this number already exists" });
+        }
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 2. Get Delivery Teams
 router.get('/teams', async (req, res) => {
     try {
