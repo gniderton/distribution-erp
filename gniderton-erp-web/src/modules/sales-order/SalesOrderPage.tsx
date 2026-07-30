@@ -834,9 +834,18 @@ export default function SalesOrderPage() {
           </div>
 
           {!jobId && (
-            <div className="p-4 border-t border-[#e6e9ee] flex justify-between items-center bg-white shrink-0">
-              <div className="text-sm text-ink-500">
-                Ensure all shorts are addressed before proceeding.
+            <div className="p-4 border-t border-[#e6e9ee] flex flex-col md:flex-row justify-between items-center bg-white shrink-0 gap-4">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleOpenTransitEntry}
+                  className="flex items-center gap-1.5 border border-[#e6e9ee] bg-white text-ink-700 hover:bg-ink-100 text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm"
+                >
+                  <Plus size={14} />
+                  Allocate Transit Stock
+                </button>
+                <div className="text-sm text-ink-500 hidden md:block">
+                  Ensure all shorts are addressed before proceeding.
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <button
