@@ -834,7 +834,7 @@ export default function SalesOrderPage() {
           </div>
 
           {!jobId && (
-            <div className="p-4 border-t border-ink-100 flex justify-between items-center bg-white shrink-0">
+            <div className="p-4 border-t border-border-subtle flex justify-between items-center bg-white shrink-0">
               <div className="text-sm text-ink-500">
                 Ensure all shorts are addressed before proceeding.
               </div>
@@ -848,7 +848,7 @@ export default function SalesOrderPage() {
                 </button>
                 <button
                   onClick={() => setShowAllocation(false)}
-                  className="px-4 py-2 border border-ink-200 text-ink-700 rounded-lg hover:bg-ink-50 text-sm font-medium transition-colors"
+                  className="px-4 py-2 border border-border-subtle text-ink-700 rounded-lg hover:bg-ink-50 text-sm font-medium transition-colors"
                 >
                   Cancel
                 </button>
