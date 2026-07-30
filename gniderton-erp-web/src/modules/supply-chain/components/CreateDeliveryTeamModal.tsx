@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+import { X, Plus, Check } from 'lucide-react'
 import { supply_chainApi } from '../api'
 
 interface Props {
@@ -17,6 +17,11 @@ export function CreateDeliveryTeamModal({ isOpen, onClose, onSuccess }: Props) {
   const [employees, setEmployees] = useState<any[]>([])
   const [vehicles, setVehicles] = useState<any[]>([])
   
+  const [isAddingVehicle, setIsAddingVehicle] = useState(false)
+  const [newVehicleNumber, setNewVehicleNumber] = useState('')
+  const [newVehicleType, setNewVehicleType] = useState('')
+  const [creatingVehicle, setCreatingVehicle] = useState(false)
+
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -28,6 +33,30 @@ export function CreateDeliveryTeamModal({ isOpen, onClose, onSuccess }: Props) {
   }, [isOpen])
 
   if (!isOpen) return null
+
+  const handleCreateVehicle = async () => {
+    if (!newVehicleNumber.trim()) {
+      setError('Vehicle number is required')
+      return
+    }
+    setCreatingVehicle(true)
+    setError('')
+    try {
+      const newVehicle = await supply_chainApi.createDeliveryVehicle({
+        vehicle_number: newVehicleNumber.trim(),
+        vehicle_type: newVehicleType.trim()
+      })
+      setVehicles([...vehicles, newVehicle])
+      setVehicleId(newVehicle.id.toString())
+      setIsAddingVehicle(false)
+      setNewVehicleNumber('')
+      setNewVehicleType('')
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to create vehicle')
+    } finally {
+      setCreatingVehicle(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -97,19 +126,66 @@ export function CreateDeliveryTeamModal({ isOpen, onClose, onSuccess }: Props) {
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-ink-600 uppercase tracking-wider mb-1.5">
-                Vehicle
-              </label>
-              <select
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 text-ink-900"
-              >
-                <option value="">Select a vehicle...</option>
-                {vehicles.map(v => (
-                  <option key={v.id} value={v.id}>{v.vehicle_number} {v.vehicle_type ? `(${v.vehicle_type})` : ''}</option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[11px] font-semibold text-ink-600 uppercase tracking-wider">
+                  Vehicle
+                </label>
+                {!isAddingVehicle && (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingVehicle(true)}
+                    className="text-[10px] text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1"
+                  >
+                    <Plus size={12} /> Add Vehicle
+                  </button>
+                )}
+              </div>
+
+              {isAddingVehicle ? (
+                <div className="flex items-center gap-2 bg-surface p-2 rounded-lg border border-border-subtle">
+                  <input
+                    type="text"
+                    placeholder="Vehicle #"
+                    value={newVehicleNumber}
+                    onChange={(e) => setNewVehicleNumber(e.target.value)}
+                    className="w-1/2 bg-white border border-border-subtle rounded px-2 py-1.5 text-xs focus:outline-none focus:border-brand-500 text-ink-900"
+                    autoFocus
+                  />
+                  <input
+                    type="text"
+                    placeholder="Type (e.g. Truck)"
+                    value={newVehicleType}
+                    onChange={(e) => setNewVehicleType(e.target.value)}
+                    className="w-1/2 bg-white border border-border-subtle rounded px-2 py-1.5 text-xs focus:outline-none focus:border-brand-500 text-ink-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateVehicle}
+                    disabled={creatingVehicle}
+                    className="p-1.5 bg-brand-600 text-white rounded hover:bg-brand-700 transition-colors disabled:opacity-50"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingVehicle(false)}
+                    className="p-1.5 bg-ink-200 text-ink-600 rounded hover:bg-ink-300 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={vehicleId}
+                  onChange={(e) => setVehicleId(e.target.value)}
+                  className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 text-ink-900"
+                >
+                  <option value="">Select a vehicle...</option>
+                  {vehicles.map(v => (
+                    <option key={v.id} value={v.id}>{v.vehicle_number} {v.vehicle_type ? `(${v.vehicle_type})` : ''}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div>
