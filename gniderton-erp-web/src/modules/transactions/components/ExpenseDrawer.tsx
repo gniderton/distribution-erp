@@ -39,8 +39,9 @@ export function ExpenseDrawer({ open, onClose }: Props) {
       tax_amount: 0,
       is_gst_expense: false,
       category_account_id: parseInt(formData.category_account_id) || null,
-      entity_id: parseInt(formData.entity_id) || null,
-      payment_source_id: parseInt(formData.payment_source_id) || null
+      vendor_name: parseInt(formData.entity_id) || null,
+      payment_source_id: parseInt(formData.payment_source_id) || null,
+      payment_mode: 'Online'
     }
 
     mutate(payload, {
@@ -113,7 +114,7 @@ export function ExpenseDrawer({ open, onClose }: Props) {
           >
             <option value="">Select a payment source</option>
             {banks.map((bank: any) => (
-              <option key={bank.id} value={bank.id}>{bank.bank_name}</option>
+              <option key={bank.id} value={bank.id}>{bank.name}</option>
             ))}
           </Select>
         </div>
