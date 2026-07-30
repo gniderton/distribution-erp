@@ -81,6 +81,36 @@ router.get('/teams', async (req, res) => {
     }
 });
 
+// 2.5 Create Delivery Team
+router.post('/teams', async (req, res) => {
+    try {
+        const { name, driver_id, vehicle_id, helper_ids } = req.body;
+        
+        if (!name) {
+            return res.status(400).json({ error: "Team name is required" });
+        }
+
+        const result = await pool.query(`
+            INSERT INTO delivery_teams (name, driver_id, vehicle_id, helper_ids)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+        `, [
+            name, 
+            driver_id || null, 
+            vehicle_id || null, 
+            helper_ids ? JSON.stringify(helper_ids) : null
+        ]);
+        
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        // Handle unique constraint violation for name
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "A team with this name already exists" });
+        }
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 3. Create Trip & Assign Invoices (Updated for Teams)
 router.post('/trips', async (req, res) => {
     const { team_id, driver_id, vehicle_number, invoice_ids, created_by } = req.body;
