@@ -444,7 +444,7 @@ export default function SalesOrderPage() {
           <div className="flex gap-2">
             <button
               onClick={() => refetchOrders()}
-              className="p-2.5 border border-border-subtle rounded-lg hover:bg-ink-100 transition text-ink-600 bg-white"
+              className="p-2.5 border border-[#e6e9ee] rounded-lg hover:bg-ink-100 transition text-ink-600 bg-white"
             >
               <RefreshCw className="h-4 w-4" />
             </button>
@@ -462,7 +462,7 @@ export default function SalesOrderPage() {
 
       {/* 📊 Useful Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass-card p-5 rounded-xl border border-border-subtle bg-white flex items-center justify-between shadow-sm">
+        <div className="glass-card p-5 rounded-xl border border-[#e6e9ee] bg-white flex items-center justify-between shadow-sm">
           <div>
             <span className="text-[10px] text-ink-500 uppercase font-semibold tracking-wider">Pending Orders</span>
             <h4 className="text-2xl font-bold text-ink-900 mt-1">{kpis.count}</h4>
@@ -472,7 +472,7 @@ export default function SalesOrderPage() {
           </div>
         </div>
 
-        <div className="glass-card p-5 rounded-xl border border-border-subtle bg-white flex items-center justify-between shadow-sm">
+        <div className="glass-card p-5 rounded-xl border border-[#e6e9ee] bg-white flex items-center justify-between shadow-sm">
           <div>
             <span className="text-[10px] text-ink-500 uppercase font-semibold tracking-wider">Total Booking Value</span>
             <h4 className="text-2xl font-bold text-ink-900 mt-1">${kpis.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
@@ -482,7 +482,7 @@ export default function SalesOrderPage() {
           </div>
         </div>
 
-        <div className="glass-card p-5 rounded-xl border border-border-subtle bg-white flex items-center justify-between shadow-sm">
+        <div className="glass-card p-5 rounded-xl border border-[#e6e9ee] bg-white flex items-center justify-between shadow-sm">
           <div>
             <span className="text-[10px] text-ink-500 uppercase font-semibold tracking-wider">Active Routes</span>
             <h4 className="text-2xl font-bold text-ink-900 mt-1">{kpis.routesCount}</h4>
@@ -492,7 +492,7 @@ export default function SalesOrderPage() {
           </div>
         </div>
 
-        <div className="glass-card p-5 rounded-xl border border-border-subtle bg-white flex items-center justify-between shadow-sm">
+        <div className="glass-card p-5 rounded-xl border border-[#e6e9ee] bg-white flex items-center justify-between shadow-sm">
           <div>
             <span className="text-[10px] text-ink-500 uppercase font-semibold tracking-wider">Sales Reps (DSE)</span>
             <h4 className="text-2xl font-bold text-ink-900 mt-1">{kpis.dseCount}</h4>
@@ -504,7 +504,7 @@ export default function SalesOrderPage() {
       </div>
 
       {/* 🔍 Dynamic Filters Panel */}
-      <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between w-full">
+      <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between w-full">
         <div className="relative w-full md:max-w-md">
           <Search className="absolute left-3.5 top-3 text-ink-600" size={15} />
           <input 
@@ -512,12 +512,12 @@ export default function SalesOrderPage() {
             placeholder="Search by customer name or order number..." 
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full bg-surface border border-border-subtle rounded-lg pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:border-brand-400 text-ink-900 placeholder:text-ink-600"
+            className="w-full bg-surface border border-[#e6e9ee] rounded-lg pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:border-brand-400 text-ink-900 placeholder:text-ink-600"
           />
         </div>
 
         <div className="flex flex-wrap gap-3 w-full md:w-auto items-center justify-end">
-          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-border-subtle">
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
             <Filter size={12} className="text-ink-600" />
             <select
               value={selectedRoute}
@@ -531,7 +531,7 @@ export default function SalesOrderPage() {
             </select>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-border-subtle">
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
             <Users size={12} className="text-ink-600" />
             <select
               value={selectedDse}
@@ -579,7 +579,7 @@ export default function SalesOrderPage() {
           Loading confirmed sales order backlog...
         </div>
       ) : (
-        <div className="glass-card rounded-xl border border-border-subtle overflow-hidden w-full shadow-sm">
+        <div className="glass-card rounded-xl border border-[#e6e9ee] overflow-hidden w-full shadow-sm">
           <div className="overflow-x-auto w-full">
             <table className="w-full text-left text-xs divide-y divide-border-subtle">
               <thead className="bg-surface text-ink-600 font-semibold">
@@ -669,8 +669,8 @@ export default function SalesOrderPage() {
       {/* MODAL 1: mdlViewOrderLines */}
       {showViewLines && activeOrder && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-panel max-w-2xl w-full rounded-xl overflow-hidden shadow-2xl border border-border-subtle flex flex-col max-h-[80vh]">
-            <div className="px-6 py-4 border-b border-border-subtle flex items-center justify-between bg-surface">
+          <div className="glass-panel max-w-2xl w-full rounded-xl overflow-hidden shadow-2xl border border-[#e6e9ee] flex flex-col max-h-[80vh]">
+            <div className="px-6 py-4 border-b border-[#e6e9ee] flex items-center justify-between bg-surface">
               <div>
                 <h3 className="font-semibold text-sm text-ink-900">
                   Items Details: {activeOrder.so_number || `SO-${activeOrder.id}`}
@@ -683,7 +683,7 @@ export default function SalesOrderPage() {
             </div>
             
             <div className="p-6 overflow-y-auto flex-1">
-              <div className="border border-border-subtle rounded-lg overflow-hidden">
+              <div className="border border-[#e6e9ee] rounded-lg overflow-hidden">
                 <table className="w-full text-left text-xs divide-y divide-border-subtle">
                   <thead className="bg-surface text-ink-600">
                     <tr>
@@ -721,8 +721,8 @@ export default function SalesOrderPage() {
       {/* MODAL 2: modalStockAllocation */}
       {showAllocation && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-panel max-w-6xl w-full rounded-xl overflow-hidden shadow-2xl border border-border-subtle flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-border-subtle flex items-center justify-between bg-surface">
+          <div className="glass-panel max-w-6xl w-full rounded-xl overflow-hidden shadow-2xl border border-[#e6e9ee] flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-[#e6e9ee] flex items-center justify-between bg-surface">
               <div>
                 <h3 className="font-semibold text-sm text-ink-900">
                   Stock Allocation & Demand Constraint Analysis
@@ -756,14 +756,14 @@ export default function SalesOrderPage() {
               <div className="space-y-6">
                 {/* Summary Cards Inside Modal (Input1 & Input2 equivalents in Appsmith) */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-xl border border-border-subtle bg-surface flex flex-col justify-between">
+                <div className="p-4 rounded-xl border border-[#e6e9ee] bg-surface flex flex-col justify-between">
                   <span className="text-[10px] text-ink-600 font-semibold uppercase">Total Order Value Requested</span>
                   <span className="text-lg font-bold text-ink-900 mt-1">
                     ${allocationMetrics.orderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
 
-                <div className="p-4 rounded-xl border border-border-subtle bg-brand-500/5 border-brand-500/20 flex flex-col justify-between">
+                <div className="p-4 rounded-xl border border-[#e6e9ee] bg-brand-500/5 border-brand-500/20 flex flex-col justify-between">
                   <span className="text-[10px] text-brand-700 font-semibold uppercase flex items-center gap-1">
                     Estimated Billing Value (Stock Ready)
                     <span title="Actual value deliverable based on current stock availability" className="cursor-help">
@@ -775,7 +775,7 @@ export default function SalesOrderPage() {
                   </span>
                 </div>
 
-                <div className="p-4 rounded-xl border border-border-subtle bg-danger-500/5 border-danger-500/20 flex flex-col justify-between">
+                <div className="p-4 rounded-xl border border-[#e6e9ee] bg-danger-500/5 border-danger-500/20 flex flex-col justify-between">
                   <span className="text-[10px] text-danger-700 font-semibold uppercase">Shortfall Billing Value Loss</span>
                   <span className="text-lg font-bold text-danger-600 mt-1">
                     ${allocationMetrics.shortfallValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -784,7 +784,7 @@ export default function SalesOrderPage() {
               </div>
 
               {/* Data Table */}
-              <div className="border border-border-subtle rounded-lg overflow-hidden bg-white">
+              <div className="border border-[#e6e9ee] rounded-lg overflow-hidden bg-white">
                 <table className="w-full text-left text-xs divide-y divide-border-subtle">
                   <thead className="bg-surface text-ink-600 font-semibold">
                     <tr>
@@ -834,7 +834,7 @@ export default function SalesOrderPage() {
           </div>
 
           {!jobId && (
-            <div className="p-4 border-t border-border-subtle flex justify-between items-center bg-white shrink-0">
+            <div className="p-4 border-t border-[#e6e9ee] flex justify-between items-center bg-white shrink-0">
               <div className="text-sm text-ink-500">
                 Ensure all shorts are addressed before proceeding.
               </div>
@@ -848,7 +848,7 @@ export default function SalesOrderPage() {
                 </button>
                 <button
                   onClick={() => setShowAllocation(false)}
-                  className="px-4 py-2 border border-border-subtle text-ink-700 rounded-lg hover:bg-ink-50 text-sm font-medium transition-colors"
+                  className="px-4 py-2 border border-[#e6e9ee] text-ink-700 rounded-lg hover:bg-ink-50 text-sm font-medium transition-colors"
                 >
                   Cancel
                 </button>
@@ -870,8 +870,8 @@ export default function SalesOrderPage() {
       {/* MODAL 3: modalTransitEntry */}
       {showTransit && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-panel max-w-4xl w-full rounded-xl overflow-hidden shadow-2xl border border-border-subtle flex flex-col max-h-[80vh]">
-            <div className="px-6 py-4 border-b border-border-subtle flex items-center justify-between bg-surface">
+          <div className="glass-panel max-w-4xl w-full rounded-xl overflow-hidden shadow-2xl border border-[#e6e9ee] flex flex-col max-h-[80vh]">
+            <div className="px-6 py-4 border-b border-[#e6e9ee] flex items-center justify-between bg-surface">
               <div>
                 <h3 className="font-semibold text-sm text-ink-900">Allocate Upcoming Transit Stock</h3>
                 <p className="text-[10px] text-ink-600 mt-0.5">Assign expected batch arrivals to cover stock shortages.</p>
@@ -882,7 +882,7 @@ export default function SalesOrderPage() {
             </div>
 
             <div className="p-6 overflow-y-auto flex-1">
-              <div className="border border-border-subtle rounded-lg overflow-hidden bg-background">
+              <div className="border border-[#e6e9ee] rounded-lg overflow-hidden bg-background">
                 <table className="w-full text-left text-xs divide-y divide-border-subtle">
                   <thead className="bg-white/2 text-ink-600">
                     <tr>
@@ -930,7 +930,7 @@ export default function SalesOrderPage() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-border-subtle flex justify-end bg-surface">
+            <div className="px-6 py-4 border-t border-[#e6e9ee] flex justify-end bg-surface">
               <button
                 onClick={handleCommitTransitStock}
                 className="bg-ink-900 text-white hover:bg-ink-800 text-xs font-semibold px-4 py-2.5 rounded-lg transition"
@@ -945,8 +945,8 @@ export default function SalesOrderPage() {
       {/* MODAL 4: mdlBreakup */}
       {showBreakup && selectedProductForBreakup && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-panel max-w-4xl w-full rounded-xl overflow-hidden shadow-2xl border border-border-subtle flex flex-col max-h-[80vh]">
-            <div className="px-6 py-4 border-b border-border-subtle flex items-center justify-between bg-surface">
+          <div className="glass-panel max-w-4xl w-full rounded-xl overflow-hidden shadow-2xl border border-[#e6e9ee] flex flex-col max-h-[80vh]">
+            <div className="px-6 py-4 border-b border-[#e6e9ee] flex items-center justify-between bg-surface">
               <div>
                 <h3 className="font-semibold text-sm text-ink-900">Demand Breakdown: {selectedProductForBreakup.product_name}</h3>
                 <p className="text-[10px] text-ink-600 mt-0.5">Clients requesting this shortage line item.</p>
@@ -957,7 +957,7 @@ export default function SalesOrderPage() {
             </div>
 
             <div className="p-6 overflow-y-auto flex-1">
-              <div className="border border-border-subtle rounded-lg overflow-hidden">
+              <div className="border border-[#e6e9ee] rounded-lg overflow-hidden">
                 <table className="w-full text-left text-xs divide-y divide-border-subtle">
                   <thead className="bg-surface text-ink-600">
                     <tr>
