@@ -8,6 +8,7 @@ import { SyncVerificationModal } from './components/SyncVerificationModal'
 import { SyncHistoryModal } from './components/SyncHistoryModal'
 import { CreateTripModal } from './components/CreateTripModal'
 import { ActiveTripDetailsModal } from './components/ActiveTripDetailsModal'
+import { CreateDeliveryTeamModal } from './components/CreateDeliveryTeamModal'
 import { format } from 'date-fns'
 import type { ColumnDef } from '@tanstack/react-table'
 import { DataTable } from '@/components/shared/DataTable'
@@ -26,6 +27,7 @@ export default function SupplyChainPage() {
   const [selectedSyncId, setSelectedSyncId] = useState<number | null>(null)
   const [selectedHistorySyncId, setSelectedHistorySyncId] = useState<number | null>(null)
   const [isCreateTripOpen, setIsCreateTripOpen] = useState(false)
+  const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false)
   const [editTripId, setEditTripId] = useState<number | null>(null)
   
   // State for Trip Details Modal
@@ -91,10 +93,16 @@ export default function SupplyChainPage() {
         title="Supply Chain"
         description="Verify delivery syncs, monitor active trips, and review settlement history."
         actions={
-          <Button onClick={() => setIsCreateTripOpen(true)} className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-4 py-2.5 rounded-lg transition shadow-md shadow-brand-500/10">
-            <Plus size={14} />
-            Create New Trip
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setIsCreateTeamOpen(true)} className="flex items-center gap-1.5 bg-white border border-border-subtle text-ink-700 hover:bg-ink-50 text-xs font-semibold px-4 py-2.5 rounded-lg transition shadow-sm">
+              <Plus size={14} />
+              Create Team
+            </Button>
+            <Button onClick={() => setIsCreateTripOpen(true)} className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-4 py-2.5 rounded-lg transition shadow-md shadow-brand-500/10">
+              <Plus size={14} />
+              Create New Trip
+            </Button>
+          </div>
         }
       />
 
@@ -239,6 +247,12 @@ export default function SupplyChainPage() {
         open={isCreateTripOpen} 
         onClose={() => { setIsCreateTripOpen(false); setEditTripId(null); }} 
         editTripId={editTripId}
+      />
+      
+      <CreateDeliveryTeamModal
+        isOpen={isCreateTeamOpen}
+        onClose={() => setIsCreateTeamOpen(false)}
+        onSuccess={() => {}}
       />
 
       <ActiveTripDetailsModal

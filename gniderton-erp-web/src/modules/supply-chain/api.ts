@@ -10,6 +10,7 @@ export const supply_chainApi = {
   getDeliverySyncDetails: (id: string | number) => api.get(`/api/delivery/sync/${id}/details`).then((r) => r.data),
   getDeliverySyncHistory: (id: string | number) => api.get(`/api/delivery/sync/${id}/history`).then((r) => r.data),
   getDeliveryTeams: () => api.get('/api/delivery/teams').then((r) => r.data),
+  createDeliveryTeam: (data: { name: string, driver_id?: number, vehicle_id?: number, helper_ids?: number[] }) => api.post('/api/delivery/teams', data).then((r) => r.data),
   getDeliveryTrips: () => api.get('/api/delivery/trips').then((r) => r.data),
   getDeliveryTripsManifestWeb: (id: string | number) => api.get(`/api/delivery/trips/${id}/manifest-web`).then((r) => r.data),
   getDeliveryTripsPicklistWeb: (id: string | number) => api.get(`/api/delivery/trips/${id}/picklist-web`).then((r) => r.data),
