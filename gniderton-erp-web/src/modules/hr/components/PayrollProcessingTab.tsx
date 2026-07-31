@@ -47,8 +47,8 @@ export function PayrollProcessingTab() {
     }
 
     const payload = {
-      month: data.length > 0 ? data[0].month : selectedMonth,
-      year: data.length > 0 ? data[0].year : selectedYear,
+      month: selectedMonth,
+      year: selectedYear,
       payment_mode: globalPaymentMode,
       bank_statement_entry_id: globalPaymentMode === 'Online' ? parseInt(globalBankStatementEntryId) : null,
       payments: data.map((emp: any) => {
