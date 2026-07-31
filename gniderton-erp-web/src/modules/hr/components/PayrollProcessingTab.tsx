@@ -50,6 +50,7 @@ export function PayrollProcessingTab() {
       month: selectedMonth,
       year: selectedYear,
       payment_mode: globalPaymentMode,
+      from_account_id: globalPaymentMode === 'Cash' ? 1 : null,
       bank_statement_entry_id: globalPaymentMode === 'Online' ? parseInt(globalBankStatementEntryId) : null,
       payments: data.map((emp: any) => {
         const rowOverride = overrides[emp.id] || {}
@@ -74,6 +75,7 @@ export function PayrollProcessingTab() {
           net_salary: emp.net_salary,
           // Overrides (if null, backend will use the global ones)
           payment_mode: rowMode,
+          from_account_id: rowMode === 'Cash' ? 1 : null,
           bank_statement_entry_id: rowBankEntry
         }
       })
