@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import toast from 'react-hot-toast'
 import { useSalaryPreview, useBulkSalaryPayment, useUnconsumedDebits } from '../hooks'
 import { Button } from '@/components/ui/Button'
 import { Label } from '@/components/ui/Input'
@@ -33,15 +34,18 @@ export function PayrollProcessingTab() {
     }))
   }
 
+  const unpaidData = useMemo(() => data.filter((emp: any) => !emp.is_paid), [data])
+  const allPaid = data.length > 0 && unpaidData.length === 0
+
   const handleSettlePayroll = () => {
     if (globalPaymentMode === 'Online' && !globalBankStatementEntryId) {
         // We only require a global one if there are rows that use the default AND are online
-        const needsGlobal = data.some((emp: any) => {
+        const needsGlobal = unpaidData.some((emp: any) => {
             const rowMode = overrides[emp.id]?.payment_mode || 'Default'
             return rowMode === 'Default'
         })
         if (needsGlobal) {
-            alert("Please select a Global Bank Statement Entry, or override all rows manually.")
+            toast.error("Please select a Global Bank Statement Entry, or override all rows manually.")
             return
         }
     }
@@ -52,7 +56,7 @@ export function PayrollProcessingTab() {
       payment_mode: globalPaymentMode,
       from_account_id: globalPaymentMode === 'Cash' ? 1 : null,
       bank_statement_entry_id: globalPaymentMode === 'Online' ? parseInt(globalBankStatementEntryId) : null,
-      payments: data.map((emp: any) => {
+      payments: unpaidData.map((emp: any) => {
         const rowOverride = overrides[emp.id] || {}
         
         let rowMode = rowOverride.payment_mode === 'Default' || !rowOverride.payment_mode ? null : rowOverride.payment_mode
@@ -85,14 +89,19 @@ export function PayrollProcessingTab() {
       onSuccess: (res: any) => {
         if (res && res.jobId) {
           setJobId(res.jobId)
+        } else {
+          toast.success("Payroll batch processed successfully!")
         }
+      },
+      onError: (err: any) => {
+        toast.error("Failed to process payroll: " + err.message)
       }
     })
   }
 
   const totalNetSalary = useMemo(() => {
-      return data.reduce((sum: number, emp: any) => sum + Number(emp.net_salary || 0), 0)
-  }, [data])
+      return unpaidData.reduce((sum: number, emp: any) => sum + Number(emp.net_salary || 0), 0)
+  }, [unpaidData])
 
   return (
     <div className="space-y-4 h-full flex flex-col">
@@ -123,12 +132,18 @@ export function PayrollProcessingTab() {
                 ))}
             </select>
 
-            <Button onClick={handleSettlePayroll} disabled={settleMutation.isPending || !!jobId || data.length === 0}>
+            <Button onClick={handleSettlePayroll} disabled={settleMutation.isPending || !!jobId || unpaidData.length === 0}>
                 <Play className="w-4 h-4 mr-2" />
                 Settle Payroll Batch (₹{totalNetSalary.toLocaleString()})
             </Button>
             </div>
         </div>
+
+        {allPaid && (
+          <div className="bg-green-50 text-green-800 p-3 rounded-md text-sm border border-green-200">
+            Payroll for this month has already been completely processed.
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-4 items-end bg-surface p-3 rounded-md">
             <div className="space-y-1 w-48">
@@ -191,6 +206,7 @@ export function PayrollProcessingTab() {
                     <thead className="bg-surface sticky top-0 z-10">
                         <tr>
                             <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Employee</th>
+                            <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle">Status</th>
                             <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle text-right">Base</th>
                             <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle text-right text-red-600">Deductions</th>
                             <th className="px-4 py-3 text-xs font-semibold text-ink-600 border-b border-border-subtle text-right text-green-600">Additions</th>
@@ -203,12 +219,20 @@ export function PayrollProcessingTab() {
                         {data.map((emp: any) => {
                             const rowMode = overrides[emp.id]?.payment_mode || 'Default'
                             const isOnline = rowMode === 'Online' || (rowMode === 'Default' && globalPaymentMode === 'Online')
+                            const isPaid = emp.is_paid
 
                             return (
-                                <tr key={emp.id} className="hover:bg-surface/50">
+                                <tr key={emp.id} className={`hover:bg-surface/50 ${isPaid ? 'opacity-60' : ''}`}>
                                     <td className="px-4 py-3">
                                         <div className="font-medium text-ink-900 text-sm">{emp.full_name}</div>
                                         <div className="text-xs text-ink-500 font-mono">{emp.employee_code}</div>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        {isPaid ? (
+                                            <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-1 text-[10px] font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Paid</span>
+                                        ) : (
+                                            <span className="inline-flex items-center rounded-full bg-yellow-50 px-2 py-1 text-[10px] font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Pending</span>
+                                        )}
                                     </td>
                                     <td className="px-4 py-3 text-right text-sm text-ink-600">₹{Number(emp.adjusted_base_salary).toLocaleString()}</td>
                                     <td className="px-4 py-3 text-right text-sm text-red-600">₹{Number(emp.total_deductions).toLocaleString()}</td>
@@ -219,7 +243,8 @@ export function PayrollProcessingTab() {
                                         <select 
                                             value={rowMode}
                                             onChange={e => handleOverrideChange(emp.id, 'payment_mode', e.target.value)}
-                                            className="w-28 h-8 px-2 rounded border border-border-subtle bg-white text-xs"
+                                            disabled={isPaid}
+                                            className="w-28 h-8 px-2 rounded border border-border-subtle bg-white text-xs disabled:opacity-50"
                                         >
                                             <option value="Default">Default</option>
                                             <option value="Cash">Cash</option>
@@ -231,7 +256,8 @@ export function PayrollProcessingTab() {
                                             <select 
                                                 value={overrides[emp.id]?.bank_statement_entry_id || ''}
                                                 onChange={e => handleOverrideChange(emp.id, 'bank_statement_entry_id', e.target.value)}
-                                                className="w-full max-w-[250px] h-8 px-2 rounded border border-border-subtle bg-white text-xs"
+                                                disabled={isPaid}
+                                                className="w-full max-w-[250px] h-8 px-2 rounded border border-border-subtle bg-white text-xs disabled:opacity-50"
                                             >
                                                 <option value="">{rowMode === 'Default' ? '(Using Global)' : '-- Select Transaction --'}</option>
                                                 {debits.map((d: any) => (

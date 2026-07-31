@@ -765,6 +765,11 @@ router.get('/salary-preview', async (req, res) => {
                 SELECT DISTINCT ON (employee_id) employee_id, new_salary 
                 FROM employee_salary_history 
                 ORDER BY employee_id, effective_date DESC, created_at DESC
+            ),
+            PaidStatus AS (
+                SELECT employee_id 
+                FROM employee_salaries
+                WHERE month = $3 AND year = $4
             )
             SELECT 
                 e.id, e.full_name, e.employee_code, e.joining_date, e.resignation_date, e.employment_status,
@@ -774,7 +779,8 @@ router.get('/salary-preview', async (req, res) => {
                 COALESCE(adv.total_advances, 0) as advance_deduction,
                 COALESCE(bs.total_bonuses, 0) as bonus_addition,
                 COALESCE(ls.total_emi, 0) as loan_deduction,
-                COALESCE(liab.total_liabilities, 0) as misc_liabilities
+                COALESCE(liab.total_liabilities, 0) as misc_liabilities,
+                CASE WHEN ps.employee_id IS NOT NULL THEN true ELSE false END as is_paid
             FROM employees e
             LEFT JOIN CurrentSalary cs ON e.id = cs.employee_id
             LEFT JOIN AttendanceStats att ON e.id = att.employee_id
@@ -782,11 +788,12 @@ router.get('/salary-preview', async (req, res) => {
             LEFT JOIN BonusStats bs ON e.id = bs.employee_id
             LEFT JOIN LoanStats ls ON e.id = ls.employee_id
             LEFT JOIN LiabilityStats liab ON e.id = liab.employee_id
+            LEFT JOIN PaidStatus ps ON e.id = ps.employee_id
             WHERE (e.joining_date::date <= $2::date) 
               AND (e.resignation_date IS NULL OR e.resignation_date::date >= $1::date)
         `;
 
-        const { rows } = await pool.query(query, [startDate, endDate]);
+        const { rows } = await pool.query(query, [startDate, endDate, month, year]);
 
         const detailedPreview = await Promise.all(rows.map(async r => {
             const salary = Number(r.base_salary);
