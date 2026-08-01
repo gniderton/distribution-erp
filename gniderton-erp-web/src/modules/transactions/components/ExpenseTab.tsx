@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Receipt, Users } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { AutoTable } from '@/components/shared/AutoTable'
 import { useExpenses, useExpenseEntities } from '../hooks'
@@ -20,22 +20,24 @@ export function ExpenseTab() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-6 py-3 border-b border-border-subtle shrink-0">
-        <div className="flex bg-surface rounded-lg p-1 border border-border-subtle">
+      <div className="flex items-center justify-between px-6 py-0 border-b border-border-subtle shrink-0">
+        <div className="flex">
           <button
             onClick={() => setSubTab('transactions')}
-            className={`px-4 py-1.5 rounded-md text-xs font-semibold transition ${
-              subTab === 'transactions' ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 -mb-[1px] transition-all ${
+              subTab === 'transactions' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'
             }`}
           >
+            <Receipt size={14} />
             Expense Transactions
           </button>
           <button
             onClick={() => setSubTab('entities')}
-            className={`px-4 py-1.5 rounded-md text-xs font-semibold transition ${
-              subTab === 'entities' ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 -mb-[1px] transition-all ${
+              subTab === 'entities' ? 'border-brand-600 text-brand-600' : 'border-transparent text-ink-600 hover:text-ink-900'
             }`}
           >
+            <Users size={14} />
             Vendors / Entities
           </button>
         </div>
