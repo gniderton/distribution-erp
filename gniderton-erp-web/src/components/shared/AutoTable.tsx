@@ -35,6 +35,15 @@ export function AutoTable({
         cell: (c: any) => {
           const v = c.getValue()
           if (v === null || v === undefined || v === '') return '—'
+          
+          if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(v)) {
+            return new Date(v).toLocaleDateString(undefined, {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            })
+          }
+          
           return String(v)
         },
       }))
