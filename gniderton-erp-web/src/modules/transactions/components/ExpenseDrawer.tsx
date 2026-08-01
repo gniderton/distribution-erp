@@ -175,45 +175,27 @@ export function ExpenseDrawer({ open, onClose }: Props) {
         </div>
 
         {paymentMode === 'Online' && (
-          <>
-            <div>
-              <Label htmlFor="bank_statement_entry_id">Link to Bank Statement (Optional)</Label>
-              <Select 
-                id="bank_statement_entry_id" 
-                name="bank_statement_entry_id" 
-                value={formData.bank_statement_entry_id} 
-                onChange={handleChange}
-              >
-                <option value="">Do not link (Manual entry)</option>
-                {unconsumedDebits.map((stmt: any) => {
-                  const unconsumed = parseFloat(stmt.amount) - parseFloat(stmt.consumed_amount || 0);
-                  return (
-                    <option key={stmt.id} value={stmt.id}>
-                      {stmt.txn_date.split('T')[0]} - {stmt.description.substring(0,30)}... - ₹{unconsumed.toFixed(2)}
-                    </option>
-                  )
-                })}
-              </Select>
-              <p className="text-xs text-gray-500 mt-1">Linking a statement will automatically resolve the bank and amount.</p>
-            </div>
-            {!formData.bank_statement_entry_id && (
-              <div>
-                <Label htmlFor="payment_source_id">Bank Account</Label>
-                <Select 
-                  id="payment_source_id" 
-                  name="payment_source_id" 
-                  value={formData.payment_source_id} 
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="">Select a bank account</option>
-                  {banks.map((bank: any) => (
-                    <option key={bank.id} value={bank.id}>{bank.bank_name}</option>
-                  ))}
-                </Select>
-              </div>
-            )}
-          </>
+          <div>
+            <Label htmlFor="bank_statement_entry_id">Link to Bank Statement</Label>
+            <Select 
+              id="bank_statement_entry_id" 
+              name="bank_statement_entry_id" 
+              value={formData.bank_statement_entry_id} 
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select a statement entry</option>
+              {unconsumedDebits.map((stmt: any) => {
+                const unconsumed = parseFloat(stmt.amount) - parseFloat(stmt.consumed_amount || 0);
+                return (
+                  <option key={stmt.id} value={stmt.id}>
+                    {stmt.txn_date.split('T')[0]} - {stmt.description.substring(0,30)}... - ₹{unconsumed.toFixed(2)}
+                  </option>
+                )
+              })}
+            </Select>
+            <p className="text-xs text-gray-500 mt-1">Selecting a statement is mandatory and will automatically resolve the bank and amount.</p>
+          </div>
         )}
 
         {paymentMode === 'Cash' && (
