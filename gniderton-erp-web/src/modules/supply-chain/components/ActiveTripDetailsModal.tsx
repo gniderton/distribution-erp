@@ -253,21 +253,78 @@ export function ActiveTripDetailsModal({
         </div>
       </div>
 
-      <div className="flex gap-4 border-b border-border-subtle mt-4 px-2">
-        <button
-          className={`flex items-center gap-2 pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === 'manifest' ? 'border-brand-600 text-brand-700' : 'border-transparent text-ink-500 hover:text-ink-700'}`}
-          onClick={() => setActiveTab('manifest')}
-        >
-          <LayoutList size={16} />
-          Delivery Manifest
-        </button>
-        <button
-          className={`flex items-center gap-2 pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === 'picklist' ? 'border-brand-600 text-brand-700' : 'border-transparent text-ink-500 hover:text-ink-700'}`}
-          onClick={() => setActiveTab('picklist')}
-        >
-          <FileText size={16} />
-          Picklist
-        </button>
+      <div className="flex justify-between items-end border-b border-border-subtle mt-4 px-2">
+        <div className="flex gap-4">
+          <button
+            className={`flex items-center gap-2 pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === 'manifest' ? 'border-brand-600 text-brand-700' : 'border-transparent text-ink-500 hover:text-ink-700'}`}
+            onClick={() => setActiveTab('manifest')}
+          >
+            <LayoutList size={16} />
+            Delivery Manifest
+          </button>
+          <button
+            className={`flex items-center gap-2 pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${activeTab === 'picklist' ? 'border-brand-600 text-brand-700' : 'border-transparent text-ink-500 hover:text-ink-700'}`}
+            onClick={() => setActiveTab('picklist')}
+          >
+            <FileText size={16} />
+            Picklist
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 pb-2">
+          <div className="flex items-center gap-2 border-r border-border-subtle pr-3">
+            <div className="flex items-center gap-2 bg-white border border-border-subtle rounded-md px-2 py-1 h-[34px]">
+              <span className="text-xs font-medium text-ink-600 whitespace-nowrap">Print Copies {'>'} ₹</span>
+              <input 
+                type="number"
+                value={printThreshold}
+                onChange={(e) => setPrintThreshold(Number(e.target.value))}
+                className="w-16 h-6 px-1 text-sm border-none bg-surface rounded focus:ring-0 text-center font-medium"
+              />
+            </div>
+            <Button 
+              size="sm" 
+              onClick={handleDownloadInvoices} 
+              loading={isPrinting}
+              disabled={manifestLoading || invoices.length === 0}
+              className="h-[34px]"
+            >
+              <FileDown size={14} className="mr-1.5" />
+              Invoices
+            </Button>
+          </div>
+
+          <div className="flex gap-2">
+            <Button 
+              size="sm" 
+              variant="secondary"
+              onClick={() => generateEwayBillsMutation.mutate(tripId!)}
+              loading={generateEwayBillsMutation.isPending}
+              className="h-[34px]"
+            >
+              <Download size={14} className="mr-1.5" />
+              Download EWB JSON
+            </Button>
+            
+            <input 
+              type="file" 
+              accept=".xlsx,.xls,.csv" 
+              ref={fileInputRef} 
+              className="hidden" 
+              onChange={handleFileUpload}
+            />
+            <Button 
+              size="sm" 
+              variant="secondary"
+              onClick={() => fileInputRef.current?.click()}
+              loading={uploadEwayBillMutation.isPending}
+              className="h-[34px]"
+            >
+              <Upload size={14} className="mr-1.5" />
+              Upload EWB Excel
+            </Button>
+          </div>
+        </div>
       </div>
 
       <div className="mt-4 flex-1 flex flex-col min-h-0">
@@ -298,56 +355,6 @@ export function ActiveTripDetailsModal({
                 </div>
                 
                 <div className="flex items-center gap-2 border-l border-border-subtle pl-3">
-                  <div className="flex items-center gap-2 bg-white border border-border-subtle rounded-md px-2 py-1 h-[34px]">
-                    <span className="text-xs font-medium text-ink-600 whitespace-nowrap">Print Copies {'>'} ₹</span>
-                    <input 
-                      type="number"
-                      value={printThreshold}
-                      onChange={(e) => setPrintThreshold(Number(e.target.value))}
-                      className="w-16 h-6 px-1 text-sm border-none bg-surface rounded focus:ring-0 text-center font-medium"
-                    />
-                  </div>
-                  <Button 
-                    size="sm" 
-                    onClick={handleDownloadInvoices} 
-                    loading={isPrinting}
-                    disabled={manifestLoading || invoices.length === 0}
-                    className="h-[34px]"
-                  >
-                    <FileDown size={14} className="mr-1.5" />
-                    Invoices
-                  </Button>
-                </div>
-
-                <div className="flex gap-2 border-l border-border-subtle pl-3">
-                  <Button 
-                    size="sm" 
-                    variant="secondary"
-                    onClick={() => generateEwayBillsMutation.mutate(tripId!)}
-                    loading={generateEwayBillsMutation.isPending}
-                    className="h-[34px]"
-                  >
-                    <Download size={14} className="mr-1.5" />
-                    Download EWB JSON
-                  </Button>
-                  
-                  <input 
-                    type="file" 
-                    accept=".xlsx,.xls,.csv" 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    onChange={handleFileUpload}
-                  />
-                  <Button 
-                    size="sm" 
-                    variant="secondary"
-                    onClick={() => fileInputRef.current?.click()}
-                    loading={uploadEwayBillMutation.isPending}
-                    className="h-[34px]"
-                  >
-                    <Upload size={14} className="mr-1.5" />
-                    Upload EWB Excel
-                  </Button>
 
                   <Button variant="secondary" size="sm" onClick={handleDownloadManifestCSV} className="h-[34px]">
                     <Download size={14} className="mr-1.5" />
