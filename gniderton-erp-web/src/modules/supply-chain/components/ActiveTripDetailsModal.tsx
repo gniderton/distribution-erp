@@ -2,12 +2,13 @@ import React, { useState } from 'react'
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { useTripManifest, useTripPicklist, useDeleteTrip, useInvoiceDetails, useProductBreakdown, useGenerateEwayBills } from '../hooks'
+import { useTripManifest, useTripPicklist, useDeleteTrip, useInvoiceDetails, useProductBreakdown, useGenerateEwayBills, useUploadEwayBillResponse } from '../hooks'
 import { generatePicklistPDF, generateManifestPDF, downloadCSV } from '../utils/pdfGenerator'
 import { generateInvoicePDF } from '@/modules/invoice/utils/pdfGenerator'
 import { supply_chainApi } from '../api'
 import { format } from 'date-fns'
-import { Activity, Truck, Users, FileText, IndianRupee, ChevronDown, ChevronRight, Download, FileDown, Trash2, LayoutList, Search } from 'lucide-react'
+import { Activity, Truck, Users, FileText, IndianRupee, ChevronDown, ChevronRight, Download, FileDown, Trash2, LayoutList, Search, Upload } from 'lucide-react'
+import { useRef } from 'react'
 
 function ManifestRowExpanded({ salesOrderId }: { salesOrderId: number }) {
   const { data, isLoading } = useInvoiceDetails(salesOrderId)
@@ -88,8 +89,17 @@ export function ActiveTripDetailsModal({
   const { data: picklistData, isLoading: picklistLoading } = useTripPicklist(tripId)
   const deleteMutation = useDeleteTrip()
   const generateEwayBillsMutation = useGenerateEwayBills()
+  const uploadEwayBillMutation = useUploadEwayBillResponse()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   
   const [activeTab, setActiveTab] = useState<'manifest' | 'picklist'>('manifest')
+  
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    uploadEwayBillMutation.mutate(file)
+    e.target.value = ''
+  }
   const [printThreshold, setPrintThreshold] = useState<number>(50000)
   const [isPrinting, setIsPrinting] = useState(false)
   const [expandedManifest, setExpandedManifest] = useState<number | null>(null)
@@ -317,8 +327,28 @@ export function ActiveTripDetailsModal({
                     loading={generateEwayBillsMutation.isPending}
                     className="h-[34px]"
                   >
-                    E-Way Bills
+                    <Download size={14} className="mr-1.5" />
+                    Download EWB JSON
                   </Button>
+                  
+                  <input 
+                    type="file" 
+                    accept=".xlsx,.xls,.csv" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    onChange={handleFileUpload}
+                  />
+                  <Button 
+                    size="sm" 
+                    variant="secondary"
+                    onClick={() => fileInputRef.current?.click()}
+                    loading={uploadEwayBillMutation.isPending}
+                    className="h-[34px]"
+                  >
+                    <Upload size={14} className="mr-1.5" />
+                    Upload EWB Excel
+                  </Button>
+
                   <Button variant="secondary" size="sm" onClick={handleDownloadManifestCSV} className="h-[34px]">
                     <Download size={14} className="mr-1.5" />
                     CSV
@@ -338,15 +368,16 @@ export function ActiveTripDetailsModal({
                   <tr>
                     <th className="px-4 py-3">Customer</th>
                     <th className="px-4 py-3">Inv #</th>
+                    <th className="px-4 py-3">E-Way Bill #</th>
                     <th className="px-4 py-3">Address</th>
                     <th className="px-4 py-3 text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-subtle">
                   {manifestLoading ? (
-                    <tr><td colSpan={4} className="p-4 text-center">Loading...</td></tr>
+                    <tr><td colSpan={5} className="p-4 text-center">Loading...</td></tr>
                   ) : filteredInvoices.length === 0 ? (
-                    <tr><td colSpan={4} className="p-4 text-center text-ink-500">No invoices match your search.</td></tr>
+                    <tr><td colSpan={5} className="p-4 text-center text-ink-500">No invoices match your search.</td></tr>
                   ) : filteredInvoices.map((inv: any) => (
                     <React.Fragment key={inv.invoice_id}>
                       <tr 
@@ -355,12 +386,13 @@ export function ActiveTripDetailsModal({
                       >
                         <td className="px-4 py-3 font-medium">{inv.customer_name}</td>
                         <td className="px-4 py-3">{inv.invoice_number}</td>
+                        <td className="px-4 py-3 text-brand-600 font-mono-figures">{inv.eway_bill_number || '-'}</td>
                         <td className="px-4 py-3 text-ink-600 truncate max-w-xs">{inv.address}</td>
                         <td className="px-4 py-3 text-right font-medium">₹{Number(inv.grand_total).toFixed(2)}</td>
                       </tr>
                       {expandedManifest === inv.invoice_id && (
                         <tr>
-                          <td colSpan={4} className="p-0">
+                          <td colSpan={5} className="p-0">
                             <ManifestRowExpanded salesOrderId={inv.sales_order_id} />
                           </td>
                         </tr>

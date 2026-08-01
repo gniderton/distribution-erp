@@ -288,17 +288,28 @@ export const generateInvoicePDF = async (invoiceData: Invoice) => {
   doc.setFont("helvetica", "bold");
   doc.text("RECEIPT ACKNOWLEDGEMENT", pageWidth / 2, slipY + 20, { align: "center" });
   
+  const contentWidth = pageWidth - margin * 2;
   const slipBoxY = slipY + 30;
-  doc.rect(margin, slipBoxY, pageWidth - margin * 2, 100);
+  doc.rect(margin, slipBoxY, contentWidth, 30);
+  
+  // Left part of slip (Invoice Info)
+  doc.setFont("helvetica", "bold");
+  doc.text(`Invoice No: ${invoiceData.invoice_number || "-"}`, margin + 10, slipBoxY + 10);
+  doc.text(`Date: ${invoiceData.invoice_date ? formatDate(invoiceData.invoice_date) : "-"}`, margin + 10, slipBoxY + 20);
+  
+  // Right part of slip (E-Way Bill Info)
+  if (invoiceData.eway_bill_number) {
+    doc.setFont("helvetica", "bold");
+    doc.text(`E-Way Bill No: ${invoiceData.eway_bill_number}`, margin + (contentWidth / 2) + 10, slipBoxY + 10);
+  }
+  
+  const bottomBoxY = slipBoxY + 35;
   doc.setFontSize(9);
-  doc.text(`Invoice No: ${invoiceData.invoice_number || "-"}`, margin + 10, slipBoxY + 15);
-  doc.text(`Date: ${invoiceData.invoice_date ? formatDate(invoiceData.invoice_date) : "-"}`, margin + 10, slipBoxY + 30);
-  doc.text(`Customer: ${invoiceData.customer_name || "-"}`, margin + 10, slipBoxY + 45);
-  doc.text(`Total Amount: ${Number(grandTotal).toFixed(2)}`, margin + 10, slipBoxY + 60);
+  doc.text(`Customer: ${invoiceData.customer_name || "-"}`, margin + 10, bottomBoxY + 10);
+  doc.text(`Total Amount: ${Number(grandTotal).toFixed(2)}`, margin + 10, bottomBoxY + 25);
   
   const bankInfoX = pageWidth / 2 + 5;
   doc.setFont("helvetica", "bold");
-  doc.text("PAYMENT BANK DETAILS", bankInfoX, slipBoxY + 15);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.text(`Bank: ${bank.bank_name || "-"}`, bankInfoX, slipBoxY + 28);

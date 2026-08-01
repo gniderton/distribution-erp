@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const kdkService = require('../services/kdkEwayBillService');
+const multer = require('multer');
+const xlsx = require('xlsx');
+const upload = multer({ storage: multer.memoryStorage() });
 
 /**
  * [NEW] Bulk Generate E-Way Bills for a Trip
@@ -36,40 +39,42 @@ router.post('/bulk-trip/:tripId', async (req, res) => {
               AND eway_bill_number IS NULL
         `, [tripId, threshold]);
 
+        const payloads = [];
         const results = [];
         for (const inv of invoicesRes.rows) {
             try {
                 // Generate Payload
                 const payload = await kdkService.mapInvoiceToKDK(inv.id, trip.vehicle_number);
-                
-                // Call GSP API
-                const ewbResponse = await kdkService.generateEWB(payload);
-
-                if (ewbResponse.success) {
-                    // Save to DB
-                    await client.query(`
-                        UPDATE sales_invoices 
-                        SET eway_bill_number = $1, 
-                            eway_bill_date = $2, 
-                            eway_bill_valid_until = $3,
-                            eway_bill_json = $4
-                        WHERE id = $5
-                    `, [ewbResponse.ewayBillNo, ewbResponse.ewayBillDate, ewbResponse.validUpto, JSON.stringify(ewbResponse), inv.id]);
-                    
-                    results.push({ id: inv.id, invoice: inv.invoice_number, status: 'Success', ewb: ewbResponse.ewayBillNo });
-                } else {
-                    results.push({ id: inv.id, invoice: inv.invoice_number, status: 'Failed', error: ewbResponse.error });
-                }
+                payloads.push(payload);
+                results.push({ id: inv.id, invoice: inv.invoice_number, status: 'Success' });
             } catch (err) {
                 results.push({ id: inv.id, invoice: inv.invoice_number, status: 'Error', error: err.message });
             }
         }
 
         await client.query('COMMIT');
+        
+        if (payloads.length === 0) {
+            return res.json({ 
+                success: true, 
+                message: "No eligible invoices found to generate E-Way Bills.",
+                details: results 
+            });
+        }
+        
+        // Structure the JSON for bulk upload as per NIC/GSP specs
+        // Often wrapped in a "billLists" or similar array, but sending the raw array for now
+        const bulkPayload = {
+            version: "1.0.0",
+            billLists: payloads
+        };
+
         res.json({ 
             success: true, 
             thresholdUsed: threshold,
-            processedCount: results.length,
+            processedCount: payloads.length,
+            fileData: bulkPayload,
+            fileName: `Trip_${tripId}_EWB_${Date.now()}.json`,
             details: results 
         });
 
@@ -79,6 +84,62 @@ router.post('/bulk-trip/:tripId', async (req, res) => {
         res.status(500).json({ error: err.message });
     } finally {
         client.release();
+    }
+});
+
+/**
+ * [NEW] Upload E-Way Bill Response (Excel/CSV from NIC Portal)
+ */
+router.post('/upload-response', upload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    try {
+        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = xlsx.utils.sheet_to_json(sheet);
+
+        let updatedCount = 0;
+        let notFoundCount = 0;
+        const client = await pool.connect();
+
+        try {
+            await client.query('BEGIN');
+
+            for (const row of rows) {
+                // NIC portal typically has "Document No" and "E-Way Bill No" columns
+                // Check various possible key names based on common formats
+                const docNo = row['Document No'] || row['Document Number'] || row['Invoice No'] || row['docNo'];
+                const ewbNo = row['E-Way Bill No'] || row['E Way Bill No'] || row['EWB No'] || row['ewayBillNo'];
+
+                if (docNo && ewbNo) {
+                    const updateRes = await client.query(`
+                        UPDATE sales_invoices 
+                        SET eway_bill_number = $1, eway_bill_date = NOW()
+                        WHERE invoice_number = $2 AND eway_bill_number IS NULL
+                        RETURNING id
+                    `, [ewbNo, docNo]);
+                    
+                    if (updateRes.rowCount > 0) {
+                        updatedCount++;
+                    } else {
+                        notFoundCount++;
+                    }
+                }
+            }
+
+            await client.query('COMMIT');
+            res.json({ success: true, updatedCount, notFoundCount });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+
+    } catch (err) {
+        console.error('Error parsing EWB Upload:', err);
+        res.status(500).json({ error: 'Failed to process file: ' + err.message });
     }
 });
 

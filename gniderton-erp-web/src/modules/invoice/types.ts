@@ -60,6 +60,7 @@ export interface Invoice {
   display_amount?: number;
   document_type?: string;
   delivery_status?: string;
+  eway_bill_number?: string;
   gstin?: string;
   route?: string;
   customer_address?: string;

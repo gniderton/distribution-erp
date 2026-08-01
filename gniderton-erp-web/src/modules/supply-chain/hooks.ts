@@ -163,19 +163,45 @@ export function useMarkSelfCollected() {
 } 
 
 export function useGenerateEwayBills() {
-  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (tripId: string | number) => supply_chainApi.generateEwayBills(tripId),
     onSuccess: (data) => {
-      if (data.results && data.results.length > 0) {
-        toast.success(`Generated ${data.results.length} E-Way Bills successfully!`)
+      if (data.fileData) {
+        // Trigger file download
+        const blob = new Blob([JSON.stringify(data.fileData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = data.fileName || 'eway_bills.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success(`Downloaded bulk E-Way Bill JSON for ${data.processedCount} invoices!`);
       } else {
-        toast.success(data.message || 'E-Way Bill check completed. No eligible invoices found.')
+        toast.success(data.message || 'No eligible invoices found for E-Way Bills.');
       }
-      queryClient.invalidateQueries({ queryKey: ['delivery-trip-manifest'] })
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.message || err?.response?.data?.error || 'Failed to generate E-Way Bills')
     }
   })
+}
+
+export function useUploadEwayBillResponse() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return supply_chainApi.uploadEwayBillResponse(formData);
+    },
+    onSuccess: (data) => {
+      toast.success(`Uploaded successfully! Updated: ${data.updatedCount}. Not found: ${data.notFoundCount}.`);
+      queryClient.invalidateQueries({ queryKey: ['delivery-trip-manifest'] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error || 'Failed to upload response');
+    }
+  });
 }
