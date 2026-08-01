@@ -294,16 +294,6 @@ export function ExpenseDrawer({ open, onClose }: Props) {
 
         {formData.is_gst_expense && (
           <div className="space-y-4 p-4 border border-gray-200 rounded-md bg-gray-50">
-            <div>
-              <Label htmlFor="gst_no">GST Number</Label>
-              <Input 
-                id="gst_no" 
-                name="gst_no" 
-                value={formData.gst_no} 
-                onChange={handleChange} 
-                placeholder="Optional"
-              />
-            </div>
             <div className="flex gap-4">
               <div className="flex-1">
                 <Label htmlFor="taxable_amount">Taxable Amount</Label>
