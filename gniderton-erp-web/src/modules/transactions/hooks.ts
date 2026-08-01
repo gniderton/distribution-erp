@@ -103,3 +103,38 @@ export function useOtherIncome(params?: any) {
     queryFn: () => transactionsApi.getFinanceOtherIncome() 
   })
 }
+
+export function useExpenseLedger(entityId: string | number) {
+  return useQuery({ 
+    queryKey: ['transactions', 'expense-ledger', entityId], 
+    queryFn: () => transactionsApi.getEntitiesExpenseLedger(entityId),
+    enabled: !!entityId
+  })
+}
+
+export function useIncomeLedger(entityId: string | number) {
+  return useQuery({ 
+    queryKey: ['transactions', 'income-ledger', entityId], 
+    queryFn: () => transactionsApi.getEntitiesIncomeLedger(entityId),
+    enabled: !!entityId
+  })
+}
+
+export function useTransfers(params?: any) {
+  return useQuery({ 
+    queryKey: ['transactions', 'transfers', params], 
+    queryFn: () => transactionsApi.getFinanceTransfers() 
+  })
+}
+
+export function useCreateTransfer() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: transactionsApi.createFinanceTransfers,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'transfers'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'unconsumed-debits'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'unconsumed-credits'] })
+    }
+  })
+}
