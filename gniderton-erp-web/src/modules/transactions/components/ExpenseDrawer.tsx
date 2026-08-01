@@ -31,18 +31,37 @@ export function ExpenseDrawer({ open, onClose }: Props) {
     cheque_date: new Date().toISOString().split('T')[0],
     bank_name: '',
     grand_total: '',
+    taxable_amount: '',
+    tax_amount: '',
+    is_gst_expense: false,
     bill_no: '',
+    gst_no: '',
     description: ''
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
+    const { name, value, type } = e.target
     if (name === 'entity_id' && value === 'CREATE_NEW') {
       setShowCreateEntity(true)
       setFormData(prev => ({ ...prev, entity_id: '' }))
       return
     }
-    setFormData(prev => ({ ...prev, [name]: value }))
+    
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked
+      setFormData(prev => ({ ...prev, [name]: checked }))
+      return
+    }
+
+    setFormData(prev => {
+      const newData = { ...prev, [name]: value };
+      if (newData.is_gst_expense && (name === 'taxable_amount' || name === 'tax_amount')) {
+        const taxable = parseFloat(newData.taxable_amount) || 0;
+        const tax = parseFloat(newData.tax_amount) || 0;
+        newData.grand_total = (taxable + tax).toFixed(2);
+      }
+      return newData;
+    })
   }
 
   const handleCreateEntity = () => {
@@ -61,19 +80,25 @@ export function ExpenseDrawer({ open, onClose }: Props) {
     
     // Auto-resolve grand total from statement if selected
     let finalTotal = parseFloat(formData.grand_total) || 0
+    let taxable = parseFloat(formData.taxable_amount) || finalTotal
+    let tax = parseFloat(formData.tax_amount) || 0
+    
     if (paymentMode === 'Online' && formData.bank_statement_entry_id) {
         const stmt = unconsumedDebits.find((s: any) => String(s.id) === formData.bank_statement_entry_id)
         if (stmt) {
             finalTotal = parseFloat(stmt.debit_amount) - parseFloat(stmt.consumed_amount || 0)
+            if (!formData.is_gst_expense) {
+              taxable = finalTotal;
+              tax = 0;
+            }
         }
     }
 
     const payload = {
       ...formData,
       grand_total: finalTotal,
-      taxable_amount: finalTotal,
-      tax_amount: 0,
-      is_gst_expense: false,
+      taxable_amount: taxable,
+      tax_amount: tax,
       category_account_id: parseInt(formData.category_account_id) || null,
       vendor_name: parseInt(formData.entity_id) || null,
       payment_source_id: parseInt(formData.payment_source_id) || null,
@@ -255,6 +280,61 @@ export function ExpenseDrawer({ open, onClose }: Props) {
           </div>
         )}
 
+        <div className="flex items-center gap-2 py-2">
+          <input 
+            type="checkbox"
+            id="is_gst_expense"
+            name="is_gst_expense"
+            checked={formData.is_gst_expense}
+            onChange={handleChange}
+            className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+          />
+          <Label htmlFor="is_gst_expense" className="cursor-pointer">This is a GST Expense</Label>
+        </div>
+
+        {formData.is_gst_expense && (
+          <div className="space-y-4 p-4 border border-gray-200 rounded-md bg-gray-50">
+            <div>
+              <Label htmlFor="gst_no">GST Number</Label>
+              <Input 
+                id="gst_no" 
+                name="gst_no" 
+                value={formData.gst_no} 
+                onChange={handleChange} 
+                placeholder="Optional"
+              />
+            </div>
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <Label htmlFor="taxable_amount">Taxable Amount</Label>
+                <Input 
+                  id="taxable_amount" 
+                  name="taxable_amount" 
+                  type="number" 
+                  step="0.01" 
+                  min="0"
+                  value={formData.taxable_amount} 
+                  onChange={handleChange} 
+                  required 
+                />
+              </div>
+              <div className="flex-1">
+                <Label htmlFor="tax_amount">Tax Amount</Label>
+                <Input 
+                  id="tax_amount" 
+                  name="tax_amount" 
+                  type="number" 
+                  step="0.01" 
+                  min="0"
+                  value={formData.tax_amount} 
+                  onChange={handleChange} 
+                  required 
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div>
           <Label htmlFor="grand_total">Total Amount</Label>
           <Input 
@@ -266,8 +346,8 @@ export function ExpenseDrawer({ open, onClose }: Props) {
             value={formData.grand_total} 
             onChange={handleChange} 
             placeholder={formData.bank_statement_entry_id ? "Auto-calculated from statement" : "0.00"}
-            required={!formData.bank_statement_entry_id} 
-            disabled={!!formData.bank_statement_entry_id}
+            required={!formData.bank_statement_entry_id && !formData.is_gst_expense} 
+            disabled={!!formData.bank_statement_entry_id || formData.is_gst_expense}
           />
         </div>
 
