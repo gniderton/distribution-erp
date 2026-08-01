@@ -25,24 +25,42 @@ export function IncomeDrawer({ open, onClose }: Props) {
     transaction_date: new Date().toISOString().split('T')[0],
     category_account_id: '',
     entity_id: '',
-    destination_account_id: '',
+    payment_source_id: '',
     bank_statement_entry_id: '',
     cheque_no: '',
     cheque_date: new Date().toISOString().split('T')[0],
     bank_name: '',
     amount: '',
-    receipt_no: '',
+    taxable_amount: '',
+    tax_amount: '',
+    is_gst_income: false,
+    reference_no: '',
     description: ''
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
+    const { name, value, type } = e.target
     if (name === 'entity_id' && value === 'CREATE_NEW') {
       setShowCreateEntity(true)
       setFormData(prev => ({ ...prev, entity_id: '' }))
       return
     }
-    setFormData(prev => ({ ...prev, [name]: value }))
+
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked
+      setFormData(prev => ({ ...prev, [name]: checked }))
+      return
+    }
+
+    setFormData(prev => {
+      const newData = { ...prev, [name]: value };
+      if (newData.is_gst_income && (name === 'taxable_amount' || name === 'tax_amount')) {
+        const taxable = parseFloat(newData.taxable_amount) || 0;
+        const tax = parseFloat(newData.tax_amount) || 0;
+        newData.amount = (taxable + tax).toFixed(2);
+      }
+      return newData;
+    })
   }
 
   const handleCreateEntity = () => {
@@ -61,19 +79,28 @@ export function IncomeDrawer({ open, onClose }: Props) {
     
     // Auto-resolve amount from statement if selected
     let finalTotal = parseFloat(formData.amount) || 0
+    let taxable = parseFloat(formData.taxable_amount) || finalTotal
+    let tax = parseFloat(formData.tax_amount) || 0
+
     if (paymentMode === 'Online' && formData.bank_statement_entry_id) {
         const stmt = unconsumedCredits.find((s: any) => String(s.id) === formData.bank_statement_entry_id)
         if (stmt) {
             finalTotal = parseFloat(stmt.credit_amount) - parseFloat(stmt.consumed_amount || 0)
+            if (!formData.is_gst_income) {
+              taxable = finalTotal;
+              tax = 0;
+            }
         }
     }
 
     const payload = {
       ...formData,
       amount: finalTotal,
+      taxable_amount: taxable,
+      tax_amount: tax,
       category_account_id: parseInt(formData.category_account_id) || null,
-      entity_id: parseInt(formData.entity_id) || null,
-      destination_account_id: parseInt(formData.destination_account_id) || null,
+      source_name: parseInt(formData.entity_id) || null,
+      payment_source_id: parseInt(formData.payment_source_id) || null,
       payment_mode: paymentMode
     }
 
@@ -199,11 +226,11 @@ export function IncomeDrawer({ open, onClose }: Props) {
 
         {paymentMode === 'Cash' && (
           <div>
-            <Label htmlFor="destination_account_id">Cash Account</Label>
+            <Label htmlFor="payment_source_id">Cash Account</Label>
             <Select 
-              id="destination_account_id" 
-              name="destination_account_id" 
-              value={formData.destination_account_id} 
+              id="payment_source_id" 
+              name="payment_source_id" 
+              value={formData.payment_source_id} 
               onChange={handleChange}
               required
             >
@@ -252,6 +279,51 @@ export function IncomeDrawer({ open, onClose }: Props) {
           </div>
         )}
 
+        <div className="flex items-center gap-2 py-2">
+          <input 
+            type="checkbox"
+            id="is_gst_income"
+            name="is_gst_income"
+            checked={formData.is_gst_income}
+            onChange={handleChange}
+            className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+          />
+          <Label htmlFor="is_gst_income" className="cursor-pointer">This is GST Income</Label>
+        </div>
+
+        {formData.is_gst_income && (
+          <div className="space-y-4 p-4 border border-gray-200 rounded-md bg-gray-50">
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <Label htmlFor="taxable_amount">Taxable Amount</Label>
+                <Input 
+                  id="taxable_amount" 
+                  name="taxable_amount" 
+                  type="number" 
+                  step="0.01" 
+                  min="0"
+                  value={formData.taxable_amount} 
+                  onChange={handleChange} 
+                  required 
+                />
+              </div>
+              <div className="flex-1">
+                <Label htmlFor="tax_amount">Tax Amount</Label>
+                <Input 
+                  id="tax_amount" 
+                  name="tax_amount" 
+                  type="number" 
+                  step="0.01" 
+                  min="0"
+                  value={formData.tax_amount} 
+                  onChange={handleChange} 
+                  required 
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div>
           <Label htmlFor="amount">Total Amount</Label>
           <Input 
@@ -263,18 +335,18 @@ export function IncomeDrawer({ open, onClose }: Props) {
             value={formData.amount} 
             onChange={handleChange} 
             placeholder={formData.bank_statement_entry_id ? "Auto-calculated from statement" : "0.00"}
-            required={!formData.bank_statement_entry_id} 
-            disabled={!!formData.bank_statement_entry_id}
+            required={!formData.bank_statement_entry_id && !formData.is_gst_income} 
+            disabled={!!formData.bank_statement_entry_id || formData.is_gst_income}
           />
         </div>
 
         <div>
-          <Label htmlFor="receipt_no">Receipt / Reference No</Label>
+          <Label htmlFor="reference_no">Reference No</Label>
           <Input 
-            id="receipt_no" 
-            name="receipt_no" 
+            id="reference_no" 
+            name="reference_no" 
             type="text" 
-            value={formData.receipt_no} 
+            value={formData.reference_no} 
             onChange={handleChange} 
             placeholder="Optional"
           />
