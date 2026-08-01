@@ -26,7 +26,7 @@ router.post('/bulk-trip/:tripId', async (req, res) => {
         const threshold = parseFloat(settingsRes.rows[0]?.setting_value || 50000);
 
         // 2. Get Trip details (Vehicle No)
-        const tripRes = await client.query("SELECT * FROM trips WHERE id = $1", [tripId]);
+        const tripRes = await client.query("SELECT * FROM delivery_trips WHERE id = $1", [tripId]);
         if (tripRes.rows.length === 0) return res.status(404).json({ error: "Trip not found" });
         const trip = tripRes.rows[0];
 
