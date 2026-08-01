@@ -218,9 +218,14 @@ router.get('/', async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT 
-                it.*,
-                fa.bank_name as from_account_name,
-                ta.bank_name as to_account_name
+                it.transfer_date,
+                fa.bank_name as source_account,
+                ta.bank_name as destination_account,
+                it.amount as total_amount,
+                it.payment_mode,
+                it.reference_no,
+                it.id,
+                it.*
             FROM internal_transfers it
             JOIN bank_accounts fa ON it.from_account_id = fa.id
             JOIN bank_accounts ta ON it.to_account_id = ta.id

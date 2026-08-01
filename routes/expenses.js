@@ -8,11 +8,14 @@ router.get('/', async (req, res) => {
         const { start_date, end_date } = req.query;
         let query = `
             SELECT 
-                ex.*, 
-                coa.name as category_name,
-                ba.bank_name as payment_source_name,
-                ex.expense_number,
-                ee.name as entity_name
+                ex.expense_date,
+                ee.name as vendor_name,
+                coa.name as category,
+                ba.bank_name as paid_via,
+                ex.grand_total,
+                ex.payment_mode,
+                ex.id,
+                ex.*
             FROM expenses ex
             JOIN chart_of_accounts coa ON ex.category_account_id = coa.id
             JOIN bank_accounts ba ON ex.payment_source_id = ba.id

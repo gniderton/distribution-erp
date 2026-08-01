@@ -8,10 +8,14 @@ router.get('/', async (req, res) => {
         const { start_date, end_date } = req.query;
         let query = `
             SELECT 
-                oi.*, 
-                coa.name as category_name,
-                ba.bank_name as destination_account_name,
-                ie.name as entity_name
+                oi.transaction_date,
+                ie.name as source_name,
+                coa.name as category,
+                ba.bank_name as received_in,
+                oi.amount as total_amount,
+                oi.payment_mode,
+                oi.id,
+                oi.*
             FROM other_income oi
             JOIN chart_of_accounts coa ON oi.category_account_id = coa.id
             JOIN bank_accounts ba ON oi.destination_account_id = ba.id

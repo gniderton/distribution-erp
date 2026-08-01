@@ -7,7 +7,7 @@ const { pool } = require('../config/db');
 // 1. List Income Entities
 router.get('/income', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM income_entities WHERE is_active = true ORDER BY name ASC');
+        const result = await pool.query('SELECT name, phone, gst_no, bank_name, account_no, ifsc_code, id, * FROM income_entities WHERE is_active = true ORDER BY name ASC');
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -61,7 +61,7 @@ router.get('/income/:id/ledger', async (req, res) => {
 // 4. List Expense Entities
 router.get('/expense', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM expense_entities WHERE is_active = true ORDER BY name ASC');
+        const result = await pool.query('SELECT name, phone, gst_no, bank_name, account_no, ifsc_code, id, * FROM expense_entities WHERE is_active = true ORDER BY name ASC');
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
