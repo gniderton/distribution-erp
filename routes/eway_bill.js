@@ -35,8 +35,8 @@ router.post('/bulk-trip/:tripId', async (req, res) => {
             SELECT id, invoice_number, grand_total 
             FROM sales_invoices 
             WHERE id IN (SELECT invoice_id FROM trip_invoices WHERE trip_id = $1)
-              AND grand_total >= $2
-              AND eway_bill_number IS NULL
+              AND CAST(grand_total AS NUMERIC) >= $2
+              AND (eway_bill_number IS NULL OR eway_bill_number = '')
         `, [tripId, threshold]);
 
         const payloads = [];
