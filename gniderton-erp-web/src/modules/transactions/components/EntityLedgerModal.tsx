@@ -19,8 +19,8 @@ export function EntityLedgerModal({ open, onClose, entity, type }: Props) {
   const totalAmount = data.reduce((sum: number, row: any) => sum + parseFloat(row.debit || row.credit || 0), 0)
 
   return (
-    <Drawer open={open} onClose={onClose} title={`${type === 'expense' ? 'Vendor' : 'Income Source'} Ledger`} description={entity?.name || "Full transaction history"}>
-      <div className="p-6 h-[70vh] flex flex-col space-y-6">
+    <Drawer widthClass="max-w-4xl" open={open} onClose={onClose} title={`${type === 'expense' ? 'Vendor' : 'Income Source'} Ledger`} description={entity?.name || "Full transaction history"}>
+      <div className="h-full flex flex-col space-y-6">
         
         {entity && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
