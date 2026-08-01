@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { useTripManifest, useTripPicklist, useDeleteTrip, useInvoiceDetails, useProductBreakdown } from '../hooks'
+import { useTripManifest, useTripPicklist, useDeleteTrip, useInvoiceDetails, useProductBreakdown, useGenerateEwayBills } from '../hooks'
 import { generatePicklistPDF, generateManifestPDF, downloadCSV } from '../utils/pdfGenerator'
 import { generateInvoicePDF } from '@/modules/invoice/utils/pdfGenerator'
 import { supply_chainApi } from '../api'
@@ -87,6 +87,7 @@ export function ActiveTripDetailsModal({
   const { data: manifestData, isLoading: manifestLoading } = useTripManifest(tripId)
   const { data: picklistData, isLoading: picklistLoading } = useTripPicklist(tripId)
   const deleteMutation = useDeleteTrip()
+  const generateEwayBillsMutation = useGenerateEwayBills()
   
   const [activeTab, setActiveTab] = useState<'manifest' | 'picklist'>('manifest')
   const [printThreshold, setPrintThreshold] = useState<number>(50000)
@@ -309,6 +310,15 @@ export function ActiveTripDetailsModal({
                 </div>
 
                 <div className="flex gap-2 border-l border-border-subtle pl-3">
+                  <Button 
+                    size="sm" 
+                    variant="secondary"
+                    onClick={() => generateEwayBillsMutation.mutate(tripId!)}
+                    loading={generateEwayBillsMutation.isPending}
+                    className="h-[34px]"
+                  >
+                    E-Way Bills
+                  </Button>
                   <Button variant="secondary" size="sm" onClick={handleDownloadManifestCSV} className="h-[34px]">
                     <Download size={14} className="mr-1.5" />
                     CSV

@@ -161,3 +161,21 @@ export function useMarkSelfCollected() {
     }  
   })  
 } 
+
+export function useGenerateEwayBills() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (tripId: string | number) => supply_chainApi.generateEwayBills(tripId),
+    onSuccess: (data) => {
+      if (data.results && data.results.length > 0) {
+        toast.success(`Generated ${data.results.length} E-Way Bills successfully!`)
+      } else {
+        toast.success(data.message || 'E-Way Bill check completed. No eligible invoices found.')
+      }
+      queryClient.invalidateQueries({ queryKey: ['delivery-trip-manifest'] })
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || err?.response?.data?.error || 'Failed to generate E-Way Bills')
+    }
+  })
+}

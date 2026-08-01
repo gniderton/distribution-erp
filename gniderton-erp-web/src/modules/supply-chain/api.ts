@@ -26,6 +26,7 @@ export const supply_chainApi = {
   getSalesUnified2: (id: string | number) => api.get(`/api/sales/unified/${id}`).then((r) => r.data),
   createDeliveryMarkSelfCollected: (payload: any) => api.post('/api/delivery/mark-self-collected', payload).then((r) => r.data),
   createDeliveryTrips: (payload: any) => api.post('/api/delivery/trips', payload).then((r) => r.data),
+  generateEwayBills: (tripId: string | number) => api.post(`/api/eway-bill/bulk-trip/${tripId}`).then((r) => r.data),
   createDeliveryVerifySettle: (payload: any) => api.post('/api/delivery/verify/settle', payload).then((r) => r.data),
   updateDeliveryTrips: (id: string | number, payload: any = {}) => api.put(`/api/delivery/trips/${id}`, payload).then((r) => r.data),
 }
