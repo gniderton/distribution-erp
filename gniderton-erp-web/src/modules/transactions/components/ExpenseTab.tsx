@@ -13,7 +13,7 @@ export function ExpenseTab() {
   const [isExpenseDrawerOpen, setIsExpenseDrawerOpen] = useState(false)
   const [isEntityDrawerOpen, setIsEntityDrawerOpen] = useState(false)
   
-  const [selectedEntityId, setSelectedEntityId] = useState<string | number | null>(null)
+  const [selectedEntity, setSelectedEntity] = useState<any | null>(null)
 
   const { data: expenses, isLoading: expensesLoading, isError: expensesError } = useExpenses()
   const { data: entities, isLoading: entitiesLoading, isError: entitiesError } = useExpenseEntities()
@@ -76,7 +76,7 @@ export function ExpenseTab() {
             isError={entitiesError}
             emptyTitle="No vendors found"
             emptyDescription="Create a new vendor entity to see it listed here."
-            onRowClick={(row) => setSelectedEntityId(row.id)}
+            onRowClick={(row) => setSelectedEntity(row)}
           />
         )}
       </div>
@@ -91,9 +91,9 @@ export function ExpenseTab() {
         type="expense"
       />
       <EntityLedgerModal
-        open={!!selectedEntityId}
-        onClose={() => setSelectedEntityId(null)}
-        entityId={selectedEntityId}
+        open={!!selectedEntity}
+        onClose={() => setSelectedEntity(null)}
+        entity={selectedEntity}
         type="expense"
       />
     </div>

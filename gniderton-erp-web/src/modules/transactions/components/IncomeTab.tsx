@@ -13,7 +13,7 @@ export function IncomeTab() {
   const [isIncomeDrawerOpen, setIsIncomeDrawerOpen] = useState(false)
   const [isEntityDrawerOpen, setIsEntityDrawerOpen] = useState(false)
   
-  const [selectedEntityId, setSelectedEntityId] = useState<string | number | null>(null)
+  const [selectedEntity, setSelectedEntity] = useState<any | null>(null)
 
   const { data: incomes, isLoading: incomesLoading, isError: incomesError } = useOtherIncome()
   const { data: entities, isLoading: entitiesLoading, isError: entitiesError } = useIncomeEntities()
@@ -76,7 +76,7 @@ export function IncomeTab() {
             isError={entitiesError}
             emptyTitle="No income sources found"
             emptyDescription="Create a new income source entity to see it listed here."
-            onRowClick={(row) => setSelectedEntityId(row.id)}
+            onRowClick={(row) => setSelectedEntity(row)}
           />
         )}
       </div>
@@ -91,9 +91,9 @@ export function IncomeTab() {
         type="income"
       />
       <EntityLedgerModal
-        open={!!selectedEntityId}
-        onClose={() => setSelectedEntityId(null)}
-        entityId={selectedEntityId}
+        open={!!selectedEntity}
+        onClose={() => setSelectedEntity(null)}
+        entity={selectedEntity}
         type="income"
       />
     </div>
