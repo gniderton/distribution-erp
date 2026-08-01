@@ -64,7 +64,7 @@ export function ExpenseDrawer({ open, onClose }: Props) {
     if (paymentMode === 'Online' && formData.bank_statement_entry_id) {
         const stmt = unconsumedDebits.find((s: any) => String(s.id) === formData.bank_statement_entry_id)
         if (stmt) {
-            finalTotal = parseFloat(stmt.amount) - parseFloat(stmt.consumed_amount || 0)
+            finalTotal = parseFloat(stmt.debit_amount) - parseFloat(stmt.consumed_amount || 0)
         }
     }
 
@@ -186,10 +186,12 @@ export function ExpenseDrawer({ open, onClose }: Props) {
             >
               <option value="">Select a statement entry</option>
               {unconsumedDebits.map((stmt: any) => {
-                const unconsumed = parseFloat(stmt.amount) - parseFloat(stmt.consumed_amount || 0);
+                const unconsumed = parseFloat(stmt.debit_amount) - parseFloat(stmt.consumed_amount || 0);
+                const tdate = stmt.transaction_date ? stmt.transaction_date.split('T')[0] : '';
+                const desc = stmt.particulars || '';
                 return (
                   <option key={stmt.id} value={stmt.id}>
-                    {stmt.txn_date.split('T')[0]} - {stmt.description.substring(0,30)}... - ₹{unconsumed.toFixed(2)}
+                    {tdate} - {desc.substring(0,30)}... - ₹{unconsumed.toFixed(2)}
                   </option>
                 )
               })}
