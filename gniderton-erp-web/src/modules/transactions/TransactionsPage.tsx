@@ -3,16 +3,18 @@ import { Plus } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { AutoTable } from '@/components/shared/AutoTable'
 import { Button } from '@/components/ui/Button'
-import { useExpenses } from './hooks'
+import { useExpenses, useOtherIncome } from './hooks'
 import { ExpenseDrawer } from './components/ExpenseDrawer'
+import { IncomeDrawer } from './components/IncomeDrawer'
 
 export default function TransactionsPage() {
   const [activeTab, setActiveTab] = useState<'expenses' | 'income' | 'transfers'>('expenses')
   const [isExpenseDrawerOpen, setIsExpenseDrawerOpen] = useState(false)
+  const [isIncomeDrawerOpen, setIsIncomeDrawerOpen] = useState(false)
   const [selected, setSelected] = useState<any>(null)
 
-  // Currently only Expenses are fully hooked up
   const { data: expenses, isLoading: expensesLoading, isError: expensesError } = useExpenses()
+  const { data: incomes, isLoading: incomesLoading, isError: incomesError } = useOtherIncome()
 
   const tabs = [
     { id: 'expenses', label: 'Expenses' },
@@ -41,7 +43,7 @@ export default function TransactionsPage() {
               </Button>
             )}
             {activeTab === 'income' && (
-              <Button variant="primary" onClick={() => {}}>
+              <Button variant="primary" onClick={() => setIsIncomeDrawerOpen(true)}>
                 <Plus size={16} className="mr-1.5" />
                 Record Income
               </Button>
@@ -88,9 +90,14 @@ export default function TransactionsPage() {
         )}
         
         {activeTab === 'income' && (
-          <div className="text-center py-12 text-ink-600 bg-white border border-border-subtle rounded-xl">
-            Other Income functionality coming soon.
-          </div>
+          <AutoTable
+            data={incomes}
+            isLoading={incomesLoading}
+            isError={incomesError}
+            emptyTitle="No income found"
+            emptyDescription="Record a new income entry to see it listed here."
+            onRowClick={(row) => setSelected(row)}
+          />
         )}
 
         {activeTab === 'transfers' && (
@@ -103,6 +110,10 @@ export default function TransactionsPage() {
       <ExpenseDrawer 
         open={isExpenseDrawerOpen} 
         onClose={() => setIsExpenseDrawerOpen(false)} 
+      />
+      <IncomeDrawer 
+        open={isIncomeDrawerOpen} 
+        onClose={() => setIsIncomeDrawerOpen(false)} 
       />
     </div>
   )

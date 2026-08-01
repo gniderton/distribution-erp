@@ -38,3 +38,68 @@ export function useCreateExpense() {
     }
   })
 }
+
+export function useIncomeEntities() {
+  return useQuery({ 
+    queryKey: ['transactions', 'income-entities'], 
+    queryFn: transactionsApi.getEntitiesIncome 
+  })
+}
+
+export function useCreateExpenseEntity() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: transactionsApi.createEntitiesExpense,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'expense-entities'] })
+    }
+  })
+}
+
+export function useCreateIncomeEntity() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: transactionsApi.createEntitiesIncome,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'income-entities'] })
+    }
+  })
+}
+
+export function useUnconsumedDebits() {
+  return useQuery({ 
+    queryKey: ['transactions', 'unconsumed-debits'], 
+    queryFn: transactionsApi.getFinanceReconciliationBankUnconsumedDebits 
+  })
+}
+
+export function useUnconsumedCredits() {
+  return useQuery({ 
+    queryKey: ['transactions', 'unconsumed-credits'], 
+    queryFn: transactionsApi.getFinanceReconciliationBankUnconsumedCredits 
+  })
+}
+
+export function useCreateOtherIncome() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: transactionsApi.createFinanceOtherIncome,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'other-income'] })
+    }
+  })
+}
+
+export function useOtherIncomeCategories() {
+  return useQuery({ 
+    queryKey: ['transactions', 'income-categories'], 
+    queryFn: transactionsApi.getFinanceOtherIncomeCategories 
+  })
+}
+
+export function useOtherIncome(params?: any) {
+  return useQuery({ 
+    queryKey: ['transactions', 'other-income', params], 
+    queryFn: () => transactionsApi.getFinanceOtherIncome() 
+  })
+}

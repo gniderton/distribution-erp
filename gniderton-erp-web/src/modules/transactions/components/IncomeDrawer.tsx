@@ -2,36 +2,36 @@ import { useState } from 'react'
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Input, Label, Select } from '@/components/ui/Input'
-import { useCreateExpense, useExpenseCategories, useExpenseEntities, useBankAccounts, useUnconsumedDebits, useCreateExpenseEntity } from '../hooks'
+import { useCreateOtherIncome, useOtherIncomeCategories, useIncomeEntities, useBankAccounts, useUnconsumedCredits, useCreateIncomeEntity } from '../hooks'
 
 interface Props {
   open: boolean
   onClose: () => void
 }
 
-export function ExpenseDrawer({ open, onClose }: Props) {
-  const { mutate, isPending } = useCreateExpense()
-  const { data: categories = [] } = useExpenseCategories()
-  const { data: entities = [] } = useExpenseEntities()
+export function IncomeDrawer({ open, onClose }: Props) {
+  const { mutate, isPending } = useCreateOtherIncome()
+  const { data: categories = [] } = useOtherIncomeCategories()
+  const { data: entities = [] } = useIncomeEntities()
   const { data: banks = [] } = useBankAccounts()
-  const { data: unconsumedDebits = [] } = useUnconsumedDebits()
-  const { mutate: createEntity, isPending: isCreatingEntity } = useCreateExpenseEntity()
+  const { data: unconsumedCredits = [] } = useUnconsumedCredits()
+  const { mutate: createEntity, isPending: isCreatingEntity } = useCreateIncomeEntity()
 
   const [paymentMode, setPaymentMode] = useState('Online')
   const [showCreateEntity, setShowCreateEntity] = useState(false)
   const [newEntityName, setNewEntityName] = useState('')
 
   const [formData, setFormData] = useState({
-    expense_date: new Date().toISOString().split('T')[0],
+    transaction_date: new Date().toISOString().split('T')[0],
     category_account_id: '',
     entity_id: '',
-    payment_source_id: '',
+    destination_account_id: '',
     bank_statement_entry_id: '',
     cheque_no: '',
     cheque_date: new Date().toISOString().split('T')[0],
     bank_name: '',
-    grand_total: '',
-    bill_no: '',
+    amount: '',
+    receipt_no: '',
     description: ''
   })
 
@@ -59,10 +59,10 @@ export function ExpenseDrawer({ open, onClose }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Auto-resolve grand total from statement if selected
-    let finalTotal = parseFloat(formData.grand_total) || 0
+    // Auto-resolve amount from statement if selected
+    let finalTotal = parseFloat(formData.amount) || 0
     if (paymentMode === 'Online' && formData.bank_statement_entry_id) {
-        const stmt = unconsumedDebits.find((s: any) => String(s.id) === formData.bank_statement_entry_id)
+        const stmt = unconsumedCredits.find((s: any) => String(s.id) === formData.bank_statement_entry_id)
         if (stmt) {
             finalTotal = parseFloat(stmt.amount) - parseFloat(stmt.consumed_amount || 0)
         }
@@ -70,13 +70,10 @@ export function ExpenseDrawer({ open, onClose }: Props) {
 
     const payload = {
       ...formData,
-      grand_total: finalTotal,
-      taxable_amount: finalTotal,
-      tax_amount: 0,
-      is_gst_expense: false,
+      amount: finalTotal,
       category_account_id: parseInt(formData.category_account_id) || null,
-      vendor_name: parseInt(formData.entity_id) || null,
-      payment_source_id: parseInt(formData.payment_source_id) || null,
+      entity_id: parseInt(formData.entity_id) || null,
+      destination_account_id: parseInt(formData.destination_account_id) || null,
       payment_mode: paymentMode
     }
 
@@ -91,17 +88,17 @@ export function ExpenseDrawer({ open, onClose }: Props) {
     <Drawer
       open={open}
       onClose={onClose}
-      title="Record Expense"
-      description="Create a new expense entry."
+      title="Record Other Income"
+      description="Create a new income entry."
     >
       <form onSubmit={handleSubmit} className="p-6 space-y-4">
         <div>
-          <Label htmlFor="expense_date">Date</Label>
+          <Label htmlFor="transaction_date">Date</Label>
           <Input 
-            id="expense_date" 
-            name="expense_date" 
+            id="transaction_date" 
+            name="transaction_date" 
             type="date" 
-            value={formData.expense_date} 
+            value={formData.transaction_date} 
             onChange={handleChange} 
             required 
           />
@@ -124,7 +121,7 @@ export function ExpenseDrawer({ open, onClose }: Props) {
         </div>
 
         <div>
-          <Label htmlFor="entity_id">Vendor / Entity</Label>
+          <Label htmlFor="entity_id">Source / Entity</Label>
           <div className="flex gap-2">
             <Select 
               id="entity_id" 
@@ -185,7 +182,7 @@ export function ExpenseDrawer({ open, onClose }: Props) {
                 onChange={handleChange}
               >
                 <option value="">Do not link (Manual entry)</option>
-                {unconsumedDebits.map((stmt: any) => {
+                {unconsumedCredits.map((stmt: any) => {
                   const unconsumed = parseFloat(stmt.amount) - parseFloat(stmt.consumed_amount || 0);
                   return (
                     <option key={stmt.id} value={stmt.id}>
@@ -198,11 +195,11 @@ export function ExpenseDrawer({ open, onClose }: Props) {
             </div>
             {!formData.bank_statement_entry_id && (
               <div>
-                <Label htmlFor="payment_source_id">Bank Account</Label>
+                <Label htmlFor="destination_account_id">Destination Bank Account</Label>
                 <Select 
-                  id="payment_source_id" 
-                  name="payment_source_id" 
-                  value={formData.payment_source_id} 
+                  id="destination_account_id" 
+                  name="destination_account_id" 
+                  value={formData.destination_account_id} 
                   onChange={handleChange}
                   required
                 >
@@ -218,11 +215,11 @@ export function ExpenseDrawer({ open, onClose }: Props) {
 
         {paymentMode === 'Cash' && (
           <div>
-            <Label htmlFor="payment_source_id">Cash Account</Label>
+            <Label htmlFor="destination_account_id">Cash Account</Label>
             <Select 
-              id="payment_source_id" 
-              name="payment_source_id" 
-              value={formData.payment_source_id} 
+              id="destination_account_id" 
+              name="destination_account_id" 
+              value={formData.destination_account_id} 
               onChange={handleChange}
               required
             >
@@ -272,14 +269,14 @@ export function ExpenseDrawer({ open, onClose }: Props) {
         )}
 
         <div>
-          <Label htmlFor="grand_total">Total Amount</Label>
+          <Label htmlFor="amount">Total Amount</Label>
           <Input 
-            id="grand_total" 
-            name="grand_total" 
+            id="amount" 
+            name="amount" 
             type="number" 
             step="0.01" 
             min="0"
-            value={formData.grand_total} 
+            value={formData.amount} 
             onChange={handleChange} 
             placeholder={formData.bank_statement_entry_id ? "Auto-calculated from statement" : "0.00"}
             required={!formData.bank_statement_entry_id} 
@@ -288,12 +285,12 @@ export function ExpenseDrawer({ open, onClose }: Props) {
         </div>
 
         <div>
-          <Label htmlFor="bill_no">Bill / Reference No</Label>
+          <Label htmlFor="receipt_no">Receipt / Reference No</Label>
           <Input 
-            id="bill_no" 
-            name="bill_no" 
+            id="receipt_no" 
+            name="receipt_no" 
             type="text" 
-            value={formData.bill_no} 
+            value={formData.receipt_no} 
             onChange={handleChange} 
             placeholder="Optional"
           />
@@ -317,7 +314,7 @@ export function ExpenseDrawer({ open, onClose }: Props) {
             Cancel
           </Button>
           <Button type="submit" variant="primary" className="flex-1" loading={isPending}>
-            Record Expense
+            Record Income
           </Button>
         </div>
       </form>
