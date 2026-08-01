@@ -21,16 +21,20 @@ export function ExpenseTab() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-6 py-3 border-b border-border-subtle shrink-0">
-        <div className="flex gap-4">
+        <div className="flex bg-surface rounded-lg p-1 border border-border-subtle">
           <button
             onClick={() => setSubTab('transactions')}
-            className={`text-sm font-medium transition-colors ${subTab === 'transactions' ? 'text-brand-600' : 'text-ink-600 hover:text-ink-900'}`}
+            className={`px-4 py-1.5 rounded-md text-xs font-semibold transition ${
+              subTab === 'transactions' ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'
+            }`}
           >
             Expense Transactions
           </button>
           <button
             onClick={() => setSubTab('entities')}
-            className={`text-sm font-medium transition-colors ${subTab === 'entities' ? 'text-brand-600' : 'text-ink-600 hover:text-ink-900'}`}
+            className={`px-4 py-1.5 rounded-md text-xs font-semibold transition ${
+              subTab === 'entities' ? 'bg-white shadow text-ink-900' : 'text-ink-500 hover:text-ink-700'
+            }`}
           >
             Vendors / Entities
           </button>
