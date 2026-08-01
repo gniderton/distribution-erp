@@ -25,7 +25,7 @@ export default function TransactionsPage() {
           description="Manage expenses, other income, and internal transfers."
         />
         
-        <div className="flex border-b border-border-subtle mt-6 bg-transparent">
+        <div className="flex border-y border-border-subtle mt-4 mb-4 bg-transparent">
           {tabs.map(tab => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -33,7 +33,7 @@ export default function TransactionsPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as Tab)}
-                className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all -mb-px ${
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 -mb-[2px] transition-all ${
                   isActive 
                     ? 'border-brand-600 text-brand-600' 
                     : 'border-transparent text-ink-600 hover:text-ink-900'
