@@ -65,7 +65,7 @@ router.post('/bulk-trip/:tripId', async (req, res) => {
         // Structure the JSON for bulk upload as per NIC/GSP specs
         // Often wrapped in a "billLists" or similar array, but sending the raw array for now
         const bulkPayload = {
-            version: "1.0.0",
+            version: "1.0.0621",
             billLists: payloads
         };
 

@@ -45,44 +45,60 @@ class KDKEwayBillService {
         // Ensure HSN and PIN are present
         if (!inv.pincode) throw new Error(`Missing PIN code for customer on invoice ${inv.invoice_number}`);
         
+        // Format docDate as DD/MM/YYYY
+        const d = new Date(inv.invoice_date);
+        const docDateStr = ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + d.getFullYear();
+
         const payload = {
+            userGstin: process.env.COMPANY_GSTIN,
             supplyType: 'O',
             subSupplyType: 1,
             docType: 'INV',
             docNo: inv.invoice_number,
-            docDate: inv.invoice_date,
+            docDate: docDateStr,
             fromGstin: process.env.COMPANY_GSTIN,
             fromTrdName: process.env.COMPANY_NAME,
             fromAddr1: process.env.COMPANY_ADDRESS,
+            fromAddr2: "",
             fromPlace: process.env.COMPANY_CITY,
             fromPincode: parseInt(process.env.COMPANY_PIN),
+            actFromStateCode: parseInt(process.env.COMPANY_STATE_CODE),
             fromStateCode: parseInt(process.env.COMPANY_STATE_CODE),
-            toGstin: inv.customer_gst,
+            toGstin: inv.customer_gst || 'URP',
             toTrdName: inv.customer_name,
-            toAddr1: inv.address_line1,
-            toPlace: inv.city,
+            toAddr1: inv.address_line1 || "",
+            toAddr2: "",
+            toPlace: inv.city || "",
             toPincode: parseInt(inv.pincode),
-            toStateCode: parseInt(inv.state_code || 32), // Kerala = 32
+            actToStateCode: parseInt(inv.state_code || 32), // Kerala = 32
+            toStateCode: parseInt(inv.state_code || 32),
             transactionType: 1,
-            dispatchFromPincode: parseInt(process.env.COMPANY_PIN),
-            shipToPincode: parseInt(inv.pincode),
+            otherValue: 0,
             totalValue: parseFloat(inv.total_taxable),
             cgstValue: parseFloat(inv.total_cgst),
             sgstValue: parseFloat(inv.total_sgst),
             igstValue: parseFloat(inv.total_igst),
+            cessValue: 0,
             totInvValue: parseFloat(inv.grand_total),
+            transId: "",
+            transName: "",
+            transDocNo: "",
             transMode: 1, // Road
+            transDistance: "0",
+            transDocDate: "",
             vehicleNo: tripVehicleNumber,
             vehicleType: 'R', // Regular
             itemList: inv.items.map(item => ({
                 productName: item.product_name,
+                productDesc: "",
                 hsnCode: parseInt(item.hsn_code),
                 quantity: parseFloat(item.qty),
-                qtyUnit: 'PCS', // Defaulting to PCS, should be dynamic
+                qtyUnit: 'NOS', // Often NIC prefers NOS or PCS
                 taxableAmount: parseFloat(item.taxable_amount),
                 cgstRate: parseFloat(item.cgst_rate),
                 sgstRate: parseFloat(item.sgst_rate),
-                igstRate: parseFloat(item.igst_rate)
+                igstRate: parseFloat(item.igst_rate),
+                cessRate: 0
             }))
         };
 
