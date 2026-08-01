@@ -131,7 +131,7 @@ export function TransferDrawer({ open, onClose }: Props) {
             >
               <option value="">Select source account</option>
               {banks.map((bank: any) => (
-                <option key={bank.id} value={bank.id}>{bank.bank_name}</option>
+                <option key={bank.id} value={bank.id}>{bank.name}</option>
               ))}
             </Select>
           </div>
@@ -178,7 +178,7 @@ export function TransferDrawer({ open, onClose }: Props) {
             >
               <option value="">Select destination account</option>
               {banks.map((bank: any) => (
-                <option key={bank.id} value={bank.id}>{bank.bank_name}</option>
+                <option key={bank.id} value={bank.id}>{bank.name}</option>
               ))}
             </Select>
           </div>
