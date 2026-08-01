@@ -69,6 +69,18 @@ export function TransferDrawer({ open, onClose }: Props) {
     })
   }
 
+  // Validate form
+  const isFormValid = () => {
+    if (!formData.transfer_date || !formData.from_account_id || !formData.to_account_id || !formData.amount || parseFloat(formData.amount) <= 0) {
+      return false;
+    }
+    // Check mandatory statements
+    if (!isFromCash && formData.from_account_id && !formData.from_bank_statement_entry_id) return false;
+    if (!isToCash && formData.to_account_id && !formData.to_bank_statement_entry_id) return false;
+    
+    return true;
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -250,7 +262,13 @@ export function TransferDrawer({ open, onClose }: Props) {
           <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" className="flex-1" loading={isPending}>
+          <Button 
+            type="submit" 
+            variant="primary" 
+            className="flex-1" 
+            loading={isPending}
+            disabled={!isFormValid()}
+          >
             Record Transfer
           </Button>
         </div>
