@@ -27,11 +27,24 @@ export function TransferDrawer({ open, onClose }: Props) {
     remarks: ''
   })
 
+  // Watch selected accounts to determine if they are Cash (id === '2')
+  const isFromCash = formData.from_account_id === '2'
+  const isToCash = formData.to_account_id === '2'
+  const isOnline = formData.payment_mode === 'Online'
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData(prev => {
       const newData = { ...prev, [name]: value }
       
+      // If changing account to Cash, clear its statement selection
+      if (name === 'from_account_id' && value === '2') {
+        newData.from_bank_statement_entry_id = ''
+      }
+      if (name === 'to_account_id' && value === '2') {
+        newData.to_bank_statement_entry_id = ''
+      }
+
       // Auto-resolve amount if statement is selected
       if (name === 'from_bank_statement_entry_id' && value) {
         const stmt = unconsumedDebits.find((s: any) => String(s.id) === value)
@@ -108,41 +121,44 @@ export function TransferDrawer({ open, onClose }: Props) {
           <h3 className="text-sm font-semibold text-ink-900 border-b border-border-subtle pb-2">From Account (Source)</h3>
           
           <div>
-            <Label htmlFor="from_bank_statement_entry_id">Link Bank Statement (Optional)</Label>
+            <Label htmlFor="from_account_id">Source Account</Label>
             <Select 
-              id="from_bank_statement_entry_id" 
-              name="from_bank_statement_entry_id" 
-              value={formData.from_bank_statement_entry_id} 
+              id="from_account_id" 
+              name="from_account_id" 
+              value={formData.from_account_id} 
               onChange={handleChange}
+              required
             >
-              <option value="">Do not link (Manual entry)</option>
-              {unconsumedDebits.map((stmt: any) => {
-                const unconsumed = parseFloat(stmt.debit_amount) - parseFloat(stmt.consumed_amount || 0);
-                const tdate = stmt.transaction_date ? stmt.transaction_date.split('T')[0] : '';
-                const desc = stmt.particulars || '';
-                return (
-                  <option key={stmt.id} value={stmt.id}>
-                    {tdate} - {desc.substring(0,30)}... - ₹{unconsumed.toFixed(2)}
-                  </option>
-                )
-              })}
+              <option value="">Select source account</option>
+              {banks.map((bank: any) => (
+                <option key={bank.id} value={bank.id}>{bank.bank_name}</option>
+              ))}
             </Select>
           </div>
 
-          {!formData.from_bank_statement_entry_id && (
+          {!isFromCash && formData.from_account_id && (
             <div>
-              <Label htmlFor="from_account_id">Source Account</Label>
+              <Label htmlFor="from_bank_statement_entry_id">
+                Debit Statement {isOnline ? "(Required for Online)" : "(Optional)"}
+              </Label>
               <Select 
-                id="from_account_id" 
-                name="from_account_id" 
-                value={formData.from_account_id} 
+                id="from_bank_statement_entry_id" 
+                name="from_bank_statement_entry_id" 
+                value={formData.from_bank_statement_entry_id} 
                 onChange={handleChange}
-                required
+                required={isOnline}
               >
-                <option value="">Select source account</option>
-                {banks.map((bank: any) => (
-                  <option key={bank.id} value={bank.id}>{bank.bank_name}</option>
-                ))}
+                <option value="">{isOnline ? "Select statement entry" : "Do not link (Manual entry)"}</option>
+                {unconsumedDebits.map((stmt: any) => {
+                  const unconsumed = parseFloat(stmt.debit_amount) - parseFloat(stmt.consumed_amount || 0);
+                  const tdate = stmt.transaction_date ? stmt.transaction_date.split('T')[0] : '';
+                  const desc = stmt.particulars || '';
+                  return (
+                    <option key={stmt.id} value={stmt.id}>
+                      {tdate} - {desc.substring(0,30)}... - ₹{unconsumed.toFixed(2)}
+                    </option>
+                  )
+                })}
               </Select>
             </div>
           )}
@@ -152,41 +168,44 @@ export function TransferDrawer({ open, onClose }: Props) {
           <h3 className="text-sm font-semibold text-ink-900 border-b border-border-subtle pb-2">To Account (Destination)</h3>
           
           <div>
-            <Label htmlFor="to_bank_statement_entry_id">Link Bank Statement (Optional)</Label>
+            <Label htmlFor="to_account_id">Destination Account</Label>
             <Select 
-              id="to_bank_statement_entry_id" 
-              name="to_bank_statement_entry_id" 
-              value={formData.to_bank_statement_entry_id} 
+              id="to_account_id" 
+              name="to_account_id" 
+              value={formData.to_account_id} 
               onChange={handleChange}
+              required
             >
-              <option value="">Do not link (Manual entry)</option>
-              {unconsumedCredits.map((stmt: any) => {
-                const unconsumed = parseFloat(stmt.credit_amount) - parseFloat(stmt.consumed_amount || 0);
-                const tdate = stmt.transaction_date ? stmt.transaction_date.split('T')[0] : '';
-                const desc = stmt.particulars || '';
-                return (
-                  <option key={stmt.id} value={stmt.id}>
-                    {tdate} - {desc.substring(0,30)}... - ₹{unconsumed.toFixed(2)}
-                  </option>
-                )
-              })}
+              <option value="">Select destination account</option>
+              {banks.map((bank: any) => (
+                <option key={bank.id} value={bank.id}>{bank.bank_name}</option>
+              ))}
             </Select>
           </div>
 
-          {!formData.to_bank_statement_entry_id && (
+          {!isToCash && formData.to_account_id && (
             <div>
-              <Label htmlFor="to_account_id">Destination Account</Label>
+              <Label htmlFor="to_bank_statement_entry_id">
+                Credit Statement {isOnline ? "(Required for Online)" : "(Optional)"}
+              </Label>
               <Select 
-                id="to_account_id" 
-                name="to_account_id" 
-                value={formData.to_account_id} 
+                id="to_bank_statement_entry_id" 
+                name="to_bank_statement_entry_id" 
+                value={formData.to_bank_statement_entry_id} 
                 onChange={handleChange}
-                required
+                required={isOnline}
               >
-                <option value="">Select destination account</option>
-                {banks.map((bank: any) => (
-                  <option key={bank.id} value={bank.id}>{bank.bank_name}</option>
-                ))}
+                <option value="">{isOnline ? "Select statement entry" : "Do not link (Manual entry)"}</option>
+                {unconsumedCredits.map((stmt: any) => {
+                  const unconsumed = parseFloat(stmt.credit_amount) - parseFloat(stmt.consumed_amount || 0);
+                  const tdate = stmt.transaction_date ? stmt.transaction_date.split('T')[0] : '';
+                  const desc = stmt.particulars || '';
+                  return (
+                    <option key={stmt.id} value={stmt.id}>
+                      {tdate} - {desc.substring(0,30)}... - ₹{unconsumed.toFixed(2)}
+                    </option>
+                  )
+                })}
               </Select>
             </div>
           )}
@@ -207,17 +226,19 @@ export function TransferDrawer({ open, onClose }: Props) {
           />
         </div>
 
-        <div>
-          <Label htmlFor="reference_no">Reference Number</Label>
-          <Input 
-            id="reference_no" 
-            name="reference_no" 
-            type="text" 
-            value={formData.reference_no} 
-            onChange={handleChange} 
-            placeholder="Optional"
-          />
-        </div>
+        {(!isFromCash && !isToCash) && (
+          <div>
+            <Label htmlFor="reference_no">Reference Number</Label>
+            <Input 
+              id="reference_no" 
+              name="reference_no" 
+              type="text" 
+              value={formData.reference_no} 
+              onChange={handleChange} 
+              placeholder="Optional"
+            />
+          </div>
+        )}
 
         <div>
           <Label htmlFor="remarks">Remarks</Label>
