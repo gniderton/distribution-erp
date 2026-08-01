@@ -144,16 +144,16 @@ export function TransferDrawer({ open, onClose }: Props) {
           {!isFromCash && formData.from_account_id && (
             <div>
               <Label htmlFor="from_bank_statement_entry_id">
-                Debit Statement {isOnline ? "(Required for Online)" : "(Optional)"}
+                Debit Statement (Required)
               </Label>
               <Select 
                 id="from_bank_statement_entry_id" 
                 name="from_bank_statement_entry_id" 
                 value={formData.from_bank_statement_entry_id} 
                 onChange={handleChange}
-                required={isOnline}
+                required
               >
-                <option value="">{isOnline ? "Select statement entry" : "Do not link (Manual entry)"}</option>
+                <option value="">Select statement entry</option>
                 {unconsumedDebits.map((stmt: any) => {
                   const unconsumed = parseFloat(stmt.debit_amount) - parseFloat(stmt.consumed_amount || 0);
                   const tdate = stmt.transaction_date ? stmt.transaction_date.split('T')[0] : '';
@@ -191,16 +191,16 @@ export function TransferDrawer({ open, onClose }: Props) {
           {!isToCash && formData.to_account_id && (
             <div>
               <Label htmlFor="to_bank_statement_entry_id">
-                Credit Statement {isOnline ? "(Required for Online)" : "(Optional)"}
+                Credit Statement (Required)
               </Label>
               <Select 
                 id="to_bank_statement_entry_id" 
                 name="to_bank_statement_entry_id" 
                 value={formData.to_bank_statement_entry_id} 
                 onChange={handleChange}
-                required={isOnline}
+                required
               >
-                <option value="">{isOnline ? "Select statement entry" : "Do not link (Manual entry)"}</option>
+                <option value="">Select statement entry</option>
                 {unconsumedCredits.map((stmt: any) => {
                   const unconsumed = parseFloat(stmt.credit_amount) - parseFloat(stmt.consumed_amount || 0);
                   const tdate = stmt.transaction_date ? stmt.transaction_date.split('T')[0] : '';
