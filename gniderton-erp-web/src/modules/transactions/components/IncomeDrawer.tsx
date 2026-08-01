@@ -59,6 +59,14 @@ export function IncomeDrawer({ open, onClose }: Props) {
         const tax = parseFloat(newData.tax_amount) || 0;
         newData.amount = (taxable + tax).toFixed(2);
       }
+      
+      if (paymentMode === 'Online' && name === 'bank_statement_entry_id' && value) {
+        const stmt = unconsumedCredits.find((s: any) => String(s.id) === value)
+        if (stmt && stmt.transaction_date) {
+          newData.transaction_date = stmt.transaction_date.split('T')[0]
+        }
+      }
+      
       return newData;
     })
   }

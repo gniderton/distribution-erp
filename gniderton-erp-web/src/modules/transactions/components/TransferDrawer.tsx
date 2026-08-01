@@ -51,18 +51,24 @@ export function TransferDrawer({ open, onClose }: Props) {
         newData.to_bank_statement_entry_id = ''
       }
 
-      // Auto-resolve amount if statement is selected
+      // Auto-resolve amount and date if statement is selected
       if (name === 'from_bank_statement_entry_id' && value) {
         const stmt = unconsumedDebits.find((s: any) => String(s.id) === value)
         if (stmt) {
           const unconsumed = parseFloat(stmt.debit_amount) - parseFloat(stmt.consumed_amount || 0)
           newData.amount = unconsumed.toFixed(2)
+          if (formData.payment_mode === 'Online' && stmt.transaction_date) {
+            newData.transfer_date = stmt.transaction_date.split('T')[0]
+          }
         }
       } else if (name === 'to_bank_statement_entry_id' && value) {
         const stmt = unconsumedCredits.find((s: any) => String(s.id) === value)
         if (stmt) {
           const unconsumed = parseFloat(stmt.credit_amount) - parseFloat(stmt.consumed_amount || 0)
           newData.amount = unconsumed.toFixed(2)
+          if (formData.payment_mode === 'Online' && stmt.transaction_date) {
+            newData.transfer_date = stmt.transaction_date.split('T')[0]
+          }
         }
       }
       
