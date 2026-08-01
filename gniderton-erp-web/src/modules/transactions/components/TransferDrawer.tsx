@@ -27,9 +27,11 @@ export function TransferDrawer({ open, onClose }: Props) {
     remarks: ''
   })
 
-  // Watch selected accounts to determine if they are Cash (id === '2')
-  const isFromCash = formData.from_account_id === '2'
-  const isToCash = formData.to_account_id === '2'
+  // Watch selected accounts to determine if they are Cash
+  const fromAccount = banks.find((b: any) => String(b.id) === formData.from_account_id)
+  const toAccount = banks.find((b: any) => String(b.id) === formData.to_account_id)
+  const isFromCash = fromAccount?.name?.toLowerCase().includes('cash') || false
+  const isToCash = toAccount?.name?.toLowerCase().includes('cash') || false
   const isOnline = formData.payment_mode === 'Online'
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -38,10 +40,13 @@ export function TransferDrawer({ open, onClose }: Props) {
       const newData = { ...prev, [name]: value }
       
       // If changing account to Cash, clear its statement selection
-      if (name === 'from_account_id' && value === '2') {
+      const changingToAccount = banks.find((b: any) => String(b.id) === value)
+      const isChangingToCash = changingToAccount?.name?.toLowerCase().includes('cash') || false
+
+      if (name === 'from_account_id' && isChangingToCash) {
         newData.from_bank_statement_entry_id = ''
       }
-      if (name === 'to_account_id' && value === '2') {
+      if (name === 'to_account_id' && isChangingToCash) {
         newData.to_bank_statement_entry_id = ''
       }
 
