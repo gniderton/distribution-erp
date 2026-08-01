@@ -22,12 +22,12 @@ class KDKEwayBillService {
                 (SELECT json_agg(json_build_object(
                     'product_name', p.product_name,
                     'hsn_code', h.hsn_code,
-                    'qty', sil.qty,
+                    'qty', sil.shipped_qty,
                     'rate', sil.rate,
                     'taxable_amount', sil.taxable_amount,
-                    'cgst_rate', sil.cgst_rate,
-                    'sgst_rate', sil.sgst_rate,
-                    'igst_rate', sil.igst_rate,
+                    'cgst_rate', sil.tax_percent / 2,
+                    'sgst_rate', sil.tax_percent / 2,
+                    'igst_rate', 0,
                     'amount', sil.amount
                 )) FROM sales_invoice_lines sil 
                    JOIN products p ON sil.product_id = p.id 
