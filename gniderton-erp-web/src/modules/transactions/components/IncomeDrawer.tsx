@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Input, Label, Select } from '@/components/ui/Input'
+import toast from 'react-hot-toast'
 import { useCreateOtherIncome, useOtherIncomeCategories, useIncomeEntities, useBankAccounts, useUnconsumedCredits, useCreateIncomeEntity } from '../hooks'
 
 interface Props {
@@ -114,7 +115,11 @@ export function IncomeDrawer({ open, onClose }: Props) {
 
     mutate(payload, {
       onSuccess: () => {
+        toast.success('Income recorded successfully!')
         onClose()
+      },
+      onError: (err: any) => {
+        toast.error(err?.response?.data?.error || err.message || 'Failed to record income')
       }
     })
   }

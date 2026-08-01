@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Input, Label, Select } from '@/components/ui/Input'
+import toast from 'react-hot-toast'
 import { useCreateExpense, useExpenseCategories, useExpenseEntities, useBankAccounts, useUnconsumedDebits, useCreateExpenseEntity } from '../hooks'
 
 interface Props {
@@ -115,7 +116,11 @@ export function ExpenseDrawer({ open, onClose }: Props) {
 
     mutate(payload, {
       onSuccess: () => {
+        toast.success('Expense recorded successfully!')
         onClose()
+      },
+      onError: (err: any) => {
+        toast.error(err?.response?.data?.error || err.message || 'Failed to record expense')
       }
     })
   }

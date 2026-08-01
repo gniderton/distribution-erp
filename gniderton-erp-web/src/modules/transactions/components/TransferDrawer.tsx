@@ -3,6 +3,7 @@ import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Input, Label, Select } from '@/components/ui/Input'
 import { AlertTriangle, XCircle } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { useCreateTransfer, useBankAccounts, useUnconsumedDebits, useUnconsumedCredits } from '../hooks'
 
 interface Props {
@@ -125,7 +126,11 @@ export function TransferDrawer({ open, onClose }: Props) {
 
     mutate(payload, {
       onSuccess: () => {
+        toast.success('Internal transfer recorded successfully!')
         onClose()
+      },
+      onError: (err: any) => {
+        toast.error(err?.response?.data?.error || err.message || 'Failed to record internal transfer')
       }
     })
   }
