@@ -231,19 +231,7 @@ export function TransferDrawer({ open, onClose }: Props) {
           />
         </div>
 
-        {(!isFromCash && !isToCash) && (
-          <div>
-            <Label htmlFor="reference_no">Reference Number</Label>
-            <Input 
-              id="reference_no" 
-              name="reference_no" 
-              type="text" 
-              value={formData.reference_no} 
-              onChange={handleChange} 
-              placeholder="Optional"
-            />
-          </div>
-        )}
+
 
         <div>
           <Label htmlFor="remarks">Remarks</Label>
