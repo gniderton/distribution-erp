@@ -61,6 +61,11 @@ export function DataTable<T>({
       globalFilter,
       rowSelection,
     },
+    initialState: {
+      pagination: {
+        pageSize: 15,
+      },
+    },
     enableRowSelection: true,
     onRowSelectionChange: onRowSelectionChange as any,
     onSortingChange: setSorting,
