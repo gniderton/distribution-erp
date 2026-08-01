@@ -1,4 +1,4 @@
-import { Modal } from '@/components/ui/Modal'
+import { Drawer } from '@/components/ui/Drawer'
 import { AutoTable } from '@/components/shared/AutoTable'
 import { useExpenseLedger, useIncomeLedger } from '../hooks'
 
@@ -16,7 +16,7 @@ export function EntityLedgerModal({ open, onClose, entityId, type }: Props) {
   const { data, isLoading, isError } = type === 'expense' ? expenseLedger : incomeLedger
 
   return (
-    <Modal open={open} onClose={onClose} title={`${type === 'expense' ? 'Vendor' : 'Income Source'} Ledger`}>
+    <Drawer open={open} onClose={onClose} title={`${type === 'expense' ? 'Vendor' : 'Income Source'} Ledger`} description="Full transaction history">
       <div className="p-6 h-[70vh] flex flex-col">
         <div className="flex-1 overflow-auto border border-border-subtle rounded-xl">
           <AutoTable
@@ -28,6 +28,6 @@ export function EntityLedgerModal({ open, onClose, entityId, type }: Props) {
           />
         </div>
       </div>
-    </Modal>
+    </Drawer>
   )
 }
