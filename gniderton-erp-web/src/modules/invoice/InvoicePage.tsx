@@ -265,7 +265,7 @@ export default function InvoicePage() {
               <select 
                   value={dseFilter} 
                   onChange={e => setDseFilter(e.target.value)}
-                  className="w-full max-w-[200px] h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
+                  className="w-full h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
               >
                   <option value="all">All DSEs</option>
                   {dseOptions.map(dse => (
