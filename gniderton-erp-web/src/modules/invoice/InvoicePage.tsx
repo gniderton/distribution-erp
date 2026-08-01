@@ -5,7 +5,7 @@ import { DataTable } from '@/components/shared/DataTable'
 import { Badge } from '@/components/ui/Badge'
 import { StatCard } from '@/components/shared/StatCard'
 import { Button } from '@/components/ui/Button'
-import { FileText, CheckCircle2, AlertTriangle, Eye, Download } from 'lucide-react'
+import { FileText, CheckCircle2, AlertTriangle, Eye, Download, Search, Filter, DollarSign, Truck, Users, RefreshCcw } from 'lucide-react'
 import { useInvoices } from './hooks'
 import { InvoiceViewModal } from './components/InvoiceViewModal'
 import type { Invoice } from './types'
@@ -192,87 +192,113 @@ export default function InvoicePage() {
         <StatCard label="Unpaid Invoices" value={String(stats.unpaidCount)} icon={AlertTriangle} tone={stats.unpaidCount > 0 ? 'danger' : 'neutral'} />
       </div>
 
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-border-subtle flex flex-wrap items-end gap-4 mb-6">
-          <div className="space-y-1">
-              <label className="text-xs font-medium text-ink-600">Date Range</label>
-              <select 
-                  value={dateFilter} 
-                  onChange={e => setDateFilter(e.target.value)}
-                  className="w-full h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
-              >
-                  <option value="all">All Time</option>
-                  <option value="today">Today</option>
-                  <option value="this_week">This Week</option>
-                  <option value="this_month">This Month</option>
-                  <option value="custom">Custom Range</option>
-              </select>
+      <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between w-full mb-6">
+        <div className="relative w-full md:max-w-md">
+          <Search className="absolute left-3.5 top-3 text-ink-600" size={15} />
+          <input 
+            type="text" 
+            placeholder="Search invoices…" 
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full bg-surface border border-[#e6e9ee] rounded-lg pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:border-brand-400 text-ink-900 placeholder:text-ink-600"
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-3 w-full md:w-auto items-center justify-end">
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <Filter size={12} className="text-ink-600" />
+            <select
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="this_week">This Week</option>
+              <option value="this_month">This Month</option>
+              <option value="custom">Custom Range</option>
+            </select>
           </div>
 
           {dateFilter === 'custom' && (
-              <div className="flex gap-2 items-end">
-                  <div className="space-y-1">
-                      <label className="text-xs font-medium text-ink-600">Start Date</label>
-                      <input 
-                          type="date" 
-                          value={customStartDate} 
-                          onChange={e => setCustomStartDate(e.target.value)}
-                          className="h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
-                      />
-                  </div>
-                  <div className="space-y-1">
-                      <label className="text-xs font-medium text-ink-600">End Date</label>
-                      <input 
-                          type="date" 
-                          value={customEndDate} 
-                          onChange={e => setCustomEndDate(e.target.value)}
-                          className="h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
-                      />
-                  </div>
-              </div>
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={customStartDate} 
+                onChange={e => setCustomStartDate(e.target.value)}
+                className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
+              />
+              <span className="text-xs text-ink-500">to</span>
+              <input 
+                type="date" 
+                value={customEndDate} 
+                onChange={e => setCustomEndDate(e.target.value)}
+                className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
+              />
+            </div>
           )}
 
-          <div className="space-y-1">
-              <label className="text-xs font-medium text-ink-600">Payment Status</label>
-              <select 
-                  value={paymentStatusFilter} 
-                  onChange={e => setPaymentStatusFilter(e.target.value)}
-                  className="w-full h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
-              >
-                  <option value="all">All</option>
-                  <option value="paid">Paid</option>
-                  <option value="unpaid">Unpaid</option>
-                  <option value="partial">Partial</option>
-              </select>
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <DollarSign size={12} className="text-ink-600" />
+            <select
+              value={paymentStatusFilter}
+              onChange={e => setPaymentStatusFilter(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer"
+            >
+              <option value="all">Payment: All</option>
+              <option value="paid">Paid</option>
+              <option value="unpaid">Unpaid</option>
+              <option value="partial">Partial</option>
+            </select>
           </div>
 
-          <div className="space-y-1">
-              <label className="text-xs font-medium text-ink-600">Delivery Status</label>
-              <select 
-                  value={deliveryStatusFilter} 
-                  onChange={e => setDeliveryStatusFilter(e.target.value)}
-                  className="w-full h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
-              >
-                  <option value="all">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="in transit">In Transit</option>
-                  <option value="delivered">Delivered</option>
-                  <option value="cancelled">Cancelled</option>
-              </select>
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <Truck size={12} className="text-ink-600" />
+            <select
+              value={deliveryStatusFilter}
+              onChange={e => setDeliveryStatusFilter(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer"
+            >
+              <option value="all">Delivery: All</option>
+              <option value="pending">Pending</option>
+              <option value="in transit">In Transit</option>
+              <option value="delivered">Delivered</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
           </div>
 
-          <div className="space-y-1">
-              <label className="text-xs font-medium text-ink-600">DSE</label>
-              <select 
-                  value={dseFilter} 
-                  onChange={e => setDseFilter(e.target.value)}
-                  className="w-full h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
-              >
-                  <option value="all">All DSEs</option>
-                  {dseOptions.map(dse => (
-                      <option key={dse as string} value={dse as string}>{dse as string}</option>
-                  ))}
-              </select>
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <Users size={12} className="text-ink-600" />
+            <select
+              value={dseFilter}
+              onChange={e => setDseFilter(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer max-w-[120px]"
+            >
+              <option value="all">All DSEs</option>
+              {dseOptions.map(dse => (
+                <option key={dse as string} value={dse as string}>{dse as string}</option>
+              ))}
+            </select>
           </div>
+
+          {(search || dateFilter !== 'all' || paymentStatusFilter !== 'all' || deliveryStatusFilter !== 'all' || dseFilter !== 'all') && (
+            <button
+              onClick={() => {
+                setSearch('')
+                setDateFilter('all')
+                setPaymentStatusFilter('all')
+                setDeliveryStatusFilter('all')
+                setDseFilter('all')
+                setCustomStartDate('')
+                setCustomEndDate('')
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-danger-600 hover:bg-danger-500/5 rounded-lg transition"
+            >
+              <RefreshCcw size={12} />
+              Reset Filters
+            </button>
+          )}
+        </div>
       </div>
 
       <DataTable
@@ -284,7 +310,7 @@ export default function InvoicePage() {
         emptyDescription="Invoices generated from sales orders will appear here."
         globalFilter={search}
         onGlobalFilterChange={setSearch}
-        searchPlaceholder="Search invoices…"
+        hideSearchBar={true}
       />
 
       {selectedInvoice && (
