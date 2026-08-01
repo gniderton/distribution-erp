@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Input, Label, Select } from '@/components/ui/Input'
+import { AlertTriangle, XCircle } from 'lucide-react'
 import { useCreateTransfer, useBankAccounts, useUnconsumedDebits, useUnconsumedCredits } from '../hooks'
 
 interface Props {
@@ -69,8 +70,31 @@ export function TransferDrawer({ open, onClose }: Props) {
     })
   }
 
+  // Smart Validation Logic
+  const selectedDebit = formData.from_bank_statement_entry_id ? unconsumedDebits.find((s: any) => String(s.id) === formData.from_bank_statement_entry_id) : null
+  const selectedCredit = formData.to_bank_statement_entry_id ? unconsumedCredits.find((s: any) => String(s.id) === formData.to_bank_statement_entry_id) : null
+  
+  let amountMismatch = false;
+  let dateWarning = false;
+  
+  if (selectedDebit && selectedCredit) {
+    const debitAmt = parseFloat(selectedDebit.debit_amount);
+    const creditAmt = parseFloat(selectedCredit.credit_amount);
+    if (debitAmt !== creditAmt) {
+      amountMismatch = true;
+    }
+    
+    const d1 = new Date(selectedDebit.transaction_date).getTime();
+    const d2 = new Date(selectedCredit.transaction_date).getTime();
+    const diffDays = Math.abs(d1 - d2) / (1000 * 60 * 60 * 24);
+    if (diffDays > 3) {
+      dateWarning = true;
+    }
+  }
+
   // Validate form
   const isFormValid = () => {
+    if (amountMismatch) return false;
     if (!formData.transfer_date || !formData.from_account_id || !formData.to_account_id || !formData.amount || parseFloat(formData.amount) <= 0) {
       return false;
     }
@@ -170,9 +194,10 @@ export function TransferDrawer({ open, onClose }: Props) {
                   const unconsumed = parseFloat(stmt.debit_amount) - parseFloat(stmt.consumed_amount || 0);
                   const tdate = stmt.transaction_date ? stmt.transaction_date.split('T')[0] : '';
                   const desc = stmt.particulars || '';
+                  const isMatch = selectedCredit && parseFloat(stmt.debit_amount) === parseFloat(selectedCredit.credit_amount);
                   return (
                     <option key={stmt.id} value={stmt.id}>
-                      {tdate} - {desc.substring(0,30)}... - ₹{unconsumed.toFixed(2)}
+                      {isMatch ? "✨ [MATCH] " : ""}{tdate} - {desc.substring(0,30)}... - ₹{unconsumed.toFixed(2)}
                     </option>
                   )
                 })}
@@ -217,9 +242,10 @@ export function TransferDrawer({ open, onClose }: Props) {
                   const unconsumed = parseFloat(stmt.credit_amount) - parseFloat(stmt.consumed_amount || 0);
                   const tdate = stmt.transaction_date ? stmt.transaction_date.split('T')[0] : '';
                   const desc = stmt.particulars || '';
+                  const isMatch = selectedDebit && parseFloat(stmt.credit_amount) === parseFloat(selectedDebit.debit_amount);
                   return (
                     <option key={stmt.id} value={stmt.id}>
-                      {tdate} - {desc.substring(0,30)}... - ₹{unconsumed.toFixed(2)}
+                      {isMatch ? "✨ [MATCH] " : ""}{tdate} - {desc.substring(0,30)}... - ₹{unconsumed.toFixed(2)}
                     </option>
                   )
                 })}
@@ -243,7 +269,19 @@ export function TransferDrawer({ open, onClose }: Props) {
           />
         </div>
 
+        {amountMismatch && (
+          <div className="flex items-start gap-2 p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-medium">
+            <XCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <p><strong>Amount Mismatch:</strong> The selected Debit and Credit statements must be of the exact same original value.</p>
+          </div>
+        )}
 
+        {dateWarning && !amountMismatch && (
+          <div className="flex items-start gap-2 p-3 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-sm font-medium">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <p><strong>Date Warning:</strong> These transactions are more than 3 days apart. Please double-check they are pairs.</p>
+          </div>
+        )}
 
         <div>
           <Label htmlFor="remarks">Remarks</Label>
