@@ -29,13 +29,64 @@ export default function InvoicePage() {
   const [search, setSearch] = useState('')
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
 
+  const [dateFilter, setDateFilter] = useState('all')
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('all')
+  const [deliveryStatusFilter, setDeliveryStatusFilter] = useState('all')
+  const [dseFilter, setDseFilter] = useState('all')
+
+  const dseOptions = useMemo(() => Array.from(new Set((data || []).map(i => i.dse_name).filter(Boolean))), [data])
+
   const filteredData = useMemo(() => {
     return (data || []).filter(item => {
       const docType = (item.document_type || '').toLowerCase()
       const orderStatus = (item.status || '').toLowerCase()
-      return docType === 'invoice' || orderStatus === 'invoiced'
+      const isInvoice = docType === 'invoice' || orderStatus === 'invoiced'
+      
+      if (!isInvoice) return false
+
+      if (dseFilter !== 'all' && item.dse_name !== dseFilter) return false
+
+      if (paymentStatusFilter !== 'all') {
+        const pStatus = (item.invoice_status || '').toLowerCase()
+        if (paymentStatusFilter === 'paid' && !['paid', 'fully paid'].includes(pStatus)) return false
+        if (paymentStatusFilter === 'unpaid' && pStatus !== 'unpaid') return false
+        if (paymentStatusFilter === 'partial' && pStatus !== 'partially paid') return false
+      }
+
+      if (deliveryStatusFilter !== 'all') {
+        const dStatus = (item.delivery_status || '').toLowerCase()
+        if (dStatus !== deliveryStatusFilter) return false
+      }
+
+      if (dateFilter !== 'all') {
+        const itemDateStr = item.invoice_date || item.order_date
+        if (!itemDateStr) return false
+        
+        // Parse date considering only year, month, day to avoid timezone shifts
+        const itemDate = new Date(itemDateStr.split('T')[0]).getTime()
+        
+        const now = new Date()
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+        
+        if (dateFilter === 'today') {
+           if (itemDate < today) return false
+        } else if (dateFilter === 'this_week') {
+           const firstDayOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).getTime()
+           if (itemDate < firstDayOfWeek) return false
+        } else if (dateFilter === 'this_month') {
+           const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+           if (itemDate < firstDayOfMonth) return false
+        } else if (dateFilter === 'custom') {
+           if (customStartDate && itemDate < new Date(customStartDate).getTime()) return false
+           if (customEndDate && itemDate > new Date(customEndDate).getTime()) return false
+        }
+      }
+
+      return true
     })
-  }, [data])
+  }, [data, dseFilter, paymentStatusFilter, deliveryStatusFilter, dateFilter, customStartDate, customEndDate])
 
   const stats = useMemo(() => {
     const list = filteredData
@@ -139,6 +190,89 @@ export default function InvoicePage() {
         <StatCard label="This Month Value (Taxable)" value={formatCurrency(stats.currentMonthTaxable)} icon={CheckCircle2} tone="success" />
         <StatCard label="Paid Invoices" value={String(stats.paidCount)} icon={CheckCircle2} tone="success" />
         <StatCard label="Unpaid Invoices" value={String(stats.unpaidCount)} icon={AlertTriangle} tone={stats.unpaidCount > 0 ? 'danger' : 'neutral'} />
+      </div>
+
+      <div className="bg-white p-4 rounded-lg shadow-sm border border-border-subtle flex flex-wrap items-end gap-4 mb-6">
+          <div className="space-y-1">
+              <label className="text-xs font-medium text-ink-600">Date Range</label>
+              <select 
+                  value={dateFilter} 
+                  onChange={e => setDateFilter(e.target.value)}
+                  className="w-full h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
+              >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="this_week">This Week</option>
+                  <option value="this_month">This Month</option>
+                  <option value="custom">Custom Range</option>
+              </select>
+          </div>
+
+          {dateFilter === 'custom' && (
+              <div className="flex gap-2 items-end">
+                  <div className="space-y-1">
+                      <label className="text-xs font-medium text-ink-600">Start Date</label>
+                      <input 
+                          type="date" 
+                          value={customStartDate} 
+                          onChange={e => setCustomStartDate(e.target.value)}
+                          className="h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
+                      />
+                  </div>
+                  <div className="space-y-1">
+                      <label className="text-xs font-medium text-ink-600">End Date</label>
+                      <input 
+                          type="date" 
+                          value={customEndDate} 
+                          onChange={e => setCustomEndDate(e.target.value)}
+                          className="h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
+                      />
+                  </div>
+              </div>
+          )}
+
+          <div className="space-y-1">
+              <label className="text-xs font-medium text-ink-600">Payment Status</label>
+              <select 
+                  value={paymentStatusFilter} 
+                  onChange={e => setPaymentStatusFilter(e.target.value)}
+                  className="w-full h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
+              >
+                  <option value="all">All</option>
+                  <option value="paid">Paid</option>
+                  <option value="unpaid">Unpaid</option>
+                  <option value="partial">Partial</option>
+              </select>
+          </div>
+
+          <div className="space-y-1">
+              <label className="text-xs font-medium text-ink-600">Delivery Status</label>
+              <select 
+                  value={deliveryStatusFilter} 
+                  onChange={e => setDeliveryStatusFilter(e.target.value)}
+                  className="w-full h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
+              >
+                  <option value="all">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="in transit">In Transit</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="cancelled">Cancelled</option>
+              </select>
+          </div>
+
+          <div className="space-y-1">
+              <label className="text-xs font-medium text-ink-600">DSE</label>
+              <select 
+                  value={dseFilter} 
+                  onChange={e => setDseFilter(e.target.value)}
+                  className="w-full max-w-[200px] h-9 px-3 rounded-md border border-border-subtle text-sm bg-surface"
+              >
+                  <option value="all">All DSEs</option>
+                  {dseOptions.map(dse => (
+                      <option key={dse as string} value={dse as string}>{dse as string}</option>
+                  ))}
+              </select>
+          </div>
       </div>
 
       <DataTable
