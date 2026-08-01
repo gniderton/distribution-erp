@@ -13,7 +13,6 @@ router.get('/', async (req, res) => {
                 coa.name as category,
                 ba.bank_name as paid_via,
                 ex.grand_total,
-                ex.payment_mode,
                 ex.id,
                 ex.*
             FROM expenses ex

@@ -13,7 +13,6 @@ router.get('/', async (req, res) => {
                 coa.name as category,
                 ba.bank_name as received_in,
                 oi.amount as total_amount,
-                oi.payment_mode,
                 oi.id,
                 oi.*
             FROM other_income oi
