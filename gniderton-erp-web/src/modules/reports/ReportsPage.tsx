@@ -1,130 +1,221 @@
 import { useState } from 'react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { StatCard } from '@/components/shared/StatCard'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { EmptyState } from '@/components/shared/EmptyState'
-import { useSalesSummary, useCashFlow, usePnL } from './hooks'
-import { formatCurrency } from '@/lib/utils'
-import { BarChart3, TrendingUp, Wallet, FileBarChart } from 'lucide-react'
-import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
-  BarChart, Bar,
-} from 'recharts'
-import { cn } from '@/lib/utils'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog'
+import { 
+  BarChart3, TrendingUp, Wallet, FileBarChart, 
+  BookOpen, Landmark, FileText, Activity, 
+  Users, PackageSearch, Receipt, FileSpreadsheet,
+  PieChart
+} from 'lucide-react'
+import { cn, formatCurrency } from '@/lib/utils'
 
-const CATEGORIES = [
-  { key: 'financial', label: 'Financial statements', code: 'FIN' },
-  { key: 'ledgers', label: 'Ledgers', code: 'LDG' },
-  { key: 'sales', label: 'Sales', code: 'SAL' },
-  { key: 'payroll', label: 'Payroll', code: 'PAY' },
-  { key: 'reconciliation', label: 'Reconciliation', code: 'REC' },
-  { key: 'audit', label: 'Audit', code: 'AUD' },
-]
+// Placeholder implementations for report views - these will be broken out later
+import { FinancialReportView } from './components/FinancialReportView'
+import { SalesReportView } from './components/SalesReportView'
 
-/** Normalizes an unknown API shape into a simple chartable array. Adjust once the real response shape is confirmed. */
-function normalizeSeries(raw: any): { label: string; value: number }[] {
-  if (!raw) return []
-  const arr = Array.isArray(raw) ? raw : raw?.data ?? raw?.results ?? []
-  if (!Array.isArray(arr)) return []
-  return arr.slice(0, 12).map((item: any, i: number) => ({
-    label: item.label ?? item.month ?? item.date ?? `#${i + 1}`,
-    value: Number(item.value ?? item.amount ?? item.total ?? 0),
-  }))
+type ReportDefinition = {
+  id: string
+  title: string
+  description: string
+  icon: any
+  colorClass: string
+  component: React.ReactNode
 }
 
+const REPORT_CATEGORIES = [
+  {
+    category: 'Financial Statements',
+    description: 'Core financial health and ledger data.',
+    color: 'emerald',
+    reports: [
+      {
+        id: 'pnl',
+        title: 'Profit & Loss',
+        description: 'Detailed revenue and expense breakdown across the fiscal year.',
+        icon: TrendingUp,
+        colorClass: 'text-emerald-600 bg-emerald-500/10 group-hover:bg-emerald-500/20 ring-emerald-500/30',
+        component: <FinancialReportView type="pnl" />
+      },
+      {
+        id: 'balancesheet',
+        title: 'Balance Sheet',
+        description: 'Snapshot of assets, liabilities, and equity.',
+        icon: Landmark,
+        colorClass: 'text-emerald-600 bg-emerald-500/10 group-hover:bg-emerald-500/20 ring-emerald-500/30',
+        component: <FinancialReportView type="balanceSheet" />
+      },
+      {
+        id: 'cashflow',
+        title: 'Cash Flow',
+        description: 'Operating, investing, and financing cash movements.',
+        icon: Wallet,
+        colorClass: 'text-emerald-600 bg-emerald-500/10 group-hover:bg-emerald-500/20 ring-emerald-500/30',
+        component: <FinancialReportView type="cashFlow" />
+      },
+      {
+        id: 'gl',
+        title: 'General Ledger',
+        description: 'Complete record of all financial transactions by account.',
+        icon: BookOpen,
+        colorClass: 'text-emerald-600 bg-emerald-500/10 group-hover:bg-emerald-500/20 ring-emerald-500/30',
+        component: <div className="p-12 text-center text-ink-500">General Ledger View Coming Soon</div>
+      }
+    ]
+  },
+  {
+    category: 'Sales & Revenue',
+    description: 'Sales performance and margin analytics.',
+    color: 'amber',
+    reports: [
+      {
+        id: 'sales-lines',
+        title: 'Sales Lines',
+        description: 'Granular view of all sales invoice lines and items sold.',
+        icon: Receipt,
+        colorClass: 'text-amber-600 bg-amber-500/10 group-hover:bg-amber-500/20 ring-amber-500/30',
+        component: <SalesReportView type="lines" />
+      },
+      {
+        id: 'sales-margin',
+        title: 'Sales Margin',
+        description: 'Profitability analysis on sales transactions.',
+        icon: PieChart,
+        colorClass: 'text-amber-600 bg-amber-500/10 group-hover:bg-amber-500/20 ring-amber-500/30',
+        component: <div className="p-12 text-center text-ink-500">Sales Margin View Coming Soon</div>
+      },
+      {
+        id: 'dse-dash',
+        title: 'DSE Dashboard',
+        description: 'Daily Sales Executive performance tracking.',
+        icon: Activity,
+        colorClass: 'text-amber-600 bg-amber-500/10 group-hover:bg-amber-500/20 ring-amber-500/30',
+        component: <div className="p-12 text-center text-ink-500">DSE Dashboard Coming Soon</div>
+      }
+    ]
+  },
+  {
+    category: 'Banking & Reconciliation',
+    description: 'Bank matching, statements, and payment audits.',
+    color: 'blue',
+    reports: [
+      {
+        id: 'bank-stmt',
+        title: 'Bank Statements',
+        description: 'Uploaded statements and matching status.',
+        icon: FileSpreadsheet,
+        colorClass: 'text-blue-600 bg-blue-500/10 group-hover:bg-blue-500/20 ring-blue-500/30',
+        component: <div className="p-12 text-center text-ink-500">Bank Statement View Coming Soon</div>
+      },
+      {
+        id: 'audit-view',
+        title: 'Reconciliation Audit',
+        description: 'Deep dive into payment allocations and forensic catches.',
+        icon: FileText,
+        colorClass: 'text-blue-600 bg-blue-500/10 group-hover:bg-blue-500/20 ring-blue-500/30',
+        component: <div className="p-12 text-center text-ink-500">Audit View Coming Soon</div>
+      }
+    ]
+  },
+  {
+    category: 'Payroll & HR',
+    description: 'Employee attendance and salary processing.',
+    color: 'indigo',
+    reports: [
+      {
+        id: 'attendance',
+        title: 'Attendance Report',
+        description: 'Daily attendance logs for all staff.',
+        icon: Users,
+        colorClass: 'text-indigo-600 bg-indigo-500/10 group-hover:bg-indigo-500/20 ring-indigo-500/30',
+        component: <div className="p-12 text-center text-ink-500">Attendance Report Coming Soon</div>
+      }
+    ]
+  },
+  {
+    category: 'Inventory & Purchases',
+    description: 'Stock holding and procurement data.',
+    color: 'rose',
+    reports: [
+      {
+        id: 'stock',
+        title: 'Stock Report',
+        description: 'Current inventory holding and valuations.',
+        icon: PackageSearch,
+        colorClass: 'text-rose-600 bg-rose-500/10 group-hover:bg-rose-500/20 ring-rose-500/30',
+        component: <div className="p-12 text-center text-ink-500">Stock Report Coming Soon</div>
+      }
+    ]
+  }
+]
+
 export default function ReportsPage() {
-  const [category, setCategory] = useState('financial')
-  const sales = useSalesSummary()
-  const cash = useCashFlow()
-  const pnl = usePnL()
-
-  const salesSeries = normalizeSeries(sales.data)
-  const cashSeries = normalizeSeries(cash.data)
-  const isLoading = sales.isLoading || cash.isLoading || pnl.isLoading
-
-  const totalSales = salesSeries.reduce((s, d) => s + d.value, 0)
-  const totalCash = cashSeries.reduce((s, d) => s + d.value, 0)
+  const [activeReport, setActiveReport] = useState<ReportDefinition | null>(null)
 
   return (
-    <div>
+    <div className="pb-20">
       <PageHeader
-        eyebrow="RPT · Finance"
-        title="Reports"
-        description="Financial statements, ledgers, sales, payroll, reconciliation, and audit — all in one hub."
+        eyebrow="RPT · Analytics"
+        title="Reports Hub"
+        description="Comprehensive financial statements, sales analytics, and audit ledgers."
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <StatCard label="Sales (period)" value={formatCurrency(totalSales)} icon={TrendingUp} />
-        <StatCard label="Net cash flow" value={formatCurrency(totalCash)} icon={Wallet} />
-        <StatCard label="Reports available" value="33" icon={FileBarChart} />
-        <StatCard label="Data points loaded" value={String(salesSeries.length + cashSeries.length)} icon={BarChart3} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+        <StatCard label="Reports Available" value="15+" icon={FileBarChart} />
+        <StatCard label="Financial Statements" value="Ready" icon={Landmark} />
+        <StatCard label="Reconciliation Status" value="Healthy" icon={Activity} />
+        <StatCard label="System Integrity" value="100%" icon={BarChart3} />
       </div>
 
-      <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 lg:col-span-3">
-          <div className="rounded-card border border-border-subtle bg-white p-2">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.key}
-                onClick={() => setCategory(c.key)}
-                className={cn(
-                  'w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm text-left transition',
-                  category === c.key ? 'bg-brand-500/10 text-brand-700 font-medium' : 'text-ink-700 hover:bg-surface'
-                )}
-              >
-                {c.label}
-                <span className="font-mono-figures text-[10px] text-ink-600/50">{c.code}</span>
-              </button>
-            ))}
+      <div className="space-y-12">
+        {REPORT_CATEGORIES.map((cat, idx) => (
+          <div key={idx} className="space-y-4">
+            <div>
+              <h2 className="text-lg font-display font-semibold text-ink-900">{cat.category}</h2>
+              <p className="text-sm text-ink-500">{cat.description}</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {cat.reports.map((report) => (
+                <button
+                  key={report.id}
+                  onClick={() => setActiveReport(report)}
+                  className="group relative flex flex-col items-start p-5 text-left bg-white border border-border-subtle rounded-xl hover:shadow-sm hover:border-border-hover transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-brand-500/50 hover:-translate-y-[2px]"
+                >
+                  <div className={cn("p-2.5 rounded-lg mb-4 ring-1 ring-inset transition-colors", report.colorClass)}>
+                    <report.icon className="w-5 h-5" strokeWidth={2} />
+                  </div>
+                  <h3 className="font-medium text-ink-900 mb-1 group-hover:text-brand-600 transition-colors">{report.title}</h3>
+                  <p className="text-sm text-ink-500 leading-relaxed">{report.description}</p>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-
-        <div className="col-span-12 lg:col-span-9 space-y-4">
-          <div className="rounded-card border border-border-subtle bg-white p-5">
-            <p className="font-display font-medium text-ink-900 mb-4">Sales summary</p>
-            {isLoading ? (
-              <Skeleton className="h-56 w-full" />
-            ) : salesSeries.length === 0 ? (
-              <EmptyState title="No sales data for this period" description="Once /api/analytics/reports/sales-summary-detailed returns data, it renders here." />
-            ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <AreaChart data={salesSeries}>
-                  <defs>
-                    <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#2f7f74" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#2f7f74" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e6e9ee" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                  <Tooltip formatter={(v) => formatCurrency(v as number)} />
-                  <Area type="monotone" dataKey="value" stroke="#2f7f74" fill="url(#salesFill)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-
-          <div className="rounded-card border border-border-subtle bg-white p-5">
-            <p className="font-display font-medium text-ink-900 mb-4">Cash flow</p>
-            {isLoading ? (
-              <Skeleton className="h-56 w-full" />
-            ) : cashSeries.length === 0 ? (
-              <EmptyState title="No cash flow data for this period" description="Once /api/analytics/reports/cash-flow returns data, it renders here." />
-            ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={cashSeries}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e6e9ee" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                  <Tooltip formatter={(v) => formatCurrency(v as number)} />
-                  <Bar dataKey="value" fill="#dc9530" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
+        ))}
       </div>
+
+      {/* Report Viewer Modal */}
+      <Dialog open={!!activeReport} onOpenChange={(open) => !open && setActiveReport(null)}>
+        {/* Render a large dialog content for complex reports */}
+        <DialogContent className="max-w-[95vw] w-full lg:max-w-[1200px] max-h-[90vh] overflow-y-auto bg-surface p-0 gap-0 border-border-subtle shadow-2xl">
+          {activeReport && (
+            <>
+              <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-border-subtle px-6 py-4 flex items-center gap-4">
+                <div className={cn("p-2 rounded-md ring-1 ring-inset", activeReport.colorClass)}>
+                  <activeReport.icon className="w-5 h-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-display">{activeReport.title}</DialogTitle>
+                  <p className="text-sm text-ink-500">{activeReport.description}</p>
+                </div>
+              </div>
+              <div className="p-6">
+                {activeReport.component}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

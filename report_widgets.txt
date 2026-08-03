@@ -1,0 +1,1253 @@
+[
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "MainContainer",
+    "children": [
+      "navHeader",
+      "Text1",
+      "Text2",
+      "Text2Copy",
+      "Text2CopyCopy1",
+      "Text2CopyCopy",
+      "Text2CopyCopyCopy",
+      "ButtonGroup1",
+      "ButtonGroup1Copy",
+      "ButtonGroup2",
+      "ButtonGroup3",
+      "mdlRecievalesList",
+      "mdlBankStatement",
+      "modalUploadStatement",
+      "mdlAuditView",
+      "mdlAttendance",
+      "mdlFinancialStatement",
+      "ButtonGroup4",
+      "mdlSalesReport",
+      "mdlJournal",
+      "ButtonGroup5",
+      "mdlAccountStatement",
+      "mdlPaymentCst",
+      "mdlPnl",
+      "ButtonGroup7",
+      "mdlStockReport",
+      "mdlDSEDshBrd",
+      "mdlpnlDash",
+      "mdlSalesDash",
+      "mdlSalary",
+      "mdlSalaryDetails",
+      "Modal1",
+      "Modal2",
+      "Modal3",
+      "Modal3Copy",
+      "mdlPurchaseLines",
+      "mdlSalesMargin"
+    ]
+  },
+  {
+    "type": "CONTAINER_WIDGET",
+    "name": "navHeader",
+    "children": [
+      "Canvas_vyrcnz67so"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas_vyrcnz67so",
+    "children": [
+      "txtHeaderTitle",
+      "btnGroupPageNav",
+      "btnHeaderLogout"
+    ]
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "txtHeaderTitle",
+    "text": "GNIDERTON ERP - Reports",
+    "children": []
+  },
+  {
+    "type": "BUTTON_GROUP_WIDGET",
+    "name": "btnGroupPageNav",
+    "children": []
+  },
+  {
+    "type": "BUTTON_WIDGET",
+    "name": "btnHeaderLogout",
+    "text": "Logout",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text1",
+    "text": "Reports",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text2",
+    "text": "Financials",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text2Copy",
+    "text": "HR",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text2CopyCopy1",
+    "text": "Inventory",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text2CopyCopy",
+    "text": "Recievables",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text2CopyCopyCopy",
+    "text": "Sales Report",
+    "children": []
+  },
+  {
+    "type": "BUTTON_GROUP_WIDGET",
+    "name": "ButtonGroup1",
+    "children": []
+  },
+  {
+    "type": "BUTTON_GROUP_WIDGET",
+    "name": "ButtonGroup1Copy",
+    "children": []
+  },
+  {
+    "type": "BUTTON_GROUP_WIDGET",
+    "name": "ButtonGroup2",
+    "children": []
+  },
+  {
+    "type": "BUTTON_GROUP_WIDGET",
+    "name": "ButtonGroup3",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlRecievalesList",
+    "children": [
+      "Canvas1"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas1",
+    "children": [
+      "IconButton1",
+      "Text3",
+      "SelectDse",
+      "SelectRoute",
+      "tblRecievables",
+      "IconButton2"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton1",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text3",
+    "text": "Reciebales List",
+    "children": []
+  },
+  {
+    "type": "SELECT_WIDGET",
+    "name": "SelectDse",
+    "children": []
+  },
+  {
+    "type": "SELECT_WIDGET",
+    "name": "SelectRoute",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "tblRecievables",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton2",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlBankStatement",
+    "children": [
+      "Canvas2"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas2",
+    "children": [
+      "IconButton3",
+      "Text4",
+      "Table1",
+      "Button1",
+      "MultiSelectBank",
+      "MultiSelectStatus",
+      "MultiSelectType",
+      "Button4"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton3",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text4",
+    "text": "Bank Statement",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table1",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "BUTTON_WIDGET",
+    "name": "Button1",
+    "text": "Upload Bank Statement",
+    "children": []
+  },
+  {
+    "type": "MULTI_SELECT_WIDGET_V2",
+    "name": "MultiSelectBank",
+    "children": []
+  },
+  {
+    "type": "MULTI_SELECT_WIDGET_V2",
+    "name": "MultiSelectStatus",
+    "children": []
+  },
+  {
+    "type": "MULTI_SELECT_WIDGET_V2",
+    "name": "MultiSelectType",
+    "children": []
+  },
+  {
+    "type": "BUTTON_WIDGET",
+    "name": "Button4",
+    "text": "Referesh",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "modalUploadStatement",
+    "children": [
+      "Canvas3"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas3",
+    "children": [
+      "IconButton4",
+      "Text5",
+      "SelectBank",
+      "FilePicker1"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton4",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text5",
+    "text": "Bank Statement",
+    "children": []
+  },
+  {
+    "type": "SELECT_WIDGET",
+    "name": "SelectBank",
+    "children": []
+  },
+  {
+    "type": "FILE_PICKER_WIDGET_V2",
+    "name": "FilePicker1",
+    "text": "Select Files",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlAuditView",
+    "children": [
+      "Canvas4"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas4",
+    "children": [
+      "IconButton5",
+      "Text6",
+      "Table2"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton5",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text6",
+    "text": "Audit View",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table2",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlAttendance",
+    "children": [
+      "Canvas5"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas5",
+    "children": [
+      "DatePicker1",
+      "DatePicker2",
+      "IconButton6",
+      "Text7",
+      "Table3"
+    ]
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "DatePicker1",
+    "text": "From",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "DatePicker2",
+    "text": "To",
+    "children": []
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton6",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text7",
+    "text": "Attendance Report",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table3",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlFinancialStatement",
+    "children": [
+      "Canvas6"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas6",
+    "children": [
+      "IconButton7",
+      "Text8",
+      "Table4"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton7",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text8",
+    "text": "Financial Statement",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table4",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "BUTTON_GROUP_WIDGET",
+    "name": "ButtonGroup4",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlSalesReport",
+    "children": [
+      "Canvas7"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas7",
+    "children": [
+      "IconButton8",
+      "Text9",
+      "tblSalesLines",
+      "StartDateSalesLines",
+      "EndDateSalesLines",
+      "Statbox1",
+      "Button2",
+      "Button3"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton8",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text9",
+    "text": "Sales Report",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "tblSalesLines",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "StartDateSalesLines",
+    "text": "From",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "EndDateSalesLines",
+    "text": "To",
+    "children": []
+  },
+  {
+    "type": "STATBOX_WIDGET",
+    "name": "Statbox1",
+    "children": [
+      "Canvas11"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas11",
+    "children": [
+      "Text15"
+    ]
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text15",
+    "text": "{{ getSalesLines.data.summary.total_taxable.toLocaleString('en-IN', { style: 'currency', currency: 'INR' }) }}\n",
+    "children": []
+  },
+  {
+    "type": "BUTTON_WIDGET",
+    "name": "Button2",
+    "text": "Download to Excel",
+    "children": []
+  },
+  {
+    "type": "BUTTON_WIDGET",
+    "name": "Button3",
+    "text": "Dashboard",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlJournal",
+    "children": [
+      "Canvas8"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas8",
+    "children": [
+      "IconButton9",
+      "Text10",
+      "Table6"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton9",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text10",
+    "text": "Journal Entries",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table6",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "BUTTON_GROUP_WIDGET",
+    "name": "ButtonGroup5",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlAccountStatement",
+    "children": [
+      "Canvas9"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas9",
+    "children": [
+      "IconButton10",
+      "Text12",
+      "startDateAc",
+      "endDateAc",
+      "Input1",
+      "Input1Copy",
+      "Table7",
+      "Select_Account"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton10",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text12",
+    "text": "Accounts Statement",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "startDateAc",
+    "text": "Start Date",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "endDateAc",
+    "text": "Start Date",
+    "children": []
+  },
+  {
+    "type": "INPUT_WIDGET_V2",
+    "name": "Input1",
+    "text": "Opening Balance",
+    "children": []
+  },
+  {
+    "type": "INPUT_WIDGET_V2",
+    "name": "Input1Copy",
+    "text": "Closing Balance",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table7",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "SELECT_WIDGET",
+    "name": "Select_Account",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlPaymentCst",
+    "children": [
+      "Canvas10"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas10",
+    "children": [
+      "IconButton11",
+      "Text13",
+      "Table8",
+      "IconButton16"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton11",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text13",
+    "text": "Customer Payment",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table8",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton16",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlPnl",
+    "children": [
+      "Canvas12"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas12",
+    "children": [
+      "IconButton12",
+      "Text16",
+      "ButtonGroup6",
+      "Text17",
+      "Table9",
+      "Text18",
+      "Text19",
+      "Table10",
+      "Text20",
+      "Table11",
+      "Text21",
+      "Text22",
+      "Table12",
+      "Text23",
+      "Text24",
+      "fySelect",
+      "qSelect",
+      "mSelect",
+      "IconButton13",
+      "IconButton13Copy"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton12",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text16",
+    "text": "Profit and Loss Statement",
+    "children": []
+  },
+  {
+    "type": "BUTTON_GROUP_WIDGET",
+    "name": "ButtonGroup6",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text17",
+    "text": "Revenue",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table9",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text18",
+    "text": "Total Revenue                                                                                                                              {{getPnL.data.sections.revenue.total}}",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text19",
+    "text": "Cost of Goods Sold (Direct)",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table10",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text20",
+    "text": "Operating Expenses",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table11",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text21",
+    "text": "Operating Expenses                                                                                                                             {{getPnL.data.sections.operating_expenses.total}}",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text22",
+    "text": "Other Income",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table12",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text23",
+    "text": "Other Income                                                                                                                                                 {{getPnL.data.sections.other_income.total}}",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text24",
+    "text": "Final Net Margin:                                                                                                                {{ getPnL.data.summary.net_margin }}",
+    "children": []
+  },
+  {
+    "type": "SELECT_WIDGET",
+    "name": "fySelect",
+    "children": []
+  },
+  {
+    "type": "SELECT_WIDGET",
+    "name": "qSelect",
+    "children": []
+  },
+  {
+    "type": "SELECT_WIDGET",
+    "name": "mSelect",
+    "children": []
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton13",
+    "children": []
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton13Copy",
+    "children": []
+  },
+  {
+    "type": "BUTTON_GROUP_WIDGET",
+    "name": "ButtonGroup7",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlStockReport",
+    "children": [
+      "Canvas13"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas13",
+    "children": [
+      "IconButton14",
+      "Text25",
+      "chkGrpBoxes",
+      "IconButton15",
+      "tblStockReport"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton14",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text25",
+    "text": "Stock Report",
+    "children": []
+  },
+  {
+    "type": "CHECKBOX_GROUP_WIDGET",
+    "name": "chkGrpBoxes",
+    "children": []
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton15",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "tblStockReport",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlDSEDshBrd",
+    "children": [
+      "Canvas14"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas14",
+    "children": [
+      "IconButton17",
+      "sltDseDash",
+      "Custom1"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton17",
+    "children": []
+  },
+  {
+    "type": "SELECT_WIDGET",
+    "name": "sltDseDash",
+    "children": []
+  },
+  {
+    "type": "CUSTOM_WIDGET",
+    "name": "Custom1",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlpnlDash",
+    "children": [
+      "Canvas15"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas15",
+    "children": [
+      "Custom2",
+      "IconButton18"
+    ]
+  },
+  {
+    "type": "CUSTOM_WIDGET",
+    "name": "Custom2",
+    "children": []
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton18",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlSalesDash",
+    "children": [
+      "Canvas16"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas16",
+    "children": [
+      "IconButton19",
+      "Custom3",
+      "SelectFY",
+      "SelectMonth"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton19",
+    "children": []
+  },
+  {
+    "type": "CUSTOM_WIDGET",
+    "name": "Custom3",
+    "children": []
+  },
+  {
+    "type": "SELECT_WIDGET",
+    "name": "SelectFY",
+    "children": []
+  },
+  {
+    "type": "SELECT_WIDGET",
+    "name": "SelectMonth",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlSalary",
+    "children": [
+      "Canvas17"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas17",
+    "children": [
+      "IconButton20",
+      "tblSalary"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton20",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "tblSalary",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlSalaryDetails",
+    "children": [
+      "Canvas18"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas18",
+    "children": [
+      "IconButton21",
+      "Custom4"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton21",
+    "children": []
+  },
+  {
+    "type": "CUSTOM_WIDGET",
+    "name": "Custom4",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "Modal1",
+    "children": [
+      "Canvas19"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas19",
+    "children": [
+      "IconButton22",
+      "Custom5",
+      "IconButton24",
+      "IconButton26"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton22",
+    "children": []
+  },
+  {
+    "type": "CUSTOM_WIDGET",
+    "name": "Custom5",
+    "children": []
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton24",
+    "children": []
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton26",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "Modal2",
+    "children": [
+      "Canvas20"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas20",
+    "children": [
+      "IconButton23",
+      "Custom6"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton23",
+    "children": []
+  },
+  {
+    "type": "CUSTOM_WIDGET",
+    "name": "Custom6",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "Modal3",
+    "children": [
+      "Canvas21"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas21",
+    "children": [
+      "IconButton25",
+      "dateRange",
+      "DatePicker4",
+      "Custom7"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton25",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "dateRange",
+    "text": "Label",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "DatePicker4",
+    "text": "Label",
+    "children": []
+  },
+  {
+    "type": "CUSTOM_WIDGET",
+    "name": "Custom7",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "Modal3Copy",
+    "children": [
+      "Canvas21Copy"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas21Copy",
+    "children": [
+      "IconButton25Copy",
+      "dateRangeCopy",
+      "DatePicker4Copy",
+      "customWidget"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton25Copy",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "dateRangeCopy",
+    "text": "Label",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "DatePicker4Copy",
+    "text": "Label",
+    "children": []
+  },
+  {
+    "type": "CUSTOM_WIDGET",
+    "name": "customWidget",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlPurchaseLines",
+    "children": [
+      "Canvas22"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas22",
+    "children": [
+      "IconButton27",
+      "Table13",
+      "SelectVendor",
+      "DatePickerStart",
+      "DatePickerEnd",
+      "IconButton28",
+      "Table14",
+      "Table14Copy",
+      "Statbox2"
+    ]
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton27",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table13",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "SELECT_WIDGET",
+    "name": "SelectVendor",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "DatePickerStart",
+    "text": "From",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "DatePickerEnd",
+    "text": "To",
+    "children": []
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton28",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table14",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "Table14Copy",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "STATBOX_WIDGET",
+    "name": "Statbox2",
+    "children": [
+      "Canvas23"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas23",
+    "children": [
+      "Text26",
+      "Text27"
+    ]
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text26",
+    "text": "Purchase Value",
+    "children": []
+  },
+  {
+    "type": "TEXT_WIDGET",
+    "name": "Text27",
+    "text": "{{ \n  \"₹\" + getPurchaseLines.data.reduce((sum, row) => sum + Number(row.net_amount || 0), 0)\n    .toLocaleString(\"en-IN\", { minimumFractionDigits: 2, maximumFractionDigits: 2 })\n}}",
+    "children": []
+  },
+  {
+    "type": "MODAL_WIDGET",
+    "name": "mdlSalesMargin",
+    "children": [
+      "Canvas24"
+    ]
+  },
+  {
+    "type": "CANVAS_WIDGET",
+    "name": "Canvas24",
+    "children": [
+      "tblSalesLines_",
+      "SelectCustomer",
+      "DatePickerStart_",
+      "DatePickerEnd_",
+      "IconButton29"
+    ]
+  },
+  {
+    "type": "TABLE_WIDGET_V2",
+    "name": "tblSalesLines_",
+    "text": "Data",
+    "children": []
+  },
+  {
+    "type": "SELECT_WIDGET",
+    "name": "SelectCustomer",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "DatePickerStart_",
+    "text": "Start Date",
+    "children": []
+  },
+  {
+    "type": "DATE_PICKER_WIDGET2",
+    "name": "DatePickerEnd_",
+    "text": "End Date",
+    "children": []
+  },
+  {
+    "type": "ICON_BUTTON_WIDGET",
+    "name": "IconButton29",
+    "children": []
+  }
+]
