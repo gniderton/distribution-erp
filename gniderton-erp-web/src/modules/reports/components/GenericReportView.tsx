@@ -27,7 +27,13 @@ export function GenericReportView({ title, queryKey, fetchFn }: GenericReportVie
   const columns = useMemo(() => {
     return Object.keys(firstRow).map(key => ({
       header: key.replace(/_/g, ' ').toUpperCase(),
-      accessorKey: key
+      accessorKey: key,
+      cell: (info: any) => {
+        const val = info.getValue()
+        if (val === null || val === undefined) return '-'
+        if (typeof val === 'object') return JSON.stringify(val)
+        return String(val)
+      }
     }))
   }, [firstRow])
 
