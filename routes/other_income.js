@@ -168,7 +168,7 @@ router.post('/', async (req, res) => {
             incomeNumber, transaction_date || new Date(), category_account_id,
             resolvedDestinationId, amount, taxable_amount || amount, tax_amount || 0,
             is_gst_income || false, gst_no, received_from, /* Reused received_from variable for ID */
-            reference_no, description, user_id, journalEntryId, bank_statement_entry_id
+            reference_no, description, user_id, journalEntryId, bank_statement_entry_id || null
         ]);
         const incomeId = insertRes.rows[0].id;
 

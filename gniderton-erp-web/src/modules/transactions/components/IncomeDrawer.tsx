@@ -35,7 +35,6 @@ export function IncomeDrawer({ open, onClose }: Props) {
     taxable_amount: '',
     tax_amount: '',
     is_gst_income: false,
-    reference_no: '',
     description: ''
   })
 
@@ -350,18 +349,6 @@ export function IncomeDrawer({ open, onClose }: Props) {
             placeholder={formData.bank_statement_entry_id ? "Auto-calculated from statement" : "0.00"}
             required={!formData.bank_statement_entry_id && !formData.is_gst_income} 
             disabled={!!formData.bank_statement_entry_id || formData.is_gst_income}
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="reference_no">Reference No</Label>
-          <Input 
-            id="reference_no" 
-            name="reference_no" 
-            type="text" 
-            value={formData.reference_no} 
-            onChange={handleChange} 
-            placeholder="Optional"
           />
         </div>
 
