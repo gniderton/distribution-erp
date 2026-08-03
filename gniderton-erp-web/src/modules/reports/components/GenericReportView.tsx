@@ -18,34 +18,29 @@ export function GenericReportView({ title, queryKey, fetchFn }: GenericReportVie
     queryFn: fetchFn
   })
 
-  if (isLoading) return <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-64 w-full" /></div>
-  if (error) return <div className="p-4 text-red-600 bg-red-50 rounded-lg">Failed to load {title.toLowerCase()} data.</div>
-
-  const reportData = Array.isArray(data) ? data : data?.data || data?.results || []
-
-  if (!reportData || reportData.length === 0) {
-    return <div className="p-12 text-center text-ink-500 bg-surface rounded-lg border border-border-subtle">No data available for {title}.</div>
-  }
-
+  // ---- HOOKS MUST BE AT THE TOP ----
   const [globalFilter, setGlobalFilter] = useState('')
 
-  // Derive columns from the first object
+  const reportData = Array.isArray(data) ? data : data?.data || data?.results || []
   const firstRow = reportData[0] || {}
-  const columns = Object.keys(firstRow).map(key => ({
-    header: key.replace(/_/g, ' ').toUpperCase(),
-    accessorKey: key
-  }))
+  
+  const columns = useMemo(() => {
+    return Object.keys(firstRow).map(key => ({
+      header: key.replace(/_/g, ' ').toUpperCase(),
+      accessorKey: key
+    }))
+  }, [firstRow])
 
-  // Auto-generate some stats
   const stats = useMemo(() => {
     if (!reportData.length) return []
     const summary = [
       { label: 'Total Rows', value: reportData.length.toString(), icon: Hash }
     ]
     
-    // Find first numeric column to sum (e.g., amount, total, balance)
+    // Find first numeric column to sum
     const numericKey = Object.keys(firstRow).find(key => 
       ['amount', 'total', 'balance', 'qty', 'quantity'].some(term => key.toLowerCase().includes(term)) && 
+      firstRow[key] !== null &&
       !isNaN(parseFloat(firstRow[key]))
     )
 
@@ -60,6 +55,15 @@ export function GenericReportView({ title, queryKey, fetchFn }: GenericReportVie
     return summary
   }, [reportData, firstRow])
 
+  // ---- EARLY RETURNS AFTER HOOKS ----
+  if (isLoading) return <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-64 w-full" /></div>
+  if (error) return <div className="p-4 text-red-600 bg-red-50 rounded-lg">Failed to load {title.toLowerCase()} data.</div>
+
+  if (!reportData || reportData.length === 0) {
+    return <div className="p-12 text-center text-ink-500 bg-surface rounded-lg border border-border-subtle">No data available for {title}.</div>
+  }
+
+  // ---- RENDER ----
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
@@ -96,7 +100,7 @@ export function GenericReportView({ title, queryKey, fetchFn }: GenericReportVie
           columns={columns} 
           globalFilter={globalFilter}
           onGlobalFilterChange={setGlobalFilter}
-          hideSearchBar={true} // We built a custom one above
+          hideSearchBar={true}
         />
       </div>
     </div>
