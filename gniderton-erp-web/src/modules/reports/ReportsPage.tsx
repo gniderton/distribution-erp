@@ -12,6 +12,8 @@ import { cn } from '@/lib/utils'
 
 import { FinancialReportView } from './components/FinancialReportView'
 import { SalesReportView } from './components/SalesReportView'
+import { GenericReportView } from './components/GenericReportView'
+import { reportsApi } from './api'
 
 type ReportDefinition = {
   id: string
@@ -58,7 +60,7 @@ const REPORT_CATEGORIES = [
         description: 'Complete record of all financial transactions by account.',
         icon: BookOpen,
         colorClass: 'text-emerald-600 bg-emerald-500/10 group-hover:bg-emerald-500/20 ring-emerald-500/30',
-        component: <div className="p-12 text-center text-ink-500">General Ledger View Coming Soon</div>
+        component: <GenericReportView title="General Ledger" queryKey="gl" fetchFn={reportsApi.generalLedger} />
       }
     ]
   },
@@ -81,7 +83,7 @@ const REPORT_CATEGORIES = [
         description: 'Profitability analysis on sales transactions.',
         icon: PieChart,
         colorClass: 'text-amber-600 bg-amber-500/10 group-hover:bg-amber-500/20 ring-amber-500/30',
-        component: <div className="p-12 text-center text-ink-500">Sales Margin View Coming Soon</div>
+        component: <GenericReportView title="Sales Margin" queryKey="sales-margin" fetchFn={reportsApi.salesFyReport} />
       },
       {
         id: 'dse-dash',
@@ -89,7 +91,7 @@ const REPORT_CATEGORIES = [
         description: 'Daily Sales Executive performance tracking.',
         icon: Activity,
         colorClass: 'text-amber-600 bg-amber-500/10 group-hover:bg-amber-500/20 ring-amber-500/30',
-        component: <div className="p-12 text-center text-ink-500">DSE Dashboard Coming Soon</div>
+        component: <GenericReportView title="DSE Pending Invoices" queryKey="dse-dash" fetchFn={reportsApi.dsePendingInvoices} />
       }
     ]
   },
@@ -104,7 +106,7 @@ const REPORT_CATEGORIES = [
         description: 'Uploaded statements and matching status.',
         icon: FileSpreadsheet,
         colorClass: 'text-blue-600 bg-blue-500/10 group-hover:bg-blue-500/20 ring-blue-500/30',
-        component: <div className="p-12 text-center text-ink-500">Bank Statement View Coming Soon</div>
+        component: <GenericReportView title="Bank Reconciliation List" queryKey="bank-stmt" fetchFn={reportsApi.bankReconciliationList} />
       },
       {
         id: 'audit-view',
@@ -112,7 +114,7 @@ const REPORT_CATEGORIES = [
         description: 'Deep dive into payment allocations and forensic catches.',
         icon: FileText,
         colorClass: 'text-blue-600 bg-blue-500/10 group-hover:bg-blue-500/20 ring-blue-500/30',
-        component: <div className="p-12 text-center text-ink-500">Audit View Coming Soon</div>
+        component: <GenericReportView title="Reconciliation Audit" queryKey="audit-view" fetchFn={reportsApi.bankAuditView} />
       }
     ]
   },
@@ -127,7 +129,7 @@ const REPORT_CATEGORIES = [
         description: 'Daily attendance logs for all staff.',
         icon: Users,
         colorClass: 'text-indigo-600 bg-indigo-500/10 group-hover:bg-indigo-500/20 ring-indigo-500/30',
-        component: <div className="p-12 text-center text-ink-500">Attendance Report Coming Soon</div>
+        component: <GenericReportView title="Attendance Report" queryKey="attendance" fetchFn={reportsApi.attendanceDetails} />
       }
     ]
   },
@@ -142,7 +144,7 @@ const REPORT_CATEGORIES = [
         description: 'Current inventory holding and valuations.',
         icon: PackageSearch,
         colorClass: 'text-rose-600 bg-rose-500/10 group-hover:bg-rose-500/20 ring-rose-500/30',
-        component: <div className="p-12 text-center text-ink-500">Stock Report Coming Soon</div>
+        component: <GenericReportView title="Purchase Invoice Lines" queryKey="stock" fetchFn={reportsApi.purchaseInvoiceLines} />
       }
     ]
   }
