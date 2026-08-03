@@ -290,7 +290,7 @@ export const generateInvoicePDF = async (invoiceData: Invoice) => {
   
   const contentWidth = pageWidth - margin * 2;
   const slipBoxY = slipY + 30;
-  doc.rect(margin, slipBoxY, contentWidth, 30);
+  doc.rect(margin, slipBoxY, contentWidth, 100);
   
   // Left part of slip (Invoice Info)
   doc.setFont("helvetica", "bold");
