@@ -131,7 +131,64 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
     )
   }
 
-  // ---- RENDER LOGIC FOR FLAT TABLES (Balance Sheet, Cash Flow) ----
+  // ---- RENDER LOGIC FOR BALANCE SHEET ----
+  if (type === 'balanceSheet') {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
+          <h3 className="text-lg font-display font-medium text-ink-900">Balance Sheet</h3>
+          <button className="px-3 py-1.5 text-sm font-medium text-ink-700 bg-white border border-border-subtle rounded hover:bg-surface transition">
+            Export CSV
+          </button>
+        </div>
+
+        {isLoading && <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-64 w-full" /></div>}
+        {error && <div className="p-4 text-red-600 bg-red-50 rounded-lg">Failed to load Balance Sheet data.</div>}
+
+        {data && data.sections && (
+          <div className="bg-white rounded-xl border border-border-subtle overflow-hidden">
+            <div className="bg-surface px-6 py-3 border-b border-border-subtle flex justify-between">
+              <span className="text-sm text-ink-500">As of: {new Date(data.as_of).toLocaleDateString()}</span>
+              {data.summary.is_balanced ? (
+                <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">Balanced</span>
+              ) : (
+                <span className="text-sm font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded">Out of Balance</span>
+              )}
+            </div>
+
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* ASSETS */}
+              <div className="space-y-6">
+                <h3 className="font-display font-semibold text-lg text-ink-900 border-b border-border-subtle pb-2">Assets</h3>
+                <SectionBlock section={data.sections.assets.current_assets} />
+                <SectionBlock section={data.sections.assets.fixed_assets} />
+                
+                <div className="flex justify-between items-center py-4 px-4 bg-emerald-50 rounded-lg border border-emerald-100 mt-4">
+                  <span className="font-display font-semibold text-emerald-900">Total Assets</span>
+                  <span className="font-display font-bold text-emerald-900 text-lg">{formatCurrency(data.summary.total_assets)}</span>
+                </div>
+              </div>
+
+              {/* LIABILITIES & EQUITY */}
+              <div className="space-y-6">
+                <h3 className="font-display font-semibold text-lg text-ink-900 border-b border-border-subtle pb-2">Liabilities & Equity</h3>
+                <SectionBlock section={data.sections.liabilities_equity.current_liabilities} />
+                <SectionBlock section={data.sections.liabilities_equity.long_term_liabilities} />
+                <SectionBlock section={data.sections.liabilities_equity.equity} />
+
+                <div className="flex justify-between items-center py-4 px-4 bg-blue-50 rounded-lg border border-blue-100 mt-4">
+                  <span className="font-display font-semibold text-blue-900">Total Liabilities & Equity</span>
+                  <span className="font-display font-bold text-blue-900 text-lg">{formatCurrency(data.summary.total_liabilities_and_equity)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ---- RENDER LOGIC FOR FLAT TABLES (Cash Flow) ----
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-64 w-full" /></div>
   if (error) return <div className="p-4 text-red-600 bg-red-50 rounded-lg">Failed to load report data.</div>
 
@@ -152,7 +209,7 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
     <div className="space-y-6">
       <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
         <h3 className="text-lg font-display font-medium text-ink-900">
-          {type === 'balanceSheet' ? 'Balance Sheet' : 'Cash Flow Statement'}
+          Cash Flow Statement
         </h3>
         <button className="px-3 py-1.5 text-sm font-medium text-ink-700 bg-white border border-border-subtle rounded hover:bg-surface transition">
           Export CSV
