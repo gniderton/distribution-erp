@@ -13,7 +13,7 @@ interface FinancialReportViewProps {
 
 export function FinancialReportView({ type }: FinancialReportViewProps) {
   // P&L Filters
-  const [fy, setFy] = useState<string>('2024')
+  const [fy, setFy] = useState<string>('2026')
   const [quarter, setQuarter] = useState<string>('')
   const [month, setMonth] = useState<string>('')
 
@@ -44,6 +44,8 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
               <option value="2023">FY 2023-24</option>
               <option value="2024">FY 2024-25</option>
               <option value="2025">FY 2025-26</option>
+              <option value="2026">FY 2026-27</option>
+              <option value="2027">FY 2027-28</option>
             </select>
 
             <select 
