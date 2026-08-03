@@ -38,7 +38,7 @@ export function GenericReportView({ title, queryKey, fetchFn }: GenericReportVie
         if (val === null || val === undefined) return '-'
         
         // Date Formatting
-        if (typeof val === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}/.test(val)) {
+        if (typeof val === 'string' && val.includes('T') && val.endsWith('Z') && val.length === 24) {
           return new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         }
         
@@ -52,35 +52,26 @@ export function GenericReportView({ title, queryKey, fetchFn }: GenericReportVie
     if (!reportData.length) return []
     const summary: any[] = []
     
-    // Find category columns to summarize (e.g. status, type)
-    const categoryKeys = Object.keys(firstRow).filter(key => 
-      ['status', 'type', 'category', 'method', 'mode'].some(term => key.toLowerCase().includes(term))
-    )
-    
-    categoryKeys.forEach(key => {
-      const uniqueVals = new Set(reportData.map((r: any) => r[key]).filter(Boolean))
-      summary.push({
-        label: `Unique ${key.replace(/_/g, ' ')}`,
-        value: uniqueVals.size.toString(),
-        icon: Hash
-      })
-    })
-    
-    // Find first numeric column to sum
-    const numericKey = Object.keys(firstRow).find(key => 
+    // Find ALL numeric columns to sum
+    const numericKeys = Object.keys(firstRow).filter(key => 
       ['amount', 'total', 'balance', 'qty', 'quantity', 'debit', 'credit', 'value'].some(term => key.toLowerCase().includes(term)) && 
       firstRow[key] !== null &&
       !isNaN(parseFloat(firstRow[key]))
     )
 
-    if (numericKey) {
+    numericKeys.forEach(numericKey => {
       const sum = reportData.reduce((acc: number, row: any) => acc + (parseFloat(row[numericKey]) || 0), 0)
       summary.push({ 
         label: `Total ${numericKey.replace(/_/g, ' ')}`, 
         value: sum.toLocaleString(undefined, { maximumFractionDigits: 2 }), 
         icon: Hash 
       })
+    })
+
+    if (summary.length === 0) {
+      summary.push({ label: 'Total Rows', value: reportData.length.toString(), icon: Hash })
     }
+
     return summary
   }, [reportData, firstRow])
 
