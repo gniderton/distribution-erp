@@ -25,12 +25,23 @@ export function GenericReportView({ title, queryKey, fetchFn }: GenericReportVie
   const firstRow = reportData[0] || {}
   
   const columns = useMemo(() => {
-    return Object.keys(firstRow).map(key => ({
+    return Object.keys(firstRow)
+      .filter(key => {
+        const k = key.toLowerCase()
+        return k !== 'id' && !k.endsWith('_id')
+      })
+      .map(key => ({
       header: key.replace(/_/g, ' ').toUpperCase(),
       accessorKey: key,
       cell: (info: any) => {
         const val = info.getValue()
         if (val === null || val === undefined) return '-'
+        
+        // Date Formatting
+        if (typeof val === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}/.test(val)) {
+          return new Date(val).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        }
+        
         if (typeof val === 'object') return JSON.stringify(val)
         return String(val)
       }
@@ -39,13 +50,25 @@ export function GenericReportView({ title, queryKey, fetchFn }: GenericReportVie
 
   const stats = useMemo(() => {
     if (!reportData.length) return []
-    const summary = [
-      { label: 'Total Rows', value: reportData.length.toString(), icon: Hash }
-    ]
+    const summary: any[] = []
+    
+    // Find category columns to summarize (e.g. status, type)
+    const categoryKeys = Object.keys(firstRow).filter(key => 
+      ['status', 'type', 'category', 'method', 'mode'].some(term => key.toLowerCase().includes(term))
+    )
+    
+    categoryKeys.forEach(key => {
+      const uniqueVals = new Set(reportData.map((r: any) => r[key]).filter(Boolean))
+      summary.push({
+        label: `Unique ${key.replace(/_/g, ' ')}`,
+        value: uniqueVals.size.toString(),
+        icon: Hash
+      })
+    })
     
     // Find first numeric column to sum
     const numericKey = Object.keys(firstRow).find(key => 
-      ['amount', 'total', 'balance', 'qty', 'quantity'].some(term => key.toLowerCase().includes(term)) && 
+      ['amount', 'total', 'balance', 'qty', 'quantity', 'debit', 'credit', 'value'].some(term => key.toLowerCase().includes(term)) && 
       firstRow[key] !== null &&
       !isNaN(parseFloat(firstRow[key]))
     )
@@ -60,6 +83,35 @@ export function GenericReportView({ title, queryKey, fetchFn }: GenericReportVie
     }
     return summary
   }, [reportData, firstRow])
+
+  const handleExportCSV = () => {
+    if (!reportData.length) return
+    const keys = Object.keys(reportData[0])
+    const csvRows = []
+    
+    // Header
+    csvRows.push(keys.map(k => `"${k.replace(/"/g, '""')}"`).join(','))
+    
+    // Data
+    for (const row of reportData) {
+      csvRows.push(keys.map(k => {
+        const val = row[k]
+        if (val === null || val === undefined) return '""'
+        const str = typeof val === 'object' ? JSON.stringify(val) : String(val)
+        return `"${str.replace(/"/g, '""')}"`
+      }).join(','))
+    }
+    
+    const blob = new Blob([csvRows.join('\\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${title.replace(/\\s+/g, '_').toLowerCase()}_export.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
 
   // ---- EARLY RETURNS AFTER HOOKS ----
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-64 w-full" /></div>
@@ -86,7 +138,10 @@ export function GenericReportView({ title, queryKey, fetchFn }: GenericReportVie
               className="pl-9 h-9 text-sm"
             />
           </div>
-          <button className="px-3 py-1.5 h-9 text-sm font-medium text-ink-700 bg-white border border-border-subtle rounded hover:bg-surface transition whitespace-nowrap">
+          <button 
+            onClick={handleExportCSV}
+            className="px-3 py-1.5 h-9 text-sm font-medium text-ink-700 bg-white border border-border-subtle rounded hover:bg-surface transition whitespace-nowrap"
+          >
             Export CSV
           </button>
         </div>
