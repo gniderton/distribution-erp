@@ -23,8 +23,9 @@ export const reportsApi = {
 
   bankReconciliationList: () => api.get('/api/finance/reconciliation/bank/list').then((r) => r.data),
   bankAuditView: () => api.get('/api/finance/reconciliation/bank/audit-view').then((r) => r.data),
-  uploadBankStatement: (formData: FormData) =>
-    api.post('/api/finance/reconciliation/bank/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data),
+  bankAccounts: () => api.get('/api/bank-accounts').then((r) => r.data),
+  uploadBankStatement: (payload: { content: string, bank_type: string }) =>
+    api.post('/api/finance/reconciliation/bank/upload', payload).then((r) => r.data),
 
   paymentAllocations: () => api.get('/api/payments/allocations').then((r) => r.data),
   dsePendingInvoices: () => api.get('/api/payments/dse-pending-invoices').then((r) => r.data),

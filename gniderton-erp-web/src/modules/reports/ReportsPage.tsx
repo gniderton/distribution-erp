@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { FinancialReportView } from './components/FinancialReportView'
 import { SalesReportView } from './components/SalesReportView'
 import { GenericReportView } from './components/GenericReportView'
+import { BankStatementUpload } from './components/BankStatementUpload'
 import { reportsApi } from './api'
 
 type ReportDefinition = {
@@ -106,7 +107,7 @@ const REPORT_CATEGORIES = [
         description: 'Uploaded statements and matching status.',
         icon: FileSpreadsheet,
         colorClass: 'text-blue-600 bg-blue-500/10 group-hover:bg-blue-500/20 ring-blue-500/30',
-        component: <GenericReportView title="Bank Reconciliation List" queryKey="bank-stmt" fetchFn={reportsApi.bankReconciliationList} />
+        component: <GenericReportView title="Bank Reconciliation List" queryKey="bank-stmt" fetchFn={reportsApi.bankReconciliationList} extraActions={<BankStatementUpload />} />
       },
       {
         id: 'audit-view',

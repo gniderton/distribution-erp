@@ -10,9 +10,10 @@ interface GenericReportViewProps {
   title: string
   queryKey: string
   fetchFn: () => Promise<any>
+  extraActions?: React.ReactNode
 }
 
-export function GenericReportView({ title, queryKey, fetchFn }: GenericReportViewProps) {
+export function GenericReportView({ title, queryKey, fetchFn, extraActions }: GenericReportViewProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['generic-report', queryKey],
     queryFn: fetchFn
@@ -129,6 +130,7 @@ export function GenericReportView({ title, queryKey, fetchFn }: GenericReportVie
               className="pl-9 h-9 text-sm"
             />
           </div>
+          {extraActions}
           <button 
             onClick={handleExportCSV}
             className="px-3 py-1.5 h-9 text-sm font-medium text-ink-700 bg-white border border-border-subtle rounded hover:bg-surface transition whitespace-nowrap"
