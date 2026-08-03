@@ -56,8 +56,6 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
         <DataTable 
           data={reportData} 
           columns={columns} 
-          pagination={false}
-          searchable={true}
         />
       </div>
     </div>

@@ -54,8 +54,6 @@ export function SalesReportView({ type }: SalesReportViewProps) {
         <DataTable 
           data={reportData} 
           columns={columns} 
-          pagination={true}
-          searchable={true}
         />
       </div>
     </div>

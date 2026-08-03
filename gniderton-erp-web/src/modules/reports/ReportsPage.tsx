@@ -1,16 +1,15 @@
 import { useState } from 'react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { StatCard } from '@/components/shared/StatCard'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog'
+import { Drawer } from '@/components/ui/Drawer'
 import { 
   BarChart3, TrendingUp, Wallet, FileBarChart, 
   BookOpen, Landmark, FileText, Activity, 
   Users, PackageSearch, Receipt, FileSpreadsheet,
   PieChart
 } from 'lucide-react'
-import { cn, formatCurrency } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 
-// Placeholder implementations for report views - these will be broken out later
 import { FinancialReportView } from './components/FinancialReportView'
 import { SalesReportView } from './components/SalesReportView'
 
@@ -194,28 +193,29 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* Report Viewer Modal */}
-      <Dialog open={!!activeReport} onOpenChange={(open) => !open && setActiveReport(null)}>
-        {/* Render a large dialog content for complex reports */}
-        <DialogContent className="max-w-[95vw] w-full lg:max-w-[1200px] max-h-[90vh] overflow-y-auto bg-surface p-0 gap-0 border-border-subtle shadow-2xl">
-          {activeReport && (
-            <>
-              <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-border-subtle px-6 py-4 flex items-center gap-4">
-                <div className={cn("p-2 rounded-md ring-1 ring-inset", activeReport.colorClass)}>
-                  <activeReport.icon className="w-5 h-5" />
+      {/* Report Viewer Drawer */}
+      <Drawer 
+        open={!!activeReport} 
+        onClose={() => setActiveReport(null)}
+        title={
+          <div className="flex items-center gap-3">
+            {activeReport && (
+              <>
+                <div className={cn("p-1.5 rounded-md ring-1 ring-inset", activeReport.colorClass)}>
+                  <activeReport.icon className="w-4 h-4" />
                 </div>
-                <div>
-                  <DialogTitle className="text-lg font-display">{activeReport.title}</DialogTitle>
-                  <p className="text-sm text-ink-500">{activeReport.description}</p>
-                </div>
-              </div>
-              <div className="p-6">
-                {activeReport.component}
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+                <span>{activeReport.title}</span>
+              </>
+            )}
+          </div>
+        }
+        description={activeReport?.description}
+        widthClass="max-w-[95vw] lg:max-w-[1200px]"
+      >
+        <div className="pt-2">
+          {activeReport?.component}
+        </div>
+      </Drawer>
     </div>
   )
 }
