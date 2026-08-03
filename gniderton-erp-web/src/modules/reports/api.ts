@@ -3,7 +3,8 @@ import { api } from '@/lib/axios'
 /** Full endpoint surface for the Reports module (Build Spec §8.16) — the largest module. */
 export const reportsApi = {
   balanceSheet: () => api.get('/api/analytics/reports/balance-sheet').then((r) => r.data),
-  profitAndLoss: () => api.get('/api/analytics/reports/p-and-l').then((r) => r.data),
+  profitAndLoss: (params?: { fy?: string, quarter?: string, month?: string }) => 
+    api.get('/api/analytics/reports/p-and-l', { params }).then((r) => r.data),
   cashFlow: () => api.get('/api/analytics/reports/cash-flow').then((r) => r.data),
   fyOperatingBalances: () => api.get('/api/analytics/reports/fy-operating-balances').then((r) => r.data),
   integrityAudit: () => api.get('/api/analytics/reports/integrity-audit').then((r) => r.data),
