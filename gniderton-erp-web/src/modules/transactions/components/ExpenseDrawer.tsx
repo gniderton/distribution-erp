@@ -35,7 +35,6 @@ export function ExpenseDrawer({ open, onClose }: Props) {
     taxable_amount: '',
     tax_amount: '',
     is_gst_expense: false,
-    bill_no: '',
     gst_no: '',
     description: ''
   })
@@ -351,18 +350,6 @@ export function ExpenseDrawer({ open, onClose }: Props) {
             placeholder={formData.bank_statement_entry_id ? "Auto-calculated from statement" : "0.00"}
             required={!formData.bank_statement_entry_id && !formData.is_gst_expense} 
             disabled={!!formData.bank_statement_entry_id || formData.is_gst_expense}
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="bill_no">Bill / Reference No</Label>
-          <Input 
-            id="bill_no" 
-            name="bill_no" 
-            type="text" 
-            value={formData.bill_no} 
-            onChange={handleChange} 
-            placeholder="Optional"
           />
         </div>
 
