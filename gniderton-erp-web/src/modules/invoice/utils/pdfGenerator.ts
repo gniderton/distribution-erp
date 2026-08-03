@@ -310,11 +310,12 @@ export const generateInvoicePDF = async (invoiceData: Invoice) => {
   
   const bankInfoX = pageWidth / 2 + 5;
   doc.setFont("helvetica", "bold");
+  doc.text("PAYMENT BANK DETAILS", bankInfoX, bottomBoxY + 10);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.text(`Bank: ${bank.bank_name || "-"}`, bankInfoX, slipBoxY + 28);
-  doc.text(`Acc No: ${bank.account_number || "-"}`, bankInfoX, slipBoxY + 38);
-  doc.text(`IFSC: ${bank.ifsc_code || "-"}`, bankInfoX, slipBoxY + 48);
+  doc.text(`Bank: ${bank.bank_name || "-"}`, bankInfoX, bottomBoxY + 25);
+  doc.text(`Acc No: ${bank.account_number || "-"}`, bankInfoX, bottomBoxY + 35);
+  doc.text(`IFSC: ${bank.ifsc_code || "-"}`, bankInfoX, bottomBoxY + 45);
   
   doc.setFontSize(9);
   doc.text(`Receiver's Signature: __________________`, margin + 10, slipBoxY + 90);
