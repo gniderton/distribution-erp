@@ -100,12 +100,13 @@ router.post('/', async (req, res) => {
         const cleanID = (val) => (val === 'undefined' || val === 'null' || val === '' || val === undefined) ? null : val;
         const pSourceId = cleanID(payment_source_id);
         const pCatId = cleanID(category_account_id);
+        const cleanStmtId = cleanID(bank_statement_entry_id);
 
         let resolvedPaymentSourceId = pSourceId;
 
         // 🚀 SMART AUTO-RESOLUTION: Derive payment source account from statement entry if provided
-        if (payment_mode !== 'Cheque' && bank_statement_entry_id) {
-            const bRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [bank_statement_entry_id]);
+        if (payment_mode !== 'Cheque' && cleanStmtId) {
+            const bRes = await client.query('SELECT bank_account_id FROM bank_statement_entries WHERE id = $1', [cleanStmtId]);
             if (bRes.rows.length === 0) {
                 return res.status(400).json({ error: `Bank statement entry ID ${bank_statement_entry_id} not found` });
             }
@@ -185,7 +186,7 @@ router.post('/', async (req, res) => {
             expense_date || new Date(), pCatId, resolvedPaymentSourceId,
             taxable_amount, tax_amount, grand_total, is_gst_expense,
             vendor_name, bill_no, gst_no, description, reference_no,
-            user_id, journalEntryId, expenseNumber, bank_statement_entry_id
+            user_id, journalEntryId, expenseNumber, cleanStmtId
         ]);
         const expenseId = expenseRes.rows[0].id;
 
@@ -214,7 +215,7 @@ router.post('/', async (req, res) => {
         }
 
         // 8. Handle Bank Statement Consumption (Online Mode)
-        if (payment_mode && payment_mode.toUpperCase() === 'ONLINE' && bank_statement_entry_id) {
+        if (payment_mode && payment_mode.toUpperCase() === 'ONLINE' && cleanStmtId) {
             await client.query(`
                 UPDATE bank_statement_entries 
                 SET consumed_amount = COALESCE(consumed_amount, 0) + $1,
@@ -223,7 +224,7 @@ router.post('/', async (req, res) => {
                         ELSE 'Partially Consumed'
                     END
                 WHERE id = $2
-            `, [grand_total, bank_statement_entry_id]);
+            `, [grand_total, cleanStmtId]);
         }
 
         await client.query('COMMIT');
