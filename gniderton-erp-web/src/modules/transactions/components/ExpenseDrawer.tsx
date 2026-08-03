@@ -250,7 +250,7 @@ export function ExpenseDrawer({ open, onClose }: Props) {
             >
               <option value="">Select cash account</option>
               {banks.map((bank: any) => (
-                <option key={bank.id} value={bank.id}>{bank.bank_name}</option>
+                <option key={bank.id} value={bank.id}>{bank.name}</option>
               ))}
             </Select>
           </div>
