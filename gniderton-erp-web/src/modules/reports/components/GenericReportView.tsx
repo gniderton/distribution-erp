@@ -93,7 +93,7 @@ export function GenericReportView({ title, queryKey, fetchFn }: GenericReportVie
       }).join(','))
     }
     
-    const blob = new Blob([csvRows.join('\\n')], { type: 'text/csv;charset=utf-8;' })
+    const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
