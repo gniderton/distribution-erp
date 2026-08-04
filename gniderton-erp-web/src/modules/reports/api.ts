@@ -22,7 +22,7 @@ export const reportsApi = {
   journalEntries: () => api.get('/api/journal-entries').then((r) => r.data),
 
   bankReconciliationList: (params?: any) => api.get('/api/finance/reconciliation/bank/list', { params }).then((r) => r.data),
-  bankAuditView: () => api.get('/api/finance/reconciliation/bank/audit-view').then((r) => r.data),
+  bankAuditView: (params?: any) => api.get('/api/finance/reconciliation/bank/audit-view', { params }).then((r) => r.data),
   bankAccounts: () => api.get('/api/bank-accounts').then((r) => r.data),
   uploadBankStatement: (payload: { content: string, bank_type: string }) =>
     api.post('/api/finance/reconciliation/bank/upload', payload).then((r) => r.data),

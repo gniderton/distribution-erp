@@ -14,6 +14,7 @@ import { FinancialReportView } from './components/FinancialReportView'
 import { SalesReportView } from './components/SalesReportView'
 import { GenericReportView } from './components/GenericReportView'
 import { BankStatementWrapper } from './components/BankStatementWrapper'
+import { ReconciliationAuditWrapper } from './components/ReconciliationAuditWrapper'
 import { reportsApi } from './api'
 
 type ReportDefinition = {
@@ -115,7 +116,7 @@ const REPORT_CATEGORIES = [
         description: 'Deep dive into payment allocations and forensic catches.',
         icon: FileText,
         colorClass: 'text-blue-600 bg-blue-500/10 group-hover:bg-blue-500/20 ring-blue-500/30',
-        component: <GenericReportView title="Reconciliation Audit" queryKey="audit-view" fetchFn={reportsApi.bankAuditView} />
+        component: <ReconciliationAuditWrapper />
       }
     ]
   },
