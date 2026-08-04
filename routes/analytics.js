@@ -840,7 +840,7 @@ router.get('/reports/fy-operating-balances', async (req, res) => {
 // --- 7. SALES LINE REPORT (DETAILED) ---
 router.get('/reports/sales-lines', async (req, res) => {
     try {
-        const { start_date, end_date, customer_id, product_id, limit = 50, offset = 0 } = req.query;
+        const { start_date, end_date, customer_id, product_id, brand_name, category_name, dse_name, route_name, search, limit = 50, offset = 0 } = req.query;
         
         // Helper: Convert DD/MM/YYYY to YYYY-MM-DD if needed
         const normalizeDate = (d) => {
@@ -879,6 +879,26 @@ router.get('/reports/sales-lines', async (req, res) => {
         if (product_id) {
             params.push(product_id);
             baseQuery += ` AND sil.product_id = $${params.length}`;
+        }
+        if (brand_name && brand_name !== 'all') {
+            params.push(brand_name);
+            baseQuery += ` AND b.brand_name = $${params.length}`;
+        }
+        if (category_name && category_name !== 'all') {
+            params.push(category_name);
+            baseQuery += ` AND cat.category_name = $${params.length}`;
+        }
+        if (dse_name && dse_name !== 'all') {
+            params.push(dse_name);
+            baseQuery += ` AND dse.full_name = $${params.length}`;
+        }
+        if (route_name && route_name !== 'all') {
+            params.push(route_name);
+            baseQuery += ` AND r.route_name = $${params.length}`;
+        }
+        if (search) {
+            params.push(`%${search}%`);
+            baseQuery += ` AND (si.invoice_number ILIKE $${params.length} OR c.customer_name ILIKE $${params.length} OR p.product_name ILIKE $${params.length} OR p.product_code ILIKE $${params.length})`;
         }
 
         // 1. Get Summary Stats (Taxable, Tax, Count) for the entire filtered period
@@ -951,7 +971,7 @@ router.get('/reports/sales-lines', async (req, res) => {
 // --- 8. SALES LINE EXPORT (EXCEL) ---
 router.get('/reports/sales-lines/export', async (req, res) => {
     try {
-        const { start_date, end_date, customer_id, product_id } = req.query;
+        const { start_date, end_date, customer_id, product_id, brand_name, category_name, dse_name, route_name, search } = req.query;
         
         const normalizeDate = (d) => {
             if (!d) return null;
@@ -1004,6 +1024,26 @@ router.get('/reports/sales-lines/export', async (req, res) => {
         if (product_id) {
             params.push(product_id);
             query += ` AND sil.product_id = $${params.length}`;
+        }
+        if (brand_name && brand_name !== 'all') {
+            params.push(brand_name);
+            query += ` AND b.brand_name = $${params.length}`;
+        }
+        if (category_name && category_name !== 'all') {
+            params.push(category_name);
+            query += ` AND cat.category_name = $${params.length}`;
+        }
+        if (dse_name && dse_name !== 'all') {
+            params.push(dse_name);
+            query += ` AND dse.full_name = $${params.length}`;
+        }
+        if (route_name && route_name !== 'all') {
+            params.push(route_name);
+            query += ` AND r.route_name = $${params.length}`;
+        }
+        if (search) {
+            params.push(`%${search}%`);
+            query += ` AND (si.invoice_number ILIKE $${params.length} OR c.customer_name ILIKE $${params.length} OR p.product_name ILIKE $${params.length} OR p.product_code ILIKE $${params.length})`;
         }
 
         query += ` ORDER BY si.invoice_date DESC, si.invoice_number DESC`;

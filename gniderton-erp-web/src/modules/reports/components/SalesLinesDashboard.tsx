@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { format } from 'date-fns'
 import { Search, Filter, Tag, Users, Map, DollarSign, CheckCircle2, TrendingUp, Download } from 'lucide-react'
 import { reportsApi } from '../api'
 import { customerApi } from '@/modules/customer/api'
@@ -46,98 +47,64 @@ export function SalesLinesDashboard() {
   }
 
   const dateParams = getDates()
+  
+  const queryParams = {
+    ...dateParams,
+    brand_name: brandFilter !== 'all' ? brandFilter : undefined,
+    category_name: categoryFilter !== 'all' ? categoryFilter : undefined,
+    dse_name: dseFilter !== 'all' ? dseFilter : undefined,
+    route_name: routeFilter !== 'all' ? routeFilter : undefined,
+    search: search || undefined
+  }
 
-  // Fetch all lines (up to 5000) for the date period. We filter the rest client-side.
-  const { data: rawLines, isLoading, error } = useQuery({
-    queryKey: ['sales-lines', dateParams],
-    queryFn: () => reportsApi.salesLines(dateParams)
+  // Fetch from backend (automatically limits to 50 lines, but summary is 100% accurate)
+  const { data: rawResponse, isLoading, error } = useQuery({
+    queryKey: ['sales-lines', queryParams],
+    queryFn: () => reportsApi.salesLines(queryParams)
   })
 
-  // Apply Client-Side Filters
-  const filteredLines = useMemo(() => {
-    if (!rawLines) return []
-    return rawLines.filter((line: any) => {
-      if (brandFilter !== 'all' && line.brand !== brandFilter) return false
-      if (categoryFilter !== 'all' && line.category !== categoryFilter) return false
-      if (dseFilter !== 'all' && line.dse_name !== dseFilter) return false
-      if (routeFilter !== 'all' && line.route_name !== routeFilter) return false
-      
-      if (search) {
-        const query = search.toLowerCase()
-        const matches = (
-          line.invoice_no?.toLowerCase().includes(query) ||
-          line.customer?.toLowerCase().includes(query) ||
-          line.product?.toLowerCase().includes(query) ||
-          line.sku?.toLowerCase().includes(query)
-        )
-        if (!matches) return false
-      }
-      return true
-    })
-  }, [rawLines, search, brandFilter, categoryFilter, dseFilter, routeFilter])
+  // Extract lines and format dates neatly
+  const lines = useMemo(() => {
+    if (!rawResponse?.lines) return []
+    return rawResponse.lines.map((line: any) => ({
+      ...line,
+      date: line.date ? format(new Date(line.date), 'MMM dd, yyyy') : line.date
+    }))
+  }, [rawResponse])
 
-  // Compute Cards
+  // Extract accurate summary from backend
   const stats = useMemo(() => {
-    let totalTaxable = 0
-    const brandSales: Record<string, number> = {}
-    const dseSales: Record<string, number> = {}
-
-    filteredLines.forEach((line: any) => {
-      const val = Number(line.taxable) || 0
-      totalTaxable += val
-
-      if (line.brand) {
-        brandSales[line.brand] = (brandSales[line.brand] || 0) + val
-      }
-      if (line.dse_name) {
-        dseSales[line.dse_name] = (dseSales[line.dse_name] || 0) + val
-      }
-    })
-
-    // Find top brand
-    const topBrand = Object.entries(brandSales).sort((a, b) => b[1] - a[1])[0]
-    // Find top DSE
-    const topDse = Object.entries(dseSales).sort((a, b) => b[1] - a[1])[0]
-
+    if (!rawResponse?.summary) return { totalTaxable: 0, totalTax: 0, totalGrand: 0, totalLines: 0 }
     return {
-      totalTaxable,
-      topBrandName: topBrand ? topBrand[0] : 'N/A',
-      topBrandValue: topBrand ? topBrand[1] : 0,
-      topDseName: topDse ? topDse[0] : 'N/A',
-      topDseValue: topDse ? topDse[1] : 0
+      totalTaxable: Number(rawResponse.summary.total_taxable) || 0,
+      totalTax: Number(rawResponse.summary.total_tax) || 0,
+      totalGrand: Number(rawResponse.summary.total_grand) || 0,
+      totalLines: Number(rawResponse.summary.total_lines) || 0
     }
-  }, [filteredLines])
+  }, [rawResponse])
 
   // Derive Table Columns
   const columns = useMemo(() => {
-    if (!filteredLines || filteredLines.length === 0) return []
-    return Object.keys(filteredLines[0])
+    if (!lines || lines.length === 0) return []
+    return Object.keys(lines[0])
       .filter(key => key !== 'status')
       .map(key => ({
         header: key.replace(/_/g, ' ').toUpperCase(),
         accessorKey: key
       }))
-  }, [filteredLines])
+  }, [lines])
 
   const handleExportCSV = () => {
-    if (filteredLines.length === 0) return
-    const headers = Object.keys(filteredLines[0]).filter(k => k !== 'status').join(',')
-    const rows = filteredLines.map((row: any) => 
-      Object.keys(row)
-        .filter(k => k !== 'status')
-        .map(key => {
-          const val = row[key]
-          return typeof val === 'string' && val.includes(',') ? `"${val}"` : val
-        }).join(',')
-    )
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers, ...rows].join('\n')
-    const encodedUri = encodeURI(csvContent)
-    const link = document.createElement("a")
-    link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `sales_lines_export.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    const p = new URLSearchParams()
+    if (queryParams.start_date) p.append('start_date', queryParams.start_date)
+    if (queryParams.end_date) p.append('end_date', queryParams.end_date)
+    if (queryParams.brand_name) p.append('brand_name', queryParams.brand_name)
+    if (queryParams.category_name) p.append('category_name', queryParams.category_name)
+    if (queryParams.dse_name) p.append('dse_name', queryParams.dse_name)
+    if (queryParams.route_name) p.append('route_name', queryParams.route_name)
+    if (queryParams.search) p.append('search', queryParams.search)
+    
+    window.open(`https://distribution-erp.onrender.com/api/analytics/reports/sales-lines/export?${p.toString()}`, '_blank')
   }
 
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-64 w-full" /></div>
@@ -146,10 +113,11 @@ export function SalesLinesDashboard() {
   return (
     <div className="space-y-6">
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard label="Total Taxable Sales (Filtered)" value={formatCurrency(stats.totalTaxable)} icon={DollarSign} tone="success" />
-        <StatCard label={`Top Brand: ${stats.topBrandName}`} value={formatCurrency(stats.topBrandValue)} icon={Tag} tone="neutral" />
-        <StatCard label={`Top DSE: ${stats.topDseName}`} value={formatCurrency(stats.topDseValue)} icon={Users} tone="neutral" />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <StatCard label="Total Lines (All Filtered)" value={String(stats.totalLines)} icon={Tag} tone="neutral" />
+        <StatCard label="Total Taxable Sales" value={formatCurrency(stats.totalTaxable)} icon={DollarSign} tone="success" />
+        <StatCard label="Total Tax Amount" value={formatCurrency(stats.totalTax)} icon={TrendingUp} tone="neutral" />
+        <StatCard label="Grand Total Value" value={formatCurrency(stats.totalGrand)} icon={CheckCircle2} tone="success" />
       </div>
 
       <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col xl:flex-row gap-4 items-center justify-between w-full">
@@ -256,11 +224,17 @@ export function SalesLinesDashboard() {
       </div>
 
       <div className="rounded-xl overflow-hidden border border-border-subtle bg-white">
-        {filteredLines.length > 0 ? (
-          <DataTable 
-            data={filteredLines} 
-            columns={columns} 
-          />
+        {lines.length > 0 ? (
+          <>
+            <div className="px-4 py-2 bg-brand-50 border-b border-border-subtle text-xs text-brand-700 font-medium flex justify-between">
+              <span>Showing latest {lines.length} lines of {stats.totalLines} total matches.</span>
+              <span>Use Export CSV to download the complete dataset.</span>
+            </div>
+            <DataTable 
+              data={lines} 
+              columns={columns} 
+            />
+          </>
         ) : (
           <div className="p-12 text-center text-ink-500 bg-surface">No sales lines match your filters.</div>
         )}
