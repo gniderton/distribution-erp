@@ -26,7 +26,7 @@ export function BankStatementWrapper() {
       >
         <option value="">All Statuses</option>
         <option value="Available">Available</option>
-        <option value="Consumed">Consumed</option>
+        <option value="Partially Consumed">Partially Consumed</option>
         <option value="Exhausted">Exhausted</option>
       </select>
 
