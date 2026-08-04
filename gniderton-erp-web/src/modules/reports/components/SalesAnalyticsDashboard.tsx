@@ -59,13 +59,13 @@ export function SalesAnalyticsDashboard() {
       const a = document.createElement('a');
       a.href = url;
       
-      let titlePeriod = \`FY \${fy}-\${parseInt(fy) + 1}\`;
+      let titlePeriod = `FY ${fy}-${parseInt(fy) + 1}`;
       if (month) {
           const monthName = new Date(parseInt(fy), parseInt(month) - 1).toLocaleString('default', { month: 'long' });
-          titlePeriod = \`\${monthName}_\${fy}\`;
+          titlePeriod = `${monthName}_${fy}`;
       }
       
-      a.download = \`Corporate_Report_\${titlePeriod}.pdf\`;
+      a.download = `Corporate_Report_${titlePeriod}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
