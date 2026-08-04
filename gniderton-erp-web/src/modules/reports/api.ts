@@ -9,7 +9,7 @@ export const reportsApi = {
   fyOperatingBalances: () => api.get('/api/analytics/reports/fy-operating-balances').then((r) => r.data),
   integrityAudit: () => api.get('/api/analytics/reports/integrity-audit').then((r) => r.data),
   salesLines: (params?: any) => api.get('/api/analytics/reports/sales-lines', { params }).then((r) => r.data),
-  salesSummaryDetailed: () => api.get('/api/analytics/reports/sales-summary-detailed').then((r) => r.data),
+  salesSummaryDetailed: (params?: any) => api.get('/api/analytics/reports/sales-summary-detailed', { params }).then((r) => r.data),
   salesFyReport: () => api.get('/api/analytics/sales-fy-report').then((r) => r.data),
   employeeDashboard: (id: string | number) => api.get(`/api/analytics/employees/${id}/dashboard`).then((r) => r.data),
 

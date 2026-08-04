@@ -15,6 +15,7 @@ import { GenericReportView } from './components/GenericReportView'
 import { BankStatementWrapper } from './components/BankStatementWrapper'
 import { ReconciliationAuditWrapper } from './components/ReconciliationAuditWrapper'
 import { SalesLinesDashboard } from './components/SalesLinesDashboard'
+import { SalesAnalyticsDashboard } from './components/SalesAnalyticsDashboard'
 import { reportsApi } from './api'
 
 type ReportDefinition = {
@@ -78,6 +79,14 @@ const REPORT_CATEGORIES = [
         icon: Receipt,
         colorClass: 'text-amber-600 bg-amber-500/10 group-hover:bg-amber-500/20 ring-amber-500/30',
         component: <SalesLinesDashboard />
+      },
+      {
+        id: 'sales-analytics',
+        title: 'Sales Analytics Dashboard',
+        description: 'Comprehensive visual dashboard of sales performance, top brands, and leaderboards.',
+        icon: TrendingUp,
+        colorClass: 'text-indigo-600 bg-indigo-500/10 group-hover:bg-indigo-500/20 ring-indigo-500/30',
+        component: <SalesAnalyticsDashboard />
       },
       {
         id: 'sales-margin',
