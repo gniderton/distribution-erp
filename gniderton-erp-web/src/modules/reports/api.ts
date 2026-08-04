@@ -8,7 +8,7 @@ export const reportsApi = {
   cashFlow: () => api.get('/api/analytics/reports/cash-flow').then((r) => r.data),
   fyOperatingBalances: () => api.get('/api/analytics/reports/fy-operating-balances').then((r) => r.data),
   integrityAudit: () => api.get('/api/analytics/reports/integrity-audit').then((r) => r.data),
-  salesLines: () => api.get('/api/analytics/reports/sales-lines').then((r) => r.data),
+  salesLines: (params?: any) => api.get('/api/analytics/reports/sales-lines', { params: { limit: 5000, ...params } }).then((r) => r.data.lines),
   salesSummaryDetailed: () => api.get('/api/analytics/reports/sales-summary-detailed').then((r) => r.data),
   salesFyReport: () => api.get('/api/analytics/sales-fy-report').then((r) => r.data),
   employeeDashboard: (id: string | number) => api.get(`/api/analytics/employees/${id}/dashboard`).then((r) => r.data),

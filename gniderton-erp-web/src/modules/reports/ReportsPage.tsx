@@ -11,7 +11,6 @@ import {
 import { cn } from '@/lib/utils'
 
 import { FinancialReportView } from './components/FinancialReportView'
-import { SalesReportView } from './components/SalesReportView'
 import { GenericReportView } from './components/GenericReportView'
 import { BankStatementWrapper } from './components/BankStatementWrapper'
 import { ReconciliationAuditWrapper } from './components/ReconciliationAuditWrapper'
@@ -77,7 +76,7 @@ const REPORT_CATEGORIES = [
         description: 'Granular view of all sales invoice lines and items sold.',
         icon: Receipt,
         colorClass: 'text-amber-600 bg-amber-500/10 group-hover:bg-amber-500/20 ring-amber-500/30',
-        component: <SalesReportView type="lines" />
+        component: <GenericReportView title="Sales Lines" queryKey="sales-lines" fetchFn={reportsApi.salesLines} hiddenColumns={['status']} />
       },
       {
         id: 'sales-margin',
