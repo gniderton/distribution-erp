@@ -41,8 +41,8 @@ router.get('/generate-corporate-report', async (req, res) => {
         // A. Operational Data (Sales & Purchases)
         const opsQuery = `
             SELECT 
-                (SELECT COALESCE(SUM(amount), 0) FROM sales_invoices WHERE invoice_date >= $1 AND invoice_date <= $2 AND status != 'Cancelled') as total_revenue,
-                (SELECT COALESCE(SUM(amount), 0) FROM purchase_invoices WHERE received_date >= $1 AND received_date <= $2 AND status != 'Cancelled') as total_cogs
+                (SELECT COALESCE(SUM(grand_total), 0) FROM sales_invoices WHERE invoice_date >= $1 AND invoice_date <= $2 AND status != 'Cancelled') as total_revenue,
+                (SELECT COALESCE(SUM(grand_total), 0) FROM purchase_invoice_headers WHERE received_date >= $1 AND received_date <= $2 AND status != 'Cancelled') as total_cogs
         `;
         const opsRes = await pool.query(opsQuery, [sd, ed]);
         const opsData = opsRes.rows[0];
