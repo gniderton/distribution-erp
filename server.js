@@ -93,6 +93,7 @@ app.use('/api/employees', require('./routes/employees'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/delivery', require('./routes/delivery'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/analytics', require('./routes/report_generator')); // [NEW] PDF Engine
 app.use('/api/dse', require('./routes/dse')); // [NEW] DSE Ops (EOD, etc)
 // app.use('/api/delivery', require('./routes/delivery')); // [NEW] Supply Chain / Delivery - REMOVED DUPLICATE
 app.use('/api/sales-orders', require('./routes/sales_orders')); // [NEW] Sales Admin

@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Calendar, DollarSign, TrendingUp, Receipt, Tag, Users, Map, Package } from 'lucide-react'
+import { Calendar, DollarSign, TrendingUp, Receipt, Tag, Users, Map, Package, Download, FileText } from 'lucide-react'
 import { reportsApi } from '../api'
 import { StatCard } from '@/components/shared/StatCard'
+import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
@@ -18,6 +19,7 @@ export function SalesAnalyticsDashboard() {
   
   const [fy, setFy] = useState(currentFY.toString())
   const [month, setMonth] = useState('')
+  const [isDownloading, setIsDownloading] = useState(false)
 
   const queryParams = {
     fy: fy || undefined,
@@ -46,6 +48,35 @@ export function SalesAnalyticsDashboard() {
     if (!data?.by_product) return []
     return data.by_product.slice(0, 5).map((p: any) => ({ name: p.product_name, amount: p.amount }))
   }, [data])
+
+  const handleDownloadReport = async () => {
+    try {
+      setIsDownloading(true);
+      const res = await reportsApi.downloadCorporateReport(queryParams);
+      
+      const blob = new Blob([res], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      let titlePeriod = \`FY \${fy}-\${parseInt(fy) + 1}\`;
+      if (month) {
+          const monthName = new Date(parseInt(fy), parseInt(month) - 1).toLocaleString('default', { month: 'long' });
+          titlePeriod = \`\${monthName}_\${fy}\`;
+      }
+      
+      a.download = \`Corporate_Report_\${titlePeriod}.pdf\`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Failed to download report', err);
+      alert('Failed to download report. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div>
   if (error) return <div className="p-4 text-red-600 bg-red-50 rounded-lg">Failed to load analytics data.</div>
@@ -95,6 +126,21 @@ export function SalesAnalyticsDashboard() {
               <option value="3">March</option>
             </select>
           </div>
+          
+          <div className="h-6 w-px bg-border mx-1"></div>
+          
+          <Button 
+            onClick={handleDownloadReport} 
+            disabled={isDownloading}
+            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white"
+          >
+            {isDownloading ? (
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+            ) : (
+              <FileText size={16} />
+            )}
+            Download Full Report
+          </Button>
         </div>
       </div>
 
