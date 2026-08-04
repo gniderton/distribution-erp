@@ -11,9 +11,10 @@ interface GenericReportViewProps {
   queryKey: string
   fetchFn: () => Promise<any>
   extraActions?: React.ReactNode
+  hiddenColumns?: string[]
 }
 
-export function GenericReportView({ title, queryKey, fetchFn, extraActions }: GenericReportViewProps) {
+export function GenericReportView({ title, queryKey, fetchFn, extraActions, hiddenColumns = [] }: GenericReportViewProps) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['generic-report', queryKey],
     queryFn: fetchFn
@@ -29,7 +30,9 @@ export function GenericReportView({ title, queryKey, fetchFn, extraActions }: Ge
     return Object.keys(firstRow)
       .filter(key => {
         const k = key.toLowerCase()
-        return k !== 'id' && !k.endsWith('_id')
+        if (k === 'id' || k.endsWith('_id')) return false
+        if (hiddenColumns.some(hc => hc.toLowerCase() === k)) return false
+        return true
       })
       .map(key => ({
       header: key.replace(/_/g, ' ').toUpperCase(),

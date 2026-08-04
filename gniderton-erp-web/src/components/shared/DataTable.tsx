@@ -101,7 +101,7 @@ export function DataTable<T>({
                   <th
                     key={header.id}
                     onClick={header.column.getToggleSortingHandler()}
-                    className="text-left px-4 py-2.5 text-xs font-medium text-ink-600 select-none whitespace-nowrap"
+                    className="text-left px-4 py-2.5 text-xs font-medium text-ink-600 select-none"
                   >
                     {header.isPlaceholder ? null : (
                       <button className="inline-flex items-center gap-1 cursor-pointer">
@@ -137,7 +137,7 @@ export function DataTable<T>({
                   className={`border-b border-border-subtle last:border-0 ${onRowClick ? 'cursor-pointer hover:bg-surface' : ''} transition`}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 text-ink-900 whitespace-nowrap">
+                    <td key={cell.id} className="px-4 py-3 text-ink-900 break-words max-w-xs xl:max-w-sm">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}

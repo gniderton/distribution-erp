@@ -21,7 +21,7 @@ export const reportsApi = {
   generalLedger: () => api.get('/api/general-ledger').then((r) => r.data),
   journalEntries: () => api.get('/api/journal-entries').then((r) => r.data),
 
-  bankReconciliationList: () => api.get('/api/finance/reconciliation/bank/list').then((r) => r.data),
+  bankReconciliationList: (params?: any) => api.get('/api/finance/reconciliation/bank/list', { params }).then((r) => r.data),
   bankAuditView: () => api.get('/api/finance/reconciliation/bank/audit-view').then((r) => r.data),
   bankAccounts: () => api.get('/api/bank-accounts').then((r) => r.data),
   uploadBankStatement: (payload: { content: string, bank_type: string }) =>
