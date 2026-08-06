@@ -1006,6 +1006,14 @@ router.post('/returns/manual', async (req, res) => {
             }
         }
 
+        // [NEW] Convert remaining unutilized credit note amount to a Customer Advance
+        if (remainingToAllocate > 0.01) {
+            await client.query(`
+                INSERT INTO customer_advances (customer_id, return_id, amount, balance)
+                VALUES ($1, $2, $3, $3)
+            `, [customer_id, returnId, remainingToAllocate]);
+        }
+
         // 6. ACCOUNTING (LEDGER)
         const acc_inv = 1001, acc_ar = 1101, acc_returns = 4003, acc_cgst = 2011, acc_sgst = 2012, acc_round = 5003, acc_cogs = 5001;
         
@@ -1331,6 +1339,14 @@ router.post('/returns/:id/apply', async (req, res) => {
                     creditRemaining -= apply;
                 }
             }
+        }
+
+        // [NEW] Convert remaining unutilized credit note amount to a Customer Advance
+        if (creditRemaining > 0.01) {
+            await client.query(`
+                INSERT INTO customer_advances (customer_id, return_id, amount, balance)
+                VALUES ($1, $2, $3, $3)
+            `, [ret.customer_id, id, creditRemaining]);
         }
 
         await client.query('COMMIT');

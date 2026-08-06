@@ -54,7 +54,7 @@ BEGIN
         SET amount_paid = COALESCE(amount_paid, 0) + v_apply_amount,
             status = CASE 
                 WHEN (grand_total - (COALESCE(amount_paid, 0) + v_apply_amount)) <= 1 THEN 'Paid'
-                WHEN (COALESCE(amount_paid, 0) + v_apply_amount) > 0 THEN 'Partial'
+                WHEN (COALESCE(amount_paid, 0) + v_apply_amount) > 0 THEN 'Partially Paid'
                 ELSE status
             END
         WHERE id = NEW.id;

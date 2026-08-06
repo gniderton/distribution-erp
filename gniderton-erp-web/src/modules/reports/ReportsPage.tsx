@@ -94,7 +94,7 @@ const REPORT_CATEGORIES = [
         description: 'Profitability analysis on sales transactions.',
         icon: PieChart,
         colorClass: 'text-amber-600 bg-amber-500/10 group-hover:bg-amber-500/20 ring-amber-500/30',
-        component: <GenericReportView title="Sales Margin" queryKey="sales-margin" fetchFn={reportsApi.salesFyReport} />
+        component: <GenericReportView title="Sales Margin" queryKey="sales-margin" fetchFn={() => reportsApi.salesInvoiceLines({ limit: 500 })} />
       },
       {
         id: 'dse-dash',
