@@ -383,7 +383,14 @@ router.post('/bulk-update', async (req, res) => {
                         `, [pay.transaction_ref, pay.cheque_date, pay.bank_name, pay.amount, pay.customer_id, pay.id]);
 
                     } else if (['neft', 'upi', 'online', 'bank transfer', 'imps', 'rtgs', 'cheque'].includes(pay.payment_mode?.toLowerCase())) {
-                        const bankEntryId = item.bank_stmt_id || (item.bank_stmt_id === 0 ? 0 : null); 
+                        let bankEntryId = item.bank_stmt_id || (item.bank_stmt_id === 0 ? 0 : null); 
+                        
+                        // [NEW] Auto-extract bank statement ID from mobile app's transaction_ref if missing from payload
+                        if (!bankEntryId && pay.transaction_ref) {
+                            const match = pay.transaction_ref.match(/^\[(\d+)\]/);
+                            if (match) bankEntryId = parseInt(match[1]);
+                        }
+
                         console.log(`[Bank Match] Payment ${pay.id} (${pay.payment_mode}), ID: ${bankEntryId}, Amount: ${pay.amount}`);
 
                         if (bankEntryId && !isNaN(bankEntryId)) {
