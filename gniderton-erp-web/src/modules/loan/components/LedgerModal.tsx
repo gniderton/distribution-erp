@@ -5,8 +5,11 @@ import { format } from 'date-fns'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Trash2 } from 'lucide-react'
+import { Trash2, FileText, Download } from 'lucide-react'
 import { useDeleteInstallment } from '../hooks'
+import { generateLoanLedgerPDF, exportLoanLedgerToExcel } from '../utils/pdfGenerator'
+import { api } from '@/lib/axios'
+import { useState, useEffect } from 'react'
 
 interface Props {
   open: boolean;
@@ -20,6 +23,13 @@ interface Props {
 
 export function LedgerModal({ open, onClose, title, data, isLoading, type, loanIdForDeletion }: Props) {
   const deleteMutation = useDeleteInstallment(loanIdForDeletion || null)
+  const [companySettings, setCompanySettings] = useState<any>(null)
+
+  useEffect(() => {
+    api.get('/api/company-settings')
+      .then(res => setCompanySettings(res.data))
+      .catch(err => console.error('Failed loading company settings:', err))
+  }, [])
 
   const columns: ColumnDef<any>[] = [
     {
@@ -112,7 +122,15 @@ export function LedgerModal({ open, onClose, title, data, isLoading, type, loanI
           emptyDescription="Transactions will appear here once recorded."
         />
         
-        <div className="flex justify-end pt-4">
+        <div className="flex justify-between items-center pt-4">
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => generateLoanLedgerPDF(title, data, companySettings)} className="bg-white" disabled={!data || isLoading}>
+              <FileText className="w-4 h-4 mr-2 text-rose-500" /> PDF
+            </Button>
+            <Button variant="secondary" onClick={() => exportLoanLedgerToExcel(title, data)} className="bg-white" disabled={!data || isLoading}>
+              <Download className="w-4 h-4 mr-2 text-emerald-500" /> Excel
+            </Button>
+          </div>
           <Button variant="secondary" onClick={onClose}>Close</Button>
         </div>
       </div>

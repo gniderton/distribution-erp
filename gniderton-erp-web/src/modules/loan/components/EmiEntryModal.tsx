@@ -29,14 +29,37 @@ export function EmiEntryModal({ open, onClose, loan }: Props) {
   const { data: credits } = useUnconsumedCredits()
   const createMutation = useCreateInstallment(loan?.id || null)
 
+  const calculateSplit = (total: string) => {
+    const totalAmount = Number(total || 0);
+    const principalBalance = Number(loan?.balance_principal || 0);
+    const ratePa = Number(loan?.interest_rate_pa || 0);
+    
+    if (ratePa > 0 && principalBalance > 0) {
+      const monthlyInterest = (principalBalance * ratePa) / (100 * 12);
+      const interest = Math.min(totalAmount, monthlyInterest);
+      const principal = totalAmount - interest;
+      return {
+        principal_portion: principal.toFixed(2),
+        interest_portion: interest.toFixed(2)
+      };
+    }
+    return {
+      principal_portion: total,
+      interest_portion: '0'
+    };
+  };
+
+
   useEffect(() => {
     if (open && loan) {
+      const initialAmount = loan.emi_amount ? String(loan.emi_amount) : '';
+      const split = calculateSplit(initialAmount);
       setFormData(prev => ({
         ...prev,
         transaction_date: format(new Date(), 'yyyy-MM-dd'),
-        total_amount: loan.emi_amount ? String(loan.emi_amount) : '',
-        principal_portion: loan.emi_amount ? String(loan.emi_amount) : '',
-        interest_portion: '0',
+        total_amount: initialAmount,
+        principal_portion: split.principal_portion,
+        interest_portion: split.interest_portion,
         reference_no: '',
         remarks: '',
         bank_statement_entry_id: ''
@@ -90,10 +113,13 @@ export function EmiEntryModal({ open, onClose, loan }: Props) {
                 step="0.01"
                 value={formData.total_amount} 
                 onChange={e => {
+                  const newTotal = e.target.value;
+                  const split = calculateSplit(newTotal);
                   setFormData({ 
                     ...formData, 
-                    total_amount: e.target.value,
-                    principal_portion: e.target.value 
+                    total_amount: newTotal,
+                    principal_portion: split.principal_portion,
+                    interest_portion: split.interest_portion 
                   })
                 }} 
                 required
@@ -144,12 +170,28 @@ export function EmiEntryModal({ open, onClose, loan }: Props) {
                   <Label>Bank Statement Link</Label>
                   <Select 
                     value={formData.bank_statement_entry_id} 
-                    onChange={e => setFormData({ ...formData, bank_statement_entry_id: e.target.value, bank_account_id: '' })}
+                    onChange={e => {
+                      const stmtId = e.target.value;
+                      const selectedStmt = bankStatements?.find((s: any) => String(s.id) === stmtId);
+                      const newUpdates: any = { bank_statement_entry_id: stmtId, bank_account_id: '' };
+                      if (selectedStmt) {
+                        newUpdates.transaction_date = format(new Date(selectedStmt.transaction_date), 'yyyy-MM-dd');
+                        const available = Number(selectedStmt.credit_amount || selectedStmt.debit_amount || 0) - Number(selectedStmt.consumed_amount || 0);
+                        if (available > 0) {
+                          newUpdates.total_amount = String(available);
+                          const split = calculateSplit(String(available));
+                          newUpdates.principal_portion = split.principal_portion;
+                          newUpdates.interest_portion = split.interest_portion;
+                        }
+                      }
+                      setFormData(prev => ({ ...prev, ...newUpdates }));
+                    }}
+                    required={formData.payment_mode === 'Bank Transfer'}
                   >
                     <option value="">-- Manual Entry (No Link) --</option>
                     {bankStatements?.map((stmt: any) => (
                       <option key={stmt.id} value={stmt.id}>
-                        {format(new Date(stmt.transaction_date), 'dd MMM')} - {stmt.description} - {stmt.amount - (stmt.consumed_amount || 0)} available
+                        {format(new Date(stmt.transaction_date), 'dd MMM')} - {stmt.particulars} - {Number(stmt.credit_amount || stmt.debit_amount || 0) - Number(stmt.consumed_amount || 0)} available
                       </option>
                     ))}
                   </Select>
@@ -160,6 +202,7 @@ export function EmiEntryModal({ open, onClose, loan }: Props) {
                   <Select 
                     value={formData.bank_account_id} 
                     onChange={e => setFormData({ ...formData, bank_account_id: e.target.value })}
+                    required
                   >
                     <option value="">-- Select Bank Account --</option>
                     {bankAccounts?.map((bank: any) => (
@@ -171,13 +214,15 @@ export function EmiEntryModal({ open, onClose, loan }: Props) {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Reference No</Label>
-                <Input 
-                  value={formData.reference_no} 
-                  onChange={e => setFormData({ ...formData, reference_no: e.target.value })} 
-                />
-              </div>
+              {formData.payment_mode !== 'Bank Transfer' && (
+                <div>
+                  <Label>Reference No</Label>
+                  <Input 
+                    value={formData.reference_no} 
+                    onChange={e => setFormData({ ...formData, reference_no: e.target.value })} 
+                  />
+                </div>
+              )}
               <div>
                 <Label>Remarks</Label>
                 <textarea 

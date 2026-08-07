@@ -185,12 +185,27 @@ export function CreateLoanModal({ open, onClose }: Props) {
                 <Label>Bank Statement Link (Smart Resolution)</Label>
                 <Select 
                   value={formData.bank_statement_entry_id} 
-                  onChange={e => setFormData({ ...formData, bank_statement_entry_id: e.target.value, bank_account_id: '' })}
+                  onChange={e => {
+                  const stmtId = e.target.value;
+                  const selectedStmt = bankStatements?.find((s: any) => String(s.id) === stmtId);
+                  const newUpdates: any = { bank_statement_entry_id: stmtId, bank_account_id: '' };
+                  if (selectedStmt) {
+                    const stmtDate = format(new Date(selectedStmt.transaction_date), 'yyyy-MM-dd');
+                    newUpdates.disbursement_date = stmtDate;
+                    newUpdates.start_date = stmtDate;
+                    const available = Number(selectedStmt.credit_amount || selectedStmt.debit_amount || 0) - Number(selectedStmt.consumed_amount || 0);
+                    if (available > 0) {
+                      newUpdates.principal_amount = String(available);
+                    }
+                  }
+                  setFormData(prev => ({ ...prev, ...newUpdates }));
+                }}
+                  required={formData.payment_mode === 'Bank Transfer'}
                 >
                   <option value="">-- Manual Entry (No Link) --</option>
                   {bankStatements?.map((stmt: any) => (
                     <option key={stmt.id} value={stmt.id}>
-                      {format(new Date(stmt.transaction_date), 'dd MMM')} - {stmt.description} - {stmt.amount - (stmt.consumed_amount || 0)} available
+                      {format(new Date(stmt.transaction_date), 'dd MMM')} - {stmt.particulars} - {Number(stmt.credit_amount || stmt.debit_amount || 0) - Number(stmt.consumed_amount || 0)} available
                     </option>
                   ))}
                 </Select>
@@ -201,6 +216,7 @@ export function CreateLoanModal({ open, onClose }: Props) {
                 <Select 
                   value={formData.bank_account_id} 
                   onChange={e => setFormData({ ...formData, bank_account_id: e.target.value })}
+                  required
                 >
                   <option value="">-- Select Bank Account --</option>
                   {bankAccounts?.map((bank: any) => (
@@ -212,13 +228,15 @@ export function CreateLoanModal({ open, onClose }: Props) {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Reference No</Label>
-              <Input 
-                value={formData.reference_no} 
-                onChange={e => setFormData({ ...formData, reference_no: e.target.value })} 
-              />
-            </div>
+            {formData.payment_mode !== 'Bank Transfer' && (
+              <div>
+                <Label>Reference No</Label>
+                <Input 
+                  value={formData.reference_no} 
+                  onChange={e => setFormData({ ...formData, reference_no: e.target.value })} 
+                />
+              </div>
+            )}
             <div>
               <Label>Remarks</Label>
               <textarea 
