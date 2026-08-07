@@ -1428,14 +1428,14 @@ router.post('/verify/settle', async (req, res) => {
                     }
                 }
             }
-        }
 
-        // [NEW] Convert remaining unutilized credit note amount to a Customer Advance
-        if (creditRemaining > 0.01) {
-            await client.query(`
-                INSERT INTO customer_advances (customer_id, return_id, amount, balance)
-                VALUES ($1, $2, $3, $3)
-            `, [customerId, srId, creditRemaining]);
+            // [NEW] Convert remaining unutilized credit note amount to a Customer Advance
+            if (creditRemaining > 0.01) {
+                await client.query(`
+                    INSERT INTO customer_advances (customer_id, return_id, amount, balance)
+                    VALUES ($1, $2, $3, $3)
+                `, [customerId, srId, creditRemaining]);
+            }
         }
 
         await client.query('COMMIT');
