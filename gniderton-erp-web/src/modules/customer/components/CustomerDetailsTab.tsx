@@ -85,13 +85,13 @@ export function CustomerDetailsTab({ customer, onClose }: { customer?: Customer 
         route_type_id: customer.route_type_id?.toString() ?? '',
         route_sequence: customer.route_sequence ?? 0,
         
-        address_line1: customer.addresses?.[0]?.address_line1 ?? '',
-        address_line2: customer.addresses?.[0]?.address_line2 ?? '',
-        city: customer.addresses?.[0]?.city ?? '',
-        state: customer.addresses?.[0]?.state ?? '',
-        pincode: customer.addresses?.[0]?.pincode ?? '',
-        location_lat: customer.addresses?.[0]?.location_lat ?? '',
-        location_lng: customer.addresses?.[0]?.location_lng ?? '',
+        address_line1: customer.addresses?.[0]?.address_line1 ?? (customer as any).address_line1 ?? (customer as any).Default_Address?.address_line1 ?? '',
+        address_line2: customer.addresses?.[0]?.address_line2 ?? (customer as any).address_line2 ?? (customer as any).Default_Address?.address_line2 ?? '',
+        city: customer.addresses?.[0]?.city ?? (customer as any).city ?? (customer as any).Default_Address?.city ?? '',
+        state: customer.addresses?.[0]?.state ?? (customer as any).state ?? (customer as any).Default_Address?.state ?? '',
+        pincode: customer.addresses?.[0]?.pincode ?? (customer as any).pincode ?? (customer as any).Default_Address?.pincode ?? '',
+        location_lat: customer.addresses?.[0]?.location_lat ?? (customer as any).location_lat ?? (customer as any).Default_Address?.location_lat ?? '',
+        location_lng: customer.addresses?.[0]?.location_lng ?? (customer as any).location_lng ?? (customer as any).Default_Address?.location_lng ?? '',
       })
     }
   }, [customer, reset])
