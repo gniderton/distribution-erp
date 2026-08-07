@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { CheckCircle2, XCircle, PlusCircle } from 'lucide-react'
 
+import { CustomerDetailsTab } from './CustomerDetailsTab'
+
 export function CustomerVerifyModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient()
   
@@ -108,103 +110,59 @@ export function CustomerVerifyModal({ open, onClose }: { open: boolean; onClose:
   )
 
   return (
-    <Dialog open={open} onClose={onClose} title="Verify Customers" footer={footer} widthClass="max-w-4xl">
-      <div className="mt-2">
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-border-subtle">
-          <DataTable
-            data={data || []}
-            columns={columns}
-            isLoading={isLoading}
-            emptyTitle="No Pending Verifications"
-            emptyDescription="All customers have been verified!"
-          />
+    <>
+      <Dialog open={open && !assigningRow} onClose={onClose} title="Verify Customers" footer={footer} widthClass="max-w-4xl">
+        <div className="mt-2">
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-border-subtle">
+            <DataTable
+              data={data || []}
+              columns={columns}
+              isLoading={isLoading}
+              emptyTitle="No Pending Verifications"
+              emptyDescription="All customers have been verified!"
+            />
+          </div>
         </div>
-      </div>
+      </Dialog>
 
       {assigningRow && (
-        <AssignDetailsModal 
-          row={assigningRow}
-          onClose={() => setAssigningRow(null)}
-          onConfirm={(payload: any) => approveMutation.mutate({ id: assigningRow.id, payload })}
-          isPending={approveMutation.isPending}
-          channels={Array.isArray(channels) ? channels : channels?.data || []}
-          routes={Array.isArray(routes) ? routes : routes?.data || []}
-          routeTypes={Array.isArray(routeTypes) ? routeTypes : routeTypes?.data || []}
-        />
+        <Dialog open={true} onClose={() => setAssigningRow(null)} title={assigningRow.customer_id ? "Verify Customer Update" : "Verify New Customer"} widthClass="max-w-4xl">
+          <div className="p-1 -m-6 bg-white rounded-b-xl overflow-hidden">
+            <CustomerDetailsTab 
+              customer={{
+                id: assigningRow.customer_id,
+                customer_name: assigningRow.proposed_customer_name || assigningRow.customer_name || '',
+                customer_phone: assigningRow.proposed_phone || assigningRow.customer_phone || '',
+                gstin: assigningRow.proposed_gstin || assigningRow.gstin || '',
+                dse_id: assigningRow.dse_id,
+                route_id: assigningRow.route_id,
+                channel_id: assigningRow.channel_id,
+                route_type_id: assigningRow.route_type_id,
+                credit_limit: assigningRow.credit_limit || 0,
+                credit_days: assigningRow.credit_days || 0,
+                addresses: [{
+                  address_line1: '',
+                  address_line2: '',
+                  city: '',
+                  state: '',
+                  pincode: '',
+                  location_lat: assigningRow.latitude || '',
+                  location_lng: assigningRow.longitude || '',
+                  is_default_billing: true,
+                  is_default_shipping: true
+                }]
+              } as any}
+              onClose={() => setAssigningRow(null)}
+              submitLabel="Verify & Save"
+              onSuccessCreate={(newCustomer: any) => {
+                approveMutation.mutate({ id: assigningRow.id, payload: { customer_id: newCustomer.id } })
+              }}
+            />
+          </div>
+        </Dialog>
       )}
-    </Dialog>
-  )
-}
-
-function AssignDetailsModal({ row, onClose, onConfirm, isPending, channels, routes, routeTypes }: any) {
-  const [routeId, setRouteId] = useState('')
-  const [channelId, setChannelId] = useState('')
-  const [routeTypeId, setRouteTypeId] = useState('')
-  const [creditLimit, setCreditLimit] = useState(0)
-  const [creditDays, setCreditDays] = useState(0)
-
-  const handleSubmit = () => {
-    onConfirm({
-      route_id: routeId || null,
-      channel_id: channelId || null,
-      route_type_id: routeTypeId || null,
-      credit_limit: creditLimit,
-      credit_days: creditDays
-    })
-  }
-
-  const footer = (
-    <>
-      <Button variant="secondary" onClick={onClose} disabled={isPending}>Cancel</Button>
-      <Button onClick={handleSubmit} disabled={!routeId || !channelId} loading={isPending}>
-        Assign & Verify
-      </Button>
     </>
   )
-
-  return (
-    <Dialog open={true} onClose={onClose} title="Assign Customer Details" footer={footer} widthClass="max-w-md">
-      <div className="space-y-4 mt-4">
-        <div className="bg-surface p-3 rounded-lg border border-border-subtle text-sm">
-          You are verifying a new customer: <strong>{row.proposed_customer_name || row.customer_name}</strong>.
-          <br/>Please assign the following details before approval.
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-ink-700">Route <span className="text-rose-500">*</span></label>
-          <select className="w-full h-10 px-3 rounded-md border border-border bg-white" value={routeId} onChange={e => setRouteId(e.target.value)}>
-            <option value="">Select Route...</option>
-            {routes.map((r: any) => <option key={r.id} value={r.id}>{r.route_name}</option>)}
-          </select>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-ink-700">Channel <span className="text-rose-500">*</span></label>
-          <select className="w-full h-10 px-3 rounded-md border border-border bg-white" value={channelId} onChange={e => setChannelId(e.target.value)}>
-            <option value="">Select Channel...</option>
-            {channels.map((c: any) => <option key={c.id} value={c.id}>{c.channel_name}</option>)}
-          </select>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-ink-700">Route Type / Frequency</label>
-          <select className="w-full h-10 px-3 rounded-md border border-border bg-white" value={routeTypeId} onChange={e => setRouteTypeId(e.target.value)}>
-            <option value="">Select Frequency...</option>
-            {routeTypes.map((t: any) => <option key={t.id} value={t.id}>{t.type_name}</option>)}
-          </select>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-ink-700">Credit Limit (₹)</label>
-            <input type="number" className="w-full h-10 px-3 rounded-md border border-border bg-white" value={creditLimit} onChange={e => setCreditLimit(Number(e.target.value))} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-ink-700">Credit Days</label>
-            <input type="number" className="w-full h-10 px-3 rounded-md border border-border bg-white" value={creditDays} onChange={e => setCreditDays(Number(e.target.value))} />
-          </div>
-        </div>
-      </div>
-    </Dialog>
-  )
 }
+
+// AssignDetailsModal has been replaced by the full CustomerDetailsTab form.

@@ -42,9 +42,9 @@ type FormValues = z.infer<typeof schema>
 const STATES = ['Kerala', 'Tamil Nadu', 'Karnataka', 'Maharashtra']
 const KERALA_DISTRICTS = ['Thiruvananthapuram', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam', 'Thrissur', 'Palakkad', 'Malappuram', 'Kozhikode', 'Wayanad', 'Kannur', 'Kasaragod']
 
-export function CustomerDetailsTab({ customer, onClose }: { customer?: Customer | null; onClose: () => void }) {
-  const isEdit = !!customer
-  const [isEditing, setIsEditing] = useState(!isEdit) // editable by default if new customer
+export function CustomerDetailsTab({ customer, onClose, onSuccessCreate, submitLabel }: { customer?: Customer | null; onClose: () => void; onSuccessCreate?: (data: any) => void; submitLabel?: string }) {
+  const isEdit = !!customer && !onSuccessCreate // If we are verifying a new customer, we want it to act like a create form structurally but pre-filled
+  const [isEditing, setIsEditing] = useState(!isEdit) 
   
   const create = useCreateCustomer()
   const update = useUpdateCustomer()
@@ -131,6 +131,10 @@ export function CustomerDetailsTab({ customer, onClose }: { customer?: Customer 
         }
       }
       await update.mutateAsync({ id: customer.id, payload })
+      if (onSuccessCreate) {
+        onSuccessCreate({ id: customer.id })
+        return
+      }
     } else {
       // Backend expects flattened structure for POST creates
       const payload = {
@@ -159,7 +163,11 @@ export function CustomerDetailsTab({ customer, onClose }: { customer?: Customer 
           is_default_shipping: true
         }]
       }
-      await create.mutateAsync(payload)
+      const newCustomer = await create.mutateAsync(payload)
+      if (onSuccessCreate) {
+        onSuccessCreate(newCustomer)
+        return
+      }
     }
     onClose()
   }
@@ -169,7 +177,7 @@ export function CustomerDetailsTab({ customer, onClose }: { customer?: Customer 
   return (
     <form className="max-w-4xl" onSubmit={handleSubmit(onSubmit)}>
       <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle bg-white">
-        <h3 className="font-semibold text-ink-900">{isEdit ? 'Customer Profile' : 'New Customer Profile'}</h3>
+        <h3 className="font-semibold text-ink-900">{isEdit ? 'Customer Profile' : (submitLabel || 'New Customer Profile')}</h3>
         <div className="flex gap-3">
           {isEdit && !isEditing && (
             <Button variant="secondary" onClick={() => setIsEditing(true)} type="button">
@@ -177,7 +185,7 @@ export function CustomerDetailsTab({ customer, onClose }: { customer?: Customer 
             </Button>
           )}
           {(!isEdit || isEditing) && <Button variant="secondary" onClick={onClose} type="button">Cancel</Button>}
-          {(!isEdit || isEditing) && <Button loading={saving} type="submit">{isEdit ? 'Save Changes' : 'Create Customer'}</Button>}
+          {(!isEdit || isEditing) && <Button loading={saving} type="submit">{submitLabel || (isEdit ? 'Save Changes' : 'Create Customer')}</Button>}
         </div>
       </div>
       
