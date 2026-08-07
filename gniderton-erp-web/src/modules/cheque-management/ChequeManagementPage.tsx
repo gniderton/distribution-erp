@@ -4,7 +4,7 @@ import type { Cheque, ChequeFilter, GroupedCheque } from './types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatCurrency } from '@/lib/utils';
-import { Filter, Search, CheckCircle, XCircle, Clock, Undo } from 'lucide-react';
+import { Filter, Search, CheckCircle, XCircle, Clock, RefreshCcw } from 'lucide-react';
 import ClearChequeModal from './components/ClearChequeModal';
 import BounceChequeModal from './components/BounceChequeModal';
 import RevertChequeModal from './components/RevertChequeModal';
@@ -116,103 +116,119 @@ export default function ChequeManagementPage() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="glass-card p-5 rounded-2xl border border-amber-200/50 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Clock size={64} className="text-amber-500" />
+        <div className="glass-card p-5 rounded-xl border border-[#e6e9ee] bg-white flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-[10px] text-ink-500 uppercase font-semibold tracking-wider">Pending Cheques</span>
+            <div className="flex items-end gap-2 mt-1">
+              <h4 className="text-2xl font-bold text-ink-900">{pendingGroups.length}</h4>
+              <p className="text-xs font-medium text-amber-600 mb-1">({formatCurrency(totalPendingAmt)})</p>
+            </div>
           </div>
-          <div className="relative z-10 flex flex-col h-full justify-between">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="bg-amber-100 p-2 rounded-lg"><Clock size={16} className="text-amber-600" /></div>
-              <p className="text-sm font-medium text-ink-700">Pending Cheques</p>
-            </div>
-            <div className="flex items-end gap-3">
-              <p className="text-3xl font-bold text-ink-900">{pendingGroups.length}</p>
-              <p className="text-sm font-medium text-amber-600 mb-1">({formatCurrency(totalPendingAmt)})</p>
-            </div>
+          <div className="p-3 bg-amber-500/10 text-amber-600 rounded-lg">
+            <Clock size={20} />
           </div>
         </div>
 
-        <div className="glass-card p-5 rounded-2xl border border-emerald-200/50 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <CheckCircle size={64} className="text-emerald-500" />
+        <div className="glass-card p-5 rounded-xl border border-[#e6e9ee] bg-white flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-[10px] text-ink-500 uppercase font-semibold tracking-wider">Cleared Cheques</span>
+            <div className="flex items-end gap-2 mt-1">
+              <h4 className="text-2xl font-bold text-ink-900">{clearedGroups.length}</h4>
+              <p className="text-xs font-medium text-emerald-600 mb-1">({formatCurrency(totalClearedAmt)})</p>
+            </div>
           </div>
-          <div className="relative z-10 flex flex-col h-full justify-between">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="bg-emerald-100 p-2 rounded-lg"><CheckCircle size={16} className="text-emerald-600" /></div>
-              <p className="text-sm font-medium text-ink-700">Cleared Cheques</p>
-            </div>
-            <div className="flex items-end gap-3">
-              <p className="text-3xl font-bold text-ink-900">{clearedGroups.length}</p>
-              <p className="text-sm font-medium text-emerald-600 mb-1">({formatCurrency(totalClearedAmt)})</p>
-            </div>
+          <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-lg">
+            <CheckCircle size={20} />
           </div>
         </div>
 
-        <div className="glass-card p-5 rounded-2xl border border-rose-200/50 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <XCircle size={64} className="text-rose-500" />
+        <div className="glass-card p-5 rounded-xl border border-[#e6e9ee] bg-white flex items-center justify-between shadow-sm">
+          <div>
+            <span className="text-[10px] text-ink-500 uppercase font-semibold tracking-wider">Bounced Cheques</span>
+            <div className="flex items-end gap-2 mt-1">
+              <h4 className="text-2xl font-bold text-ink-900">{bouncedGroups.length}</h4>
+              <p className="text-xs font-medium text-rose-600 mb-1">({formatCurrency(totalBouncedAmt)})</p>
+            </div>
           </div>
-          <div className="relative z-10 flex flex-col h-full justify-between">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="bg-rose-100 p-2 rounded-lg"><XCircle size={16} className="text-rose-600" /></div>
-              <p className="text-sm font-medium text-ink-700">Bounced Cheques</p>
-            </div>
-            <div className="flex items-end gap-3">
-              <p className="text-3xl font-bold text-ink-900">{bouncedGroups.length}</p>
-              <p className="text-sm font-medium text-rose-600 mb-1">({formatCurrency(totalBouncedAmt)})</p>
-            </div>
+          <div className="p-3 bg-rose-500/10 text-rose-600 rounded-lg">
+            <XCircle size={20} />
           </div>
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="glass-card p-4 rounded-xl border border-border-subtle flex flex-col md:flex-row gap-4 justify-between">
-        <div className="flex flex-wrap gap-3 flex-1">
-          <div className="relative w-full md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" size={16} />
-            <Input 
+      {/* Dynamic Filters Panel */}
+      <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between w-full">
+        <div className="relative w-full md:max-w-md flex flex-col gap-3">
+          <div className="relative w-full">
+            <Search className="absolute left-3.5 top-3 text-ink-600" size={15} />
+            <input 
+              type="text" 
               placeholder="Search by Cheque No, Party, Bank..." 
               value={search}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-              className="pl-9 w-full"
+              className="w-full bg-surface border border-[#e6e9ee] rounded-lg pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:border-brand-400 text-ink-900 placeholder:text-ink-600"
             />
           </div>
-          <select 
-            className="h-10 px-3 rounded-lg border border-border-subtle focus:border-brand-500 outline-none text-sm bg-white"
-            value={filters.type || ''}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilters({ ...filters, type: e.target.value || undefined })}
-          >
-            <option value="">All Types</option>
-            <option value="INCOMING">Incoming</option>
-            <option value="OUTGOING">Outgoing</option>
-          </select>
-          <select 
-            className="h-10 px-3 rounded-lg border border-border-subtle focus:border-brand-500 outline-none text-sm bg-white"
-            value={filters.status || ''}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilters({ ...filters, status: e.target.value || undefined })}
-          >
-            <option value="">All Statuses</option>
-            <option value="PENDING">Pending</option>
-            <option value="CLEARED">Cleared</option>
-            <option value="BOUNCED">Bounced</option>
-          </select>
+          {selectedIds.length > 0 && (
+            <div className="flex items-center gap-3 bg-brand-50 px-3 py-1.5 rounded-lg border border-brand-100 self-start">
+              <span className="text-xs font-semibold text-brand-700">
+                {selectedIds.length} selected ({formatCurrency(selectedCheques.reduce((sum: number, c: any) => sum + c.amount, 0))})
+              </span>
+              {selectedCheques.every((c: GroupedCheque) => c.status === 'PENDING') && (
+                <button 
+                  onClick={() => { setActiveCheque(null); setIsClearOpen(true); }}
+                  className="text-xs font-bold text-brand-700 bg-white px-2 py-1 rounded shadow-sm hover:bg-brand-50"
+                >
+                  Clear Selected
+                </button>
+              )}
+            </div>
+          )}
         </div>
-        
-        {selectedIds.length > 0 && (
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-ink-600">{selectedIds.length} selected</span>
-            {selectedCheques.every((c: GroupedCheque) => c.status === 'PENDING') && (
-              <Button 
-                variant="primary" 
-                onClick={() => { setActiveCheque(null); setIsClearOpen(true); }}
-              >
-                Clear Selected Cheques
-              </Button>
-            )}
+
+        <div className="flex flex-wrap gap-3 w-full md:w-auto items-center justify-end">
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <Filter size={12} className="text-ink-600" />
+            <select 
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-6 cursor-pointer"
+              value={filters.type || ''}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilters({ ...filters, type: e.target.value || undefined })}
+            >
+              <option value="">All Types</option>
+              <option value="INCOMING">Incoming</option>
+              <option value="OUTGOING">Outgoing</option>
+            </select>
           </div>
-        )}
+
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <Filter size={12} className="text-ink-600" />
+            <select 
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-6 cursor-pointer"
+              value={filters.status || ''}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilters({ ...filters, status: e.target.value || undefined })}
+            >
+              <option value="">All Statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="CLEARED">Cleared</option>
+              <option value="BOUNCED">Bounced</option>
+            </select>
+          </div>
+
+          {(search || filters.type || filters.status) && (
+            <button
+              onClick={() => {
+                setSearch('');
+                setFilters({});
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-danger-600 hover:bg-danger-500/5 rounded-lg transition"
+            >
+              <RefreshCcw size={12} />
+              Reset
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
