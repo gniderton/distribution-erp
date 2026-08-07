@@ -4,7 +4,7 @@ import type { Cheque, ChequeFilter, GroupedCheque } from './types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatCurrency } from '@/lib/utils';
-import { Filter, Search, CheckCircle, XCircle, Clock, RefreshCcw } from 'lucide-react';
+import { Filter, Search, CheckCircle, XCircle, Clock, RefreshCcw, Undo } from 'lucide-react';
 import ClearChequeModal from './components/ClearChequeModal';
 import BounceChequeModal from './components/BounceChequeModal';
 import RevertChequeModal from './components/RevertChequeModal';
