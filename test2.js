@@ -1,1 +1,18 @@
-const { pool } = require('./config/db'); async function test() { const res = await pool.query('SELECT p.*, COALESCE((SELECT SUM(quantity_remaining) FROM inventory_batches WHERE product_id = p.id AND is_active = true), 0) as total_stock FROM products p WHERE p.id = 169'); console.log(res.rows); process.exit(0); } test();  
+const { pool } = require('./config/db');
+
+async function run() {
+    try {
+        const res = await pool.query(`
+            SELECT id, payment_mode, transaction_ref, amount 
+            FROM customer_payments 
+            WHERE payment_mode ILIKE '%Credit Note%' OR transaction_ref ILIKE '%CN%' OR transaction_ref ILIKE '%SR%'
+            LIMIT 5
+        `);
+        console.table(res.rows);
+    } catch (e) {
+        console.error(e);
+    } finally {
+        process.exit(0);
+    }
+}
+run();

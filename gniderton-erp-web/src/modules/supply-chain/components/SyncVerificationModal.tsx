@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { FileText, PackageX, IndianRupee, FileDown, Box, AlertCircle, Download } from 'lucide-react'
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
@@ -8,6 +9,7 @@ import { useSyncDetails, useVerifySettle } from '../hooks'
 import { generateVehicleInventoryPDF } from '../utils/pdfHistoryGenerator'
 
 export function SyncVerificationModal({ open, onClose, syncId }: { open: boolean, onClose: () => void, syncId: number | null }) {
+  const queryClient = useQueryClient()
   const { data, isLoading } = useSyncDetails(syncId)
   const settleMutation = useVerifySettle()
   
@@ -98,9 +100,12 @@ export function SyncVerificationModal({ open, onClose, syncId }: { open: boolean
             jobId={jobId} 
             title="Settling Trip..." 
             onComplete={() => {
-              // Note: the hook invalidate is handled by useVerifySettle onSuccess typically, 
-              // but since job completes later, we should probably trigger it here if needed.
-              // For simplicity, closing will refresh if the parent refreshes.
+              queryClient.invalidateQueries({ queryKey: ['delivery-sync-logs'] })
+              queryClient.invalidateQueries({ queryKey: ['delivery-sync-logs-history'] })
+              queryClient.invalidateQueries({ queryKey: ['delivery-trips'] })
+              setTimeout(() => {
+                onClose()
+              }, 1500)
             }} 
           />
         </div>
