@@ -39,9 +39,9 @@ export function CustomerVerifyModal({ open, onClose }: { open: boolean; onClose:
   })
 
   const columns = [
-    { accessorKey: 'customer_name', header: 'Customer', cell: (c: any) => <span className="font-semibold text-ink-900">{c.getValue() as string}</span> },
-    { accessorKey: 'customer_phone', header: 'Phone', cell: (c: any) => c.getValue() || '—' },
-    { accessorKey: 'gstin', header: 'GST No', cell: (c: any) => <span className="font-mono-figures text-xs">{c.getValue() as string || '—'}</span> },
+    { id: 'customer_name', header: 'Customer', cell: ({ row }: any) => <span className="font-semibold text-ink-900">{row.original.proposed_customer_name || row.original.customer_name || '—'}</span> },
+    { id: 'customer_phone', header: 'Phone', cell: ({ row }: any) => row.original.proposed_phone || row.original.customer_phone || '—' },
+    { id: 'gstin', header: 'GST No', cell: ({ row }: any) => <span className="font-mono-figures text-xs">{row.original.proposed_gstin || row.original.gstin || '—'}</span> },
     { id: 'location', header: 'Location', cell: ({ row }: any) => {
       const lat = row.original.latitude;
       const lng = row.original.longitude;
