@@ -33,6 +33,7 @@ export function SyncVerificationModal({ open, onClose, syncId }: { open: boolean
       })
       setReturnApprovals(initialR)
       setActiveTab('manifest') // Reset to first tab
+      setJobId(null) // Reset job state so it doesn't show old completed status
     }
   }, [data, open])
 
