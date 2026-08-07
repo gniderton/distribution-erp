@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/Button'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import toast from 'react-hot-toast'
+import { generateEntityLedgerPDF } from '../utils/pdfGenerator'
+import { api } from '@/lib/axios'
+import { useState, useEffect } from 'react'
 
 interface Props {
   open: boolean
@@ -22,84 +25,18 @@ export function EntityLedgerModal({ open, onClose, entity, type }: Props) {
 
   const totalAmount = data.reduce((sum: number, row: any) => sum + parseFloat(row.debit || row.credit || 0), 0)
 
+  const [companySettings, setCompanySettings] = useState<any>(null)
+
+  useEffect(() => {
+    api.get('/api/company-settings')
+      .then(res => setCompanySettings(res.data))
+      .catch(err => console.error('Failed loading company settings:', err))
+  }, [])
+
   const handleDownloadPDF = () => {
     if (!entity) return
     try {
-      const doc = new jsPDF('p', 'pt', 'a4')
-      const margin = 17.5
-      const pageWidth = 595
-      const downloadTimestamp = new Date().toLocaleString()
-
-      doc.setTextColor(0, 0, 0)
-      doc.setFont("helvetica", "bold")
-      doc.setFontSize(16)
-      doc.text(`${type === 'expense' ? 'VENDOR' : 'INCOME SOURCE'} LEDGER STATEMENT`, pageWidth / 2, margin + 15, { align: "center" })
-      
-      const boxesY = margin + 40
-      const boxWidth = (pageWidth - (margin * 2) - 8) / 2
-      const boxHeight = 80
-
-      const drawSimpleBox = (docObj: any, x: number, y: number, width: number, height: number, rows: any[], labelWidth = 65) => {
-        docObj.setDrawColor(0, 0, 0)
-        docObj.setLineWidth(0.5)
-        docObj.rect(x, y, width, height)
-        let rowY = y + 11
-        rows.forEach((r: any) => {
-          docObj.setFontSize(8)
-          docObj.setFont("helvetica", "bold")
-          docObj.setTextColor(0, 0, 0)
-          docObj.text(String(r[0]) + ":", x + 5, rowY)
-          docObj.setFont("helvetica", "normal")
-          const val = String(r[1] || "-")
-          if (r[2]) {
-            docObj.text(val, x + width - 5, rowY, { align: 'right' })
-            rowY += 11
-          } else {
-            const splitVal = docObj.splitTextToSize(val, width - labelWidth - 5)
-            docObj.text(splitVal, x + labelWidth, rowY)
-            rowY += (splitVal.length * 9.5) + 1.5
-          }
-        })
-      }
-
-      drawSimpleBox(doc, margin, boxesY, boxWidth, boxHeight, [
-        ["Entity Name", entity.name],
-        ["Phone", entity.phone],
-        ["GST No", entity.gst_no]
-      ], 65)
-
-      drawSimpleBox(doc, margin + boxWidth + 8, boxesY, boxWidth, boxHeight, [
-        ["Total Transactions", String(data.length), true],
-        ["Total Volume", `Rs. ${totalAmount.toFixed(2)}`, true],
-        ["Printed On", downloadTimestamp, true]
-      ], 85)
-
-      const tableStartY = margin + 40 + 80 + 15
-      
-      const bodyRows = data.map((row: any) => [
-        row.date?.split('T')[0] || '',
-        row.type || '-',
-        row.reference || '-',
-        row.description || '-',
-        Number(row.debit || 0).toFixed(2),
-        Number(row.credit || 0).toFixed(2)
-      ])
-
-      autoTable(doc, {
-        startY: tableStartY,
-        margin: { left: margin, right: margin },
-        head: [["DATE", "TYPE", "REFERENCE", "DESCRIPTION", "DEBIT", "CREDIT"]],
-        body: bodyRows.length > 0 ? bodyRows : [['-', '-', '-', 'No transactions', '0.00', '0.00']],
-        theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.5, textColor: [0, 0, 0] },
-        headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.5 },
-        columnStyles: {
-          4: { halign: 'right' },
-          5: { halign: 'right' }
-        }
-      })
-
-      doc.save(`${type === 'expense' ? 'Vendor' : 'IncomeSource'}_Ledger_${entity.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`)
+      generateEntityLedgerPDF(entity, type, data, totalAmount, companySettings)
       toast.success('Ledger PDF downloaded!')
     } catch (err: any) {
       toast.error(`PDF generation failed: ${err.message}`)
