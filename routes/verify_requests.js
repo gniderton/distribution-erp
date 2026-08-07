@@ -116,28 +116,57 @@ router.post('/:id/approve', async (req, res) => {
             }
 
         } else {
-            // CASE B: CREATE NEW CUSTOMER
-            const seqRes = await client.query(`UPDATE document_sequences SET current_number = current_number + 1 WHERE document_type = 'CUSTOMER' RETURNING prefix, current_number`);
-            const customerCode = `${seqRes.rows[0].prefix}${String(seqRes.rows[0].current_number).padStart(5, '0')}`;
+            // CASE B: CREATE NEW CUSTOMER OR LINK TO UNLINKED EXISTING CUSTOMER
+            // The field app might have created the customer but failed to pass the customer_id to the verification queue.
+            // Let's check if a customer with the same phone or name already exists.
+            let existingCustomerId = null;
+            if (r.proposed_phone) {
+                const phoneCheck = await client.query(`SELECT id FROM customers WHERE customer_phone = $1 ORDER BY created_at DESC LIMIT 1`, [r.proposed_phone]);
+                if (phoneCheck.rows.length > 0) existingCustomerId = phoneCheck.rows[0].id;
+            }
+            if (!existingCustomerId && r.proposed_customer_name) {
+                const nameCheck = await client.query(`SELECT id FROM customers WHERE customer_name = $1 ORDER BY created_at DESC LIMIT 1`, [r.proposed_customer_name]);
+                if (nameCheck.rows.length > 0) existingCustomerId = nameCheck.rows[0].id;
+            }
 
-            const insertRes = await client.query(`
-                INSERT INTO customers (
-                    customer_name, customer_code, customer_phone, gstin,
-                    route_id, dse_id, channel_id, route_type_id, credit_limit, credit_days, 
-                    is_verified, verification_status, is_active
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, 'Verified', true)
-                RETURNING id
-            `, [r.proposed_customer_name, customerCode, r.proposed_phone, r.proposed_gstin, route_id, r.dse_id, channel_id, route_type_id, credit_limit, credit_days]);
-            
-            finalCustomerId = insertRes.rows[0].id;
+            if (existingCustomerId) {
+                // We found the orphaned customer created by the field app! Link and update it.
+                finalCustomerId = existingCustomerId;
+                await client.query(`
+                    UPDATE customers SET
+                        route_id = COALESCE($1, route_id),
+                        channel_id = COALESCE($2, channel_id),
+                        route_type_id = COALESCE($3, route_type_id),
+                        credit_limit = COALESCE($4, credit_limit),
+                        credit_days = COALESCE($5, credit_days),
+                        is_verified = true,
+                        verification_status = 'Verified'
+                    WHERE id = $6
+                `, [route_id, channel_id, route_type_id, credit_limit, credit_days, finalCustomerId]);
+            } else {
+                // Truly a new customer
+                const seqRes = await client.query(`UPDATE document_sequences SET current_number = current_number + 1 WHERE document_type = 'CUSTOMER' RETURNING prefix, current_number`);
+                const customerCode = `${seqRes.rows[0].prefix}${String(seqRes.rows[0].current_number).padStart(5, '0')}`;
 
-            await client.query(`
-                INSERT INTO customer_addresses (customer_id, address_line1, city, location_lat, location_lng, is_default_billing, is_default_shipping)
-                VALUES ($1, 'Captured in Field', 'Captured in Field', $2, $3, true, true)
-            `, [finalCustomerId, r.latitude, r.longitude]);
+                const insertRes = await client.query(`
+                    INSERT INTO customers (
+                        customer_name, customer_code, customer_phone, gstin,
+                        route_id, dse_id, channel_id, route_type_id, credit_limit, credit_days, 
+                        is_verified, verification_status, is_active
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, 'Verified', true)
+                    RETURNING id
+                `, [r.proposed_customer_name, customerCode, r.proposed_phone, r.proposed_gstin, route_id, r.dse_id, channel_id, route_type_id, credit_limit, credit_days]);
+                
+                finalCustomerId = insertRes.rows[0].id;
+
+                await client.query(`
+                    INSERT INTO customer_addresses (customer_id, address_line1, city, location_lat, location_lng, is_default_billing, is_default_shipping)
+                    VALUES ($1, 'Captured in Field', 'Captured in Field', $2, $3, true, true)
+                `, [finalCustomerId, r.latitude, r.longitude]);
+            }
         }
 
-        await client.query(`UPDATE customer_verification_requests SET status = 'Approved', reviewed_at = NOW(), reviewed_by = $1 WHERE id = $2`, [reviewed_by, id]);
+        await client.query(`UPDATE customer_verification_requests SET customer_id = COALESCE(customer_id, $1), status = 'Approved', reviewed_at = NOW(), reviewed_by = $2 WHERE id = $3`, [finalCustomerId, reviewed_by, id]);
 
         await client.query('COMMIT');
         res.json({ success: true, customer_id: finalCustomerId, message: 'Approval processed successfully' });
