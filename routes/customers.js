@@ -337,25 +337,56 @@ router.post('/', async (req, res) => {
             customerCode = `${prefix}${String(current_number).padStart(5, '0')}`;
         }
 
-        // 1. Insert Customer
-        const insertRes = await client.query(`
-            INSERT INTO customers (
-                customer_name, customer_code, customer_phone, email, gstin, pan, 
-                credit_limit, credit_days, channel_id,
-                route_id, dse_id, is_active, whatsapp_number, route_type_id,
-                verification_status -- [NEW]
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13, 'Pending')
-            RETURNING id
-        `, [
-            customer_name, customerCode, customer_phone, email, gstin, pan,
-            credit_limit || 0, credit_days || 0, channel_id,
-            route_id || null, dse_id || null, req.body.whatsapp_number, req.body.route_type_id || null
-        ]);
+        // 1. Check for orphaned unverified customer created by field app to prevent duplicates
+        let existingId = null;
+        if (customer_phone) {
+            const phoneCheck = await client.query(`SELECT id FROM customers WHERE customer_phone = $1 AND (is_verified = false OR is_verified IS NULL) ORDER BY created_at DESC LIMIT 1`, [customer_phone]);
+            if (phoneCheck.rows.length > 0) existingId = phoneCheck.rows[0].id;
+        }
+        if (!existingId && customer_name) {
+            const nameCheck = await client.query(`SELECT id FROM customers WHERE customer_name = $1 AND (is_verified = false OR is_verified IS NULL) ORDER BY created_at DESC LIMIT 1`, [customer_name]);
+            if (nameCheck.rows.length > 0) existingId = nameCheck.rows[0].id;
+        }
 
-        const custId = insertRes.rows[0].id;
+        let custId;
+        if (existingId) {
+            // Update the existing orphaned record
+            await client.query(`
+                UPDATE customers SET
+                    customer_name = $1, customer_phone = $2, email = $3, gstin = $4, pan = $5,
+                    credit_limit = $6, credit_days = $7, channel_id = $8,
+                    route_id = $9, dse_id = $10, whatsapp_number = $11, route_type_id = $12
+                WHERE id = $13
+            `, [
+                customer_name, customer_phone, email, gstin, pan,
+                credit_limit || 0, credit_days || 0, channel_id,
+                route_id || null, dse_id || null, req.body.whatsapp_number, req.body.route_type_id || null,
+                existingId
+            ]);
+            custId = existingId;
+        } else {
+            // Insert Customer
+            const insertRes = await client.query(`
+                INSERT INTO customers (
+                    customer_name, customer_code, customer_phone, email, gstin, pan, 
+                    credit_limit, credit_days, channel_id,
+                    route_id, dse_id, is_active, whatsapp_number, route_type_id,
+                    verification_status
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13, 'Pending')
+                RETURNING id
+            `, [
+                customer_name, customerCode, customer_phone, email, gstin, pan,
+                credit_limit || 0, credit_days || 0, channel_id,
+                route_id || null, dse_id || null, req.body.whatsapp_number, req.body.route_type_id || null
+            ]);
+            custId = insertRes.rows[0].id;
+        }
 
         // 2. Insert Addresses
         if (addresses && addresses.length > 0) {
+            if (existingId) {
+                await client.query(`DELETE FROM customer_addresses WHERE customer_id = $1`, [existingId]);
+            }
             for (const addr of addresses) {
                 await client.query(`
                     INSERT INTO customer_addresses (
