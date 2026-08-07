@@ -48,7 +48,23 @@ export function CreateEntityModal({ open, onClose }: Props) {
     })
   }
 
-  const isEmployee = formData.entity_type === 'Employee'
+  const isEmployee = formData.role_type === 'Employee' || formData.entity_type === 'Employee'
+
+  const handleEmployeeChange = (empId: string) => {
+    const emp = employees?.find((e: any) => String(e.id) === empId)
+    if (emp) {
+      setFormData(prev => ({
+        ...prev,
+        reference_id: empId,
+        entity_name: emp.full_name || '',
+        contact_number: emp.contact_primary || '',
+        email: emp.email || '',
+        address: emp.address || ''
+      }))
+    } else {
+      setFormData(prev => ({ ...prev, reference_id: empId, entity_name: '', contact_number: '', email: '', address: '' }))
+    }
+  }
 
   return (
     <Dialog open={open} onClose={onClose} title="Create Loan Entity" widthClass="max-w-lg">
@@ -90,12 +106,12 @@ export function CreateEntityModal({ open, onClose }: Props) {
             <Label>Select Employee</Label>
             <Select
               value={formData.reference_id}
-              onChange={e => setFormData({ ...formData, reference_id: e.target.value })}
+              onChange={e => handleEmployeeChange(e.target.value)}
               required={isEmployee}
             >
               <option value="">-- Select Employee --</option>
               {employees?.map((emp: any) => (
-                <option key={emp.id} value={emp.id}>{emp.full_name || emp.name} ({emp.employee_code})</option>
+                <option key={emp.id} value={emp.id}>{emp.full_name} ({emp.employee_code})</option>
               ))}
             </Select>
           </div>
@@ -110,36 +126,37 @@ export function CreateEntityModal({ open, onClose }: Props) {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label>Contact Number</Label>
-            <Input 
-              value={formData.contact_number} 
-              onChange={e => setFormData({ ...formData, contact_number: e.target.value })} 
-              disabled={isEmployee}
-            />
-          </div>
-          <div>
-            <Label>Email</Label>
-            <Input 
-              type="email"
-              value={formData.email} 
-              onChange={e => setFormData({ ...formData, email: e.target.value })} 
-              disabled={isEmployee}
-            />
-          </div>
-        </div>
+        {!isEmployee && (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Contact Number</Label>
+                <Input 
+                  value={formData.contact_number} 
+                  onChange={e => setFormData({ ...formData, contact_number: e.target.value })} 
+                />
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input 
+                  type="email"
+                  value={formData.email} 
+                  onChange={e => setFormData({ ...formData, email: e.target.value })} 
+                />
+              </div>
+            </div>
 
-        <div>
-          <Label>Address</Label>
-          <textarea 
-            className="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none"
-            value={formData.address} 
-            onChange={e => setFormData({ ...formData, address: e.target.value })}
-            rows={2}
-            disabled={isEmployee}
-          />
-        </div>
+            <div>
+              <Label>Address</Label>
+              <textarea 
+                className="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-brand-400 outline-none"
+                value={formData.address} 
+                onChange={e => setFormData({ ...formData, address: e.target.value })}
+                rows={2}
+              />
+            </div>
+          </>
+        )}
 
         <div>
           <Label>Notes</Label>
