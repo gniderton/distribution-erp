@@ -43,7 +43,7 @@ const STATES = ['Kerala', 'Tamil Nadu', 'Karnataka', 'Maharashtra']
 const KERALA_DISTRICTS = ['Thiruvananthapuram', 'Kollam', 'Pathanamthitta', 'Alappuzha', 'Kottayam', 'Idukki', 'Ernakulam', 'Thrissur', 'Palakkad', 'Malappuram', 'Kozhikode', 'Wayanad', 'Kannur', 'Kasaragod']
 
 export function CustomerDetailsTab({ customer, onClose, onSuccessCreate, submitLabel }: { customer?: Customer | null; onClose: () => void; onSuccessCreate?: (data: any) => void; submitLabel?: string }) {
-  const isEdit = !!customer && !onSuccessCreate // If we are verifying a new customer, we want it to act like a create form structurally but pre-filled
+  const isEdit = !!customer?.id 
   const [isEditing, setIsEditing] = useState(!isEdit) 
   
   const create = useCreateCustomer()
