@@ -103,6 +103,14 @@ const REPORT_CATEGORIES = [
         icon: Activity,
         colorClass: 'text-amber-600 bg-amber-500/10 group-hover:bg-amber-500/20 ring-amber-500/30',
         component: <ReceivablesReportView />
+      },
+      {
+        id: 'dse-performance',
+        title: 'DSE Executive Dashboard',
+        description: 'Live KPIs, productivity stats, and sales vs collection trends for executives.',
+        icon: Users,
+        colorClass: 'text-fuchsia-600 bg-fuchsia-500/10 group-hover:bg-fuchsia-500/20 ring-fuchsia-500/30',
+        component: <DseDashboardView />
       }
     ]
   },
@@ -163,6 +171,7 @@ const REPORT_CATEGORIES = [
 
 import { StockReportView } from './components/StockReportView'
 import { ReceivablesReportView } from './components/ReceivablesReportView'
+import { DseDashboardView } from './components/DseDashboardView'
 
 export default function ReportsPage() {
   const [activeReport, setActiveReport] = useState<ReportDefinition | null>(null)
