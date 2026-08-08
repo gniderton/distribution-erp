@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { 
   ComposedChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, 
@@ -25,7 +25,7 @@ export function DseDashboardView() {
   })
 
   // Set default selection if none selected
-  useMemo(() => {
+  useEffect(() => {
     if (!selectedDseId && employees.length > 0) {
       setSelectedDseId(employees[0].id || employees[0].employee_id)
     }
