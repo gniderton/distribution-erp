@@ -364,15 +364,27 @@ router.get('/employees/:id/dashboard', async (req, res) => {
         }
 
         const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
+        let currentYear = now.getFullYear();
+        let currentMonth = now.getMonth() + 1;
         
+        if (req.query.month && req.query.fy) {
+            currentMonth = parseInt(req.query.month);
+            const fyStartYear = parseInt(req.query.fy);
+            currentYear = currentMonth < 4 ? fyStartYear + 1 : fyStartYear;
+        }
+
         const monthStart = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
         
         // Previous Month Range
-        const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const prevMonthStart = `${prevMonthDate.getFullYear()}-${(prevMonthDate.getMonth() + 1).toString().padStart(2, '0')}-01`;
-        const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+        let prevMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+        let prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+        const prevMonthStart = `${prevMonthYear}-${prevMonth.toString().padStart(2, '0')}-01`;
+        
+        // In JS, day 0 of a month gives the last day of the previous month.
+        // currentMonth is 1-indexed. So currentMonth - 1 is the 0-indexed current month.
+        // new Date(y, m, 0) gives last day of previous month.
+        const prevMonthDate = new Date(currentYear, currentMonth - 1, 0);
+        const prevMonthEnd = `${prevMonthDate.getFullYear()}-${(prevMonthDate.getMonth() + 1).toString().padStart(2, '0')}-${prevMonthDate.getDate().toString().padStart(2, '0')}`;
 
         let fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
         const fyStart = `${fyStartYear}-04-01`;

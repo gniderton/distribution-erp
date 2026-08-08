@@ -12,7 +12,7 @@ export const reportsApi = {
   salesSummaryDetailed: (params?: any) => api.get('/api/analytics/reports/sales-summary-detailed', { params }).then((r) => r.data),
   downloadCorporateReport: (params?: any) => api.get('/api/analytics/generate-corporate-report', { params, responseType: 'blob' }).then(r => r.data),
   salesFyReport: () => api.get('/api/analytics/sales-fy-report').then((r) => r.data),
-  employeeDashboard: (id: string | number) => api.get(`/api/analytics/employees/${id}/dashboard`).then((r) => r.data),
+  employeeDashboard: (id: string | number, params?: { fy?: string; month?: string }) => api.get(`/api/analytics/employees/${id}/dashboard`, { params }).then((r) => r.data),
 
   accountingCashFlow: () => api.get('/api/accounting/cash-flow').then((r) => r.data),
   forensicSnapshot: () => api.get('/api/accounting/forensic-snapshot').then((r) => r.data),

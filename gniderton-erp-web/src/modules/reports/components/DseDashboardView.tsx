@@ -16,8 +16,12 @@ import { Select } from '@/components/ui/Input'
 import { formatCurrency } from '@/lib/utils'
 
 export function DseDashboardView() {
+  const now = new Date()
+  const currentFY = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1
+  
   const [selectedDseId, setSelectedDseId] = useState<string>('')
-
+  const [fy, setFy] = useState<string>(currentFY.toString())
+  const [month, setMonth] = useState<string>((now.getMonth() + 1).toString())
   // 1. Fetch DSE List
   const { data: employees = [], isLoading: isEmployeesLoading } = useQuery({
     queryKey: ['employees-list'],
@@ -33,8 +37,8 @@ export function DseDashboardView() {
 
   // 2. Fetch Dashboard Data
   const { data, isLoading: isDashboardLoading, error } = useQuery({
-    queryKey: ['dse-dashboard', selectedDseId],
-    queryFn: () => selectedDseId ? reportsApi.employeeDashboard(selectedDseId) : null,
+    queryKey: ['dse-dashboard', selectedDseId, month, fy],
+    queryFn: () => selectedDseId ? reportsApi.employeeDashboard(selectedDseId, { month, fy }) : null,
     enabled: !!selectedDseId,
     refetchInterval: 30000 // auto-refresh every 30s
   })
@@ -42,8 +46,9 @@ export function DseDashboardView() {
   if (isEmployeesLoading) return <div className="space-y-4"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div>
   
   const m = data?.metrics?.month || {}
-  const fy = data?.metrics?.fy || {}
+  const fyData = data?.metrics?.fy || {}
   const p = data?.productivity || {}
+  const vE = data?.visit_efficiency || {}
   
   // Calculate Points (Goal Met Days)
   let pts = 0;
@@ -77,8 +82,42 @@ export function DseDashboardView() {
           </h2>
           <p className="text-sm text-ink-500 mt-1">Live metrics, targets, and sales analytics.</p>
         </div>
-        <div className="flex items-center gap-4 w-full sm:w-auto">
-          <div className="flex flex-col sm:flex-row gap-3 items-center bg-surface px-4 py-2 rounded-xl border border-[#e6e9ee] w-full sm:w-80">
+        <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+          
+          <div className="flex items-center gap-2 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <Calendar size={14} className="text-ink-600" />
+            <select
+              value={fy}
+              onChange={e => setFy(e.target.value)}
+              className="bg-transparent text-sm font-medium text-ink-900 focus:outline-none cursor-pointer"
+            >
+              {[currentFY, currentFY - 1, currentFY - 2].map(year => (
+                <option key={year} value={year}>FY {year}-{year + 1}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <select
+              value={month}
+              onChange={e => setMonth(e.target.value)}
+              className="bg-transparent text-sm font-medium text-ink-900 focus:outline-none cursor-pointer"
+            >
+              <option value="4">April</option>
+              <option value="5">May</option>
+              <option value="6">June</option>
+              <option value="7">July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+              <option value="1">January</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 items-center bg-surface px-4 py-1.5 rounded-lg border border-[#e6e9ee] w-full sm:w-64">
             <UserCheck size={16} className="text-ink-500" />
             <Select 
               value={selectedDseId} 
@@ -111,7 +150,19 @@ export function DseDashboardView() {
             </div>
             <div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200 text-sm font-medium">
               <Users size={14} />
-              New Customers (Month): {p.new_customers_this_month || 0}
+              New Customers: {p.new_customers_this_month || 0}
+            </div>
+            <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200 text-sm font-medium">
+              <Map size={14} />
+              Visits: {vE.total_visits || 0}
+            </div>
+            <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200 text-sm font-medium">
+              <Activity size={14} />
+              Conv Rate: {vE.conversion_rate || 0}%
+            </div>
+            <div className="flex items-center gap-2 bg-rose-50 text-rose-700 px-3 py-1.5 rounded-lg border border-rose-200 text-sm font-medium">
+              <DollarSign size={14} />
+              Avg Order: {formatCurrency(vE.avg_order_value || 0)}
             </div>
             <div className="text-xs text-ink-500 ml-auto flex items-center gap-1">
               <Clock size={12} /> Last Sync: {new Date().toLocaleTimeString()}
@@ -129,7 +180,7 @@ export function DseDashboardView() {
                 {Math.abs(sG)}% MoM
               </div>
               <div className="mt-3 pt-3 border-t border-border-subtle text-xs text-ink-500">
-                FY Total: <span className="font-semibold text-ink-900">{formatCurrency(fy.net_sales_taxable || 0)}</span>
+                FY Total: <span className="font-semibold text-ink-900">{formatCurrency(fyData.net_sales_taxable || 0)}</span>
               </div>
             </div>
 
@@ -141,7 +192,7 @@ export function DseDashboardView() {
                 {Math.abs(cG)}% MoM
               </div>
               <div className="mt-3 pt-3 border-t border-border-subtle text-xs text-ink-500">
-                FY Total: <span className="font-semibold text-ink-900">{formatCurrency(fy.collection || 0)}</span>
+                FY Total: <span className="font-semibold text-ink-900">{formatCurrency(fyData.collection || 0)}</span>
               </div>
             </div>
 
@@ -169,7 +220,7 @@ export function DseDashboardView() {
               <div className="text-2xl font-bold text-ink-900 mb-2">{m.avg_credit_days || 0}</div>
               <div className="text-xs font-medium text-success-600">Healthy Pace</div>
               <div className="mt-3 pt-3 border-t border-border-subtle text-xs text-ink-500">
-                FY Avg: <span className="font-semibold text-ink-900">{fy.avg_credit_days || 0}d</span>
+                FY Avg: <span className="font-semibold text-ink-900">{fyData.avg_credit_days || 0}d</span>
               </div>
             </div>
 
