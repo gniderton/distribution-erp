@@ -102,7 +102,7 @@ const REPORT_CATEGORIES = [
         description: 'Daily Sales Executive performance tracking.',
         icon: Activity,
         colorClass: 'text-amber-600 bg-amber-500/10 group-hover:bg-amber-500/20 ring-amber-500/30',
-        component: <GenericReportView title="DSE Pending Invoices" queryKey="dse-dash" fetchFn={reportsApi.dsePendingInvoices} />
+        component: <ReceivablesReportView />
       }
     ]
   },
@@ -162,6 +162,7 @@ const REPORT_CATEGORIES = [
 ]
 
 import { StockReportView } from './components/StockReportView'
+import { ReceivablesReportView } from './components/ReceivablesReportView'
 
 export default function ReportsPage() {
   const [activeReport, setActiveReport] = useState<ReportDefinition | null>(null)
