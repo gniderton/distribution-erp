@@ -37,9 +37,6 @@ export function StockReportView() {
   // Filter Data
   const filteredData = useMemo(() => {
     return rawData.filter((row: any) => {
-      const name = String(row.product_name || '');
-      const code = String(row.product_code || '');
-      const matchSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) || code.toLowerCase().includes(searchTerm.toLowerCase());
       const matchBrand = brandFilter ? row.brand_name === brandFilter : true
       const matchCat = categoryFilter ? row.category_name === categoryFilter : true
       
@@ -49,9 +46,9 @@ export function StockReportView() {
       if (statusFilter === 'out_of_stock') matchStatus = qty <= 0;
       if (statusFilter === 'low_stock') matchStatus = qty > 0 && qty < 10; // assuming < 10 is low
 
-      return matchSearch && matchBrand && matchCat && matchStatus
+      return matchBrand && matchCat && matchStatus
     })
-  }, [rawData, searchTerm, brandFilter, categoryFilter, statusFilter])
+  }, [rawData, brandFilter, categoryFilter, statusFilter])
 
   // Calculate Stats
   const stats = useMemo(() => {
@@ -249,56 +246,19 @@ export function StockReportView() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard 
-          label="Total Items in Stock" 
-          value={stats.totalItems.toLocaleString()} 
-          icon={Package} 
-        />
-        <StatCard 
-          label="Total Inventory Valuation" 
-          value={`₹${stats.totalValuation.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} 
-          icon={DollarSign} 
-        />
-        <StatCard 
-          label="Out of Stock Items" 
-          value={stats.outOfStock.toString()} 
-          icon={Hash} 
-          trend="Requires Attention"
-          tone="danger"
-        />
-      </div>
-
-      <div className="bg-white p-4 rounded-xl border border-[#e6e9ee] shadow-sm space-y-4">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="flex-1 min-w-[200px]">
-            <Label className="text-xs mb-1 text-ink-500 block">Search Item</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-ink-400" />
-              <Input
-                placeholder="Search by name or code..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div className="bg-white p-5 rounded-xl border border-[#e6e9ee] shadow-sm flex flex-col justify-center">
+          <p className="text-sm text-ink-600 font-medium mb-1">Total Stock Valuation</p>
+          <p className="text-2xl font-bold text-ink-900 font-mono-figures">₹{stats.totalValuation.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+          <div className="flex gap-4 mt-2">
+            <p className="text-xs text-ink-500">Items: {stats.totalItems.toLocaleString()}</p>
+            {stats.outOfStock > 0 && <p className="text-xs text-danger-600 font-medium">{stats.outOfStock} Out of Stock</p>}
           </div>
-          <div className="w-[180px]">
-            <Label className="text-xs mb-1 text-ink-500 block">Brand</Label>
-            <Select value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
-              <option value="">All Brands</option>
-              {brands.map((b: any) => <option key={b} value={b}>{b}</option>)}
-            </Select>
-          </div>
-          <div className="w-[180px]">
-            <Label className="text-xs mb-1 text-ink-500 block">Category</Label>
-            <Select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-              <option value="">All Categories</option>
-              {categories.map((c: any) => <option key={c} value={c}>{c}</option>)}
-            </Select>
-          </div>
-          <div className="w-[180px]">
-            <Label className="text-xs mb-1 text-ink-500 block">Status</Label>
+        </div>
+        
+        <div className="md:col-span-2 flex items-center gap-4 bg-white p-5 rounded-xl border border-[#e6e9ee] shadow-sm">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-ink-700 mb-1">Status</label>
             <Select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="">All Items</option>
               <option value="in_stock">In Stock</option>
@@ -306,14 +266,30 @@ export function StockReportView() {
               <option value="out_of_stock">Out of Stock</option>
             </Select>
           </div>
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-ink-700 mb-1">Brand</label>
+            <Select value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
+              <option value="">All Brands</option>
+              {brands.map((b: any) => <option key={b} value={b}>{b}</option>)}
+            </Select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-ink-700 mb-1">Category</label>
+            <Select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
+              <option value="">All Categories</option>
+              {categories.map((c: any) => <option key={c} value={c}>{c}</option>)}
+            </Select>
+          </div>
         </div>
-
-        <DataTable
-          columns={columns}
-          data={filteredData}
-          searchPlaceholder="Search in results..."
-        />
       </div>
+
+      <DataTable
+        columns={columns}
+        data={filteredData}
+        globalFilter={searchTerm}
+        onGlobalFilterChange={setSearchTerm}
+        searchPlaceholder="Search by name, code, brand..."
+      />
     </div>
   )
 }
