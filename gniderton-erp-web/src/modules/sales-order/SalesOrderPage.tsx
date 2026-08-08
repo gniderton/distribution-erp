@@ -354,7 +354,67 @@ export default function SalesOrderPage() {
     }
   };
 
-  const handleDownloadShortfallReport = async () => {
+  const handleDownloadShortfallReport = () => {
+    const selectedOrders = salesOrders.filter(o => selectedOrderIds.includes(o.id));
+    
+    // Create a mutable copy of total available stock per product
+    const availableStockMap: Record<string, number> = {};
+    demandAnalysis.forEach(item => {
+      availableStockMap[item.item_id] = item.total_avail;
+    });
+
+    const reportRows: Array<{ customer_name: string; so_number: string; product_name: string; shortfall_qty: number }> = [];
+
+    // Simulate FIFO allocation to determine which customers are short
+    selectedOrders.forEach(order => {
+      let lines: OrderLine[] = [];
+      try {
+        lines = typeof order.lines === 'string' ? JSON.parse(order.lines) : order.lines || [];
+      } catch (e) {}
+
+      lines.forEach(line => {
+        const pid = String(line.product_id);
+        const qty = Number(line.qty || 0);
+        
+        if (availableStockMap[pid] !== undefined) {
+          const available = availableStockMap[pid];
+          if (available < qty) {
+            const shortfall = qty - available;
+            reportRows.push({
+              customer_name: order.customer_name || 'Unknown',
+              so_number: order.so_number || `SO-${order.id}`,
+              product_name: line.product_name || `Product ${pid}`,
+              shortfall_qty: shortfall
+            });
+          }
+          availableStockMap[pid] = Math.max(0, available - qty);
+        }
+      });
+    });
+
+    if (reportRows.length === 0) {
+      setAlertMsg({ type: 'success', text: 'No shortfalls found! All stock can be allocated.' });
+      return;
+    }
+
+    // Convert to CSV
+    const headers = ['Customer Name', 'SO Number', 'Product Name', 'Shortfall Qty'];
+    const csvContent = [
+      headers.join(','),
+      ...reportRows.map(row => 
+        `"${row.customer_name}","${row.so_number}","${row.product_name}",${row.shortfall_qty}`
+      )
+    ].join('\n');
+
+    // Download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Shortfall_Report_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const handleExportTableToExcel = async () => {
     if (demandAnalysis.length === 0) {
       setAlertMsg({ type: 'error', text: 'No data to export.' });
       return;
@@ -849,6 +909,13 @@ export default function SalesOrderPage() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
+                <button
+                  onClick={handleExportTableToExcel}
+                  className="px-4 py-2 border border-brand-200 text-brand-700 bg-brand-50 rounded-lg hover:bg-brand-100 text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Export Table to Excel
+                </button>
                 <button
                   onClick={handleDownloadShortfallReport}
                   className="px-4 py-2 border border-brand-200 text-brand-700 bg-brand-50 rounded-lg hover:bg-brand-100 text-sm font-medium transition-colors flex items-center gap-2"
