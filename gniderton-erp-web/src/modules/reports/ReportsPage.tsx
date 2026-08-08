@@ -155,11 +155,13 @@ const REPORT_CATEGORIES = [
         description: 'Current inventory holding and valuations.',
         icon: PackageSearch,
         colorClass: 'text-rose-600 bg-rose-500/10 group-hover:bg-rose-500/20 ring-rose-500/30',
-        component: <GenericReportView title="Purchase Invoice Lines" queryKey="stock" fetchFn={reportsApi.purchaseInvoiceLines} />
+        component: <StockReportView />
       }
     ]
   }
 ]
+
+import { StockReportView } from './components/StockReportView'
 
 export default function ReportsPage() {
   const [activeReport, setActiveReport] = useState<ReportDefinition | null>(null)
