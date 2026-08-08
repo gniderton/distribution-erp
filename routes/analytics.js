@@ -582,12 +582,15 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             WHERE t.employee_id = $1 AND t.month = $2 AND t.year = $3
         `, [id, currentMonth, currentYear]);
 
-        // Daily Trend (Last 30 Days)
+        // Daily Trend (For Selected Month)
+        const monthEndDate = new Date(currentYear, currentMonth, 0);
+        const monthEnd = `${monthEndDate.getFullYear()}-${(monthEndDate.getMonth() + 1).toString().padStart(2, '0')}-${monthEndDate.getDate().toString().padStart(2, '0')}`;
+        
         const dailyTrend = await pool.query(`
             WITH RECURSIVE days AS (
-                SELECT CURRENT_DATE - INTERVAL '29 days' as day_date
+                SELECT $3::date as day_date
                 UNION ALL
-                SELECT day_date + INTERVAL '1 day' FROM days WHERE day_date < CURRENT_DATE
+                SELECT day_date + INTERVAL '1 day' FROM days WHERE day_date < LEAST($4::date, CURRENT_DATE)
             )
             SELECT 
                 TO_CHAR(d.day_date, 'DD Mon') as label,
@@ -604,7 +607,7 @@ router.get('/employees/:id/dashboard', async (req, res) => {
                 ), 0) as route_receivables
             FROM days d
             ORDER BY d.day_date ASC
-        `, [customerIds, id]);
+        `, [customerIds, id, monthStart, monthEnd]);
 
         res.json({
             metrics: { 

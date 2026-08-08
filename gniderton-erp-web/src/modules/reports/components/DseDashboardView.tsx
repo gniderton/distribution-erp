@@ -51,15 +51,16 @@ export function DseDashboardView() {
   const vE = data?.visit_efficiency || {}
   const perf = data?.performance || {}
   
-  // Calculate Goal Met Days for Daily Trend
+  // Calculate Goal Met Days and Manual Points
+  let pts = 0;
   let metDays = 0;
   (data?.daily_trend || []).forEach((d: any) => { 
     if (d.route_receivables > 0 && d.collections >= (d.route_receivables * 0.3)) { 
+      pts += 20;
       metDays++; 
     } 
   });
 
-  const pts = perf.total_points || 0;
   const sG = parseFloat(data?.metrics?.growth_sales_pct || 0);
   const cG = parseFloat(data?.metrics?.growth_collection_pct || 0);
 
@@ -200,7 +201,7 @@ export function DseDashboardView() {
               <div className="absolute -right-4 -top-4 w-16 h-16 bg-fuchsia-50 rounded-full blur-xl opacity-50"></div>
               <div className="text-xs font-semibold text-fuchsia-600 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Award size={14}/> Achieved Points</div>
               <div className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-600 to-purple-600 mb-2 drop-shadow-sm">{pts}</div>
-              <div className="text-xs font-medium text-fuchsia-600">{perf.plan_name || 'No Plan Assigned'}</div>
+              <div className="text-xs font-medium text-fuchsia-600">Month Incentive</div>
               <div className="mt-3 pt-3 border-t border-fuchsia-100 text-xs text-ink-500">
                 Performance Goal: <span className="font-semibold text-ink-900">30%</span>
               </div>
