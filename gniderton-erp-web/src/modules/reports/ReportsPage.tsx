@@ -97,9 +97,9 @@ const REPORT_CATEGORIES = [
         component: <GenericReportView title="Sales Margin" queryKey="sales-margin" fetchFn={() => reportsApi.salesInvoiceLines({ limit: 500 })} />
       },
       {
-        id: 'dse-dash',
-        title: 'DSE Dashboard',
-        description: 'Daily Sales Executive performance tracking.',
+        id: 'receivables',
+        title: 'Receivables & Collections',
+        description: 'Payment Collection Master and outstanding DSE invoices.',
         icon: Activity,
         colorClass: 'text-amber-600 bg-amber-500/10 group-hover:bg-amber-500/20 ring-amber-500/30',
         component: <ReceivablesReportView />
