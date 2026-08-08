@@ -6,7 +6,7 @@ import {
 } from 'recharts'
 import { 
   TrendingUp, TrendingDown, DollarSign, Activity, Target, UserCheck, Award, 
-  Calendar, Map, Clock, ArrowUpRight, ArrowDownRight, Package, AlertCircle
+  Calendar, Map, Clock, ArrowUpRight, ArrowDownRight, Package, AlertCircle, Users
 } from 'lucide-react'
 import { api } from '@/lib/axios'
 import { reportsApi } from '../api'
@@ -191,7 +191,7 @@ export function DseDashboardView() {
                     <YAxis yAxisId="right" orientation="right" tickFormatter={(val) => `₹${(val/1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: '#6b7280' }} />
                     
                     <RechartsTooltip 
-                      formatter={(value: any, name: string) => [formatCurrency(Number(value)), name]}
+                      formatter={(value: any, name: any) => [formatCurrency(Number(value)), name]}
                       contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     />
                     <Legend wrapperStyle={{ fontSize: '12px' }} />
