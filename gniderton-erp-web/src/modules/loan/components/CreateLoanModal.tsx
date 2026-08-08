@@ -54,6 +54,7 @@ export function CreateLoanModal({ open, onClose }: Props) {
     const party = entities?.find((e: any) => e.id.toString() === formData.party_id)
     const payload = {
       ...formData,
+      party_type: party?.entity_type || 'OTHER',
       party_name: party?.entity_name || 'Unknown',
       principal_amount: Number(formData.principal_amount),
       interest_rate_pa: Number(formData.interest_rate_pa),
