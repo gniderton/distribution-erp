@@ -56,6 +56,9 @@ router.post('/', async (req, res) => {
             user_id
         } = req.body;
 
+        const allowedPartyTypes = ['EMPLOYEE', 'DIRECTOR', 'BANK', 'FAMILY', 'OTHER'];
+        const final_party_type = allowedPartyTypes.includes(party_type) ? party_type : 'OTHER';
+
         let resolvedBankAccountId = bank_account_id;
 
         // 🚀 SMART AUTO-RESOLUTION: Derive bank account from statement entry if provided
@@ -90,7 +93,7 @@ router.post('/', async (req, res) => {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             RETURNING id
         `, [
-            loanNumber, loan_type, party_type, party_id, party_name,
+            loanNumber, loan_type, final_party_type, party_id, party_name,
             principal_amount, interest_rate_pa || 0, tenor_months, emi_amount || 0,
             disbursement_date, start_date, principal_amount, 0,
             'Active', remarks, user_id
