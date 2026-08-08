@@ -269,7 +269,7 @@ export function ReceivablesReportView() {
           <p className="text-2xl font-bold text-ink-900 font-mono-figures">₹{stats.osTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
           <div className="flex gap-4 mt-2">
             <p className="text-xs text-ink-500">Invoices: {stats.invCount.toLocaleString()}</p>
-            {stats.above21DaysAmt > 0 && <p className="text-xs text-danger-600 font-medium">> 21 Days: ₹{stats.above21DaysAmt.toLocaleString('en-IN')}</p>}
+            {stats.above21DaysAmt > 0 && <p className="text-xs text-danger-600 font-medium">&gt; 21 Days: ₹{stats.above21DaysAmt.toLocaleString('en-IN')}</p>}
           </div>
         </div>
         
