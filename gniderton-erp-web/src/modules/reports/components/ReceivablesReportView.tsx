@@ -9,7 +9,7 @@ import { reportsApi } from '../api'
 import moment from 'moment'
 import { toast } from 'react-hot-toast'
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
+import autoTable from 'jspdf-autotable'
 import type { ColumnDef } from '@tanstack/react-table'
 
 export function ReceivablesReportView() {
@@ -43,16 +43,21 @@ export function ReceivablesReportView() {
   const filteredData = useMemo(() => {
     let data = Array.isArray(rawData) ? rawData : (rawData?.data || rawData?.results || [])
     return data.filter((row: any) => {
-      // If DSE is selected, we assume backend data has some dse mapping, but 
-      // the Appsmith snippet only showed selectedDseName filtering at the UI level if applicable,
-      // wait, the snippet didn't filter by DSE! It just printed the selected DSE name on the PDF.
-      // But typically, a filter should filter the table. Let's just pass them through if no specific 
-      // filter mapping is known, or filter by `dse_name` / `route_name` if they exist.
       const matchDse = selectedDseName ? (row.dse_name === selectedDseName || row.employee_name === selectedDseName) : true;
       const matchRoute = selectedRouteName ? row.route_name === selectedRouteName : true;
       return matchDse && matchRoute;
     })
   }, [rawData, selectedDseName, selectedRouteName])
+
+  // Calculate stats for UI and PDF
+  const stats = useMemo(() => {
+    const osTotal = filteredData.reduce((sum: number, item: any) => sum + Number(item.balance || 0), 0);
+    const invCount = filteredData.length;
+    const custCount = [...new Set(filteredData.map((i: any) => i.customer_id))].length;
+    const above21DaysAmt = filteredData.filter((i: any) => i.days_from_billed > 21).reduce((s: number, i: any) => s + Number(i.balance || 0), 0);
+    const targetAmt = osTotal * 0.30;
+    return { osTotal, invCount, custCount, above21DaysAmt, targetAmt };
+  }, [filteredData])
 
   // PDF Export Function (Ported from Appsmith)
   const downloadReceivablesPDF = async () => {
@@ -70,13 +75,6 @@ export function ReceivablesReportView() {
         if (nameA > nameB) return 1;
         return new Date(a.invoice_date).getTime() - new Date(b.invoice_date).getTime();
       });
-
-      // --- 2. CALCULATE FINANCIAL METRICS ---
-      const osTotal = sortedData.reduce((sum: number, item: any) => sum + Number(item.balance || 0), 0);
-      const invCount = sortedData.length;
-      const custCount = [...new Set(sortedData.map(i => i.customer_id))].length;
-      const above21DaysAmt = sortedData.filter(i => i.days_from_billed > 21).reduce((s: number, i: any) => s + Number(i.balance || 0), 0);
-      const targetAmt = osTotal * 0.30;
 
       // --- 3. LIBRARY SETUP ---
       const doc = new jsPDF('p', 'pt', 'a4');
@@ -134,15 +132,15 @@ export function ReceivablesReportView() {
         ]);
 
         _drawSimpleBox(doc, margin + (boxWidth * 2) + (gap * 2), boxesY, boxWidth, boxHeight, [
-          ["O/S TOTAL", `Rs. ${osTotal.toFixed(0)}`],
-          ["INV/CUST", `${invCount} / ${custCount}`],
-          ["> 21 DAYS", `Rs. ${above21DaysAmt.toFixed(0)}`],
-          ["TARGET 30%", `Rs. ${targetAmt.toFixed(0)}`]
+          ["O/S TOTAL", `Rs. ${stats.osTotal.toFixed(0)}`],
+          ["INV/CUST", `${stats.invCount} / ${stats.custCount}`],
+          ["> 21 DAYS", `Rs. ${stats.above21DaysAmt.toFixed(0)}`],
+          ["TARGET 30%", `Rs. ${stats.targetAmt.toFixed(0)}`]
         ]);
 
         const reconY = boxesY + boxHeight + 5;
 
-        (doc as any).autoTable({
+        autoTable(doc, {
           startY: reconY,
           margin: { left: margin },
           tableWidth: boxWidth,
@@ -159,7 +157,7 @@ export function ReceivablesReportView() {
           }
         });
 
-        (doc as any).autoTable({
+        autoTable(doc, {
           startY: reconY,
           margin: { left: margin + boxWidth + gap },
           tableWidth: (boxWidth * 2) + gap,
@@ -188,7 +186,7 @@ export function ReceivablesReportView() {
       const firstPageTableStart = drawTopSection();
 
       // --- 4. MAIN BILL TABLE (UPDATED FONT SIZE) ---
-      (doc as any).autoTable({
+      autoTable(doc, {
         startY: firstPageTableStart,
         margin: { left: margin, right: margin, bottom: 13, top: 5 },
         head: [["Date", "Inv No", "Customer", "Amt", "Bal", "P.Date", "Mode", "Bank/Ref No", "Paid", "D"]],
@@ -265,28 +263,39 @@ export function ReceivablesReportView() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-5 rounded-xl border border-[#e6e9ee] shadow-sm mb-6">
-        <div>
-          <label className="block text-xs font-medium text-ink-700 mb-1">Select DSE Name</label>
-          <Select value={selectedDseName} onChange={e => setSelectedDseName(e.target.value)}>
-            <option value="">All Sales Executives</option>
-            {employees.map((emp: any) => (
-              <option key={emp.id || emp.employee_id} value={emp.full_name || emp.employee_name}>
-                {emp.full_name || emp.employee_name}
-              </option>
-            ))}
-          </Select>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div className="bg-white p-5 rounded-xl border border-[#e6e9ee] shadow-sm flex flex-col justify-center">
+          <p className="text-sm text-ink-600 font-medium mb-1">Total Outstanding</p>
+          <p className="text-2xl font-bold text-ink-900 font-mono-figures">₹{stats.osTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+          <div className="flex gap-4 mt-2">
+            <p className="text-xs text-ink-500">Invoices: {stats.invCount.toLocaleString()}</p>
+            {stats.above21DaysAmt > 0 && <p className="text-xs text-danger-600 font-medium">> 21 Days: ₹{stats.above21DaysAmt.toLocaleString('en-IN')}</p>}
+          </div>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-ink-700 mb-1">Select Route</label>
-          <Select value={selectedRouteName} onChange={e => setSelectedRouteName(e.target.value)}>
-            <option value="">All Routes</option>
-            {routes.map((rt: any) => (
-              <option key={rt.id || rt.route_id} value={rt.route_name || rt.name}>
-                {rt.route_name || rt.name}
-              </option>
-            ))}
-          </Select>
+        
+        <div className="md:col-span-2 flex items-center gap-4 bg-white p-5 rounded-xl border border-[#e6e9ee] shadow-sm">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-ink-700 mb-1">Select DSE Name</label>
+            <Select value={selectedDseName} onChange={e => setSelectedDseName(e.target.value)}>
+              <option value="">All Sales Executives</option>
+              {employees.map((emp: any) => (
+                <option key={emp.id || emp.employee_id} value={emp.full_name || emp.employee_name}>
+                  {emp.full_name || emp.employee_name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-ink-700 mb-1">Select Route</label>
+            <Select value={selectedRouteName} onChange={e => setSelectedRouteName(e.target.value)}>
+              <option value="">All Routes</option>
+              {routes.map((rt: any) => (
+                <option key={rt.id || rt.route_id} value={rt.route_name || rt.name}>
+                  {rt.route_name || rt.name}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
       </div>
 
