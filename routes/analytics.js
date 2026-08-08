@@ -588,7 +588,7 @@ router.get('/employees/:id/dashboard', async (req, res) => {
         
         const dailyTrend = await pool.query(`
             WITH RECURSIVE days AS (
-                SELECT $3::date as day_date
+                SELECT $3::timestamp as day_date
                 UNION ALL
                 SELECT day_date + INTERVAL '1 day' FROM days WHERE day_date < LEAST($4::date, CURRENT_DATE)
             )
