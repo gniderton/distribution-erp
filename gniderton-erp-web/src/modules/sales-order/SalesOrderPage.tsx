@@ -354,64 +354,65 @@ export default function SalesOrderPage() {
     }
   };
 
-  const handleDownloadShortfallReport = () => {
-    const selectedOrders = salesOrders.filter(o => selectedOrderIds.includes(o.id));
-    
-    // Create a mutable copy of total available stock per product
-    const availableStockMap: Record<string, number> = {};
-    demandAnalysis.forEach(item => {
-      availableStockMap[item.item_id] = item.total_avail;
-    });
-
-    const reportRows: Array<{ customer_name: string; so_number: string; product_name: string; shortfall_qty: number }> = [];
-
-    // Simulate FIFO allocation to determine which customers are short
-    selectedOrders.forEach(order => {
-      let lines: OrderLine[] = [];
-      try {
-        lines = typeof order.lines === 'string' ? JSON.parse(order.lines) : order.lines || [];
-      } catch (e) {}
-
-      lines.forEach(line => {
-        const pid = String(line.product_id);
-        const qty = Number(line.qty || 0);
-        
-        if (availableStockMap[pid] !== undefined) {
-          const available = availableStockMap[pid];
-          if (available < qty) {
-            const shortfall = qty - available;
-            reportRows.push({
-              customer_name: order.customer_name || 'Unknown',
-              so_number: order.so_number || `SO-${order.id}`,
-              product_name: line.product_name || `Product ${pid}`,
-              shortfall_qty: shortfall
-            });
-          }
-          availableStockMap[pid] = Math.max(0, available - qty);
-        }
-      });
-    });
-
-    if (reportRows.length === 0) {
-      setAlertMsg({ type: 'success', text: 'No shortfalls found! All stock can be allocated.' });
+  const handleDownloadShortfallReport = async () => {
+    if (demandAnalysis.length === 0) {
+      setAlertMsg({ type: 'error', text: 'No data to export.' });
       return;
     }
 
-    // Convert to CSV
-    const headers = ['Customer Name', 'SO Number', 'Product Name', 'Shortfall Qty'];
-    const csvContent = [
-      headers.join(','),
-      ...reportRows.map(row => 
-        `"${row.customer_name}","${row.so_number}","${row.product_name}",${row.shortfall_qty}`
-      )
-    ].join('\n');
+    try {
+      // Dynamic import to avoid inflating initial bundle size if not used immediately
+      const ExcelJS = (await import('exceljs')).default;
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Stock Allocation');
 
-    // Download file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Shortfall_Report_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
+      // Define columns to match the view on the table
+      worksheet.columns = [
+        { header: 'Product Name', key: 'product_name', width: 40 },
+        { header: 'Total Demand', key: 'demand', width: 15 },
+        { header: 'Warehouse Stock', key: 'real_stock', width: 18 },
+        { header: 'Transit Allocated', key: 'transit_qty', width: 18 },
+        { header: 'Total Available', key: 'total_avail', width: 18 },
+        { header: 'Shortage', key: 'shortage', width: 15 },
+        { header: 'Status', key: 'status', width: 15 }
+      ];
+
+      // Add data rows
+      demandAnalysis.forEach(item => {
+        worksheet.addRow({
+          product_name: item.product_name,
+          demand: item.demand,
+          real_stock: item.real_stock,
+          transit_qty: item.transit_qty || 0,
+          total_avail: item.total_avail,
+          shortage: item.shortage > 0 ? item.shortage : 0,
+          status: item.status
+        });
+      });
+
+      // Style the header row
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF3F4F6' } // surface color
+      };
+
+      // Generate Excel file
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Stock_Allocation_Analysis_${new Date().toISOString().split('T')[0]}.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      setAlertMsg({ type: 'success', text: 'Successfully exported to Excel!' });
+    } catch (err) {
+      console.error('Export error:', err);
+      setAlertMsg({ type: 'error', text: 'Failed to export to Excel.' });
+    }
   };
 
   // Stock Allocation metrics cards (from Input1 & Input2 in Appsmith modalStockAllocation)
