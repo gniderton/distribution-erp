@@ -52,9 +52,15 @@ export function CreateLoanModal({ open, onClose }: Props) {
     e.preventDefault()
     
     const party = entities?.find((e: any) => e.id.toString() === formData.party_id)
+    
+    let mappedPartyType = (party?.entity_type || 'OTHER').toUpperCase()
+    if (mappedPartyType === 'FINANCIAL INSTITUTION') {
+      mappedPartyType = 'BANK'
+    }
+
     const payload = {
       ...formData,
-      party_type: party?.entity_type || 'OTHER',
+      party_type: mappedPartyType,
       party_name: party?.entity_name || 'Unknown',
       principal_amount: Number(formData.principal_amount),
       interest_rate_pa: Number(formData.interest_rate_pa),

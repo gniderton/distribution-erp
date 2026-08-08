@@ -56,8 +56,13 @@ router.post('/', async (req, res) => {
             user_id
         } = req.body;
 
+        let mapped_party_type = party_type;
+        if (typeof party_type === 'string' && party_type.toUpperCase() === 'FINANCIAL INSTITUTION') {
+            mapped_party_type = 'BANK';
+        }
+
         const allowedPartyTypes = ['EMPLOYEE', 'DIRECTOR', 'BANK', 'FAMILY', 'OTHER'];
-        const final_party_type = allowedPartyTypes.includes(party_type) ? party_type : 'OTHER';
+        const final_party_type = allowedPartyTypes.includes(mapped_party_type) ? mapped_party_type : 'OTHER';
 
         let resolvedBankAccountId = bank_account_id;
 
