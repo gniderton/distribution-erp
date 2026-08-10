@@ -160,8 +160,8 @@ router.post('/', async (req, res) => {
                 // Logic: If 'Good Stock' or Specific Batch provided, we deduct.
                 // Even 'Damage' returns typically reduce 'inventory_batches' because the item PHYSICALLY leaves.
 
-                // Round Line Amount
-                const lineAmount = Math.round(Number(line.amount));
+                // Do not round line amounts to preserve decimal precision
+                const lineAmount = Number(line.amount);
 
                 // [FIX] Fetch Tax Info if not provided to ensure proper Ledger split
                 let lineTaxPct = line.tax_percentage;
