@@ -216,7 +216,7 @@ export async function generateDebitNotePdf(dnHeader: any) {
     let batchTableY = (doc as any).lastAutoTable.finalY + 15
     autoTable(doc, {
       startY: batchTableY,
-      margin: { left: margin, right: margin, bottom: 12 },
+      margin: { left: margin, right: margin, top: 160, bottom: 12 },
       head: [["S.N", "BATCH DETAILS (ITEM NAME)", "MRP", "BATCH", "EXPIRY", "QTY"]],
       body: (dnLines || []).map((row: any, i: number) => {
         const expiryStr = row['Expiry'] ? new Date(row['Expiry']).toLocaleDateString('en-GB') : "-"
