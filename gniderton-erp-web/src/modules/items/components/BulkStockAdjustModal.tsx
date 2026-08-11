@@ -27,10 +27,8 @@ export function BulkStockAdjustModal({ open, onClose, products }: Props) {
   const [search, setSearch] = useState('')
   const [selectedBrand, setSelectedBrand] = useState('')
   
-  // We need to fetch global batches for the dropdowns
   const { data: allBatches } = useAllBatches()
   
-  // Get unique brands for the filter
   const uniqueBrands = Array.from(new Set(products.map(p => p.brand_name).filter(Boolean))).sort()
 
   const filteredProducts = products.filter(p => {
@@ -40,31 +38,63 @@ export function BulkStockAdjustModal({ open, onClose, products }: Props) {
     return matchSearch && matchBrand
   })
   
-  // Localized state for editing adjustments
-  const [edits, setEdits] = useState<Record<string | number, AdjustState>>({})
+  // extraRows[product_id] = number of additional rows requested
+  const [extraRows, setExtraRows] = useState<Record<string | number, number>>({})
+  
+  // edits keyed by `${product_id}_${index}`
+  const [edits, setEdits] = useState<Record<string, AdjustState>>({})
 
-  const handleChange = (id: string | number, field: keyof AdjustState, value: any) => {
+  const handleChange = (rowKey: string, field: keyof AdjustState, value: any) => {
     setEdits(prev => ({
       ...prev,
-      [id]: {
-        ...(prev[id] || { qty: '', reason: 'Damage', batch_code: '' }),
+      [rowKey]: {
+        ...(prev[rowKey] || { qty: '', reason: 'Damage', batch_code: '' }),
         [field]: value
       }
     }))
   }
 
+  const handleAddRow = (productId: string | number) => {
+    setExtraRows(prev => ({
+      ...prev,
+      [productId]: (prev[productId] || 0) + 1
+    }))
+  }
+
+  const handleRemoveRow = (productId: string | number, rowIndex: number) => {
+    // If it's the primary row (index 0), we just clear its edits.
+    // If it's an extra row, we decrement extraRows and shift edits (or just clear the edit for that specific rowKey, but decrementing is tricky if we don't shift. A simpler way is to just clear the edit for now and let the user ignore it, OR we change the extraRows logic).
+    // Actually, easiest way is to just clear the edit for that rowKey.
+    const rowKey = `${productId}_${rowIndex}`;
+    setEdits(prev => {
+      const next = { ...prev };
+      delete next[rowKey];
+      return next;
+    });
+    // We can decrement extraRows if it's the last row to visually hide it.
+    if (rowIndex > 0 && rowIndex === (extraRows[productId] || 0)) {
+      setExtraRows(prev => ({
+        ...prev,
+        [productId]: prev[productId] - 1
+      }))
+    }
+  }
+
   const handleSave = async () => {
     const items = Object.keys(edits)
-      .filter(id => {
-        const e = edits[id]
+      .filter(rowKey => {
+        const e = edits[rowKey]
         return e.qty !== '' && Number(e.qty) > 0
       })
-      .map(id => ({
-        product_id: id,
-        qty: Number(edits[id].qty),
-        reason: edits[id].reason,
-        batch_code: edits[id].batch_code || undefined
-      }))
+      .map(rowKey => {
+        const productId = rowKey.split('_')[0]
+        return {
+          product_id: productId,
+          qty: Number(edits[rowKey].qty),
+          reason: edits[rowKey].reason,
+          batch_code: edits[rowKey].batch_code || undefined
+        }
+      })
 
     if (items.length === 0) {
       toast.error('No valid adjustments to save. Ensure quantities are greater than zero.')
@@ -79,7 +109,7 @@ export function BulkStockAdjustModal({ open, onClose, products }: Props) {
         items
       }
       await adjustMutation.mutateAsync(payload)
-      toast.success(`Successfully adjusted stock for ${items.length} products`)
+      toast.success(`Successfully adjusted stock for ${items.length} records`)
       qc.invalidateQueries({ queryKey: ['products'] })
       onClose()
     } catch (err: any) {
@@ -92,7 +122,8 @@ export function BulkStockAdjustModal({ open, onClose, products }: Props) {
   const handleDownload = () => {
     const headers = ['Product ID', 'Product Name', 'Batch Code', 'Adjustment Qty', 'Reason']
     const rows = filteredProducts.map(p => {
-      const e = edits[p.id] || { qty: '', reason: 'Damage', batch_code: '' }
+      const rowKey = `${p.id}_0`
+      const e = edits[rowKey] || { qty: '', reason: 'Damage', batch_code: '' }
       return [
         p.id,
         `"${p.product_name.replace(/"/g, '""')}"`,
@@ -121,7 +152,8 @@ export function BulkStockAdjustModal({ open, onClose, products }: Props) {
       const text = event.target?.result as string
       const lines = text.split('\n')
       
-      const newEdits: Record<string | number, AdjustState> = {}
+      const newEdits: Record<string, AdjustState> = {}
+      const idCounts: Record<string, number> = {}
       
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i].trim()
@@ -134,7 +166,11 @@ export function BulkStockAdjustModal({ open, onClose, products }: Props) {
           const reasonStr = parts[4].trim()
           
           if (qtyStr && Number(qtyStr) > 0) {
-            newEdits[id] = {
+            const currentCount = idCounts[id] || 0
+            idCounts[id] = currentCount + 1
+            const rowKey = `${id}_${currentCount}`
+            
+            newEdits[rowKey] = {
               batch_code: parts[2].replace(/"/g, ''),
               qty: Number(qtyStr),
               reason: ['Found', 'Damage', 'Expiry', 'Lost'].includes(reasonStr) ? reasonStr : 'Damage'
@@ -143,8 +179,16 @@ export function BulkStockAdjustModal({ open, onClose, products }: Props) {
         }
       }
       
+      const newExtraRows: Record<string | number, number> = {}
+      for (const id in idCounts) {
+        if (idCounts[id] > 1) {
+          newExtraRows[id] = idCounts[id] - 1
+        }
+      }
+      
+      setExtraRows(prev => ({ ...prev, ...newExtraRows }))
       setEdits(prev => ({ ...prev, ...newEdits }))
-      toast.success(`Loaded adjustments for ${Object.keys(newEdits).length} products from CSV`)
+      toast.success(`Loaded adjustments for ${Object.keys(newEdits).length} records from CSV`)
     }
     reader.readAsText(file)
     e.target.value = ''
@@ -198,61 +242,96 @@ export function BulkStockAdjustModal({ open, onClose, products }: Props) {
               <th className="px-4 py-3 w-48">Batch Code</th>
               <th className="px-4 py-3 w-32">Adjustment Qty</th>
               <th className="px-4 py-3 w-48">Reason</th>
+              <th className="px-4 py-3 w-16">Act</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subtle bg-white">
             {filteredProducts.map(p => {
               const productBatches = allBatches?.filter((b: any) => b.product_id === p.id) || []
-              return (
-              <tr key={p.id} className="hover:bg-ink-50/50 group">
-                <td className="px-4 py-2 truncate max-w-[200px]" title={p.product_name}>
-                  {p.product_name}
-                  <div className="text-xs text-ink-400">{p.product_code || p.brand_name}</div>
-                </td>
-                <td className="px-4 py-2">
-                  {p.current_stock}
-                </td>
-                <td className="px-4 py-2">
-                  <Select 
-                    className="w-full"
-                    value={edits[p.id]?.batch_code ?? ''}
-                    onChange={e => handleChange(p.id, 'batch_code', e.target.value)}
-                  >
-                    <option value="">-- Optional --</option>
-                    {productBatches.map((b: any) => (
-                      <option key={b.id} value={b.batch_code}>{b.batch_code} (Qty: {b.quantity_remaining})</option>
-                    ))}
-                  </Select>
-                </td>
-                <td className="px-4 py-2">
-                  <Input 
-                    type="number" step="1" placeholder="0" min="1"
-                    className="w-full text-right"
-                    value={edits[p.id]?.qty ?? ''}
-                    onChange={e => handleChange(p.id, 'qty', e.target.value)}
-                  />
-                </td>
-                <td className="px-4 py-2">
-                  <Select 
-                    className="w-full"
-                    value={edits[p.id]?.reason ?? 'Damage'}
-                    onChange={e => handleChange(p.id, 'reason', e.target.value)}
-                  >
-                    <option value="Found">Found (+)</option>
-                    <option value="Damage">Damage (-)</option>
-                    <option value="Expiry">Expiry (-)</option>
-                    <option value="Lost">Lost (-)</option>
-                  </Select>
-                </td>
-              </tr>
-            )})}
+              const rowsCount = 1 + (extraRows[p.id] || 0)
+              
+              return Array.from({ length: rowsCount }).map((_, rowIndex) => {
+                const rowKey = `${p.id}_${rowIndex}`
+                const isExtraRow = rowIndex > 0
+                
+                return (
+                  <tr key={rowKey} className={`hover:bg-ink-50/50 group ${isExtraRow ? 'bg-ink-50/30' : ''}`}>
+                    <td className="px-4 py-2 truncate max-w-[200px]" title={p.product_name}>
+                      {!isExtraRow && (
+                        <>
+                          {p.product_name}
+                          <div className="text-xs text-ink-400">{p.product_code || p.brand_name}</div>
+                        </>
+                      )}
+                      {isExtraRow && <div className="text-xs text-ink-400 pl-4 border-l-2 border-border-subtle">↳ additional adjustment</div>}
+                    </td>
+                    <td className="px-4 py-2 text-ink-500 font-mono text-xs">
+                      {!isExtraRow && p.current_stock}
+                    </td>
+                    <td className="px-4 py-2">
+                      <Select 
+                        className="w-full text-xs"
+                        value={edits[rowKey]?.batch_code ?? ''}
+                        onChange={e => handleChange(rowKey, 'batch_code', e.target.value)}
+                      >
+                        <option value="">-- Optional --</option>
+                        {productBatches.map((b: any) => (
+                          <option key={b.id} value={b.batch_code}>
+                            {b.batch_code} (MRP: ₹{Number(b.mrp || 0).toFixed(2)}, Qty: {b.quantity_remaining})
+                          </option>
+                        ))}
+                      </Select>
+                    </td>
+                    <td className="px-4 py-2">
+                      <Input 
+                        type="number" step="1" placeholder="0" min="1"
+                        className="w-full text-right h-8"
+                        value={edits[rowKey]?.qty ?? ''}
+                        onChange={e => handleChange(rowKey, 'qty', e.target.value)}
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <Select 
+                        className="w-full h-8 text-xs"
+                        value={edits[rowKey]?.reason ?? 'Damage'}
+                        onChange={e => handleChange(rowKey, 'reason', e.target.value)}
+                      >
+                        <option value="Found">Found (+)</option>
+                        <option value="Damage">Damage (-)</option>
+                        <option value="Expiry">Expiry (-)</option>
+                        <option value="Lost">Lost (-)</option>
+                      </Select>
+                    </td>
+                    <td className="px-4 py-2">
+                      {rowIndex === rowsCount - 1 ? (
+                        <button 
+                          onClick={() => handleAddRow(p.id)}
+                          className="text-brand-600 hover:text-brand-800 p-1 rounded hover:bg-brand-50"
+                          title="Add another batch adjustment for this product"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => handleRemoveRow(p.id, rowIndex)}
+                          className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50"
+                          title="Clear this row"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })
+            })}
           </tbody>
         </table>
       </div>
 
       <div className="mt-6 flex items-center justify-between">
         <div className="text-sm font-medium text-brand-600 bg-brand-50 px-3 py-1.5 rounded-full">
-          {Object.values(edits).filter(e => e.qty !== '' && Number(e.qty) > 0).length} products to adjust
+          {Object.values(edits).filter(e => e.qty !== '' && Number(e.qty) > 0).length} records to adjust
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={onClose} disabled={loading}>Cancel</Button>

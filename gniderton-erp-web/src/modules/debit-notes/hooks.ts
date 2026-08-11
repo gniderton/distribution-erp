@@ -20,8 +20,12 @@ export function useVendors() {
   return useQuery({ queryKey: ['vendors', 'list'], queryFn: debit_notesApi.getVendors })
 }
 
-export function useProducts() {
-  return useQuery({ queryKey: ['products', 'list'], queryFn: debit_notesApi.getProducts })
+export function useProducts(params?: any) {
+  return useQuery({ queryKey: ['products', 'list', params], queryFn: () => debit_notesApi.getProducts(params) })
+}
+
+export function useProductsBatches(params?: any) {
+  return useQuery({ queryKey: ['products-batches', 'list', params], queryFn: () => debit_notesApi.getProductsBatches(params) })
 }
 
 export function usePurchaseInvoices() {
