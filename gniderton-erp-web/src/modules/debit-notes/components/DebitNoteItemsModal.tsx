@@ -15,7 +15,7 @@ export function DebitNoteItemsModal({ isOpen, onClose, debitNote }: DebitNoteIte
   const { data: items, isLoading, isError } = useDebitNoteItems(isOpen ? debitNote?.id : null)
 
   const columns: ColumnDef<any, any>[] = [
-    { accessorKey: 'S.No', header: 'S.No' },
+    { id: 'S.No', header: 'S.No', accessorFn: (row) => row['S.No'] },
     { accessorKey: 'Item Name', header: 'Item' },
     { accessorKey: 'Batch No', header: 'Batch' },
     { accessorKey: 'Qty', header: 'Qty' },
