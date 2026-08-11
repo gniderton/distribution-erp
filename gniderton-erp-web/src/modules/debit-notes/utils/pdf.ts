@@ -41,21 +41,26 @@ function groupDnLines(lines: any[]) {
   lines.forEach(line => {
     const key = line['product_code'] + '_' + line['MRP'];
     if (!map.has(key)) {
-      map.set(key, { ...line, Batches: new Set([line['Batch No']]), Expiries: new Set([line['Expiry']]) });
+      map.set(key, { 
+        ...line, 
+        maxQtyBatch: { qty: Number(line['Qty']), batch: line['Batch No'], expiry: line['Expiry'] } 
+      });
     } else {
       const existing = map.get(key);
-      existing['Qty'] = Number(existing['Qty'] || 0) + Number(line['Qty'] || 0);
+      const currentQty = Number(line['Qty'] || 0);
+      existing['Qty'] = Number(existing['Qty'] || 0) + currentQty;
       existing['Gross $'] = Number(existing['Gross $'] || 0) + Number(line['Gross $'] || 0);
       existing['Taxable $'] = Number(existing['Taxable $'] || 0) + Number(line['Taxable $'] || 0);
       existing['GST $'] = Number(existing['GST $'] || 0) + Number(line['GST $'] || 0);
       existing['Net $'] = Number(existing['Net $'] || 0) + Number(line['Net $'] || 0);
-      if (line['Batch No']) existing.Batches.add(line['Batch No']);
-      if (line['Expiry']) existing.Expiries.add(line['Expiry']);
+      if (currentQty > existing.maxQtyBatch.qty) {
+        existing.maxQtyBatch = { qty: currentQty, batch: line['Batch No'], expiry: line['Expiry'] };
+      }
     }
   });
   return Array.from(map.values()).map(item => {
-    item['Batch No'] = Array.from(item.Batches).filter(Boolean).join(', ');
-    item['Expiry'] = Array.from(item.Expiries).filter(Boolean)[0];
+    item['Batch No'] = item.maxQtyBatch.batch || '';
+    item['Expiry'] = item.maxQtyBatch.expiry || null;
     return item;
   });
 }
@@ -208,7 +213,35 @@ export async function generateDebitNotePdf(dnHeader: any) {
       tableWidth: 400
     })
 
-    const wordsY = (doc as any).lastAutoTable.finalY + 25
+    let batchTableY = (doc as any).lastAutoTable.finalY + 15
+    autoTable(doc, {
+      startY: batchTableY,
+      margin: { left: margin, right: margin, bottom: 12 },
+      head: [["S.N", "BATCH DETAILS (ITEM NAME)", "MRP", "BATCH", "EXPIRY", "QTY"]],
+      body: (dnLines || []).map((row: any, i: number) => {
+        const expiryStr = row['Expiry'] ? new Date(row['Expiry']).toLocaleDateString('en-GB') : "-"
+        return [
+          i + 1,
+          row['Item Name'],
+          Number(row['MRP'] || 0).toFixed(2),
+          row['Batch No'] || "-",
+          expiryStr,
+          row['Qty']
+        ]
+      }),
+      didDrawPage: (data: any) => drawMainHeader(data.pageNumber, (doc.internal as any).getNumberOfPages()),
+      theme: 'grid',
+      styles: { fontSize: 7, cellPadding: 3, lineColor: [100, 100, 100], lineWidth: 0.5, textColor: [0, 0, 0] },
+      headStyles: { fillColor: [240, 240, 240], fontStyle: 'bold' }
+    })
+
+    let wordsY = (doc as any).lastAutoTable.finalY + 25
+    if (wordsY > pageHeight - 200) {
+      doc.addPage()
+      drawMainHeader((doc.internal as any).getNumberOfPages(), (doc.internal as any).getNumberOfPages())
+      wordsY = 160
+    }
+
     doc.setFontSize(10)
     doc.setFont("helvetica", "bold")
     doc.text("Total Amount (in words):", margin, wordsY)
