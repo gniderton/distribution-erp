@@ -95,18 +95,18 @@ export default function LegacyBatchBulkModal({ open, onClose }: Props) {
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-border-subtle bg-surface">
-          <table className="w-full text-left text-sm divide-y divide-border-subtle min-w-[1200px]">
+          <table className="w-full text-left text-sm divide-y divide-border-subtle min-w-[1300px]">
             <thead className="bg-ink-50">
               <tr>
-                <th className="p-3 font-medium text-ink-700 w-64">Product *</th>
-                <th className="p-3 font-medium text-ink-700">Batch Code *</th>
-                <th className="p-3 font-medium text-ink-700">Expiry (Opt)</th>
-                <th className="p-3 font-medium text-ink-700 w-24">MRP</th>
-                <th className="p-3 font-medium text-ink-700 w-24">Purchase</th>
-                <th className="p-3 font-medium text-ink-700 w-24">Distributor</th>
-                <th className="p-3 font-medium text-ink-700 w-24">Wholesale</th>
-                <th className="p-3 font-medium text-ink-700 w-24">Dealer</th>
-                <th className="p-3 font-medium text-ink-700 w-24">Retail</th>
+                <th className="p-3 font-medium text-ink-700 min-w-[350px]">Product *</th>
+                <th className="p-3 font-medium text-ink-700 min-w-[160px]">Batch Code *</th>
+                <th className="p-3 font-medium text-ink-700 w-[140px]">Expiry (Opt)</th>
+                <th className="p-3 font-medium text-ink-700 w-[90px]">MRP</th>
+                <th className="p-3 font-medium text-ink-700 w-[90px]">Purchase</th>
+                <th className="p-3 font-medium text-ink-700 w-[90px]">Distributor</th>
+                <th className="p-3 font-medium text-ink-700 w-[90px]">Wholesale</th>
+                <th className="p-3 font-medium text-ink-700 w-[90px]">Dealer</th>
+                <th className="p-3 font-medium text-ink-700 w-[90px]">Retail</th>
                 <th className="p-3 font-medium text-ink-700 w-12"></th>
               </tr>
             </thead>
