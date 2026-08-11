@@ -17,13 +17,18 @@ export function DebitNoteItemsModal({ isOpen, onClose, debitNote }: DebitNoteIte
   const columns: ColumnDef<any, any>[] = [
     { accessorKey: 'S.No', header: 'S.No' },
     { accessorKey: 'Item Name', header: 'Item' },
-    { accessorKey: 'EAN Code', header: 'Code' },
     { accessorKey: 'Batch No', header: 'Batch' },
     { accessorKey: 'Qty', header: 'Qty' },
-    { accessorKey: 'Price', header: 'Price', cell: (c) => formatCurrency(c.getValue() as number) },
-    { accessorKey: 'GST %', header: 'GST %' },
+    { accessorKey: 'MRP', header: 'MRP', cell: (c) => formatCurrency(c.getValue() as number) },
+    { accessorKey: 'Price', header: 'Unit Rate', cell: (c) => formatCurrency(c.getValue() as number) },
+    { accessorKey: 'Gross $', header: 'Gross', cell: (c) => formatCurrency(c.getValue() as number) },
+    { accessorKey: 'Sch', header: 'Scheme', cell: (c) => c.getValue() || '0' },
+    { accessorKey: 'Disc %', header: 'Disc %', cell: (c) => c.getValue() || '0' },
+    { accessorKey: 'Disc. $', header: 'Disc Amt', cell: (c) => formatCurrency(c.getValue() as number) },
     { accessorKey: 'Taxable $', header: 'Taxable', cell: (c) => formatCurrency(c.getValue() as number) },
-    { accessorKey: 'Net $', header: 'Net Amt', cell: (c) => formatCurrency(c.getValue() as number) },
+    { accessorKey: 'GST %', header: 'Tax %' },
+    { accessorKey: 'GST $', header: 'Tax Amt', cell: (c) => formatCurrency(c.getValue() as number) },
+    { accessorKey: 'Net $', header: 'Net', cell: (c) => formatCurrency(c.getValue() as number) },
   ]
 
   if (!isOpen) return null
