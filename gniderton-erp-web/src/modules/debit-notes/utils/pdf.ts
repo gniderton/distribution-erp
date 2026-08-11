@@ -165,7 +165,12 @@ export async function generateDebitNotePdf(dnHeader: any) {
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 4, lineColor: [0, 0, 0], lineWidth: 0.5, textColor: [0, 0, 0] },
       headStyles: { fillColor: [245, 245, 245], fontStyle: 'bold' },
-      bodyStyles: (row: any) => row.raw[0] === 'Total' ? { fontStyle: 'bold', fillColor: [250, 250, 250] } : {},
+      didParseCell: (data: any) => {
+        if (data.row.raw[0] === 'Total') {
+          data.cell.styles.fontStyle = 'bold'
+          data.cell.styles.fillColor = [250, 250, 250]
+        }
+      },
       tableWidth: 400
     })
 
