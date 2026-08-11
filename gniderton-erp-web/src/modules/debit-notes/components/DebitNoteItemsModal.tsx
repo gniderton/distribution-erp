@@ -37,7 +37,7 @@ export function DebitNoteItemsModal({ isOpen, onClose, debitNote }: DebitNoteIte
     <Drawer 
       open={isOpen} 
       onClose={onClose} 
-      widthClass="max-w-4xl"
+      widthClass="max-w-7xl"
       title={
         <div className="flex items-center gap-3">
           <span className="text-xl font-bold">{debitNote?.debit_note_number || 'Debit Note'}</span>
@@ -53,7 +53,7 @@ export function DebitNoteItemsModal({ isOpen, onClose, debitNote }: DebitNoteIte
       }
       footer={<Button variant="secondary" onClick={onClose}>Close</Button>}
     >
-      <div className="flex flex-col h-full space-y-6 mt-2">
+      <div className="space-y-8 mt-2">
         {/* Header Summary */}
         <div className="flex flex-col sm:flex-row gap-6 justify-between items-start bg-surface p-5 rounded-xl border border-border-subtle">
           <div>
@@ -89,9 +89,9 @@ export function DebitNoteItemsModal({ isOpen, onClose, debitNote }: DebitNoteIte
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col min-h-[300px]">
+        <div>
           <h4 className="font-semibold text-sm mb-3 text-ink-900">Line Items</h4>
-          <div className="flex-1">
+          <div>
             <DataTable
               data={items}
               columns={columns}
