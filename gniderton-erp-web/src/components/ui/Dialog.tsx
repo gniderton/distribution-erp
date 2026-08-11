@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, useEffect } from 'react'
 
 interface DialogProps {
   open: boolean
@@ -11,6 +11,22 @@ interface DialogProps {
 
 /** Small centered dialog — reserved for short confirmations only (see Build Spec §5). */
 export function Dialog({ open, onClose, title, children, footer, widthClass = "max-w-sm" }: DialogProps) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    
+    if (open) {
+      document.addEventListener('keydown', onKey)
+      document.body.style.overflow = 'hidden'
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [open, onClose])
+
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

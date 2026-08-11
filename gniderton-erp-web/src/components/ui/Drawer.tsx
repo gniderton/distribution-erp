@@ -22,8 +22,17 @@ export function Drawer({ open, onClose, title, description, children, footer, wi
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
     }
-    if (open) document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    
+    if (open) {
+      document.addEventListener('keydown', onKey)
+      // Prevent background scrolling
+      document.body.style.overflow = 'hidden'
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
   }, [open, onClose])
 
   if (!open) return null
