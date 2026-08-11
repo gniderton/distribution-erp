@@ -10,7 +10,7 @@ export const debit_notesApi = {
   getProductsBatches: () => api.get('/api/products/batches').then((r) => r.data),
   getPurchaseInvoices: () => api.get('/api/purchase-invoices').then((r) => r.data),
   getStockAdjustBatches: (productid: string | number) => api.get(`/api/stock/adjust/batches/${productid}`).then((r) => r.data),
-  getVendors: () => api.get('/api/vendors').then((r) => r.data),
+  getVendors: () => api.get('/api/vendors').then((r) => r.data.data || r.data),
   createDebitNotes: (payload: any) => api.post('/api/debit-notes', payload).then((r) => r.data),
   createDebitNotesConvert: (id: string | number, payload: any = {}) => api.post(`/api/debit-notes/${id}/convert`, payload).then((r) => r.data),
   createDebitNotesReverse: (id: string | number, payload: any = {}) => api.post(`/api/debit-notes/${id}/reverse`, payload).then((r) => r.data),
