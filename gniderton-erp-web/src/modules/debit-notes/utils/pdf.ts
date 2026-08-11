@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
+import autoTable from 'jspdf-autotable'
 import { api } from '@/lib/axios'
 
 // Helper to convert number to words (Indian Number System)
@@ -123,7 +123,7 @@ export async function generateDebitNotePdf(dnHeader: any) {
       ])
     }
 
-    ;(doc as any).autoTable({
+    autoTable(doc, {
       startY: 160,
       margin: { left: margin, right: margin, top: 160, bottom: 120 },
       head: [["S.N", "ITEM NAME", "CODE/EAN", "HSN", "BATCH/EXP", "MRP", "QTY", "PRICE", "TXBL", "GST%", "GST$", "NET$"]],
@@ -156,7 +156,7 @@ export async function generateDebitNotePdf(dnHeader: any) {
       currentY = 160
     }
 
-    ;(doc as any).autoTable({
+    autoTable(doc, {
       startY: currentY,
       margin: { left: margin },
       head: [["TAX SUMMARY", "TOTAL PCS", "TAXABLE VALUE", "TAX AMOUNT", "NET AMOUNT"]],
