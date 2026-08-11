@@ -89,7 +89,7 @@ function getDNTaxSummary(lines: any[]) {
 
 export async function generateDebitNotePdf(dnHeader: any) {
   try {
-    const { data: dnLines } = await api.get(\`/api/debit-notes/\${dnHeader.id}/items\`)
+    const { data: dnLines } = await api.get(`/api/debit-notes/${dnHeader.id}/items`)
     
     const doc = new jsPDF('p', 'pt', 'a4')
     const groupedLines = groupDnLines(dnLines || [])
@@ -130,7 +130,7 @@ export async function generateDebitNotePdf(dnHeader: any) {
         ["DATE", new Date(dnHeader.debit_note_date).toLocaleDateString('en-GB')],
         ["BILL REF", String(dnHeader.linked_invoice_number || "-")],
         ["AMT", "INR " + Number(grandTotal).toFixed(2)],
-        ["PAGE", \`\${currentPage} / \${totalPages}\`]
+        ["PAGE", `${currentPage} / ${totalPages}`]
       ], 60)
       
       _drawSimpleBox(doc, margin + boxWidth + gap, boxesY, boxWidth, boxHeight, [
@@ -154,14 +154,14 @@ export async function generateDebitNotePdf(dnHeader: any) {
     autoTable(doc, {
       startY: 160,
       margin: { left: margin, right: margin, top: 160, bottom: 12 },
-      head: [["S.N", "ITEM NAME", "HSN", "BATCH\\nEXPIRY", "MRP", "QTY", "PRICE", "GROSS", "SCH", "D%", "D.AMT", "TXBL", "GST%", "GST$", "NET$"]],
+      head: [["S.N", "ITEM NAME", "HSN", "BATCH\nEXPIRY", "MRP", "QTY", "PRICE", "GROSS", "SCH", "D%", "D.AMT", "TXBL", "GST%", "GST$", "NET$"]],
       body: groupedLines.map((row: any, index: number) => {
         const expiryStr = row['Expiry'] ? new Date(row['Expiry']).toLocaleDateString('en-GB', { month: '2-digit', year: '2-digit' }) : "-"
         return [
           index + 1,
-          \`\${row['Item Name']}\\nEAN: \${row['EAN Code'] || row['product_code'] || ""}\`,
+          `${row['Item Name']}\nEAN: ${row['EAN Code'] || row['product_code'] || ""}`,
           row['hsn_code'] || "-",
-          \`\${row['Batch No'] || ""}\\n\${expiryStr}\`,
+          `${row['Batch No'] || ""}\n${expiryStr}`,
           Number(row['MRP'] || 0).toFixed(2),
           row['Qty'],
           Number(row['Price'] || 0).toFixed(2),
@@ -228,11 +228,11 @@ export async function generateDebitNotePdf(dnHeader: any) {
     doc.text("DETACHABLE ACKNOWLEDGEMENT SLIP", pageWidth / 2, slipY + 15, { align: "center" })
 
     doc.setFont("helvetica", "normal")
-    doc.text(\`Debit Note: \${dnHeader.debit_note_number}\`, margin, slipY + 35)
-    doc.text(\`Date: \${new Date(dnHeader.debit_note_date).toLocaleDateString('en-GB')}\`, margin + 180, slipY + 35)
-    doc.text(\`Amount: \${Number(grandTotal).toFixed(2)}\`, margin + 350, slipY + 35)
-    doc.text(\`Vendor: \${dnHeader.vendor_name}\`, margin, slipY + 50)
-    doc.text(\`Receiver's Signature: ___________________________\`, margin + 310, slipY + 80)
+    doc.text(`Debit Note: ${dnHeader.debit_note_number}`, margin, slipY + 35)
+    doc.text(`Date: ${new Date(dnHeader.debit_note_date).toLocaleDateString('en-GB')}`, margin + 180, slipY + 35)
+    doc.text(`Amount: ${Number(grandTotal).toFixed(2)}`, margin + 350, slipY + 35)
+    doc.text(`Vendor: ${dnHeader.vendor_name}`, margin, slipY + 50)
+    doc.text(`Receiver's Signature: ___________________________`, margin + 310, slipY + 80)
 
     doc.save((dnHeader.debit_note_number || "DebitNote") + ".pdf")
   } catch (error: any) {
