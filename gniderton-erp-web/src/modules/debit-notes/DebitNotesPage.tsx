@@ -51,7 +51,7 @@ export default function DebitNotesPage() {
       accessorKey: 'note_type',
       header: 'Type',
       cell: ({ row }) => (
-        <Badge variant={row.original.note_type === 'Return Slip' ? 'warning' : 'default'}>
+        <Badge tone={row.original.note_type === 'Return Slip' ? 'warn' : 'neutral'}>
           {row.original.note_type}
         </Badge>
       ),
@@ -65,7 +65,7 @@ export default function DebitNotesPage() {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => (
-        <Badge variant={row.original.status === 'Approved' ? 'success' : 'default'}>
+        <Badge tone={row.original.status === 'Approved' ? 'success' : 'neutral'}>
           {row.original.status}
         </Badge>
       ),
@@ -100,7 +100,7 @@ export default function DebitNotesPage() {
             </Button>
             {isReturnSlip && !isConverted && (
               <Button 
-                variant="outline" 
+                variant="secondary" 
                 size="sm" 
                 onClick={(e) => { 
                   e.stopPropagation(); 
@@ -126,7 +126,7 @@ export default function DebitNotesPage() {
           title="Debit Notes & Returns"
           description="Manage financial adjustments and item returns to vendors."
         />
-        <Button onClick={() => setCreateModalOpen(true)} className="gap-2">
+        <Button onClick={() => setCreateModalOpen(true)} className="gap-2" variant="primary">
           <Plus className="w-4 h-4" /> New Record
         </Button>
       </div>
@@ -136,7 +136,7 @@ export default function DebitNotesPage() {
         {(['All', 'Debit Note', 'Return Slip'] as const).map(type => (
           <Button 
             key={type}
-            variant={typeFilter === type ? 'default' : 'outline'}
+            variant={typeFilter === type ? 'primary' : 'secondary'}
             size="sm"
             onClick={() => setTypeFilter(type)}
             className="rounded-full"

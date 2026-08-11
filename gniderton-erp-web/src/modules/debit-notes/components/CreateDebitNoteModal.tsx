@@ -121,22 +121,22 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
       widthClass={mode === 'Item Return' ? 'max-w-5xl' : 'max-w-md'}
       footer={
         <>
-          <Button variant="outline" onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleSubmit}>Create</Button>
+          <Button variant="secondary" onClick={handleClose}>Cancel</Button>
+          <Button variant="primary" onClick={handleSubmit}>Create</Button>
         </>
       }
     >
       <div className="flex flex-col gap-4 py-2">
         <div className="flex gap-2">
           <Button 
-            variant={mode === 'Financial' ? 'default' : 'outline'} 
+            variant={mode === 'Financial' ? 'primary' : 'secondary'} 
             onClick={() => setMode('Financial')}
             className="flex-1"
           >
             Financial Adjustment
           </Button>
           <Button 
-            variant={mode === 'Item Return' ? 'default' : 'outline'} 
+            variant={mode === 'Item Return' ? 'primary' : 'secondary'} 
             onClick={() => setMode('Item Return')}
             className="flex-1"
           >
@@ -184,7 +184,7 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
           <div className="mt-4 border border-border-subtle rounded-md p-4 bg-ink-50/50">
             <div className="flex justify-between items-center mb-2">
               <h4 className="font-semibold text-sm">Return Items</h4>
-              <Button size="sm" variant="outline" onClick={handleAddLine}>Add Item</Button>
+              <Button size="sm" variant="secondary" onClick={handleAddLine}>Add Item</Button>
             </div>
             
             {lines.length === 0 ? (

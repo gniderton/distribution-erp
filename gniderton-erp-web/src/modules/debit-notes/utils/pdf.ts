@@ -180,9 +180,9 @@ export async function generateDebitNotePdf(dnHeader: any) {
     doc.text("This is a computer generated document and does not require a physical signature.", margin, wordsY + 20)
 
     const slipY = pageHeight - 100
-    doc.setLineDash([3, 3], 0)
+    ;(doc as any).setLineDash([3, 3], 0)
     doc.line(margin, slipY, pageWidth - margin, slipY)
-    doc.setLineDash([], 0)
+    ;(doc as any).setLineDash([], 0)
 
     doc.setFontSize(9)
     doc.setFont("helvetica", "bold")
