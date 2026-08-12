@@ -833,17 +833,56 @@ router.post('/returns/manual', async (req, res) => {
             const batchId = item.batch_id || null;
             const inventoryStatus = item.inventory_status || 'Good'; // [NEW] Status from UI
 
-            // A. Valuation Logic (Matching Delivery Sync)
+            // A. Valuation Logic (Matching Delivery Sync & Historical Pricing)
             let unitNet = Number(item['Taxable $'] || 0) / qty; 
             
-            // If linked to an invoice, try to fetch the precise historic net rate
-            if (invoice_id && productId) {
+            if (req.body.is_exact_invoice_return && invoice_id && productId) {
+                // EXACT BILL RETURN (Highest Priority bypass)
                 const histRes = await client.query(`
                     SELECT (taxable_amount / NULLIF(shipped_qty, 0)) as unit_net 
                     FROM sales_invoice_lines 
                     WHERE invoice_id = $1 AND product_id = $2 LIMIT 1
                 `, [invoice_id, productId]);
-                if (histRes.rows.length > 0) unitNet = Number(histRes.rows[0].unit_net);
+                if (histRes.rows.length > 0) {
+                    unitNet = Number(histRes.rows[0].unit_net);
+                } else {
+                    throw new Error(`Product ID ${productId} not found on linked invoice for Exact Return.`);
+                }
+            } else if (productId) {
+                // NORMAL MANUAL RETURN: 3-Tier Lowest Price Logic
+                let foundPrice = false;
+
+                // Tier 1: Lowest Batch Price (Customer Specific)
+                if (batchId) {
+                    const batchHistRes = await client.query(`
+                        SELECT MIN(sil.taxable_amount / NULLIF(sil.shipped_qty, 0)) as min_unit_net
+                        FROM sales_invoice_lines sil
+                        JOIN sales_invoices si ON si.id = sil.invoice_id
+                        WHERE si.customer_id = $1 AND sil.product_id = $2 AND sil.batch_id = $3
+                    `, [customer_id, productId, batchId]);
+                    if (batchHistRes.rows.length > 0 && batchHistRes.rows[0].min_unit_net !== null) {
+                        unitNet = Number(batchHistRes.rows[0].min_unit_net);
+                        foundPrice = true;
+                    }
+                }
+
+                // Tier 2: Lowest Product Price (Customer Specific)
+                if (!foundPrice) {
+                    const prodHistRes = await client.query(`
+                        SELECT MIN(sil.taxable_amount / NULLIF(sil.shipped_qty, 0)) as min_unit_net
+                        FROM sales_invoice_lines sil
+                        JOIN sales_invoices si ON si.id = sil.invoice_id
+                        WHERE si.customer_id = $1 AND sil.product_id = $2
+                    `, [customer_id, productId]);
+                    if (prodHistRes.rows.length > 0 && prodHistRes.rows[0].min_unit_net !== null) {
+                        unitNet = Number(prodHistRes.rows[0].min_unit_net);
+                        foundPrice = true;
+                    }
+                }
+
+                // Tier 3: Batch Master Price (Fallback)
+                // If foundPrice is still false, it means they never bought this product.
+                // We fallback to unitNet which defaults to the frontend provided `Taxable $ / qty`.
             }
 
             const grossAmount = qty * rate;

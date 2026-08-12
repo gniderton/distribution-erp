@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { useCreateCreditNote, useCustomers, useCustomerPendingBills, useUnifiedInvoiceDetail, useProducts, useProductsBatches } from '../hooks'
-import { CheckCircle2, Package, Plus, Trash, Download } from 'lucide-react'
+import { CheckCircle2, Package, Plus, Trash, Download, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -23,6 +23,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
   const [remarks, setRemarks] = useState('')
   const [flatAmount, setFlatAmount] = useState('')
   const [isFlatGst, setIsFlatGst] = useState(true)
+  const [isExactInvoiceReturn, setIsExactInvoiceReturn] = useState(false)
 
   const { data: pendingBills } = useCustomerPendingBills(customerId)
   const { data: invoiceDetail, isFetching: isFetchingInvoice } = useUnifiedInvoiceDetail(invoiceId)
@@ -74,7 +75,59 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
       }
     })
     setLines(newLines)
+    setIsExactInvoiceReturn(true)
     toast.success('Loaded items from invoice')
+  }
+
+  const handle1ClickReturn = async () => {
+    if (!invoiceDetail || !invoiceDetail.lines) {
+      toast.error('No invoice details found')
+      return
+    }
+
+    const loadedLines = invoiceDetail.lines.map((l: any) => {
+      const p = products.find((prod: any) => String(prod.id) === String(l.product_id))
+      return {
+        product_id: l.product_id,
+        batch_id: l.batch_id,
+        inventory_status: 'Good',
+        return_to_stock: true,
+        qty: Number(l.shipped_qty || l.qty || 1),
+        rate: Number(l.rate || l.mrp || 0),
+        tax_percentage: Number(l.tax_percent || 0),
+        taxable: Number(l.taxable_amount || 0)
+      }
+    })
+
+    const itemsPayload = loadedLines.filter((l: any) => Number(l.qty) > 0).map((l: any) => ({
+      _product_id: l.product_id,
+      batch_id: l.batch_id,
+      inventory_status: l.inventory_status,
+      Qty: Number(l.qty),
+      Price: Number(l.rate),
+      'GST %': Number(l.tax_percentage),
+      'Taxable $': Number(l.taxable),
+      return_to_stock: l.return_to_stock,
+      reason: remarks
+    }))
+
+    const payload = {
+      customer_id: customerId,
+      invoice_id: invoiceId || null,
+      type: 'Itemized Sales Return',
+      remarks,
+      return_date: date,
+      items: itemsPayload,
+      is_exact_invoice_return: true
+    }
+
+    try {
+      await createCreditNote(payload)
+      toast.success('Exact Bill Return completed successfully')
+      handleClose()
+    } catch (e: any) {
+      toast.error('Failed to return bill: ' + (e.response?.data?.error || e.message))
+    }
   }
 
   const handleAddLine = () => {
@@ -99,6 +152,10 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
   }
 
   const handleLineChange = (index: number, field: string, value: any) => {
+    if (['product_id', 'batch_id'].includes(field)) {
+      setIsExactInvoiceReturn(false) // Changing products/batches breaks exact invoice match
+    }
+
     const newLines = [...lines]
     newLines[index][field] = value
 
@@ -210,7 +267,8 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
       type: mode === 'Itemized' ? 'Itemized Sales Return' : 'Flat Amount Return',
       remarks,
       return_date: date,
-      items: itemsPayload
+      items: itemsPayload,
+      is_exact_invoice_return: isExactInvoiceReturn
     }
 
     try {
@@ -228,6 +286,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
     setRemarks('')
     setFlatAmount('')
     setIsFlatGst(true)
+    setIsExactInvoiceReturn(false)
     setLines([])
     setMode('Itemized')
     onClose()
@@ -283,15 +342,26 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
                 />
               </div>
               {mode === 'Itemized' && invoiceId && (
-                <Button 
-                  variant="secondary" 
-                  onClick={handleLoadFromInvoice}
-                  disabled={isFetchingInvoice}
-                  className="px-2"
-                  title="Load Items"
-                >
-                  <Download size={14} />
-                </Button>
+                <>
+                  <Button 
+                    variant="secondary" 
+                    onClick={handleLoadFromInvoice}
+                    disabled={isFetchingInvoice}
+                    className="px-2"
+                    title="Load Items"
+                  >
+                    <Download size={14} />
+                  </Button>
+                  <Button 
+                    variant="primary" 
+                    onClick={handle1ClickReturn}
+                    disabled={isFetchingInvoice}
+                    className="px-2 bg-amber-500 hover:bg-amber-600 text-white border-amber-500 hover:border-amber-600"
+                    title="1-Click Return Full Bill"
+                  >
+                    <Zap size={14} />
+                  </Button>
+                </>
               )}
             </div>
           </div>
