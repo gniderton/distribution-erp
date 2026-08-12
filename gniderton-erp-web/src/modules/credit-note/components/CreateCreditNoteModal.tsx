@@ -327,7 +327,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
   if (!isOpen) return null
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} title="Create Credit Note / Sales Return" widthClass="max-w-6xl">
+    <Dialog open={isOpen} onClose={handleClose} title="Create Credit Note / Sales Return" widthClass="max-w-[95vw] 2xl:max-w-[1600px]">
       <div className="flex flex-col gap-5 py-1">
         
         {/* Compact Segmented Control */}
@@ -446,23 +446,23 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
             </div>
             
             <div className="overflow-x-auto flex-1 pb-4">
-              <table className="w-full text-xs min-w-[1200px]">
+              <table className="w-full text-xs min-w-[1400px]">
                 <thead className="bg-surface border-b border-[#e6e9ee]">
                   <tr className="text-left text-ink-600">
                     <th className="px-3 py-3 font-medium min-w-[200px]">Product</th>
                     <th className="px-3 py-3 font-medium w-[160px]">Batch</th>
                     <th className="px-3 py-3 font-medium w-[110px]">Condition</th>
-                    <th className="px-3 py-3 font-medium w-[80px] text-right">Qty</th>
-                    <th className="px-3 py-3 font-medium w-[80px] text-right">MRP</th>
-                    <th className="px-3 py-3 font-medium w-[90px] text-right">Rate</th>
-                    <th className="px-3 py-3 font-medium w-[90px] text-right">Gross</th>
-                    <th className="px-3 py-3 font-medium w-[80px] text-right">Scheme</th>
-                    <th className="px-3 py-3 font-medium w-[70px] text-right">Disc %</th>
-                    <th className="px-3 py-3 font-medium w-[80px] text-right">Disc Amt</th>
-                    <th className="px-3 py-3 font-medium w-[90px] text-right">Taxable</th>
-                    <th className="px-3 py-3 font-medium w-[60px] text-right">Tax %</th>
-                    <th className="px-3 py-3 font-medium w-[80px] text-right">Tax Amt</th>
-                    <th className="px-3 py-3 font-medium w-[100px] text-right">Net</th>
+                    <th className="px-3 py-3 font-medium w-[100px] text-right">Qty</th>
+                    <th className="px-3 py-3 font-medium w-[110px] text-right">MRP</th>
+                    <th className="px-3 py-3 font-medium w-[120px] text-right">Rate</th>
+                    <th className="px-3 py-3 font-medium w-[120px] text-right">Gross</th>
+                    <th className="px-3 py-3 font-medium w-[110px] text-right">Scheme</th>
+                    <th className="px-3 py-3 font-medium w-[90px] text-right">Disc %</th>
+                    <th className="px-3 py-3 font-medium w-[110px] text-right">Disc Amt</th>
+                    <th className="px-3 py-3 font-medium w-[120px] text-right">Taxable</th>
+                    <th className="px-3 py-3 font-medium w-[80px] text-right">Tax %</th>
+                    <th className="px-3 py-3 font-medium w-[110px] text-right">Tax Amt</th>
+                    <th className="px-3 py-3 font-medium w-[120px] text-right">Net</th>
                     <th className="px-3 py-3 font-medium w-[50px] text-center">Del</th>
                   </tr>
                 </thead>
