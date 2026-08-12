@@ -10,4 +10,6 @@ export const credit_noteApi = {
   getSalesReturns: () => api.get('/api/sales-returns').then((r) => r.data),
   getSalesReturns2: () => api.get('/api/sales/returns').then((r) => r.data),
   createSalesReturnsManual: (payload: any) => api.post('/api/sales/returns/manual', payload).then((r) => r.data),
+  getUnifiedInvoiceDetail: (id: string | number) => api.get(`/api/sales/unified/${id}`).then(r => r.data),
+  getSalesReturnDetail: (id: string | number) => api.get(`/api/sales-returns/${id}`).then(r => r.data),
 }

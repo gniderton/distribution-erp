@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { X, Loader2, CheckCircle2, XCircle, FileText, Wallet, CreditCard, Banknote, AlertCircle, Save, Receipt, ShieldCheck, Download } from 'lucide-react'
 import { JobProgressBar } from '@/components/ui/JobProgressBar'
 import { useReconciliationDetails, useBulkUpdateReconciliation, useUnconsumedCredits } from '../hooks'
+import { useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import toast from 'react-hot-toast'
 import { generatePaymentSettlementPDF } from '../utils/pdfGenerator'
@@ -10,6 +11,7 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
   const { data, isLoading, isError } = useReconciliationDetails(reportId)
   const { data: bankCredits } = useUnconsumedCredits()
   const { mutate: bulkUpdate, isPending: isUpdating } = useBulkUpdateReconciliation()
+  const qc = useQueryClient()
 
   const [activeTab, setActiveTab] = useState<'Payments' | 'Expenses' | 'Settlement'>('Payments')
   const [settlementSubTab, setSettlementSubTab] = useState<'Cash' | 'Cheque' | 'Online'>('Cash')
@@ -51,6 +53,7 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
       setActiveTab('Payments')
       setSettlementSubTab('Cash')
     }
+    setJobId(null)
   }, [reportId])
 
   const isSettled = data?.summary?.settlement_status === 'Settled'
@@ -254,6 +257,7 @@ export default function PaymentReconciliationDrawer({ reportId, onClose }: { rep
                 jobId={jobId} 
                 title="Processing Settlement..." 
                 onComplete={() => {
+                  qc.invalidateQueries({ queryKey: ['payment-settlement'] })
                   toast.success("Report settled successfully!")
                   onClose()
                 }}
