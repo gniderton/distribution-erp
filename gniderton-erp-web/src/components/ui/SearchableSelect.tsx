@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, Search } from 'lucide-react'
 
 interface Option {
@@ -18,12 +19,18 @@ interface Props {
 export function SearchableSelect({ options, value, onChange, placeholder = 'Select...', className = '', disabled = false }: Props) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
   const containerRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setOpen(false)
       }
     }
@@ -34,8 +41,26 @@ export function SearchableSelect({ options, value, onChange, placeholder = 'Sele
   useEffect(() => {
     if (open) {
       setSearch('')
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        setDropdownStyle({
+          top: rect.bottom + window.scrollY + 4,
+          left: rect.left + window.scrollX,
+          width: rect.width,
+        })
+      }
       setTimeout(() => inputRef.current?.focus(), 50)
     }
+  }, [open])
+
+  useEffect(() => {
+    function handleScroll() {
+      if (open) setOpen(false) // Close on scroll to prevent floating detached menu
+    }
+    if (open) {
+      window.addEventListener('scroll', handleScroll, true) // capture phase to catch all scrolling containers
+    }
+    return () => window.removeEventListener('scroll', handleScroll, true)
   }, [open])
 
   const selectedOption = options.find(o => o.value === value)
@@ -56,8 +81,12 @@ export function SearchableSelect({ options, value, onChange, placeholder = 'Sele
         <ChevronDown size={16} className="text-ink-400 shrink-0 ml-1" />
       </div>
 
-      {open && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-border-subtle rounded-lg shadow-lg max-h-60 flex flex-col">
+      {open && createPortal(
+        <div 
+          ref={dropdownRef}
+          className="absolute z-[9999] bg-white border border-border-subtle rounded-lg shadow-lg max-h-60 flex flex-col"
+          style={dropdownStyle}
+        >
           <div className="p-2 border-b border-border-subtle flex items-center gap-2">
             <Search size={14} className="text-ink-400" />
             <input
@@ -87,7 +116,8 @@ export function SearchableSelect({ options, value, onChange, placeholder = 'Sele
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
