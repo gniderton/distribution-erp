@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { useCreateCreditNote, useCustomers, useCustomerPendingBills, useUnifiedInvoiceDetail, useProducts, useProductsBatches } from '../hooks'
-import { CheckCircle2, Package, Plus, Trash } from 'lucide-react'
+import { CheckCircle2, Package, Plus, Trash, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -232,17 +232,36 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
     setMode('Itemized')
     onClose()
   }
-
   if (!isOpen) return null
 
   return (
     <Dialog open={isOpen} onClose={handleClose} title="Create Credit Note / Sales Return" widthClass="max-w-6xl">
-      <div className="space-y-6">
+      <div className="flex flex-col gap-5 py-1">
         
+        {/* Compact Segmented Control */}
+        <div className="flex bg-surface p-1 rounded-md border border-border-subtle shadow-sm w-full max-w-lg mx-auto">
+          <button 
+            onClick={() => setMode('Itemized')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1 text-xs font-semibold rounded transition-all ${
+              mode === 'Itemized' ? 'bg-brand-500 text-white shadow-sm' : 'text-ink-600 hover:text-ink-900 hover:bg-ink-50'
+            }`}
+          >
+            <Package size={14} /> Itemized Return
+          </button>
+          <button 
+            onClick={() => setMode('Flat')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1 text-xs font-semibold rounded transition-all ${
+              mode === 'Flat' ? 'bg-brand-500 text-white shadow-sm' : 'text-ink-600 hover:text-ink-900 hover:bg-ink-50'
+            }`}
+          >
+            <CheckCircle2 size={14} /> Flat Discount
+          </button>
+        </div>
+
         {/* Header Section */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-ink-900 mb-1">Customer <span className="text-danger">*</span></label>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white p-4 rounded-lg border border-border-subtle shadow-sm">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-[10px] font-bold text-ink-900 mb-1 block tracking-wide uppercase">Customer *</label>
             <SearchableSelect
               options={customerOptions}
               value={customerId}
@@ -251,38 +270,10 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
             />
           </div>
           
-          <div>
-            <label className="block text-xs font-medium text-ink-900 mb-1">Return Date</label>
-            <Input 
-              type="date" 
-              value={date} 
-              onChange={e => setDate(e.target.value)} 
-            />
-          </div>
-          
-          <div className="flex items-end h-full">
-            <div className="flex bg-surface border border-[#e6e9ee] p-1 rounded-lg w-full">
-              <button 
-                className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${mode === 'Itemized' ? 'bg-white shadow-sm border border-[#e6e9ee] text-ink-900' : 'text-ink-600 hover:text-ink-900'}`}
-                onClick={() => setMode('Itemized')}
-              >
-                Itemized Return
-              </button>
-              <button 
-                className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${mode === 'Flat' ? 'bg-white shadow-sm border border-[#e6e9ee] text-ink-900' : 'text-ink-600 hover:text-ink-900'}`}
-                onClick={() => setMode('Flat')}
-              >
-                Flat Discount
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-ink-900 mb-1">Linked Invoice (Optional)</label>
-            <div className="flex gap-2 items-center">
-              <div className="flex-1">
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-[10px] font-bold text-ink-900 mb-1 block tracking-wide uppercase">Linked Invoice (Optional)</label>
+            <div className="flex gap-1 items-center">
+              <div className="flex-1 min-w-0">
                 <SearchableSelect
                   options={invoiceOptions}
                   value={invoiceId}
@@ -296,18 +287,30 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
                   variant="secondary" 
                   onClick={handleLoadFromInvoice}
                   disabled={isFetchingInvoice}
+                  className="px-2"
+                  title="Load Items"
                 >
-                  Load Items
+                  <Download size={14} />
                 </Button>
               )}
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-ink-900 mb-1">Remarks / Reason</label>
+          
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-[10px] font-bold text-ink-900 mb-1 block tracking-wide uppercase">Return Date</label>
             <Input 
-              placeholder="Enter reason for return..." 
+              type="date" 
+              value={date} 
+              onChange={e => setDate(e.target.value)} 
+            />
+          </div>
+          
+          <div className="col-span-2 md:col-span-1">
+            <label className="text-[10px] font-bold text-ink-900 mb-1 block tracking-wide uppercase">Remarks / Reason</label>
+            <Input 
               value={remarks} 
               onChange={e => setRemarks(e.target.value)} 
+              placeholder="Enter reason for return..." 
             />
           </div>
         </div>
