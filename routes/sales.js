@@ -836,7 +836,10 @@ router.post('/returns/manual', async (req, res) => {
             // A. Valuation Logic (Matching Delivery Sync & Historical Pricing)
             let unitNet = Number(item['Taxable $'] || 0) / qty; 
             
-            if (req.body.is_exact_invoice_return && invoice_id && productId) {
+            if (req.body.is_manual_override) {
+                // MANUAL OVERRIDE (Trust frontend price entirely)
+                // unitNet remains as calculated above: Number(item['Taxable $'] || 0) / qty;
+            } else if (req.body.is_exact_invoice_return && invoice_id && productId) {
                 // EXACT BILL RETURN (Highest Priority bypass)
                 const histRes = await client.query(`
                     SELECT (taxable_amount / NULLIF(shipped_qty, 0)) as unit_net 

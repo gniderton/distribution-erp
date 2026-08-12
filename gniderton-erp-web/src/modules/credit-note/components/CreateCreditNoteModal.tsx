@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
-  const { mutateAsync: createCreditNote } = useCreateCreditNote()
+  const { mutateAsync: createCreditNote, isPending: isSubmitting } = useCreateCreditNote()
   const { data: customers } = useCustomers()
 
   const [mode, setMode] = useState<'Itemized' | 'Flat'>('Itemized')
@@ -24,6 +24,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
   const [flatAmount, setFlatAmount] = useState('')
   const [isFlatGst, setIsFlatGst] = useState(true)
   const [isExactInvoiceReturn, setIsExactInvoiceReturn] = useState(false)
+  const [isManualOverride, setIsManualOverride] = useState(false)
 
   const { data: pendingBills } = useCustomerPendingBills(customerId)
   const { data: invoiceDetail, isFetching: isFetchingInvoice } = useUnifiedInvoiceDetail(invoiceId)
@@ -67,10 +68,16 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
         inventory_status: 'Good',
         return_to_stock: true,
         qty: Number(l.shipped_qty || l.qty || 1),
-        max_qty: Number(l.shipped_qty || l.qty || 1), // can't return more than bought
+        max_qty: Number(l.shipped_qty || l.qty || 1),
+        mrp: Number(l.mrp || 0),
         rate: Number(l.rate || l.mrp || 0),
-        tax_percentage: Number(l.tax_percent || 0),
+        gross: Number(l.gross_amount || 0),
+        scheme: Number(l.scheme_amount || 0),
+        disc_percent: Number(l.discount_percent || 0),
+        disc_amount: Number(l.discount_amount || 0),
         taxable: Number(l.taxable_amount || 0),
+        tax_percentage: Number(l.tax_percent || 0),
+        tax_amount: Number(l.tax_amount || 0),
         amount: Number(l.amount || 0)
       }
     })
@@ -143,9 +150,15 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
         return_to_stock: true,
         qty: 1,
         max_qty: 9999,
+        mrp: 0,
         rate: 0,
-        tax_percentage: 0,
+        gross: 0,
+        scheme: 0,
+        disc_percent: 0,
+        disc_amount: 0,
         taxable: 0,
+        tax_percentage: 0,
+        tax_amount: 0,
         amount: 0
       }
     ])
@@ -153,7 +166,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
 
   const handleLineChange = (index: number, field: string, value: any) => {
     if (['product_id', 'batch_id'].includes(field)) {
-      setIsExactInvoiceReturn(false) // Changing products/batches breaks exact invoice match
+      setIsExactInvoiceReturn(false)
     }
 
     const newLines = [...lines]
@@ -166,6 +179,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
         newLines[index].tax_percentage = Number(p.tax_percentage || 0)
         newLines[index].batch_id = ''
         newLines[index].batch_code = ''
+        newLines[index].mrp = 0
         newLines[index].rate = 0
       }
     }
@@ -174,11 +188,12 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
       const b = batches.find((bat: any) => String(bat.id) === String(value))
       if (b) {
         newLines[index].batch_code = b.batch_code
+        newLines[index].mrp = Number(b.mrp || 0)
         newLines[index].rate = Number(b.mrp || 0)
       }
     }
 
-    if (['qty', 'rate', 'product_id', 'batch_id'].includes(field)) {
+    if (['qty', 'rate', 'product_id', 'batch_id', 'mrp', 'scheme', 'disc_percent', 'disc_amount'].includes(field)) {
       let qty = Number(newLines[index].qty) || 0
       const max = newLines[index].max_qty
       if (qty > max) qty = max
@@ -187,12 +202,29 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
       
       const rate = Number(newLines[index].rate) || 0
       const taxPct = Number(newLines[index].tax_percentage) || 0
+      const scheme = Number(newLines[index].scheme) || 0
+      const discPct = Number(newLines[index].disc_percent) || 0
+      let discAmt = Number(newLines[index].disc_amount) || 0
       
       const gross = qty * rate
-      const taxAmt = gross * (taxPct / 100)
       
-      newLines[index].taxable = gross
-      newLines[index].amount = gross + taxAmt
+      if (field === 'disc_percent') {
+         discAmt = (gross - scheme) * (discPct / 100)
+         newLines[index].disc_amount = discAmt
+      } else if (field === 'disc_amount') {
+         newLines[index].disc_percent = (gross - scheme) > 0 ? (discAmt / (gross - scheme)) * 100 : 0
+      } else {
+         discAmt = (gross - scheme) * (discPct / 100)
+         newLines[index].disc_amount = discAmt
+      }
+
+      const taxable = gross - scheme - discAmt
+      const taxAmt = taxable * (taxPct / 100)
+      
+      newLines[index].gross = gross
+      newLines[index].taxable = taxable
+      newLines[index].tax_amount = taxAmt
+      newLines[index].amount = taxable + taxAmt
     }
 
     setLines(newLines)
@@ -268,7 +300,8 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
       remarks,
       return_date: date,
       items: itemsPayload,
-      is_exact_invoice_return: isExactInvoiceReturn
+      is_exact_invoice_return: isExactInvoiceReturn,
+      is_manual_override: isManualOverride
     }
 
     try {
@@ -355,11 +388,11 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
                   <Button 
                     variant="primary" 
                     onClick={handle1ClickReturn}
-                    disabled={isFetchingInvoice}
+                    disabled={isFetchingInvoice || isSubmitting}
                     className="px-2 bg-amber-500 hover:bg-amber-600 text-white border-amber-500 hover:border-amber-600"
                     title="1-Click Return Full Bill"
                   >
-                    <Zap size={14} />
+                    {isSubmitting ? <span className="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full" /> : <Zap size={14} />}
                   </Button>
                 </>
               )}
@@ -383,6 +416,20 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
               placeholder="Enter reason for return..." 
             />
           </div>
+
+          {mode === 'Itemized' && (
+            <div className="col-span-2 md:col-span-4 flex justify-end items-center mt-2 border-t border-border-subtle pt-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-ink-900 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={isManualOverride} 
+                  onChange={e => setIsManualOverride(e.target.checked)} 
+                  className="w-4 h-4 rounded border-[#e6e9ee] text-brand-500 focus:ring-brand-500"
+                />
+                Enable Manual Pricing Override
+              </label>
+            </div>
+          )}
         </div>
 
         {/* Lines Section */}
@@ -398,23 +445,31 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
               </Button>
             </div>
             
-            <div className="overflow-visible flex-1">
-              <table className="w-full text-xs">
+            <div className="overflow-x-auto flex-1 pb-4">
+              <table className="w-full text-xs min-w-[1200px]">
                 <thead className="bg-surface border-b border-[#e6e9ee]">
                   <tr className="text-left text-ink-600">
-                    <th className="px-4 py-3 font-medium">Product</th>
-                    <th className="px-4 py-3 font-medium w-[180px]">Batch</th>
-                    <th className="px-4 py-3 font-medium w-[120px]">Condition</th>
-                    <th className="px-4 py-3 font-medium w-[100px] text-right">Qty</th>
-                    <th className="px-4 py-3 font-medium w-[100px] text-right">Rate</th>
-                    <th className="px-4 py-3 font-medium w-[100px] text-right">Net Amount</th>
-                    <th className="px-4 py-3 font-medium w-[60px] text-center">Delete</th>
+                    <th className="px-3 py-3 font-medium min-w-[200px]">Product</th>
+                    <th className="px-3 py-3 font-medium w-[160px]">Batch</th>
+                    <th className="px-3 py-3 font-medium w-[110px]">Condition</th>
+                    <th className="px-3 py-3 font-medium w-[80px] text-right">Qty</th>
+                    <th className="px-3 py-3 font-medium w-[80px] text-right">MRP</th>
+                    <th className="px-3 py-3 font-medium w-[90px] text-right">Rate</th>
+                    <th className="px-3 py-3 font-medium w-[90px] text-right">Gross</th>
+                    <th className="px-3 py-3 font-medium w-[80px] text-right">Scheme</th>
+                    <th className="px-3 py-3 font-medium w-[70px] text-right">Disc %</th>
+                    <th className="px-3 py-3 font-medium w-[80px] text-right">Disc Amt</th>
+                    <th className="px-3 py-3 font-medium w-[90px] text-right">Taxable</th>
+                    <th className="px-3 py-3 font-medium w-[60px] text-right">Tax %</th>
+                    <th className="px-3 py-3 font-medium w-[80px] text-right">Tax Amt</th>
+                    <th className="px-3 py-3 font-medium w-[100px] text-right">Net</th>
+                    <th className="px-3 py-3 font-medium w-[50px] text-center">Del</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e6e9ee]">
                   {lines.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-ink-600">
+                      <td colSpan={15} className="px-4 py-8 text-center text-ink-600">
                         No items added. Click "Add Row" or "Load Items".
                       </td>
                     </tr>
@@ -425,7 +480,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
 
                     return (
                       <tr key={line._row_id} className="bg-white hover:bg-surface/50 transition-colors">
-                        <td className="px-4 py-2">
+                        <td className="px-3 py-2">
                           <SearchableSelect
                             options={productOptions}
                             value={line.product_id}
@@ -433,7 +488,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
                             placeholder="Product"
                           />
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-3 py-2">
                           <SearchableSelect
                             options={batchOptions}
                             value={line.batch_id}
@@ -442,7 +497,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
                             disabled={!line.product_id}
                           />
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-3 py-2">
                           <select 
                             className="w-full bg-surface border border-[#e6e9ee] rounded-md px-2 py-1.5 focus:outline-none"
                             value={line.inventory_status}
@@ -453,29 +508,47 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
                             <option value="Expiry">Expiry</option>
                           </select>
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-3 py-2">
                           <Input
                             type="number"
                             min="0"
                             max={line.max_qty}
-                            className="text-right h-8"
+                            className="text-right h-8 px-2"
                             value={line.qty}
                             onChange={e => handleLineChange(idx, 'qty', e.target.value)}
                           />
                         </td>
-                        <td className="px-4 py-2">
-                          <Input
-                            type="number"
-                            min="0"
-                            className="text-right h-8"
-                            value={line.rate}
-                            onChange={e => handleLineChange(idx, 'rate', e.target.value)}
-                          />
+                        <td className="px-3 py-2">
+                          <Input type="number" min="0" className="text-right h-8 px-2" value={line.mrp} onChange={e => handleLineChange(idx, 'mrp', e.target.value)} />
                         </td>
-                        <td className="px-4 py-2 text-right font-medium text-ink-900 align-middle">
+                        <td className="px-3 py-2">
+                          <Input type="number" min="0" className="text-right h-8 px-2" value={line.rate} onChange={e => handleLineChange(idx, 'rate', e.target.value)} />
+                        </td>
+                        <td className="px-3 py-2 text-right font-medium text-ink-600 align-middle">
+                          ₹{(Number(line.gross) || 0).toFixed(2)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input type="number" min="0" className="text-right h-8 px-2" value={line.scheme} onChange={e => handleLineChange(idx, 'scheme', e.target.value)} />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input type="number" min="0" max="100" className="text-right h-8 px-2" value={line.disc_percent} onChange={e => handleLineChange(idx, 'disc_percent', e.target.value)} />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input type="number" min="0" className="text-right h-8 px-2" value={line.disc_amount} onChange={e => handleLineChange(idx, 'disc_amount', e.target.value)} />
+                        </td>
+                        <td className="px-3 py-2 text-right font-medium text-ink-900 align-middle">
+                          ₹{(Number(line.taxable) || 0).toFixed(2)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-ink-600 align-middle">
+                          {(Number(line.tax_percentage) || 0)}%
+                        </td>
+                        <td className="px-3 py-2 text-right text-ink-600 align-middle">
+                          ₹{(Number(line.tax_amount) || 0).toFixed(2)}
+                        </td>
+                        <td className="px-3 py-2 text-right font-bold text-ink-900 align-middle">
                           ₹{(Number(line.amount) || 0).toFixed(2)}
                         </td>
-                        <td className="px-4 py-2 text-center align-middle">
+                        <td className="px-3 py-2 text-center align-middle">
                           <button 
                             onClick={() => handleRemoveLine(idx)}
                             className="text-ink-400 hover:text-danger p-1 rounded transition-colors"
@@ -537,10 +610,14 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
 
         {/* Footer Actions */}
         <div className="flex justify-end gap-3 pt-4 border-t border-[#e6e9ee]">
-          <Button variant="ghost" onClick={handleClose}>Cancel</Button>
-          <Button variant="primary" onClick={handleSubmit} className="gap-2">
-            <CheckCircle2 className="w-4 h-4" />
-            Create Credit Note
+          <Button variant="ghost" onClick={handleClose} disabled={isSubmitting}>Cancel</Button>
+          <Button variant="primary" onClick={handleSubmit} className="gap-2" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <span className="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4" />
+            )}
+            {isSubmitting ? 'Processing...' : 'Create Credit Note'}
           </Button>
         </div>
       </div>
