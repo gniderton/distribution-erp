@@ -4,6 +4,8 @@ import { useCreditNoteDetail } from '../hooks'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Button } from '@/components/ui/Button'
 import { formatCurrency } from '@/lib/utils'
+import { Printer } from 'lucide-react'
+import { generateCreditNotePDF } from '../utils/pdfGenerator'
 
 interface CreditNoteItemsModalProps {
   isOpen: boolean
@@ -48,6 +50,21 @@ export function CreditNoteItemsModal({ isOpen, onClose, creditNote }: CreditNote
               {creditNote.status.toUpperCase()}
             </span>
           )}
+          
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            className="ml-auto flex items-center gap-2"
+            onClick={() => {
+              if (detailData) {
+                generateCreditNotePDF(detailData)
+              }
+            }}
+            disabled={isLoading || isError || !detailData}
+          >
+            <Printer size={16} />
+            Print PDF
+          </Button>
         </div>
       }
       footer={<Button variant="secondary" onClick={onClose}>Close</Button>}
