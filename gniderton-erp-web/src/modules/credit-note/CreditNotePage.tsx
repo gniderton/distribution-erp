@@ -8,7 +8,9 @@ import { StatCard } from '@/components/shared/StatCard'
 import type { ColumnDef } from '@tanstack/react-table'
 import { CreditNoteItemsModal } from './components/CreditNoteItemsModal'
 import { CreateCreditNoteModal } from './components/CreateCreditNoteModal'
-import { FileText, Plus, CheckCircle2, AlertTriangle, Search, Filter, Trash } from 'lucide-react'
+import { FileText, Plus, CheckCircle2, AlertTriangle, Search, Filter, Trash, Printer } from 'lucide-react'
+import { generateCreditNotePDF } from './utils/pdfGenerator'
+import { credit_noteApi } from './api'
 import toast from 'react-hot-toast'
 
 export default function CreditNotePage() {
@@ -137,6 +139,23 @@ export default function CreditNotePage() {
           <div className="flex gap-2 items-center justify-end">
             <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleViewItems(row.original) }}>
               View
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={async (e) => { 
+                e.stopPropagation();
+                try {
+                  const detailData = await credit_noteApi.getSalesReturnDetail(row.original.id);
+                  generateCreditNotePDF(detailData);
+                } catch (err) {
+                  toast.error("Failed to load full details for PDF");
+                }
+              }}
+              title="Print PDF"
+              className="text-ink-600 hover:text-brand-500 hover:bg-brand-50"
+            >
+              <Printer className="w-4 h-4" />
             </Button>
             {row.original.status !== 'Cancelled' && (
               <Button 

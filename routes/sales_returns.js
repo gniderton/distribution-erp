@@ -100,11 +100,17 @@ router.get('/:id', async (req, res) => {
             SELECT 
                 sr.*,
                 c.customer_name,
-                c.gstin as customer_gstin,
+                c.gstin as customer_gst,
+                c.customer_phone as customer_contact,
+                c.email as customer_email,
+                COALESCE(ca.address_line1 || ' ' || COALESCE(ca.address_line2, ''), '') as customer_address,
+                COALESCE(ca.city, '') as customer_district,
+                COALESCE(ca.pincode, '') as customer_pin,
                 si.invoice_number as original_invoice_number,
                 e.full_name as created_by_name
             FROM sales_returns sr
             JOIN customers c ON sr.customer_id = c.id
+            LEFT JOIN customer_addresses ca ON c.id = ca.customer_id AND ca.is_default_billing = true
             LEFT JOIN sales_invoices si ON sr.invoice_id = si.id
             LEFT JOIN employees e ON sr.created_by = e.id
             WHERE sr.id = $1
@@ -118,9 +124,15 @@ router.get('/:id', async (req, res) => {
             SELECT 
                 srl.*, 
                 p.product_name,
-                ib.batch_code as batch_number
+                p.product_code,
+                p.ean_code,
+                h.hsn_code,
+                ib.batch_code as batch_number,
+                ib.expiry_date,
+                ib.mrp
             FROM sales_return_lines srl
             JOIN products p ON srl.product_id = p.id
+            LEFT JOIN hsn_codes h ON p.hsn_id = h.id
             LEFT JOIN inventory_batches ib ON srl.batch_id = ib.id
             WHERE srl.return_id = $1
             ORDER BY srl.id ASC

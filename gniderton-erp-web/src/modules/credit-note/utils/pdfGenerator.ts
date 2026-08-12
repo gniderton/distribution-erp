@@ -124,7 +124,7 @@ export const generateCreditNotePDF = async (cnHeader: any) => {
     const boxesY = headerY + 40;
     const gap = 8;
     const boxWidth = (pageWidth - (margin * 2) - (gap * 2)) / 3;
-    const boxHeight = 85; 
+    const boxHeight = 110; 
 
     // Box 1: Document Details
     drawSimpleBox(doc, margin, boxesY, boxWidth, boxHeight, [
@@ -161,7 +161,7 @@ export const generateCreditNotePDF = async (cnHeader: any) => {
 
   // --- 3. ITEMS TABLE ---
   autoTable(doc, {
-    startY: margin + 40 + 85 + 10,
+    startY: margin + 40 + 110 + 10,
     margin: { left: margin, right: margin, top: margin + 140, bottom: 120 },
     head: [["S.N", "ITEM NAME", "CODE\nEAN", "HSN", "BATCH\nEXPIRY", "MRP", "QTY", "PRICE", "GROSS", "SCH", "D%", "D.AMT", "TXBL", "GST%", "GST$", "NET$"]],
     body: cnLines.map((row: any, index: number) => {
