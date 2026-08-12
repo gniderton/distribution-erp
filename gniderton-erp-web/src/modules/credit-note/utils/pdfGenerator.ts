@@ -108,7 +108,7 @@ export const generateCreditNotePDF = async (cnHeader: any) => {
     const headerY = margin;
     try {
       if (brand.logo) {
-        const logoData = brand.logo.startsWith('data:image') ? brand.logo : \`data:image/png;base64,\${brand.logo}\`;
+        const logoData = brand.logo.startsWith('data:image') ? brand.logo : `data:image/png;base64,${brand.logo}`;
         doc.addImage(logoData, 'PNG', margin, headerY, 90, 30);
       }
     } catch(e) {}
@@ -132,14 +132,14 @@ export const generateCreditNotePDF = async (cnHeader: any) => {
       ["DATE", cnHeader.return_date ? new Date(cnHeader.return_date).toLocaleDateString('en-GB') : "-"],
       ["LINKED INV", String(cnHeader.linked_invoice_number || cnHeader.original_invoice_number || "-")],
       ["TOTAL AMT", Number(grandTotal).toFixed(2)],
-      ["PAGE", \`\${currentPage} / \${totalPages}\`]
+      ["PAGE", `${currentPage} / ${totalPages}`]
     ]);
 
     // Box 2: Company Details
     drawSimpleBox(doc, margin + boxWidth + gap, boxesY, boxWidth, boxHeight, [
       ["From", String(brand.regt_name)],
       ["Address", String(brand.address)],
-      ["Dist/PIN", \`\${brand.District} - \${brand.pin}\`],
+      ["Dist/PIN", `${brand.District} - ${brand.pin}`],
       ["GST", String(brand.gst)],
       ["FSSAI", String(brand.fssai_no)],
       ["Email", String(brand.email)],
@@ -163,15 +163,15 @@ export const generateCreditNotePDF = async (cnHeader: any) => {
   autoTable(doc, {
     startY: margin + 40 + 85 + 10,
     margin: { left: margin, right: margin, top: margin + 140, bottom: 120 },
-    head: [["S.N", "ITEM NAME", "CODE\\nEAN", "HSN", "BATCH\\nEXPIRY", "MRP", "QTY", "PRICE", "GROSS", "SCH", "D%", "D.AMT", "TXBL", "GST%", "GST$", "NET$"]],
+    head: [["S.N", "ITEM NAME", "CODE\nEAN", "HSN", "BATCH\nEXPIRY", "MRP", "QTY", "PRICE", "GROSS", "SCH", "D%", "D.AMT", "TXBL", "GST%", "GST$", "NET$"]],
     body: cnLines.map((row: any, index: number) => {
       const expiryStr = row.expiry_date ? new Date(row.expiry_date).toLocaleDateString('en-GB', { month: '2-digit', year: '2-digit' }) : "-";
       return [
         index + 1, 
         row.product_name || "-", 
-        \`\${row.product_code || "-"}\\n\${row.ean_code || "-"}\`, 
+        `${row.product_code || "-"}\n${row.ean_code || "-"}`, 
         row.hsn_code || "-", 
-        \`\${row.batch_number || row.batch_code || "-"}\\n\${expiryStr}\`,
+        `${row.batch_number || row.batch_code || "-"}\n${expiryStr}`,
         Number(row.mrp || 0).toFixed(2), 
         row.qty || 0, 
         Number(row.rate || 0).toFixed(2),
@@ -264,11 +264,11 @@ export const generateCreditNotePDF = async (cnHeader: any) => {
   
   const slipContentY = slipY + 45; 
   doc.setFont("helvetica", "normal");
-  doc.text(\`Credit Note: \${cnHeader.return_number || "-"}\`, margin, slipContentY);
-  doc.text(\`Date: \${cnHeader.return_date ? new Date(cnHeader.return_date).toLocaleDateString('en-GB') : "-"}\`, margin + 180, slipContentY);
-  doc.text(\`Amt: \${grandTotal.toFixed(2)}\`, margin + 350, slipContentY);
-  doc.text(\`Customer: \${cnHeader.customer_name || "-"}\`, margin, slipContentY + 20);
-  doc.text(\`Auth. Signature: ___________________________\`, margin + 310, slipContentY + 35);
+  doc.text(`Credit Note: ${cnHeader.return_number || "-"}`, margin, slipContentY);
+  doc.text(`Date: ${cnHeader.return_date ? new Date(cnHeader.return_date).toLocaleDateString('en-GB') : "-"}`, margin + 180, slipContentY);
+  doc.text(`Amt: ${grandTotal.toFixed(2)}`, margin + 350, slipContentY);
+  doc.text(`Customer: ${cnHeader.customer_name || "-"}`, margin, slipContentY + 20);
+  doc.text(`Auth. Signature: ___________________________`, margin + 310, slipContentY + 35);
 
   const fileName = (cnHeader.return_number || "CreditNote") + ".pdf";
   doc.save(fileName);
