@@ -54,7 +54,8 @@ export function SearchableSelect({ options, value, onChange, placeholder = 'Sele
   }, [open])
 
   useEffect(() => {
-    function handleScroll() {
+    function handleScroll(e: Event) {
+      if (dropdownRef.current && dropdownRef.current.contains(e.target as Node)) return
       if (open) setOpen(false) // Close on scroll to prevent floating detached menu
     }
     if (open) {
