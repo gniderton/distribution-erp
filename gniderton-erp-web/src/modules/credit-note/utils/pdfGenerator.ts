@@ -186,7 +186,7 @@ export const generateCreditNotePDF = async (cnHeader: any) => {
       ];
     }),
     didDrawPage: (data: any) => {
-      const totalPages = doc.internal.getNumberOfPages();
+      const totalPages = (doc as any).internal.getNumberOfPages();
       drawMainHeader(data.pageNumber, totalPages);
     },
     theme: 'grid',
@@ -214,7 +214,7 @@ export const generateCreditNotePDF = async (cnHeader: any) => {
   
   if (currentY + 150 > pageHeight) {
     doc.addPage();
-    const totalPages = doc.internal.getNumberOfPages();
+    const totalPages = (doc as any).internal.getNumberOfPages();
     currentY = drawMainHeader(totalPages, totalPages) + 10;
   }
 
