@@ -105,7 +105,7 @@ export default function CreditNotePage() {
       accessorKey: 'type',
       header: 'Type',
       cell: ({ row }) => (
-        <Badge tone={row.original.type === 'Itemized Sales Return' ? 'primary' : 'secondary'}>
+        <Badge tone={row.original.type === 'Itemized Sales Return' ? 'brand' : 'neutral'}>
           {row.original.type === 'Itemized Sales Return' ? 'Itemized' : 'Flat Amount'}
         </Badge>
       ),
@@ -174,7 +174,7 @@ export default function CreditNotePage() {
         <StatCard label="This Month Records" value={String(stats.thisMonthCount)} icon={FileText} tone="success" />
         <StatCard label="This Month Value" value={`₹${Number(stats.thisMonthValue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} icon={CheckCircle2} tone="success" />
         <StatCard label="Itemized Returns" value={String(stats.itemizedCount)} icon={CheckCircle2} tone="success" />
-        <StatCard label="Flat Amount" value={String(stats.flatCount)} icon={AlertTriangle} tone={stats.flatCount > 0 ? 'primary' : 'neutral'} />
+        <StatCard label="Flat Amount" value={String(stats.flatCount)} icon={AlertTriangle} tone={stats.flatCount > 0 ? 'success' : 'neutral'} />
       </div>
       
       <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between w-full mb-6">

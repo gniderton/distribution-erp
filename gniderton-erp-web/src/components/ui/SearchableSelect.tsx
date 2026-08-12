@@ -12,9 +12,10 @@ interface Props {
   onChange: (val: string | number) => void
   placeholder?: string
   className?: string
+  disabled?: boolean
 }
 
-export function SearchableSelect({ options, value, onChange, placeholder = 'Select...', className = '' }: Props) {
+export function SearchableSelect({ options, value, onChange, placeholder = 'Select...', className = '', disabled = false }: Props) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
@@ -44,10 +45,10 @@ export function SearchableSelect({ options, value, onChange, placeholder = 'Sele
   )
 
   return (
-    <div className={`relative ${className}`} ref={containerRef}>
+    <div className={`relative ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`} ref={containerRef}>
       <div 
-        className="h-9 w-full rounded-lg border border-border-subtle bg-white px-2 flex items-center justify-between cursor-pointer text-sm"
-        onClick={() => setOpen(!open)}
+        className={`h-9 w-full rounded-lg border border-border-subtle bg-white px-2 flex items-center justify-between text-sm ${disabled ? 'bg-surface cursor-not-allowed' : 'cursor-pointer'}`}
+        onClick={() => !disabled && setOpen(!open)}
       >
         <span className={`truncate ${!selectedOption ? 'text-ink-400' : 'text-ink-900'}`}>
           {selectedOption ? selectedOption.label : placeholder}
