@@ -314,8 +314,8 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
 
         {/* Lines Section */}
         {mode === 'Itemized' ? (
-          <div className="bg-surface rounded-xl border border-[#e6e9ee] overflow-hidden flex flex-col">
-            <div className="px-4 py-3 border-b border-[#e6e9ee] flex justify-between items-center bg-white">
+          <div className="bg-surface rounded-xl border border-[#e6e9ee] flex flex-col min-h-[350px]">
+            <div className="px-4 py-3 border-b border-[#e6e9ee] flex justify-between items-center bg-white rounded-t-xl">
               <h3 className="font-semibold text-sm text-ink-900 flex items-center gap-2">
                 <Package className="w-4 h-4 text-brand-500" />
                 Return Items
@@ -325,7 +325,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
               </Button>
             </div>
             
-            <div className="overflow-x-auto">
+            <div className="overflow-visible flex-1">
               <table className="w-full text-xs">
                 <thead className="bg-surface border-b border-[#e6e9ee]">
                   <tr className="text-left text-ink-600">
@@ -418,7 +418,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
             </div>
 
             {lines.length > 0 && (
-              <div className="px-4 py-3 bg-surface border-t border-[#e6e9ee] flex justify-end gap-6 text-sm">
+              <div className="px-4 py-3 bg-surface border-t border-[#e6e9ee] flex justify-end gap-6 text-sm rounded-b-xl">
                 <div className="text-ink-600">
                   Taxable: <span className="font-medium text-ink-900 ml-1">₹{totals.taxable.toFixed(2)}</span>
                 </div>
