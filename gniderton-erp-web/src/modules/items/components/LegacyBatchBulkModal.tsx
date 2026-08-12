@@ -94,8 +94,8 @@ export default function LegacyBatchBulkModal({ open, onClose }: Props) {
           <strong>Note:</strong> These batches are created with exactly <strong>0 initial quantity</strong>. They will not affect your inventory valuation or opening balances. They exist solely so you can process returns against them.
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-border-subtle bg-surface">
-          <table className="w-full text-left text-sm divide-y divide-border-subtle min-w-[1300px]">
+        <div className="overflow-x-auto rounded-xl border border-border-subtle bg-surface min-h-[400px] flex flex-col">
+          <table className="w-full text-left text-sm divide-y divide-border-subtle min-w-[1300px] flex-1">
             <thead className="bg-ink-50">
               <tr>
                 <th className="p-3 font-medium text-ink-700 min-w-[350px]">Product *</th>
