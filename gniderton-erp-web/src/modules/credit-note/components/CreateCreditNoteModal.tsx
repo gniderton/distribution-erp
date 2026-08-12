@@ -114,7 +114,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
     const payload = {
       customer_id: customerId,
       invoice_id: invoiceId || null,
-      type: 'Itemized Sales Return',
+      type: 'Sales Return',
       remarks,
       return_date: date,
       items: itemsPayload,
@@ -264,7 +264,7 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
     const payload = {
       customer_id: customerId,
       invoice_id: invoiceId || null,
-      type: mode === 'Itemized' ? 'Itemized Sales Return' : 'Flat Amount Return',
+      type: mode === 'Itemized' ? 'Sales Return' : 'Rate Adjustment',
       remarks,
       return_date: date,
       items: itemsPayload,
