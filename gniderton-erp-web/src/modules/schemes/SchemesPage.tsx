@@ -201,7 +201,7 @@ export default function SchemesPage() {
             </div>
 
             <div className="glass-card bg-white rounded-xl border border-[#e6e9ee] shadow-sm overflow-hidden mb-6">
-              <DataTable columns={columns} data={filteredData} search={globalFilter} isLoading={isLoading} />
+              <DataTable columns={columns} data={filteredData} isLoading={isLoading} />
             </div>
           </>
         )}
@@ -226,7 +226,7 @@ export default function SchemesPage() {
             
             {selectedSchemeForUsage ? (
               <div className="glass-card bg-white rounded-xl border border-[#e6e9ee] shadow-sm overflow-hidden mb-6">
-                <DataTable columns={usageColumns} data={usageData || []} search="" isLoading={isUsageLoading} />
+                <DataTable columns={usageColumns} data={usageData || []} isLoading={isUsageLoading} />
               </div>
             ) : (
               <div className="py-12 text-center text-ink-500 border border-dashed border-[#e6e9ee] rounded-xl">

@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react'
-import { Dialog } from '@/components/ui/Dialog'
+import { useState } from 'react'
+import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { MultiSearchableSelect } from '@/components/ui/MultiSearchableSelect'
-import { Plus, Trash, Zap } from 'lucide-react'
+import { Plus, Trash, Zap, Gift, Tag, Percent, ArrowRight, ArrowLeft, CheckCircle2, Box, X } from 'lucide-react'
 import { useCreateScheme, useUpdateScheme } from '../hooks'
 import { useProducts, useBrands, useCategories } from '@/modules/items/hooks'
 import { useCustomers } from '@/modules/customer/hooks'
@@ -16,6 +16,13 @@ interface Props {
   editScheme?: any
 }
 
+const SCHEME_TYPES = [
+  { id: 'BUY_GET_FREE', label: 'Buy Get Free', icon: Gift, desc: 'Offer free items when buying specific products' },
+  { id: 'COMBO', label: 'Combo', icon: Zap, desc: 'Bundle products together for special deals' },
+  { id: 'PRICE_SLAB', label: 'Price Slab', icon: Tag, desc: 'Set volume-based pricing tiers' },
+  { id: 'FLAT_MRP_DISCOUNT', label: 'Flat MRP Discount', icon: Percent, desc: 'Apply flat percentage discounts' }
+]
+
 export function SchemeFormModal({ isOpen, onClose, editScheme }: Props) {
   const { mutateAsync: createScheme, isPending: isCreating } = useCreateScheme()
   const { mutateAsync: updateScheme, isPending: isUpdating } = useUpdateScheme()
@@ -25,6 +32,9 @@ export function SchemeFormModal({ isOpen, onClose, editScheme }: Props) {
   const { data: categories } = useCategories()
   const { data: customers } = useCustomers()
 
+  const [step, setStep] = useState(1)
+
+  // Step 1: Config
   const [schemeName, setSchemeName] = useState(editScheme?.scheme_name || '')
   const [description, setDescription] = useState(editScheme?.description || '')
   const [startDate, setStartDate] = useState(editScheme?.start_date ? editScheme.start_date.split('T')[0] : '')
@@ -32,6 +42,7 @@ export function SchemeFormModal({ isOpen, onClose, editScheme }: Props) {
   const [noExpiry, setNoExpiry] = useState(editScheme ? !editScheme.end_date : false)
   const [isActive, setIsActive] = useState(editScheme?.is_active ?? true)
   
+  // Step 2: Rules
   const [schemeType, setSchemeType] = useState(editScheme?.rules?.[0]?.scheme_type || 'BUY_GET_FREE')
   const [rules, setRules] = useState<any[]>(editScheme?.rules || [])
 
@@ -54,13 +65,12 @@ export function SchemeFormModal({ isOpen, onClose, editScheme }: Props) {
 
   const isSubmitting = isCreating || isUpdating
 
-  const isFormValid = schemeName.trim() !== '' && rules.length > 0
+  const isStep1Valid = schemeName.trim() !== '' && startDate !== '' && (noExpiry || endDate !== '')
 
   const handleAddComboProduct = () => {
     if (!comboSelectedProduct) return
     const prod = products?.find((p: any) => p.id == comboSelectedProduct)
     if (!prod) return
-    // Prevent duplicates
     if (!comboProducts.some(p => p.product_id == prod.id)) {
       setComboProducts([...comboProducts, { product_id: prod.id, product_name: prod.product_name, product_code: prod.product_code }])
     }
@@ -69,6 +79,7 @@ export function SchemeFormModal({ isOpen, onClose, editScheme }: Props) {
 
   const handleAddComboSlab = () => {
     if (comboProducts.length === 0) return toast.error('Add at least one product to the combo group')
+    if (!minQty) return toast.error('Min Qty is required')
     const newRule = {
       scheme_type: 'COMBO',
       trigger_type: 'Product',
@@ -87,6 +98,10 @@ export function SchemeFormModal({ isOpen, onClose, editScheme }: Props) {
   }
 
   const handleAddRule = () => {
+    if (schemeType === 'BUY_GET_FREE' && (!triggerId || !minQty)) return toast.error('Please fill required fields')
+    if (schemeType === 'PRICE_SLAB' && (!triggerId || !minQty || !specialPrice)) return toast.error('Please fill required fields')
+    if (schemeType === 'FLAT_MRP_DISCOUNT' && (!flatBrand || !minQty || !specialPrice)) return toast.error('Please fill required fields')
+
     const triggerName = triggerType === 'Product' 
         ? products?.find((p: any) => p.id == triggerId)?.product_name 
         : triggerType === 'Brand'
@@ -106,7 +121,6 @@ export function SchemeFormModal({ isOpen, onClose, editScheme }: Props) {
       channel_tier: channel || 'Dealer',
       special_price: specialPrice ? Number(specialPrice) : null,
       combo_products: comboProducts,
-      // Custom fields for FLAT_MRP_DISCOUNT
       targeted_customer_ids: flatCustomers,
       targeted_product_ids: flatProducts
     }
@@ -120,14 +134,11 @@ export function SchemeFormModal({ isOpen, onClose, editScheme }: Props) {
   }
 
   const handleSave = async () => {
-    if (!schemeName) return toast.error("Scheme Name is required")
-    if (rules.length === 0) return toast.error("At least one rule/slab is required")
-
     const payload = {
       scheme_name: schemeName,
       description,
-      start_date: startDate || new Date(),
-      end_date: noExpiry ? null : (endDate || null),
+      start_date: startDate,
+      end_date: noExpiry ? null : endDate,
       is_active: isActive,
       targeted_customer_ids: rules.length > 0 && rules[0].scheme_type === 'FLAT_MRP_DISCOUNT' ? (rules[0].targeted_customer_ids || []) : [],
       rules
@@ -147,341 +158,473 @@ export function SchemeFormModal({ isOpen, onClose, editScheme }: Props) {
     }
   }
 
+  const renderStepIndicator = () => (
+    <div className="flex items-center justify-center mb-8">
+      {[1, 2, 3].map((s, i) => (
+        <div key={s} className="flex items-center">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
+            step === s ? 'bg-brand-600 text-white shadow-md' : 
+            step > s ? 'bg-brand-100 text-brand-600' : 'bg-surface text-ink-400'
+          }`}>
+            {step > s ? <CheckCircle2 className="w-5 h-5" /> : s}
+          </div>
+          {i < 2 && (
+            <div className={`w-16 h-1 mx-2 rounded-full transition-colors ${step > s ? 'bg-brand-200' : 'bg-surface'}`} />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+
+  const footer = (
+    <>
+      {step > 1 && (
+        <Button variant="ghost" onClick={() => setStep(step - 1)}>
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back
+        </Button>
+      )}
+      {step < 3 ? (
+        <Button 
+          variant="primary" 
+          onClick={() => {
+            if (step === 1 && !isStep1Valid) {
+              toast.error('Please fill required fields')
+              return
+            }
+            if (step === 2 && rules.length === 0) {
+              toast.error('Please add at least one rule')
+              return
+            }
+            setStep(step + 1)
+          }}
+          disabled={step === 1 ? !isStep1Valid : rules.length === 0}
+        >
+          Next <ArrowRight className="w-4 h-4 ml-2" />
+        </Button>
+      ) : (
+        <Button variant="primary" onClick={handleSave} disabled={isSubmitting} className="gap-2">
+          <Zap className="w-4 h-4" /> {editScheme ? 'Save Changes' : 'Publish Scheme'}
+        </Button>
+      )}
+    </>
+  )
+
   return (
-    <Dialog open={isOpen} onClose={onClose} title={editScheme ? "Edit Scheme" : "Create New Scheme"} widthClass="max-w-4xl">
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-ink-600 mb-1">Scheme Name</label>
-            <Input placeholder="Scheme Name" value={schemeName} onChange={e => setSchemeName(e.target.value)} required />
-          </div>
-          <div>
-            <label className="block text-xs text-ink-600 mb-1">Description</label>
-            <Input placeholder="Description" value={description} onChange={e => setDescription(e.target.value)} />
-          </div>
-          <div className="flex gap-4 items-end">
-            <div className="flex-1">
-              <label className="block text-xs text-ink-600 mb-1">From</label>
-              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-            </div>
-            <div className="flex-1">
-              <label className="block text-xs text-ink-600 mb-1">To</label>
-              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} disabled={noExpiry} />
-            </div>
-          </div>
-          <div className="flex items-center gap-2 pt-5">
-            <input type="checkbox" id="noExpiry" checked={noExpiry} onChange={e => setNoExpiry(e.target.checked)} className="rounded border-ink-300 text-brand-600 focus:ring-brand-600" />
-            <label htmlFor="noExpiry" className="text-sm text-ink-700">No Expiry</label>
-          </div>
-        </div>
+    <Drawer 
+      open={isOpen} 
+      onClose={onClose} 
+      title={editScheme ? "Edit Scheme" : "Create New Scheme"} 
+      description="Configure scheme rules, slabs, and targeting"
+      widthClass="max-w-3xl"
+      footer={footer}
+    >
+      {renderStepIndicator()}
 
-        <div className="pt-2">
-          <h3 className="text-sm text-ink-600 mb-3">Type</h3>
-          <div className="flex gap-6">
-            {['BUY_GET_FREE', 'COMBO', 'PRICE_SLAB', 'FLAT_MRP_DISCOUNT'].map(t => (
-              <label key={t} className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-                <input type="radio" name="stype" checked={schemeType === t} onChange={() => { setSchemeType(t); setRules([]) }} className="text-brand-600 focus:ring-brand-600" />
-                {t.replace(/_/g, ' ')}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-surface p-5 rounded-xl border border-[#e6e9ee]">
-          <div className="space-y-4">
-            {schemeType === 'BUY_GET_FREE' && (
-              <>
+      <div className="transition-opacity duration-300">
+        {/* STEP 1: CONFIGURATION */}
+        {step === 1 && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+            <div>
+              <label className="block text-xs font-medium text-ink-700 mb-1.5">Scheme Name <span className="text-danger-500">*</span></label>
+              <Input placeholder="e.g. Summer Bonanza 2026" value={schemeName} onChange={e => setSchemeName(e.target.value)} autoFocus />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink-700 mb-1.5">Description</label>
+              <textarea 
+                className="w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm text-ink-900 outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400 transition placeholder:text-ink-600/40 min-h-[100px]"
+                placeholder="Optional details about this scheme..." 
+                value={description} 
+                onChange={e => setDescription(e.target.value)} 
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-ink-700 mb-1.5">Start Date <span className="text-danger-500">*</span></label>
+                <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+              </div>
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-xs font-medium text-ink-700">End Date</label>
+                  <label className="flex items-center gap-1.5 text-xs text-ink-600 cursor-pointer">
+                    <input type="checkbox" checked={noExpiry} onChange={e => setNoExpiry(e.target.checked)} className="rounded border-ink-300 text-brand-600 focus:ring-brand-600" />
+                    No Expiry
+                  </label>
+                </div>
+                <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} disabled={noExpiry} className={noExpiry ? 'opacity-50' : ''} />
+              </div>
+            </div>
+            <div className="pt-4 border-t border-border-subtle">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="w-4 h-4 rounded border-ink-300 text-brand-600 focus:ring-brand-600" />
                 <div>
-                  <h4 className="text-xs font-medium text-ink-600 mb-2">Group</h4>
-                  <div className="flex gap-6 mb-4">
-                    {['Product', 'Brand', 'Category'].map(g => (
-                      <label key={g} className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="radio" name="gtype" checked={triggerType === g} onChange={() => setTriggerType(g)} className="text-brand-600 focus:ring-brand-600" />
-                        {g}
-                      </label>
-                    ))}
-                  </div>
+                  <div className="text-sm font-medium text-ink-900">Active Scheme</div>
+                  <div className="text-xs text-ink-500">Scheme will be immediately available if within date range</div>
                 </div>
-
-                <div className="w-1/2">
-                  <label className="block text-xs text-ink-600 mb-1">Choose</label>
-                  <SearchableSelect 
-                    value={triggerId} 
-                    onChange={val => setTriggerId(String(val))}
-                    placeholder="Select option"
-                    options={
-                      triggerType === 'Product' ? (products?.map((p: any) => ({ value: p.id, label: p.product_name })) || []) :
-                      triggerType === 'Brand' ? (brands?.map((b: any) => ({ value: b.id, label: b.brand_name })) || []) :
-                      (categories?.map((c: any) => ({ value: c.id, label: c.category_name })) || [])
-                    }
-                  />
-                </div>
-
-                <div className="pt-2">
-                  <div className="flex gap-6 mb-3">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="radio" name="ftype" checked={freeItemType === 'Same'} onChange={() => setFreeItemType('Same')} className="text-brand-600 focus:ring-brand-600" />
-                      Same Product
-                    </label>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="radio" name="ftype" checked={freeItemType === 'Different'} onChange={() => setFreeItemType('Different')} className="text-brand-600 focus:ring-brand-600" />
-                      Different Product
-                    </label>
-                  </div>
-                  {freeItemType === 'Different' && (
-                    <div className="w-1/2">
-                      <select className="w-full text-sm p-2 rounded-lg border border-[#e6e9ee]" value={rewardProductId} onChange={e => setRewardProductId(e.target.value)}>
-                        <option value="">Choose Free Product</option>
-                        {products?.map((p: any) => <option key={p.id} value={p.id}>{p.product_name}</option>)}
-                      </select>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-4 gap-4 items-end mt-4">
-                  <div>
-                    <label className="block text-xs text-ink-600 mb-1">Channel</label>
-                    <select className="w-full text-sm p-2.5 rounded-lg border border-[#e6e9ee]" value={channel} onChange={e => setChannel(e.target.value)}>
-                      <option value="">Select option</option>
-                      <option value="Distributor">Distributor</option>
-                      <option value="Wholesale">Wholesale</option>
-                      <option value="Dealer">Dealer</option>
-                      <option value="Retail">Retail</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-ink-600 mb-1">Min Qty</label>
-                    <Input type="number" placeholder="0" value={minQty} onChange={e => setMinQty(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-ink-600 mb-1">Free Qty</label>
-                    <Input type="number" placeholder="0" value={rewardQty} onChange={e => setRewardQty(e.target.value)} />
-                  </div>
-                  <div>
-                    <Button onClick={handleAddRule} variant="secondary" className="w-10 h-10 p-0 rounded-lg flex items-center justify-center"><Plus className="w-5 h-5 text-ink-600"/></Button>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {schemeType === 'PRICE_SLAB' && (
-              <div className="grid grid-cols-12 gap-4 items-end">
-                <div className="col-span-2">
-                  <label className="block text-xs text-ink-600 mb-1">Channel</label>
-                  <select className="w-full text-sm p-2 rounded-lg border border-border-subtle bg-white" value={channel} onChange={e => setChannel(e.target.value)}>
-                    <option value="">Select</option>
-                    <option value="Distributor">Distributor</option>
-                    <option value="Wholesale">Wholesale</option>
-                    <option value="Dealer">Dealer</option>
-                    <option value="Retail">Retail</option>
-                  </select>
-                </div>
-                <div className="col-span-4">
-                  <label className="block text-xs text-ink-600 mb-1">Product</label>
-                  <SearchableSelect 
-                    value={triggerId} 
-                    onChange={val => setTriggerId(String(val))}
-                    placeholder="Select..."
-                    options={products?.map((p: any) => ({ value: p.id, label: p.product_name })) || []}
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs text-ink-600 mb-1">Min Qty</label>
-                  <Input type="number" placeholder="0" value={minQty} onChange={e => setMinQty(e.target.value)} />
-                </div>
-                <div className="col-span-3">
-                  <label className="block text-xs text-ink-600 mb-1">Special Net Rate (₹)</label>
-                  <Input type="number" placeholder="0" value={specialPrice} onChange={e => setSpecialPrice(e.target.value)} />
-                </div>
-                <div className="col-span-1">
-                  <Button onClick={handleAddRule} variant="secondary" className="w-10 h-10 p-0 rounded-lg flex items-center justify-center"><Plus className="w-5 h-5 text-ink-600"/></Button>
-                </div>
-              </div>
-            )}
-            
-            {schemeType === 'COMBO' && (
-              <div className="col-span-4 space-y-4">
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <label className="block text-xs text-ink-600 mb-1">Choose a Product</label>
-                    <SearchableSelect 
-                      value={comboSelectedProduct} 
-                      onChange={val => setComboSelectedProduct(String(val))}
-                      placeholder="Select option"
-                      options={products?.map((p: any) => ({ value: p.id, label: p.product_name })) || []}
-                    />
-                  </div>
-                  <Button onClick={handleAddComboProduct} variant="secondary" className="w-10 h-10 p-0 rounded-lg flex items-center justify-center shrink-0">
-                    <Plus className="w-5 h-5 text-ink-600" />
-                  </Button>
-                </div>
-
-                {comboProducts.length > 0 && (
-                  <div className="border border-[#e6e9ee] rounded-xl overflow-hidden mt-2">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                      <thead className="bg-surface text-ink-600 text-xs font-medium border-b border-[#e6e9ee]">
-                        <tr>
-                          <th className="px-4 py-3">product_name</th>
-                          <th className="px-4 py-3">product_code</th>
-                          <th className="px-4 py-3 w-10">Delete</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#e6e9ee]">
-                        {comboProducts.map((p, i) => (
-                          <tr key={i} className="hover:bg-brand-50/50 transition-colors">
-                            <td className="px-4 py-3 font-medium">{p.product_name}</td>
-                            <td className="px-4 py-3">{p.product_code}</td>
-                            <td className="px-4 py-3 text-right">
-                              <button onClick={() => setComboProducts(comboProducts.filter((_, idx) => idx !== i))} className="text-danger-500 hover:text-danger-700 p-1 rounded-lg hover:bg-danger-50 transition-colors">
-                                <Trash className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                <div className="pt-2">
-                  <div className="flex gap-6 mb-3">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="radio" name="ftypeCombo" checked={freeItemType === 'Same'} onChange={() => setFreeItemType('Same')} className="text-brand-600 focus:ring-brand-600" />
-                      From the Same Group
-                    </label>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="radio" name="ftypeCombo" checked={freeItemType === 'Different'} onChange={() => setFreeItemType('Different')} className="text-brand-600 focus:ring-brand-600" />
-                      Different Product
-                    </label>
-                  </div>
-                  {freeItemType === 'Different' && (
-                    <div className="w-1/2">
-                      <label className="block text-xs text-ink-600 mb-1">Free Product</label>
-                      <SearchableSelect 
-                        value={rewardProductId} 
-                        onChange={val => setRewardProductId(String(val))}
-                        placeholder="Choose Free Product"
-                        options={products?.map((p: any) => ({ value: p.id, label: p.product_name })) || []}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-4 gap-4 items-end mt-4">
-                  <div>
-                    <label className="block text-xs text-ink-600 mb-1">Channel</label>
-                    <select className="w-full text-sm p-2.5 rounded-lg border border-[#e6e9ee]" value={channel} onChange={e => setChannel(e.target.value)}>
-                      <option value="">Select option</option>
-                      <option value="Distributor">Distributor</option>
-                      <option value="Wholesale">Wholesale</option>
-                      <option value="Dealer">Dealer</option>
-                      <option value="Retail">Retail</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-ink-600 mb-1">Min Qty</label>
-                    <Input type="number" placeholder="0" value={minQty} onChange={e => setMinQty(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-ink-600 mb-1">Free Qty</label>
-                    <Input type="number" placeholder="0" value={rewardQty} onChange={e => setRewardQty(e.target.value)} />
-                  </div>
-                  <div>
-                    <Button onClick={handleAddComboSlab} variant="secondary" className="w-10 h-10 p-0 rounded-lg flex items-center justify-center"><Plus className="w-5 h-5 text-ink-600"/></Button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {schemeType === 'FLAT_MRP_DISCOUNT' && (
-              <div className="grid grid-cols-12 gap-4 items-end">
-                <div className="col-span-3">
-                  <label className="block text-xs text-ink-600 mb-1">Select Customers</label>
-                  <MultiSearchableSelect 
-                    value={flatCustomers}
-                    onChange={setFlatCustomers}
-                    placeholder="Select option(s)"
-                    options={customers?.map((c: any) => ({ value: c.id, label: c.customer_name })) || []}
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs text-ink-600 mb-1">Select Brand</label>
-                  <SearchableSelect 
-                    value={flatBrand} 
-                    onChange={val => setFlatBrand(String(val))}
-                    placeholder="Select option"
-                    options={brands?.map((b: any) => ({ value: b.id, label: b.brand_name })) || []}
-                  />
-                </div>
-                <div className="col-span-3">
-                  <label className="block text-xs text-ink-600 mb-1">Products</label>
-                  <MultiSearchableSelect 
-                    value={flatProducts}
-                    onChange={setFlatProducts}
-                    placeholder="Select option(s)"
-                    options={products?.map((p: any) => ({ value: p.id, label: p.product_name })) || []}
-                  />
-                </div>
-                <div className="col-span-1">
-                  <label className="block text-xs text-ink-600 mb-1">Min Qty</label>
-                  <Input type="number" placeholder="0" value={minQty} onChange={e => setMinQty(e.target.value)} />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs text-ink-600 mb-1">Discount Perc</label>
-                  <Input type="number" placeholder="0" value={specialPrice} onChange={e => setSpecialPrice(e.target.value)} />
-                </div>
-                <div className="col-span-1 pb-1">
-                  <Button onClick={handleAddRule} variant="secondary" className="w-10 h-10 p-0 rounded-lg flex items-center justify-center"><Plus className="w-5 h-5 text-ink-600"/></Button>
-                </div>
-              </div>
-            )}
-
-          </div>
-        </div>
-
-        {rules.length > 0 && (
-          <div className="border border-[#e6e9ee] rounded-xl overflow-hidden mt-4">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-surface text-ink-600 text-xs font-medium border-b border-[#e6e9ee]">
-                <tr>
-                  <th className="px-4 py-3">scheme_type</th>
-                  <th className="px-4 py-3">trigger_type</th>
-                  <th className="px-4 py-3">trigger_name</th>
-                  <th className="px-4 py-3">min_qty</th>
-                  <th className="px-4 py-3">reward_qty</th>
-                  <th className="px-4 py-3 w-10"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#e6e9ee]">
-                {rules.map((r, i) => (
-                  <tr key={i} className="hover:bg-brand-50/50 transition-colors">
-                    <td className="px-4 py-3 font-medium">{r.scheme_type}</td>
-                    <td className="px-4 py-3">{r.trigger_type}</td>
-                    <td className="px-4 py-3">{r.trigger_name || r.trigger_id}</td>
-                    <td className="px-4 py-3">{r.min_qty}</td>
-                    <td className="px-4 py-3">
-                      {r.reward_qty}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button onClick={() => setRules(rules.filter((_, idx) => idx !== i))} className="text-danger-500 hover:text-danger-700 p-1 rounded-lg hover:bg-danger-50 transition-colors">
-                        <Trash className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              </label>
+            </div>
           </div>
         )}
 
-      </div>
+        {/* STEP 2: RULE BUILDER */}
+        {step === 2 && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+            <div>
+              <h3 className="text-sm font-medium text-ink-900 mb-3">Scheme Type</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {SCHEME_TYPES.map(type => (
+                  <div 
+                    key={type.id}
+                    onClick={() => { setSchemeType(type.id); setRules([]) }}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                      schemeType === type.id ? 'border-brand-500 bg-brand-50/50 shadow-sm' : 'border-border-subtle hover:border-ink-300 bg-white'
+                    }`}
+                  >
+                    <div className={`p-2 rounded-lg ${schemeType === type.id ? 'bg-brand-100 text-brand-600' : 'bg-surface text-ink-500'}`}>
+                      <type.icon className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className={`text-sm font-semibold ${schemeType === type.id ? 'text-brand-900' : 'text-ink-900'}`}>{type.label}</div>
+                      <div className="text-xs text-ink-500 mt-0.5">{type.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-      <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-[#e6e9ee]">
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" className="gap-2" onClick={handleSave} disabled={!isFormValid || isSubmitting}>
-          <Zap className="w-4 h-4" /> {editScheme ? 'Save Changes' : 'Create Scheme'}
-        </Button>
+            <div className="bg-surface/50 border border-border-subtle p-5 rounded-xl">
+              <h4 className="text-sm font-medium text-ink-900 mb-4 flex items-center gap-2">
+                <Box className="w-4 h-4 text-ink-500" /> Builder Configuration
+              </h4>
+              
+              <div className="space-y-4">
+                {schemeType === 'BUY_GET_FREE' && (
+                  <>
+                    <div className="flex gap-6 mb-4">
+                      {['Product', 'Brand', 'Category'].map(g => (
+                        <label key={g} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="radio" checked={triggerType === g} onChange={() => setTriggerType(g)} className="text-brand-600 focus:ring-brand-600" />
+                          <span className="font-medium text-ink-700">{g}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-12 gap-4 items-end">
+                      <div className="col-span-6">
+                        <label className="block text-xs font-medium text-ink-700 mb-1.5">Target {triggerType}</label>
+                        <SearchableSelect 
+                          value={triggerId} 
+                          onChange={val => setTriggerId(String(val))}
+                          placeholder={`Select ${triggerType.toLowerCase()}...`}
+                          options={
+                            triggerType === 'Product' ? (products?.map((p: any) => ({ value: p.id, label: p.product_name })) || []) :
+                            triggerType === 'Brand' ? (brands?.map((b: any) => ({ value: b.id, label: b.brand_name })) || []) :
+                            (categories?.map((c: any) => ({ value: c.id, label: c.category_name })) || [])
+                          }
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <label className="block text-xs font-medium text-ink-700 mb-1.5">Channel</label>
+                        <select className="w-full text-sm p-1.5 min-h-[36px] rounded-lg border border-border-subtle bg-white" value={channel} onChange={e => setChannel(e.target.value)}>
+                          <option value="">Any</option>
+                          <option value="Distributor">Distributor</option>
+                          <option value="Wholesale">Wholesale</option>
+                          <option value="Dealer">Dealer</option>
+                          <option value="Retail">Retail</option>
+                        </select>
+                      </div>
+                      <div className="col-span-3">
+                        <label className="block text-xs font-medium text-ink-700 mb-1.5">Min Qty</label>
+                        <Input type="number" placeholder="0" value={minQty} onChange={e => setMinQty(e.target.value)} />
+                      </div>
+                    </div>
+                    
+                    <div className="pt-2 border-t border-border-subtle mt-4">
+                      <div className="flex gap-6 mb-3 pt-2">
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="radio" checked={freeItemType === 'Same'} onChange={() => setFreeItemType('Same')} className="text-brand-600 focus:ring-brand-600" />
+                          <span className="font-medium text-ink-700">Same Product Free</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="radio" checked={freeItemType === 'Different'} onChange={() => setFreeItemType('Different')} className="text-brand-600 focus:ring-brand-600" />
+                          <span className="font-medium text-ink-700">Different Product</span>
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-12 gap-4 items-end">
+                        {freeItemType === 'Different' ? (
+                          <div className="col-span-6">
+                            <label className="block text-xs font-medium text-ink-700 mb-1.5">Free Product</label>
+                            <SearchableSelect 
+                              value={rewardProductId} 
+                              onChange={val => setRewardProductId(String(val))}
+                              placeholder="Choose Free Product"
+                              options={products?.map((p: any) => ({ value: p.id, label: p.product_name })) || []}
+                            />
+                          </div>
+                        ) : <div className="col-span-6" />}
+                        <div className="col-span-3">
+                          <label className="block text-xs font-medium text-ink-700 mb-1.5">Free Qty</label>
+                          <Input type="number" placeholder="0" value={rewardQty} onChange={e => setRewardQty(e.target.value)} />
+                        </div>
+                        <div className="col-span-3">
+                          <Button onClick={handleAddRule} variant="secondary" className="w-full h-9 rounded-lg flex items-center justify-center gap-2 text-ink-700 bg-white border border-border-subtle hover:bg-surface">
+                            <Plus className="w-4 h-4"/> Add Rule
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {schemeType === 'PRICE_SLAB' && (
+                  <div className="grid grid-cols-12 gap-4 items-end">
+                    <div className="col-span-3">
+                      <label className="block text-xs font-medium text-ink-700 mb-1.5">Channel</label>
+                      <select className="w-full text-sm p-1.5 min-h-[36px] rounded-lg border border-border-subtle bg-white" value={channel} onChange={e => setChannel(e.target.value)}>
+                        <option value="">Any</option>
+                        <option value="Distributor">Distributor</option>
+                        <option value="Wholesale">Wholesale</option>
+                        <option value="Dealer">Dealer</option>
+                        <option value="Retail">Retail</option>
+                      </select>
+                    </div>
+                    <div className="col-span-9">
+                      <label className="block text-xs font-medium text-ink-700 mb-1.5">Target Product</label>
+                      <SearchableSelect 
+                        value={triggerId} 
+                        onChange={val => setTriggerId(String(val))}
+                        placeholder="Select..."
+                        options={products?.map((p: any) => ({ value: p.id, label: p.product_name })) || []}
+                      />
+                    </div>
+                    <div className="col-span-4">
+                      <label className="block text-xs font-medium text-ink-700 mb-1.5">Min Qty Trigger</label>
+                      <Input type="number" placeholder="0" value={minQty} onChange={e => setMinQty(e.target.value)} />
+                    </div>
+                    <div className="col-span-4">
+                      <label className="block text-xs font-medium text-ink-700 mb-1.5">Special Net Rate (₹)</label>
+                      <Input type="number" placeholder="0" value={specialPrice} onChange={e => setSpecialPrice(e.target.value)} />
+                    </div>
+                    <div className="col-span-4">
+                      <Button onClick={handleAddRule} variant="secondary" className="w-full h-9 rounded-lg flex items-center justify-center gap-2 text-ink-700 bg-white border border-border-subtle hover:bg-surface">
+                        <Plus className="w-4 h-4"/> Add Slab
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
+                {schemeType === 'COMBO' && (
+                  <div className="space-y-4">
+                    <div className="flex gap-3 items-end bg-white p-3 rounded-lg border border-border-subtle">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-ink-700 mb-1.5">Build Combo Group</label>
+                        <SearchableSelect 
+                          value={comboSelectedProduct} 
+                          onChange={val => setComboSelectedProduct(String(val))}
+                          placeholder="Select product to add..."
+                          options={products?.map((p: any) => ({ value: p.id, label: p.product_name })) || []}
+                        />
+                      </div>
+                      <Button onClick={handleAddComboProduct} variant="secondary" className="w-10 h-9 p-0 rounded-lg flex items-center justify-center shrink-0">
+                        <Plus className="w-4 h-4 text-ink-600" />
+                      </Button>
+                    </div>
+
+                    {comboProducts.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {comboProducts.map((p, i) => (
+                          <div key={i} className="inline-flex items-center gap-2 bg-brand-50 border border-brand-100 text-brand-700 px-2.5 py-1 rounded-md text-xs">
+                            {p.product_name}
+                            <button onClick={() => setComboProducts(comboProducts.filter((_, idx) => idx !== i))} className="text-brand-400 hover:text-brand-700">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-12 gap-4 items-end pt-2 border-t border-border-subtle">
+                      <div className="col-span-3">
+                        <label className="block text-xs font-medium text-ink-700 mb-1.5">Channel</label>
+                        <select className="w-full text-sm p-1.5 min-h-[36px] rounded-lg border border-border-subtle bg-white" value={channel} onChange={e => setChannel(e.target.value)}>
+                          <option value="">Any</option>
+                          <option value="Distributor">Distributor</option>
+                          <option value="Dealer">Dealer</option>
+                        </select>
+                      </div>
+                      <div className="col-span-3">
+                        <label className="block text-xs font-medium text-ink-700 mb-1.5">Min Qty</label>
+                        <Input type="number" placeholder="0" value={minQty} onChange={e => setMinQty(e.target.value)} />
+                      </div>
+                      <div className="col-span-6">
+                        <label className="block text-xs font-medium text-ink-700 mb-1.5">Free Product</label>
+                        <div className="flex items-center gap-2">
+                          <select className="w-1/3 text-sm p-1.5 min-h-[36px] rounded-lg border border-border-subtle bg-white" value={freeItemType} onChange={e => setFreeItemType(e.target.value as any)}>
+                            <option value="Same">From Group</option>
+                            <option value="Different">Different</option>
+                          </select>
+                          {freeItemType === 'Different' ? (
+                            <div className="flex-1">
+                              <SearchableSelect 
+                                value={rewardProductId} 
+                                onChange={val => setRewardProductId(String(val))}
+                                placeholder="Choose Free"
+                                options={products?.map((p: any) => ({ value: p.id, label: p.product_name })) || []}
+                              />
+                            </div>
+                          ) : <div className="flex-1 text-xs text-ink-500 italic">User chooses from combo</div>}
+                        </div>
+                      </div>
+                      <div className="col-span-6" />
+                      <div className="col-span-3">
+                        <label className="block text-xs font-medium text-ink-700 mb-1.5">Free Qty</label>
+                        <Input type="number" placeholder="0" value={rewardQty} onChange={e => setRewardQty(e.target.value)} />
+                      </div>
+                      <div className="col-span-3">
+                        <Button onClick={handleAddComboSlab} variant="secondary" className="w-full h-9 rounded-lg flex items-center justify-center gap-2 text-ink-700 bg-white border border-border-subtle hover:bg-surface">
+                          <Plus className="w-4 h-4"/> Add Combo
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {schemeType === 'FLAT_MRP_DISCOUNT' && (
+                  <div className="grid grid-cols-12 gap-4 items-end">
+                    <div className="col-span-12">
+                      <label className="block text-xs font-medium text-ink-700 mb-1.5">Target Customers (Global)</label>
+                      <MultiSearchableSelect 
+                        value={flatCustomers}
+                        onChange={setFlatCustomers}
+                        placeholder="Select customers..."
+                        options={customers?.map((c: any) => ({ value: c.id, label: c.customer_name })) || []}
+                      />
+                    </div>
+                    <div className="col-span-6">
+                      <label className="block text-xs font-medium text-ink-700 mb-1.5">Target Brand</label>
+                      <SearchableSelect 
+                        value={flatBrand} 
+                        onChange={val => setFlatBrand(String(val))}
+                        placeholder="Select Brand"
+                        options={brands?.map((b: any) => ({ value: b.id, label: b.brand_name })) || []}
+                      />
+                    </div>
+                    <div className="col-span-6">
+                      <label className="block text-xs font-medium text-ink-700 mb-1.5">Included Products (Optional)</label>
+                      <MultiSearchableSelect 
+                        value={flatProducts}
+                        onChange={setFlatProducts}
+                        placeholder="All if empty"
+                        options={products?.map((p: any) => ({ value: p.id, label: p.product_name })) || []}
+                      />
+                    </div>
+                    <div className="col-span-4">
+                      <label className="block text-xs font-medium text-ink-700 mb-1.5">Min Qty</label>
+                      <Input type="number" placeholder="0" value={minQty} onChange={e => setMinQty(e.target.value)} />
+                    </div>
+                    <div className="col-span-4">
+                      <label className="block text-xs font-medium text-ink-700 mb-1.5">Discount %</label>
+                      <Input type="number" placeholder="0" value={specialPrice} onChange={e => setSpecialPrice(e.target.value)} />
+                    </div>
+                    <div className="col-span-4">
+                      <Button onClick={handleAddRule} variant="secondary" className="w-full h-9 rounded-lg flex items-center justify-center gap-2 text-ink-700 bg-white border border-border-subtle hover:bg-surface">
+                        <Plus className="w-4 h-4"/> Add Rule
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* RULE CARDS */}
+            {rules.length > 0 && (
+              <div className="mt-6 space-y-3">
+                <h4 className="text-sm font-semibold text-ink-900 mb-2">Configured Rules ({rules.length})</h4>
+                {rules.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between p-4 bg-white border border-border-subtle rounded-xl hover:shadow-sm transition-shadow group relative overflow-hidden">
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand-400" />
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-brand-600 bg-brand-50 px-2 py-0.5 rounded">
+                          {r.scheme_type.replace(/_/g, ' ')}
+                        </span>
+                        {r.channel_tier && <span className="text-xs text-ink-500">• {r.channel_tier}</span>}
+                      </div>
+                      <div className="text-sm text-ink-900 font-medium">
+                        {r.scheme_type === 'PRICE_SLAB' ? (
+                          <>Buy <span className="font-bold">{r.min_qty}</span> of {r.trigger_name}, rate is <span className="text-success-600 font-bold">₹{r.special_price}</span></>
+                        ) : r.scheme_type === 'FLAT_MRP_DISCOUNT' ? (
+                          <>Min <span className="font-bold">{r.min_qty}</span> on {r.trigger_name}, get <span className="text-success-600 font-bold">{r.special_price}% OFF</span></>
+                        ) : r.scheme_type === 'COMBO' ? (
+                          <>Buy <span className="font-bold">{r.min_qty}</span> from {r.trigger_name}, get <span className="font-bold">{r.reward_qty}</span> free</>
+                        ) : (
+                          <>Buy <span className="font-bold">{r.min_qty}</span> of {r.trigger_name}, get <span className="font-bold">{r.reward_qty}</span> free</>
+                        )}
+                      </div>
+                    </div>
+                    <button onClick={() => setRules(rules.filter((_, idx) => idx !== i))} className="p-2 text-ink-400 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                      <Trash className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* STEP 3: REVIEW */}
+        {step === 3 && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+            <div className="bg-brand-50 border border-brand-100 rounded-xl p-5 text-center">
+              <div className="w-12 h-12 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-semibold text-brand-900">Ready to Publish</h3>
+              <p className="text-sm text-brand-600/80 mt-1">Review the scheme details below before saving.</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-white border border-border-subtle rounded-xl p-5">
+                <h4 className="text-xs font-semibold text-ink-500 uppercase tracking-wider mb-4">Basic Details</h4>
+                <div className="grid grid-cols-2 gap-y-4">
+                  <div>
+                    <div className="text-xs text-ink-500">Name</div>
+                    <div className="text-sm font-medium text-ink-900">{schemeName}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-ink-500">Status</div>
+                    <div className="text-sm font-medium text-ink-900">{isActive ? 'Active' : 'Inactive'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-ink-500">Duration</div>
+                    <div className="text-sm font-medium text-ink-900">{startDate} to {noExpiry ? 'No Expiry' : endDate}</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-xs text-ink-500">Description</div>
+                    <div className="text-sm font-medium text-ink-900">{description || '—'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white border border-border-subtle rounded-xl p-5">
+                <h4 className="text-xs font-semibold text-ink-500 uppercase tracking-wider mb-4">Configured Rules ({rules.length})</h4>
+                <div className="space-y-3">
+                  {rules.map((r, i) => (
+                    <div key={i} className="text-sm text-ink-800 pb-3 border-b border-border-subtle last:border-0 last:pb-0">
+                      <span className="font-semibold text-ink-900">{i+1}. </span> 
+                      {r.scheme_type === 'PRICE_SLAB' ? (
+                        <>Buy <span className="font-medium">{r.min_qty}</span> of {r.trigger_name} at rate <span className="text-success-600 font-medium">₹{r.special_price}</span></>
+                      ) : r.scheme_type === 'FLAT_MRP_DISCOUNT' ? (
+                        <>Min <span className="font-medium">{r.min_qty}</span> on {r.trigger_name}, get <span className="text-success-600 font-medium">{r.special_price}% OFF</span></>
+                      ) : (
+                        <>Buy <span className="font-medium">{r.min_qty}</span> of {r.trigger_name}, get <span className="font-medium">{r.reward_qty}</span> free</>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </Dialog>
+    </Drawer>
   )
 }
