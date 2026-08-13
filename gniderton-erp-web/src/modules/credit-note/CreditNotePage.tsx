@@ -8,7 +8,7 @@ import { StatCard } from '@/components/shared/StatCard'
 import type { ColumnDef } from '@tanstack/react-table'
 import { CreditNoteItemsModal } from './components/CreditNoteItemsModal'
 import { CreateCreditNoteModal } from './components/CreateCreditNoteModal'
-import { FileText, Plus, CheckCircle2, AlertTriangle, Search, Filter, Trash, Printer } from 'lucide-react'
+import { FileText, Plus, CheckCircle2, AlertTriangle, Search, Filter, Trash, Printer, RotateCcw } from 'lucide-react'
 import { generateCreditNotePDF } from './utils/pdfGenerator'
 import { credit_noteApi } from './api'
 import toast from 'react-hot-toast'
@@ -272,6 +272,24 @@ export default function CreditNotePage() {
               {dseOptions.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
+
+          {(globalFilter !== '' || typeFilter !== 'All' || dateFilter !== 'all' || routeFilter !== 'All' || dseFilter !== 'All') && (
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              className="gap-1.5 text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 border-transparent rounded-full px-4"
+              onClick={() => {
+                setGlobalFilter('')
+                setTypeFilter('All')
+                setDateFilter('all')
+                setRouteFilter('All')
+                setDseFilter('All')
+              }}
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset Filters
+            </Button>
+          )}
         </div>
       </div>
 
