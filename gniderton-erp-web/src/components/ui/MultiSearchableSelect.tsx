@@ -9,14 +9,14 @@ interface Option {
 
 interface Props {
   options: Option[]
-  value: string | number
-  onChange: (val: string | number) => void
+  value: (string | number)[]
+  onChange: (val: (string | number)[]) => void
   placeholder?: string
   className?: string
   disabled?: boolean
 }
 
-export function SearchableSelect({ options, value, onChange, placeholder = 'Select...', className = '', disabled = false }: Props) {
+export function MultiSearchableSelect({ options, value, onChange, placeholder = 'Select...', className = '', disabled = false }: Props) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
@@ -64,22 +64,35 @@ export function SearchableSelect({ options, value, onChange, placeholder = 'Sele
     return () => window.removeEventListener('scroll', handleScroll, true)
   }, [open])
 
-  const selectedLabel = (options || []).find(o => o.value == value)?.label
+  const toggleOption = (optionValue: string | number) => {
+    const safeValue = value || []
+    if (safeValue.includes(optionValue)) {
+      onChange(safeValue.filter(v => v !== optionValue))
+    } else {
+      onChange([...safeValue, optionValue])
+    }
+    inputRef.current?.focus()
+  }
+
+  const safeValue = value || []
+  const selectedLabels = safeValue.map(v => (options || []).find(o => o.value == v)?.label).filter(Boolean).join(', ')
   
   const filteredOptions = (options || []).filter(o => 
     (o.label || '').toString().toLowerCase().includes(search.toLowerCase())
   )
 
   return (
-    <div className={`relative ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`} ref={containerRef}>
-      <div 
-        className={`h-9 w-full rounded-lg border border-border-subtle bg-white px-2 flex items-center justify-between text-sm ${disabled ? 'bg-surface cursor-not-allowed' : 'cursor-pointer'}`}
+    <div className={`relative ${className}`} ref={containerRef}>
+      <div
+        className={`w-full rounded-lg border border-border-subtle bg-white px-3 py-2 text-sm flex items-center justify-between cursor-pointer transition ${
+          disabled ? 'opacity-50 cursor-not-allowed bg-surface' : 'hover:border-brand-300'
+        } ${open ? 'border-brand-400 ring-2 ring-brand-400 ring-opacity-20' : ''}`}
         onClick={() => !disabled && setOpen(!open)}
       >
-        <span className={`truncate ${!selectedLabel ? 'text-ink-400' : 'text-ink-900'}`}>
-          {selectedLabel ? selectedLabel : placeholder}
+        <span className={`truncate ${safeValue.length ? 'text-ink-900' : 'text-ink-600/40'}`}>
+          {safeValue.length ? selectedLabels : placeholder}
         </span>
-        <ChevronDown size={16} className="text-ink-400 shrink-0 ml-1" />
+        <ChevronDown className={`w-4 h-4 text-ink-500 transition-transform ${open ? 'rotate-180' : ''}`} />
       </div>
 
       {open && createPortal(
@@ -100,21 +113,24 @@ export function SearchableSelect({ options, value, onChange, placeholder = 'Sele
             />
           </div>
           <div className="overflow-y-auto">
-            {filteredOptions.length === 0 ? (
-              <div className="p-3 text-sm text-ink-400 text-center">No results found</div>
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => {
+                const isSelected = safeValue.includes(option.value)
+                return (
+                  <div
+                    key={option.value}
+                    className={`px-3 py-2 text-sm cursor-pointer transition-colors flex justify-between items-center ${
+                      isSelected ? 'bg-brand-50 text-brand-700' : 'hover:bg-surface text-ink-900'
+                    }`}
+                    onClick={() => toggleOption(option.value)}
+                  >
+                    <span>{option.label}</span>
+                    {isSelected && <span className="text-brand-600 font-bold">✓</span>}
+                  </div>
+                )
+              })
             ) : (
-              filteredOptions.map(opt => (
-                <div
-                  key={opt.value}
-                  className={`p-2 text-sm cursor-pointer hover:bg-brand-50 hover:text-brand-700 ${opt.value === value ? 'bg-brand-50 text-brand-700 font-medium' : 'text-ink-900'}`}
-                  onClick={() => {
-                    onChange(opt.value)
-                    setOpen(false)
-                  }}
-                >
-                  {opt.label}
-                </div>
-              ))
+              <div className="p-3 text-sm text-ink-400 text-center">No results found</div>
             )}
           </div>
         </div>,
