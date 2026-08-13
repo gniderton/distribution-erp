@@ -375,26 +375,15 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
                 />
               </div>
               {mode === 'Itemized' && invoiceId && (
-                <>
-                  <Button 
-                    variant="secondary" 
-                    onClick={handleLoadFromInvoice}
-                    disabled={isFetchingInvoice}
-                    className="px-2"
-                    title="Load Items"
-                  >
-                    <Download size={14} />
-                  </Button>
-                  <Button 
-                    variant="primary" 
-                    onClick={handle1ClickReturn}
-                    disabled={isFetchingInvoice || isSubmitting}
-                    className="px-2 bg-amber-500 hover:bg-amber-600 text-white border-amber-500 hover:border-amber-600"
-                    title="1-Click Return Full Bill"
-                  >
-                    {isSubmitting ? <span className="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full" /> : <Zap size={14} />}
-                  </Button>
-                </>
+                <Button 
+                  variant="secondary" 
+                  onClick={handleLoadFromInvoice}
+                  disabled={isFetchingInvoice}
+                  className="px-2"
+                  title="Load Items"
+                >
+                  <Download size={14} />
+                </Button>
               )}
             </div>
           </div>
@@ -440,9 +429,24 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
                 <Package className="w-4 h-4 text-brand-500" />
                 Return Items
               </h3>
-              <Button size="sm" onClick={handleAddLine} variant="secondary" className="gap-2">
-                <Plus className="w-4 h-4" /> Add Row
-              </Button>
+              <div className="flex gap-2">
+                {invoiceId && (
+                  <Button 
+                    size="sm"
+                    variant="primary" 
+                    onClick={handle1ClickReturn}
+                    disabled={isFetchingInvoice || isSubmitting}
+                    className="gap-2 bg-amber-500 hover:bg-amber-600 text-white border-amber-500 hover:border-amber-600"
+                    title="1-Click Return Full Bill"
+                  >
+                    {isSubmitting ? <span className="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full" /> : <Zap size={14} />}
+                    1-Click Return Full Bill
+                  </Button>
+                )}
+                <Button size="sm" onClick={handleAddLine} variant="secondary" className="gap-2">
+                  <Plus className="w-4 h-4" /> Add Row
+                </Button>
+              </div>
             </div>
             
             <div className="overflow-x-auto flex-1 pb-4">
