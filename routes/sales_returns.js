@@ -19,6 +19,8 @@ router.get('/', async (req, res) => {
                 sr.status, 
                 sr.remarks as reason,
                 c.customer_name,
+                r.route_name,
+                dse.full_name as dse_name,
                 c.gstin as customer_gst,
                 c.customer_phone as customer_contact,
                 c.email as customer_email,
@@ -50,6 +52,8 @@ router.get('/', async (req, res) => {
                 )) FILTER (WHERE srl.id IS NOT NULL), '[]') as items
             FROM sales_returns sr
             JOIN customers c ON sr.customer_id = c.id
+            LEFT JOIN routes r ON c.route_id = r.id
+            LEFT JOIN employees dse ON c.dse_id = dse.id
             LEFT JOIN customer_addresses ca ON c.id = ca.customer_id AND ca.is_default_billing = true
             LEFT JOIN sales_invoices si ON sr.invoice_id = si.id
             LEFT JOIN employees e ON sr.created_by = e.id
@@ -79,7 +83,7 @@ router.get('/', async (req, res) => {
             params.push(status);
         }
 
-        query += ` GROUP BY sr.id, c.customer_name, c.gstin, c.customer_phone, c.email, ca.address_line1, ca.address_line2, ca.city, ca.pincode, si.invoice_number, e.full_name
+        query += ` GROUP BY sr.id, c.customer_name, c.gstin, c.customer_phone, c.email, ca.address_line1, ca.address_line2, ca.city, ca.pincode, si.invoice_number, e.full_name, r.route_name, dse.full_name
                    ORDER BY sr.return_date DESC, sr.id DESC`;
 
 

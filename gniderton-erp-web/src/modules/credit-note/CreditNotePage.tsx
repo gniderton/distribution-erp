@@ -18,8 +18,10 @@ export default function CreditNotePage() {
   const { mutateAsync: deleteCreditNote } = useDeleteCreditNote()
   
   const [globalFilter, setGlobalFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'All' | 'Itemized Sales Return' | 'Flat Amount Return'>('All')
+  const [typeFilter, setTypeFilter] = useState<'All' | 'Sales Return' | 'Rate Adjustment'>('All')
   const [dateFilter, setDateFilter] = useState('all')
+  const [routeFilter, setRouteFilter] = useState('All')
+  const [dseFilter, setDseFilter] = useState('All')
   
   const [itemsModalOpen, setItemsModalOpen] = useState(false)
   const [selectedNote, setSelectedNote] = useState<any>(null)
@@ -29,6 +31,8 @@ export default function CreditNotePage() {
     if (!data) return []
     return data.filter((row: any) => {
       if (typeFilter !== 'All' && row.type !== typeFilter) return false
+      if (routeFilter !== 'All' && row.route_name !== routeFilter) return false
+      if (dseFilter !== 'All' && row.dse_name !== dseFilter) return false
       
       if (dateFilter !== 'all') {
         const itemDateStr = row.return_date
@@ -49,7 +53,19 @@ export default function CreditNotePage() {
       }
       return true
     })
-  }, [data, typeFilter, dateFilter])
+  }, [data, typeFilter, dateFilter, routeFilter, dseFilter])
+
+  const routeOptions = useMemo(() => {
+    if (!data) return []
+    const routes = new Set<string>(data.map((d: any) => d.route_name).filter(Boolean))
+    return Array.from(routes).sort()
+  }, [data])
+
+  const dseOptions = useMemo(() => {
+    if (!data) return []
+    const dses = new Set<string>(data.map((d: any) => d.dse_name).filter(Boolean))
+    return Array.from(dses).sort()
+  }, [data])
 
   const stats = useMemo(() => {
     const list = filteredData
@@ -67,8 +83,8 @@ export default function CreditNotePage() {
     const thisMonthCount = currentMonthList.length
     const thisMonthValue = currentMonthList.reduce((sum: number, r: any) => sum + (Number(r.amount) || 0), 0)
     
-    const itemizedCount = list.filter((r: any) => r.type === 'Itemized Sales Return').length
-    const flatCount = list.filter((r: any) => r.type === 'Flat Amount Return').length
+    const itemizedCount = list.filter((r: any) => r.type === 'Sales Return').length
+    const flatCount = list.filter((r: any) => r.type === 'Rate Adjustment').length
     
     return { totalCount, totalValue, thisMonthCount, thisMonthValue, itemizedCount, flatCount }
   }, [filteredData])
@@ -107,8 +123,8 @@ export default function CreditNotePage() {
       accessorKey: 'type',
       header: 'Type',
       cell: ({ row }) => (
-        <Badge tone={row.original.type === 'Itemized Sales Return' ? 'brand' : 'neutral'}>
-          {row.original.type === 'Itemized Sales Return' ? 'Itemized' : 'Flat Amount'}
+        <Badge tone={row.original.type === 'Sales Return' ? 'brand' : 'neutral'}>
+          {row.original.type === 'Sales Return' ? 'Itemized' : 'Flat Amount'}
         </Badge>
       ),
     },
@@ -230,8 +246,30 @@ export default function CreditNotePage() {
               className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer"
             >
               <option value="All">Type: All</option>
-              <option value="Itemized Sales Return">Itemized</option>
-              <option value="Flat Amount Return">Flat Amount</option>
+              <option value="Sales Return">Itemized Return</option>
+              <option value="Rate Adjustment">Flat Amount</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <select
+              value={routeFilter}
+              onChange={e => setRouteFilter(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer max-w-[120px]"
+            >
+              <option value="All">Route: All</option>
+              {routeOptions.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <select
+              value={dseFilter}
+              onChange={e => setDseFilter(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer max-w-[120px]"
+            >
+              <option value="All">DSE: All</option>
+              {dseOptions.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
         </div>
