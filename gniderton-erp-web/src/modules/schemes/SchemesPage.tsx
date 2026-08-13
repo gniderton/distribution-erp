@@ -141,15 +141,17 @@ export default function SchemesPage() {
   if (isError) return <div className="p-8 text-center text-danger-600">Failed to load schemes</div>
 
   return (
-    <div className="h-full flex flex-col bg-ink-50">
-      <div className="px-6 py-5 flex items-start justify-between shrink-0">
-        <PageHeader eyebrow="SELL · PRICING" title="Schemes & Offers" description="Configure buy-get-free, combos, price slabs, and track their usage." />
-        <Button onClick={() => { setEditScheme(null); setCreateModalOpen(true) }} className="gap-2" variant="primary">
-          <Plus className="w-4 h-4" /> New Scheme
-        </Button>
-      </div>
-
-      <div className="px-6">
+    <div>
+      <PageHeader 
+        eyebrow="SELL · PRICING" 
+        title="Schemes & Offers" 
+        description="Configure buy-get-free, combos, price slabs, and track their usage." 
+        actions={
+          <Button onClick={() => { setEditScheme(null); setCreateModalOpen(true) }} className="gap-2" variant="primary">
+            <Plus className="w-4 h-4" /> New Scheme
+          </Button>
+        }
+      />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <StatCard label="Total Schemes" value={String(stats.total)} icon={Gift} />
           <StatCard label="Active" value={String(stats.active)} icon={CheckCircle2} tone="success" />
@@ -235,8 +237,6 @@ export default function SchemesPage() {
             )}
           </>
         )}
-      </div>
-
       {createModalOpen && (
         <SchemeFormModal 
           isOpen={createModalOpen} 
