@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge'
 import { StatCard } from '@/components/shared/StatCard'
 import type { ColumnDef } from '@tanstack/react-table'
 import { SchemeFormModal } from './components/SchemeFormModal'
+import { SchemeAnalyticsDashboard } from './components/SchemeAnalyticsDashboard'
 import { Gift, Plus, CheckCircle2, AlertTriangle, Search, Filter, Trash, Edit2, Play, Pause } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -171,7 +172,7 @@ export default function SchemesPage() {
             className={`pb-3 text-sm font-medium transition-colors border-b-2 ${activeTab === 'usage' ? 'border-brand-600 text-brand-700' : 'border-transparent text-ink-600 hover:text-ink-900'}`}
             onClick={() => setActiveTab('usage')}
           >
-            Usage Tracking
+            Analytics & Usage
           </button>
         </div>
 
@@ -227,8 +228,15 @@ export default function SchemesPage() {
             </div>
             
             {selectedSchemeForUsage ? (
-              <div className="glass-card bg-white rounded-xl border border-[#e6e9ee] shadow-sm overflow-hidden mb-6">
-                <DataTable columns={usageColumns} data={usageData || []} isLoading={isUsageLoading} />
+              <div className="space-y-6 mb-6">
+                <SchemeAnalyticsDashboard schemeId={selectedSchemeForUsage} />
+                
+                <div className="glass-card bg-white rounded-xl border border-[#e6e9ee] shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-[#e6e9ee] bg-gray-50 flex justify-between items-center">
+                    <h3 className="font-semibold text-gray-900">Raw Invoice Transactions</h3>
+                  </div>
+                  <DataTable columns={usageColumns} data={usageData || []} isLoading={isUsageLoading} hideSearchBar={false} />
+                </div>
               </div>
             ) : (
               <div className="py-12 text-center text-ink-500 border border-dashed border-[#e6e9ee] rounded-xl">

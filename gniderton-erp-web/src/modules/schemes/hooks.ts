@@ -24,6 +24,14 @@ export function useSchemeUsage(id: string | null, params: any = {}) {
   })
 }
 
+export function useSchemeAnalytics(id: string | null) {
+  return useQuery({
+    queryKey: ['schemes', 'analytics', id],
+    queryFn: () => schemeApi.getAnalytics(id!),
+    enabled: !!id
+  })
+}
+
 export function useCreateScheme() {
   const queryClient = useQueryClient()
   return useMutation({

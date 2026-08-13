@@ -405,6 +405,110 @@ router.get('/:id/usage', async (req, res) => {
     }
 });
 
+// GET /api/schemes/:id/analytics - Get analytics dashboard data for a scheme
+router.get('/:id/analytics', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // 1. Get the scheme name for fallback search
+        const nameRes = await pool.query('SELECT scheme_name FROM schemes WHERE id = $1', [id]);
+        if (nameRes.rows.length === 0) return res.status(404).json({ error: 'Scheme not found' });
+        const name = nameRes.rows[0].scheme_name;
+
+        const params = [`%[ID:${id}]%`, `%${name}%`];
+
+        const baseCTE = `
+            WITH scheme_lines AS (
+                SELECT 
+                    sil.invoice_id,
+                    sil.product_id,
+                    sil.shipped_qty,
+                    sil.rate,
+                    sil.amount,
+                    sil.scheme_amount,
+                    sil.tier_applied,
+                    si.invoice_number,
+                    si.customer_id,
+                    c.customer_name,
+                    c.dse_id,
+                    e.full_name as dse_name,
+                    p.product_name
+                FROM sales_invoice_lines sil
+                JOIN sales_invoices si ON sil.invoice_id = si.id
+                JOIN customers c ON si.customer_id = c.id
+                JOIN products p ON sil.product_id = p.id
+                LEFT JOIN employees e ON c.dse_id = e.id
+                WHERE (sil.tier_applied ILIKE $1 OR sil.tier_applied ILIKE $2)
+                  AND si.status != 'Cancelled'
+            )
+        `;
+
+        // KPIs
+        const kpiQuery = `
+            ${baseCTE}
+            SELECT 
+                COALESCE(SUM(scheme_amount), 0) as total_discount,
+                COALESCE(SUM(amount), 0) as net_revenue,
+                COUNT(DISTINCT invoice_id) as invoices_impacted
+            FROM scheme_lines
+        `;
+        const kpiRes = await pool.query(kpiQuery, params);
+
+        // Top Tier
+        const tierQuery = `
+            ${baseCTE}
+            SELECT tier_applied as tier_name, COALESCE(SUM(scheme_amount), 0) as discount_amount, COUNT(DISTINCT invoice_id) as invoices_count
+            FROM scheme_lines
+            GROUP BY tier_applied
+            ORDER BY discount_amount DESC
+        `;
+        const tierRes = await pool.query(tierQuery, params);
+
+        // Top Customers
+        const custQuery = `
+            ${baseCTE}
+            SELECT customer_name, COUNT(*) as matching_items, COALESCE(SUM(shipped_qty), 0) as total_qty, COALESCE(SUM(scheme_amount), 0) as total_discount, COALESCE(SUM(amount), 0) as net_revenue
+            FROM scheme_lines
+            GROUP BY customer_id, customer_name
+            ORDER BY total_discount DESC
+            LIMIT 10
+        `;
+        const custRes = await pool.query(custQuery, params);
+
+        // Top Products
+        const prodQuery = `
+            ${baseCTE}
+            SELECT product_name, COALESCE(SUM(shipped_qty), 0) as total_qty, COALESCE(SUM(scheme_amount), 0) as total_discount, COALESCE(SUM(amount), 0) as net_revenue
+            FROM scheme_lines
+            GROUP BY product_id, product_name
+            ORDER BY net_revenue DESC
+            LIMIT 10
+        `;
+        const prodRes = await pool.query(prodQuery, params);
+
+        // DSE Performance
+        const dseQuery = `
+            ${baseCTE}
+            SELECT COALESCE(dse_name, 'Unknown') as dse_name, COALESCE(SUM(amount), 0) as sales_value, COALESCE(SUM(scheme_amount), 0) as discount_given, COUNT(DISTINCT invoice_id) as invoices_handled
+            FROM scheme_lines
+            GROUP BY COALESCE(dse_name, 'Unknown')
+            ORDER BY sales_value DESC
+        `;
+        const dseRes = await pool.query(dseQuery, params);
+
+        res.json({
+            kpis: kpiRes.rows[0],
+            tiers: tierRes.rows,
+            customers: custRes.rows,
+            products: prodRes.rows,
+            dse: dseRes.rows
+        });
+    } catch (err) {
+        console.error('Scheme Analytics Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // PATCH /api/schemes/:id/toggle - Toggle Active Status
 router.patch('/:id/toggle', async (req, res) => {
     try {
