@@ -98,6 +98,13 @@ router.post('/', async (req, res) => {
     try {
         const jobId = await runBackgroundJob('create-debit-note', async (updateProgress) => {
             const client = await pool.connect();
+
+                const oldQuery = client.query;
+                client.query = async function(...args) {
+                    console.log("EXECUTING:", args[0], args[1]);
+                    return oldQuery.apply(this, args);
+                };
+
             updateProgress(5);
             try {
                 let resolvedInvoiceId = null;
@@ -117,7 +124,7 @@ router.post('/', async (req, res) => {
                 const seqRes = await client.query(`
                     SELECT prefix, current_number 
                     FROM document_sequences 
-                    WHERE document_type = $1 AND is_active = true
+                    WHERE document_type = $1::text AND is_active = true
                     FOR UPDATE
                 `, [docType]);
 
@@ -128,13 +135,13 @@ router.post('/', async (req, res) => {
                     const seq = seqRes.rows[0];
                     const nextNum = Number(seq.current_number) + 1;
                     dnNumber = `${seq.prefix}${nextNum}`;
-                    await client.query(`UPDATE document_sequences SET current_number = $1 WHERE document_type = $2`, [nextNum, docType]);
+                    await client.query(`UPDATE document_sequences SET current_number = $1::bigint WHERE document_type = $2::text`, [nextNum, docType]);
                 }
 
                 const insertRes = await client.query(`
                     INSERT INTO debit_notes 
                     (vendor_id, debit_note_number, debit_note_date, amount, reason, linked_invoice_id, status, note_type)
-                    VALUES ($1, $2, $3, $4, $5, $6, 'Approved', $7)
+                    VALUES ($1::bigint, $2::text, $3::date, $4::numeric, $5::text, $6::bigint, 'Approved', $7::text)
                     RETURNING id, debit_note_number
                 `, [vendor_id, dnNumber, debit_note_date || new Date(), amount, reason, resolvedInvoiceId, note_type]);
                 const newId = insertRes.rows[0].id;
@@ -151,7 +158,7 @@ router.post('/', async (req, res) => {
                         if (lineTaxPct === undefined) {
                             const taxRes = await client.query(`
                                 SELECT t.tax_percentage 
-                                FROM products p LEFT JOIN taxes t ON p.tax_id = t.id WHERE p.id = $1
+                                FROM products p LEFT JOIN taxes t ON p.tax_id = t.id WHERE p.id = $1::bigint
                             `, [line.product_id]);
                             lineTaxPct = taxRes.rows.length > 0 ? Number(taxRes.rows[0].tax_percentage) : 0;
                             line.tax_percentage = lineTaxPct;
@@ -166,16 +173,16 @@ router.post('/', async (req, res) => {
                         await client.query(`
                             INSERT INTO debit_note_lines 
                             (debit_note_id, product_id, qty, rate, amount, batch_number, return_type, tax_percentage, tax_amount)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                            VALUES ($1::bigint, $2::bigint, $3::numeric, $4::numeric, $5::numeric, $6::text, $7::text, $8::numeric, $9::numeric)
                         `, [newId, line.product_id, line.qty, line.rate, lineAmount, line.batch_number, line.return_type || 'Damage', lineTaxPct, lineTaxAmt]);
 
                         let remainingReturnQty = Number(line.qty);
                         if (remainingReturnQty > 0) {
                             const findBatches = async (targetStatus) => {
-                                let q = `SELECT id, quantity_remaining, batch_code FROM inventory_batches WHERE product_id = $1 AND quantity_remaining > 0`;
+                                let q = `SELECT id, quantity_remaining, batch_code FROM inventory_batches WHERE product_id = $1::bigint AND quantity_remaining > 0`;
                                 const p = [line.product_id];
-                                if (targetStatus) { q += ` AND status = ${p.length + 1}`; p.push(targetStatus); }
-                                if (line.batch_number && line.batch_number.trim() !== '') { q += ` AND batch_code = ${p.length + 1}`; p.push(line.batch_number.trim()); }
+                                if (targetStatus) { q += ` AND status = $${p.length + 1}::text`; p.push(targetStatus); }
+                                if (line.batch_number && line.batch_number.trim() !== '') { q += ` AND batch_code = $${p.length + 1}::text`; p.push(line.batch_number.trim()); }
                                 q += ` ORDER BY created_at ASC FOR UPDATE`;
                                 return await client.query(q, p);
                             };
@@ -187,7 +194,7 @@ router.post('/', async (req, res) => {
 
                             const totalAvailable = batches.rows.reduce((sum, b) => sum + Number(b.quantity_remaining), 0);
                             if (totalAvailable < remainingReturnQty) {
-                                const prodRes = await client.query('SELECT product_name FROM products WHERE id = $1', [line.product_id]);
+                                const prodRes = await client.query('SELECT product_name FROM products WHERE id = $1::bigint', [line.product_id]);
                                 const prodName = prodRes.rows.length > 0 ? prodRes.rows[0].product_name : `ID: ${line.product_id}`;
                                 throw new Error(`Insufficient stock for product "${prodName}": requested ${remainingReturnQty}, but only ${totalAvailable} is available.`);
                             }
@@ -197,10 +204,10 @@ router.post('/', async (req, res) => {
                                 const available = Number(batch.quantity_remaining);
                                 const deduct = Math.min(available, remainingReturnQty);
 
-                                await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2`, [deduct, batch.id]);
+                                await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1::numeric WHERE id = $2::bigint`, [deduct, batch.id]);
                                 await client.query(`
                                     INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
-                                    VALUES ($1, $2, $3, 'OUT', $4, $5, $6)
+                                    VALUES ($1::bigint, $2::bigint, $3::numeric, 'OUT', $4::bigint, $5::text, $6::text)
                                 `, [batch.id, line.product_id, -deduct, newId, note_type, `Purchase Return via ${dnNumber}`]);
 
                                 remainingReturnQty -= deduct;
@@ -296,7 +303,7 @@ router.post('/', async (req, res) => {
                     if (totalTax > 0) {
                         const settingsRes = await client.query('SELECT state_code FROM company_settings LIMIT 1');
                         const cmpState = (settingsRes.rows.length > 0) ? Number(settingsRes.rows[0].state_code) : 32;
-                        const vendRes = await client.query('SELECT gst FROM vendors WHERE id = $1', [vendor_id]);
+                        const vendRes = await client.query('SELECT gst FROM vendors WHERE id = $1::bigint', [vendor_id]);
                         const vGst = vendRes.rows.length > 0 ? vendRes.rows[0].gst : '';
                         
                         let isIntra = false;
@@ -317,7 +324,7 @@ router.post('/', async (req, res) => {
                     }
 
                     await client.query(`
-                        UPDATE debit_notes SET taxable_amount = $1, tax_amount = $2, cgst_amount = $3, sgst_amount = $4, igst_amount = $5, place_of_supply = $6 WHERE id = $7
+                        UPDATE debit_notes SET taxable_amount = $1::numeric, tax_amount = $2::numeric, cgst_amount = $3::numeric, sgst_amount = $4::numeric, igst_amount = $5::numeric, place_of_supply = $6::text WHERE id = $7::bigint
                     `, [totalTaxable, totalTax, cgstVal, sgstVal, igstVal, posVal, newId]);
 
                     let totalCredits = 0;
