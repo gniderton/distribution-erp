@@ -24,6 +24,7 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
   const [amount, setAmount] = useState('')
 
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(['Good', 'Damage', 'Expiry'])
+  const [searchQuery, setSearchQuery] = useState('')
 
   const { data: productsData, isLoading: isLoadingProducts } = useProducts(
     vendorId ? { vendor_id: vendorId, limit: 1000 } : undefined
@@ -110,8 +111,11 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
     )
   }
 
-  const handleLineChange = (index: number, field: string, value: any) => {
+  const handleLineChange = (rowId: string, field: string, value: any) => {
     const newLines = [...lines]
+    const index = newLines.findIndex(l => l._row_id === rowId)
+    if (index === -1) return
+    
     let newValue = value
 
     if (field === 'qty') {
@@ -135,8 +139,8 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
     setLines(newLines)
   }
 
-  const handleRemoveLine = (index: number) => {
-    setLines(lines.filter((_, i) => i !== index))
+  const handleRemoveLine = (rowId: string) => {
+    setLines(lines.filter(l => l._row_id !== rowId))
   }
 
   const totals = useMemo(() => {
@@ -304,19 +308,32 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
             <div className="flex justify-between items-center">
               <h4 className="font-bold text-sm text-ink-900">Return Items</h4>
               
-              <div className="flex gap-3 items-center bg-surface px-3 py-1.5 rounded-md border border-border-subtle">
-                <span className="text-[10px] font-bold text-ink-500 uppercase tracking-wide">Basket:</span>
-                {['Good', 'Damage', 'Expiry'].map(status => (
-                  <label key={status} className="flex items-center gap-1.5 text-xs font-medium text-ink-700 cursor-pointer select-none">
-                    <input 
-                      type="checkbox" 
-                      checked={selectedStatuses.includes(status)}
-                      onChange={() => handleStatusToggle(status)}
-                      className="w-3.5 h-3.5 rounded border-ink-300 text-brand-500 focus:ring-brand-500 transition-colors"
-                    />
-                    {status}
-                  </label>
-                ))}
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-ink-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  </div>
+                  <Input 
+                    placeholder="Search item or batch..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 h-8 text-xs w-64 bg-surface"
+                  />
+                </div>
+                <div className="flex gap-3 items-center bg-surface px-3 py-1.5 rounded-md border border-border-subtle h-8">
+                  <span className="text-[10px] font-bold text-ink-500 uppercase tracking-wide">Basket:</span>
+                  {['Good', 'Damage', 'Expiry'].map(status => (
+                    <label key={status} className="flex items-center gap-1.5 text-xs font-medium text-ink-700 cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedStatuses.includes(status)}
+                        onChange={() => handleStatusToggle(status)}
+                        className="w-3.5 h-3.5 rounded border-ink-300 text-brand-500 focus:ring-brand-500 transition-colors"
+                      />
+                      {status}
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
             
@@ -345,7 +362,10 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-subtle">
-                      {lines.map((line, idx) => (
+                      {lines.filter(l => 
+                        l.item_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                        l.batch_number.toLowerCase().includes(searchQuery.toLowerCase())
+                      ).map((line, idx) => (
                         <tr key={line._row_id} className={`hover:bg-ink-50/50 transition-colors ${Number(line.qty) === 0 ? 'opacity-40 grayscale' : ''}`}>
                           <td className="px-3 py-1.5 text-ink-400 font-medium text-xs">{idx + 1}</td>
                           <td className="px-3 py-1.5 font-semibold text-ink-900 max-w-[200px] truncate text-xs" title={line.item_name}>{line.item_name}</td>
@@ -364,7 +384,7 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
                             <Input 
                               type="number" 
                               value={line.qty} 
-                              onChange={(e) => handleLineChange(idx, 'qty', e.target.value)}
+                              onChange={(e) => handleLineChange(line._row_id, 'qty', e.target.value)}
                               className="h-7 text-xs px-2 py-0.5 text-right font-semibold bg-white focus:ring-brand-500"
                               max={line.max_qty}
                               min={0}
@@ -375,7 +395,7 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
                           <td className="px-3 py-1.5 text-right font-bold text-ink-900 text-xs">₹{line.amount.toFixed(2)}</td>
                           <td className="px-3 py-1.5 text-center">
                             <button 
-                              onClick={() => handleRemoveLine(idx)}
+                              onClick={() => handleRemoveLine(line._row_id)}
                               className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors"
                               title="Remove Line"
                             >
