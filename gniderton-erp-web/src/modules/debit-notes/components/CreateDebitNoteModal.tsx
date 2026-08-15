@@ -350,7 +350,7 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
                     <thead className="bg-surface sticky top-0 z-10 shadow-sm text-[10px] uppercase tracking-wider text-ink-500 font-bold">
                       <tr>
                         <th className="px-3 py-2.5 border-b border-border-subtle w-10">S.No</th>
-                        <th className="px-3 py-2.5 border-b border-border-subtle max-w-xs truncate">Item Name</th>
+                        <th className="px-3 py-2.5 border-b border-border-subtle min-w-[250px]">Item Name</th>
                         <th className="px-3 py-2.5 border-b border-border-subtle">Batch</th>
                         <th className="px-3 py-2.5 border-b border-border-subtle">Reason</th>
                         <th className="px-3 py-2.5 border-b border-border-subtle text-right text-brand-600">Avail Qty</th>
@@ -367,9 +367,9 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
                         l.batch_number.toLowerCase().includes(searchQuery.toLowerCase())
                       ).map((line, idx) => (
                         <tr key={line._row_id} className={`hover:bg-ink-50/50 transition-colors ${Number(line.qty) === 0 ? 'opacity-40 grayscale' : ''}`}>
-                          <td className="px-3 py-1.5 text-ink-400 font-medium text-xs">{idx + 1}</td>
-                          <td className="px-3 py-1.5 font-semibold text-ink-900 max-w-[200px] truncate text-xs" title={line.item_name}>{line.item_name}</td>
-                          <td className="px-3 py-1.5 font-mono text-[10px] text-ink-600 bg-ink-50 rounded px-1">{line.batch_number}</td>
+                          <td className="px-3 py-1.5 text-ink-400 font-medium text-xs whitespace-nowrap">{idx + 1}</td>
+                          <td className="px-3 py-1.5 font-semibold text-ink-900 text-xs whitespace-normal break-words min-w-[250px]">{line.item_name}</td>
+                          <td className="px-3 py-1.5 font-mono text-[10px] text-ink-600 bg-ink-50 rounded px-1 whitespace-nowrap">{line.batch_number}</td>
                           <td className="px-3 py-1.5">
                             <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${
                               line.return_type === 'Damage' ? 'bg-red-100 text-red-700 border border-red-200' :
