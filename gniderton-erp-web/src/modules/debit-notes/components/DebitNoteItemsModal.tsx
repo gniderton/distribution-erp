@@ -4,6 +4,8 @@ import { useDebitNoteItems } from '../hooks'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Button } from '@/components/ui/Button'
 import { formatCurrency } from '@/lib/utils'
+import { generateDebitNoteExcel } from '../utils/excel'
+import { Download } from 'lucide-react'
 
 interface DebitNoteItemsModalProps {
   isOpen: boolean
@@ -51,7 +53,18 @@ export function DebitNoteItemsModal({ isOpen, onClose, debitNote }: DebitNoteIte
           )}
         </div>
       }
-      footer={<Button variant="secondary" onClick={onClose}>Close</Button>}
+      footer={
+        <div className="flex justify-end gap-3 w-full">
+          <Button 
+            variant="secondary" 
+            onClick={() => generateDebitNoteExcel(debitNote, items || [])}
+            className="gap-2"
+          >
+            <Download className="w-4 h-4" /> Download Excel
+          </Button>
+          <Button variant="primary" onClick={onClose}>Close</Button>
+        </div>
+      }
     >
       <div className="space-y-8 mt-2">
         {/* Header Summary */}
