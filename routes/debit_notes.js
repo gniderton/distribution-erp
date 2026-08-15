@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const { runBackgroundJob } = require('../utils/jobRunner');
 
 // @route   GET /api/debit-notes
 // @desc    Get all Debit Notes (with optional vendor_id filter)
@@ -78,424 +79,283 @@ router.get('/vendor/:id', async (req, res) => {
 // @route   POST /api/debit-notes
 // @desc    Create a new Debit Note (Financial Adjustment)
 router.post('/', async (req, res) => {
-    const client = await pool.connect();
+    const {
+        vendor_id,
+        amount: rawAmount,
+        debit_note_date,
+        reason,
+        linked_invoice_id,
+        note_type = 'Debit Note',
+        lines = []
+    } = req.body;
+
+    const amount = Math.round(Number(rawAmount));
+
+    if (!vendor_id || !amount || amount <= 0) {
+        return res.status(400).json({ error: 'Vendor and Valid Amount required' });
+    }
+
     try {
-        const {
-            vendor_id,
-            amount: rawAmount, // Rename destructured var
-            debit_note_date,
-            reason,
-            linked_invoice_id,
-            note_type = 'Debit Note' // Default to DN
-        } = req.body;
-
-        const amount = Math.round(Number(rawAmount)); // Enforce Rounding
-
-        if (!vendor_id || !amount || amount <= 0) {
-            return res.status(400).json({ error: 'Vendor and Valid Amount required' });
-        }
-
-        // 0. Resolve Linked Invoice ID (Handle 'GD-CLT-PI...' string)
-        let resolvedInvoiceId = null; // Default to null explicitly
-        if (linked_invoice_id && isNaN(Number(linked_invoice_id))) {
-            // It's a string (e.g., "GD-CLT-PI-26-12"), look up the ID
-            const invRes = await client.query('SELECT id FROM purchase_invoice_headers WHERE invoice_number = $1', [linked_invoice_id]);
-            if (invRes.rows.length > 0) {
-                resolvedInvoiceId = invRes.rows[0].id;
-            }
-        } else if (linked_invoice_id) {
-            resolvedInvoiceId = Number(linked_invoice_id);
-        }
-
-        await client.query('BEGIN');
-
-        // 1. Generate Number (Sequence Logic)
-        const docType = note_type === 'Return Slip' ? 'RS' : 'DN';
-        const seqRes = await client.query(`
-            SELECT prefix, current_number 
-            FROM document_sequences 
-            WHERE document_type = $1 AND is_active = true
-            FOR UPDATE
-        `, [docType]);
-
-        let dnNumber;
-        if (seqRes.rows.length === 0) {
-            // Fallback if seed missing
-            dnNumber = `${docType}-${Date.now().toString().slice(-6)}`;
-        } else {
-            const seq = seqRes.rows[0];
-            const nextNum = Number(seq.current_number) + 1;
-            dnNumber = `${seq.prefix}${nextNum}`;
-
-            // Update Sequence
-            await client.query(`
-               UPDATE document_sequences 
-               SET current_number = $1
-               WHERE document_type = $2
-           `, [nextNum, docType]);
-        }
-
-        // 2. Insert Record
-        const insertRes = await client.query(`
-            INSERT INTO debit_notes 
-            (vendor_id, debit_note_number, debit_note_date, amount, reason, linked_invoice_id, status, note_type)
-            VALUES ($1, $2, $3, $4, $5, $6, 'Approved', $7)
-            RETURNING id, debit_note_number
-        `, [
-            vendor_id,
-            dnNumber,
-            debit_note_date || new Date(),
-            amount,
-            reason,
-            resolvedInvoiceId,
-            note_type
-        ]);
-        const newId = insertRes.rows[0].id; // Capture ID
-
-        // 3. Insert Lines (If any)
-        const lines = req.body.lines || [];
-        if (lines.length > 0) {
-            for (const line of lines) {
-                // Determine if we need to reduce stock
-                // Logic: If 'Good Stock' or Specific Batch provided, we deduct.
-                // Even 'Damage' returns typically reduce 'inventory_batches' because the item PHYSICALLY leaves.
-
-                // Do not round line amounts to preserve decimal precision
-                const lineAmount = Number(line.amount);
-
-                // [FIX] Fetch Tax Info if not provided to ensure proper Ledger split
-                let lineTaxPct = line.tax_percentage;
-                let lineTaxAmt = line.tax_amount;
-
-                if (lineTaxPct === undefined) {
-                    const taxRes = await client.query(`
-                        SELECT t.tax_percentage 
-                        FROM products p 
-                        LEFT JOIN taxes t ON p.tax_id = t.id 
-                        WHERE p.id = $1
-                    `, [line.product_id]);
-                    lineTaxPct = taxRes.rows.length > 0 ? Number(taxRes.rows[0].tax_percentage) : 0;
-                    line.tax_percentage = lineTaxPct;
+        const jobId = await runBackgroundJob('create-debit-note', async (updateProgress) => {
+            const client = await pool.connect();
+            updateProgress(5);
+            try {
+                let resolvedInvoiceId = null;
+                if (linked_invoice_id && isNaN(Number(linked_invoice_id))) {
+                    const invRes = await client.query('SELECT id FROM purchase_invoice_headers WHERE invoice_number = $1', [linked_invoice_id]);
+                    if (invRes.rows.length > 0) {
+                        resolvedInvoiceId = invRes.rows[0].id;
+                    }
+                } else if (linked_invoice_id) {
+                    resolvedInvoiceId = Number(linked_invoice_id);
                 }
 
-                if (lineTaxAmt === undefined) {
-                    // Reverse calculate tax from Gross Amount
-                    const taxable = lineAmount / (1 + (lineTaxPct / 100));
-                    lineTaxAmt = lineAmount - taxable;
-                    line.tax_amount = lineTaxAmt;
+                await client.query('BEGIN');
+                updateProgress(10);
+
+                const docType = note_type === 'Return Slip' ? 'RS' : 'DN';
+                const seqRes = await client.query(`
+                    SELECT prefix, current_number 
+                    FROM document_sequences 
+                    WHERE document_type = $1 AND is_active = true
+                    FOR UPDATE
+                `, [docType]);
+
+                let dnNumber;
+                if (seqRes.rows.length === 0) {
+                    dnNumber = `${docType}-${Date.now().toString().slice(-6)}`;
+                } else {
+                    const seq = seqRes.rows[0];
+                    const nextNum = Number(seq.current_number) + 1;
+                    dnNumber = `${seq.prefix}${nextNum}`;
+                    await client.query(`UPDATE document_sequences SET current_number = $1 WHERE document_type = $2`, [nextNum, docType]);
                 }
 
-                await client.query(`
-                    INSERT INTO debit_note_lines 
-                    (debit_note_id, product_id, qty, rate, amount, batch_number, return_type, tax_percentage, tax_amount)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                `, [
-                    newId,
-                    line.product_id,
-                    line.qty,
-                    line.rate,
-                    lineAmount,
-                    line.batch_number,
-                    line.return_type || 'Damage',
-                    lineTaxPct,
-                    lineTaxAmt
-                ]);
+                const insertRes = await client.query(`
+                    INSERT INTO debit_notes 
+                    (vendor_id, debit_note_number, debit_note_date, amount, reason, linked_invoice_id, status, note_type)
+                    VALUES ($1, $2, $3, $4, $5, $6, 'Approved', $7)
+                    RETURNING id, debit_note_number
+                `, [vendor_id, dnNumber, debit_note_date || new Date(), amount, reason, resolvedInvoiceId, note_type]);
+                const newId = insertRes.rows[0].id;
 
-                // --- STOCK DEDUCTION LOGIC (FIFO) ---
-                let remainingReturnQty = Number(line.qty);
+                updateProgress(20);
 
-                if (remainingReturnQty > 0) {
-                    // 1. Fetch Candidates (FIFO: Oldest First)
-                    // We must filter by the requested STATUS (Good vs Damage)
-                    // 'return_type' from frontend maps to 'status' in DB
-                    // Helper to build and run query
-                    // Helper to build and run query
-                    const findBatches = async (targetStatus) => {
-                        const fs = require('fs');
-                        let q = `
-                            SELECT id, quantity_remaining, batch_code 
-                            FROM inventory_batches 
-                            WHERE product_id = $1 AND quantity_remaining > 0 
-                        `;
-                        const p = [line.product_id];
+                if (lines.length > 0) {
+                    let processedLines = 0;
+                    for (const line of lines) {
+                        const lineAmount = Number(line.amount);
+                        let lineTaxPct = line.tax_percentage;
+                        let lineTaxAmt = line.tax_amount;
 
-                        // Debug Log
-                        fs.appendFileSync('debug_dn.txt', `\n[${new Date().toISOString()}] Searching: Prod=${line.product_id}, Status=${targetStatus}, Batch=${line.batch_number}\n`);
-
-                        if (targetStatus) {
-                            q += ` AND status = $${p.length + 1}`;
-                            p.push(targetStatus);
+                        if (lineTaxPct === undefined) {
+                            const taxRes = await client.query(`
+                                SELECT t.tax_percentage 
+                                FROM products p LEFT JOIN taxes t ON p.tax_id = t.id WHERE p.id = $1
+                            `, [line.product_id]);
+                            lineTaxPct = taxRes.rows.length > 0 ? Number(taxRes.rows[0].tax_percentage) : 0;
+                            line.tax_percentage = lineTaxPct;
                         }
 
-                        if (line.batch_number && line.batch_number.trim() !== '') {
-                            q += ` AND batch_code = $${p.length + 1}`;
-                            p.push(line.batch_number.trim());
+                        if (lineTaxAmt === undefined) {
+                            const taxable = lineAmount / (1 + (lineTaxPct / 100));
+                            lineTaxAmt = lineAmount - taxable;
+                            line.tax_amount = lineTaxAmt;
                         }
 
-                        q += ` ORDER BY created_at ASC FOR UPDATE`;
-
-                        fs.appendFileSync('debug_dn.txt', `Query: ${q} \nParams: ${JSON.stringify(p)}\n`);
-
-                        return await client.query(q, p);
-                    };
-
-                    // 1. Try Primary Status (e.g. 'Damage')
-                    let batches = await findBatches(line.return_type);
-                    require('fs').appendFileSync('debug_dn.txt', `Primary Search Valid Batches: ${batches.rows.length}\n`);
-
-                    // 2. Fallback to 'Good' if no stock found
-                    if (batches.rows.length === 0 && line.return_type !== 'Good') {
-                        require('fs').appendFileSync('debug_dn.txt', `Triggering Fallback to 'Good'\n`);
-                        batches = await findBatches('Good');
-                        require('fs').appendFileSync('debug_dn.txt', `Fallback Search Valid Batches: ${batches.rows.length}\n`);
-                    }
-
-                    // Enforce Strict Stock Validation
-                    const totalAvailable = batches.rows.reduce((sum, b) => sum + Number(b.quantity_remaining), 0);
-                    if (totalAvailable < remainingReturnQty) {
-                        const prodRes = await client.query('SELECT product_name FROM products WHERE id = $1', [line.product_id]);
-                        const prodName = prodRes.rows.length > 0 ? prodRes.rows[0].product_name : `ID: ${line.product_id}`;
-                        throw new Error(`Insufficient stock for product "${prodName}": requested ${remainingReturnQty}, but only ${totalAvailable} is available.`);
-                    }
-
-                    // 2. Deduct from Batches
-                    for (const batch of batches.rows) {
-                        if (remainingReturnQty <= 0) break;
-
-                        const available = Number(batch.quantity_remaining);
-                        const deduct = Math.min(available, remainingReturnQty);
-
-                        require('fs').appendFileSync('debug_dn.txt', `Deducting ${deduct} from BatchID ${batch.id} (Available: ${available})\n`);
-
-                        // A. Deduct from Batch
                         await client.query(`
-                            UPDATE inventory_batches 
-                            SET quantity_remaining = quantity_remaining - $1 
-                            WHERE id = $2
-                        `, [deduct, batch.id]);
+                            INSERT INTO debit_note_lines 
+                            (debit_note_id, product_id, qty, rate, amount, batch_number, return_type, tax_percentage, tax_amount)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                        `, [newId, line.product_id, line.qty, line.rate, lineAmount, line.batch_number, line.return_type || 'Damage', lineTaxPct, lineTaxAmt]);
 
-                        // [NEW] Stock Traceability Log
-                        await client.query(`
-                            INSERT INTO stock_traceability (
-                                batch_id, product_id, quantity_change, transaction_type, 
-                                reference_id, reference_type, notes
-                            ) VALUES ($1, $2, $3, 'OUT', $4, $5, $6)
-                        `, [batch.id, line.product_id, -deduct, newId, note_type, `Purchase Return via ${dnNumber}`]);
+                        let remainingReturnQty = Number(line.qty);
+                        if (remainingReturnQty > 0) {
+                            const findBatches = async (targetStatus) => {
+                                let q = `SELECT id, quantity_remaining, batch_code FROM inventory_batches WHERE product_id = $1 AND quantity_remaining > 0`;
+                                const p = [line.product_id];
+                                if (targetStatus) { q += ` AND status = ${p.length + 1}`; p.push(targetStatus); }
+                                if (line.batch_number && line.batch_number.trim() !== '') { q += ` AND batch_code = ${p.length + 1}`; p.push(line.batch_number.trim()); }
+                                q += ` ORDER BY created_at ASC FOR UPDATE`;
+                                return await client.query(q, p);
+                            };
 
-                        remainingReturnQty -= deduct;
-                    }
+                            let batches = await findBatches(line.return_type);
+                            if (batches.rows.length === 0 && line.return_type !== 'Good') {
+                                batches = await findBatches('Good');
+                            }
 
-                    // 3. (Optional) warning if we tried to return more than we have in stock
-                    // For now, we allow the Debit Note to be created even if stock is virtual/missing, 
-                    // but we only deducted what we found.
-                }
-            }
-        }
+                            const totalAvailable = batches.rows.reduce((sum, b) => sum + Number(b.quantity_remaining), 0);
+                            if (totalAvailable < remainingReturnQty) {
+                                const prodRes = await client.query('SELECT product_name FROM products WHERE id = $1', [line.product_id]);
+                                const prodName = prodRes.rows.length > 0 ? prodRes.rows[0].product_name : `ID: ${line.product_id}`;
+                                throw new Error(`Insufficient stock for product "${prodName}": requested ${remainingReturnQty}, but only ${totalAvailable} is available.`);
+                            }
 
-        // 4. SPILLOVER ALLOCATION LOGIC (Only for financial Debit Notes)
-        if (note_type !== 'Return Slip') {
-            let remainingToAllocate = Number(amount);
+                            for (const batch of batches.rows) {
+                                if (remainingReturnQty <= 0) break;
+                                const available = Number(batch.quantity_remaining);
+                                const deduct = Math.min(available, remainingReturnQty);
 
-            // A. Priority Allocation (Linked Bill)
-            if (resolvedInvoiceId && remainingToAllocate > 0) {
-                // Get Balance of Linked Bill
-                const billRes = await client.query(`
-                    SELECT 
-                        pi.id,
-                        (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) as balance
-                    FROM purchase_invoice_headers pi
-                    LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as paid FROM payment_allocations GROUP BY purchase_invoice_id) pa ON pi.id = pa.purchase_invoice_id
-                    LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as applied FROM debit_note_allocations GROUP BY purchase_invoice_id) dn ON pi.id = dn.purchase_invoice_id
-                    WHERE pi.id = $1
-                `, [resolvedInvoiceId]);
+                                await client.query(`UPDATE inventory_batches SET quantity_remaining = quantity_remaining - $1 WHERE id = $2`, [deduct, batch.id]);
+                                await client.query(`
+                                    INSERT INTO stock_traceability (batch_id, product_id, quantity_change, transaction_type, reference_id, reference_type, notes)
+                                    VALUES ($1, $2, $3, 'OUT', $4, $5, $6)
+                                `, [batch.id, line.product_id, -deduct, newId, note_type, `Purchase Return via ${dnNumber}`]);
 
-                if (billRes.rows.length > 0) {
-                    const bill = billRes.rows[0];
-                    const billBal = Number(bill.balance);
-                    if (billBal > 0) {
-                        const alloc = Math.min(billBal, remainingToAllocate);
-                        await client.query(`
-                            INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount)
-                            VALUES ($1, $2, $3)
-                        `, [newId, resolvedInvoiceId, alloc]);
-                        remainingToAllocate -= alloc;
-                    }
-                }
-            }
-
-            // B. Spillover Allocation (FIFO on other bills)
-            if (remainingToAllocate > 0) {
-                // Fetch other pending bills for this vendor
-                const pendingRes = await client.query(`
-                    SELECT 
-                        pi.id,
-                        (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) as balance
-                    FROM purchase_invoice_headers pi
-                    LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as paid FROM payment_allocations GROUP BY purchase_invoice_id) pa ON pi.id = pa.purchase_invoice_id
-                    LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as applied FROM debit_note_allocations GROUP BY purchase_invoice_id) dn ON pi.id = dn.purchase_invoice_id
-                    WHERE pi.vendor_id = $1 
-                    AND pi.status != 'Cancelled'
-                    AND (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) > 0
-                    AND ($2::integer IS NULL OR pi.id != $2::integer) -- Exclude the one we just allocated to
-                    ORDER BY pi.received_date ASC, pi.created_at ASC
-                `, [vendor_id, resolvedInvoiceId]);
-
-                for (const bill of pendingRes.rows) {
-                    if (remainingToAllocate <= 0.01) break;
-
-                    const billBal = Number(bill.balance);
-                    const alloc = Math.min(billBal, remainingToAllocate);
-
-                    if (alloc > 0) {
-                        await client.query(`
-                            INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount)
-                            VALUES ($1, $2, $3)
-                        `, [newId, bill.id, alloc]);
-                        remainingToAllocate -= alloc;
-                    }
-                }
-            }
-        }
-
-        // 5. Accounting Entry (Ledger)
-        const acc_ap = 2001;
-        const acc_inventory = 1001;
-        const acc_discount = 4002;
-        const acc_gst = 1010; // Defaulting to IGST for now
-
-        let ledgerLines = [];
-        let desc = '';
-
-        if (lines.length === 0) {
-            // Case A: Financial Debit Note (No Items)
-            desc = `Financial DN: ${dnNumber}`;
-            ledgerLines = [
-                { code: acc_ap, debit: Number(amount), credit: 0 },
-                { code: acc_discount, debit: 0, credit: Number(amount) }
-            ];
-        } else {
-            // Case B: Purchase Return (Itemized)
-            desc = `Purchase Return: ${dnNumber}`;
-
-            // Calculate Split (Inventory vs Tax)
-            let totalTax = 0;
-            let totalTaxable = 0;
-
-            for (const line of lines) {
-                const lineAmt = Number(line.amount) || 0; // Gross
-                const lineTax = Number(line.tax_amount) || 0;
-                totalTax += lineTax;
-                totalTaxable += (lineAmt - lineTax);
-            }
-
-            // Round to 2 decimals for safety
-            totalTax = Number(totalTax.toFixed(2));
-            totalTaxable = Number(totalTaxable.toFixed(2));
-
-            if (totalTaxable < 0) totalTaxable = 0;
-
-            ledgerLines = [
-                { code: acc_ap, debit: Number(amount), credit: 0 },
-                { code: acc_inventory, debit: 0, credit: totalTaxable }
-            ];
-
-            // --- GST SPLIT LOGIC ---
-            let cgstVal = 0;
-            let sgstVal = 0;
-            let igstVal = 0;
-            let posVal = '32'; // Default Kerala
-
-            if (totalTax > 0) {
-                // 1. Fetch Company State & Vendor GST
-                const settingsRes = await client.query('SELECT state_code FROM company_settings LIMIT 1');
-                const cmpState = (settingsRes.rows.length > 0) ? Number(settingsRes.rows[0].state_code) : 32;
-
-                const vendRes = await client.query('SELECT gst FROM vendors WHERE id = $1', [vendor_id]);
-                const vGst = vendRes.rows.length > 0 ? vendRes.rows[0].gst : '';
-
-                let isIntra = false;
-                // Extract Prefix
-                if (vGst && vGst.length >= 2) {
-                    posVal = vGst.substring(0, 2); // Capture POS
-                    const vState = parseInt(posVal);
-                    if (!isNaN(vState) && vState === cmpState) {
-                        isIntra = true;
+                                remainingReturnQty -= deduct;
+                            }
+                        }
+                        processedLines++;
+                        updateProgress(20 + Math.floor((processedLines / lines.length) * 40));
                     }
                 }
 
-                if (isIntra) {
-                    const halfTax = Number((totalTax / 2).toFixed(2));
-                    const otherHalf = Number((totalTax - halfTax).toFixed(2));
+                updateProgress(65);
 
-                    cgstVal = halfTax;
-                    sgstVal = otherHalf;
+                if (note_type !== 'Return Slip') {
+                    let remainingToAllocate = Number(amount);
+                    if (resolvedInvoiceId && remainingToAllocate > 0) {
+                        const billRes = await client.query(`
+                            SELECT pi.id, (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) as balance
+                            FROM purchase_invoice_headers pi
+                            LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as paid FROM payment_allocations GROUP BY purchase_invoice_id) pa ON pi.id = pa.purchase_invoice_id
+                            LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as applied FROM debit_note_allocations GROUP BY purchase_invoice_id) dn ON pi.id = dn.purchase_invoice_id
+                            WHERE pi.id = $1
+                        `, [resolvedInvoiceId]);
 
-                    const acc_cgst = 1011;
-                    const acc_sgst = 1012;
-                    ledgerLines.push({ code: acc_cgst, debit: 0, credit: halfTax });
-                    ledgerLines.push({ code: acc_sgst, debit: 0, credit: otherHalf });
+                        if (billRes.rows.length > 0) {
+                            const bill = billRes.rows[0];
+                            const billBal = Number(bill.balance);
+                            if (billBal > 0) {
+                                const alloc = Math.min(billBal, remainingToAllocate);
+                                await client.query(`INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount) VALUES ($1, $2, $3)`, [newId, resolvedInvoiceId, alloc]);
+                                remainingToAllocate -= alloc;
+                            }
+                        }
+                    }
+
+                    if (remainingToAllocate > 0) {
+                        const pendingRes = await client.query(`
+                            SELECT pi.id, (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) as balance
+                            FROM purchase_invoice_headers pi
+                            LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as paid FROM payment_allocations GROUP BY purchase_invoice_id) pa ON pi.id = pa.purchase_invoice_id
+                            LEFT JOIN (SELECT purchase_invoice_id, SUM(amount) as applied FROM debit_note_allocations GROUP BY purchase_invoice_id) dn ON pi.id = dn.purchase_invoice_id
+                            WHERE pi.vendor_id = $1 AND pi.status != 'Cancelled' AND (pi.grand_total - COALESCE(pa.paid,0) - COALESCE(dn.applied,0)) > 0 AND ($2::integer IS NULL OR pi.id != $2::integer)
+                            ORDER BY pi.received_date ASC, pi.created_at ASC
+                        `, [vendor_id, resolvedInvoiceId]);
+
+                        for (const bill of pendingRes.rows) {
+                            if (remainingToAllocate <= 0.01) break;
+                            const billBal = Number(bill.balance);
+                            const alloc = Math.min(billBal, remainingToAllocate);
+                            if (alloc > 0) {
+                                await client.query(`INSERT INTO debit_note_allocations (debit_note_id, purchase_invoice_id, amount) VALUES ($1, $2, $3)`, [newId, bill.id, alloc]);
+                                remainingToAllocate -= alloc;
+                            }
+                        }
+                    }
+                }
+
+                updateProgress(80);
+
+                const acc_ap = 2001;
+                const acc_inventory = 1001;
+                const acc_discount = 4002;
+                const acc_gst = 1010;
+
+                let ledgerLines = [];
+                let desc = '';
+
+                if (lines.length === 0) {
+                    desc = `Financial DN: ${dnNumber}`;
+                    ledgerLines = [
+                        { code: acc_ap, debit: Number(amount), credit: 0 },
+                        { code: acc_discount, debit: 0, credit: Number(amount) }
+                    ];
                 } else {
-                    igstVal = totalTax;
+                    desc = `Purchase Return: ${dnNumber}`;
+                    let totalTax = 0;
+                    let totalTaxable = 0;
+                    for (const line of lines) {
+                        const lineAmt = Number(line.amount) || 0;
+                        const lineTax = Number(line.tax_amount) || 0;
+                        totalTax += lineTax;
+                        totalTaxable += (lineAmt - lineTax);
+                    }
+                    totalTax = Number(totalTax.toFixed(2));
+                    totalTaxable = Number(totalTaxable.toFixed(2));
+                    if (totalTaxable < 0) totalTaxable = 0;
 
-                    // IGST
-                    ledgerLines.push({ code: acc_gst, debit: 0, credit: totalTax });
+                    ledgerLines = [
+                        { code: acc_ap, debit: Number(amount), credit: 0 },
+                        { code: acc_inventory, debit: 0, credit: totalTaxable }
+                    ];
+
+                    let cgstVal = 0, sgstVal = 0, igstVal = 0, posVal = '32';
+                    if (totalTax > 0) {
+                        const settingsRes = await client.query('SELECT state_code FROM company_settings LIMIT 1');
+                        const cmpState = (settingsRes.rows.length > 0) ? Number(settingsRes.rows[0].state_code) : 32;
+                        const vendRes = await client.query('SELECT gst FROM vendors WHERE id = $1', [vendor_id]);
+                        const vGst = vendRes.rows.length > 0 ? vendRes.rows[0].gst : '';
+                        
+                        let isIntra = false;
+                        if (vGst && vGst.length >= 2) {
+                            posVal = vGst.substring(0, 2);
+                            if (parseInt(posVal) === cmpState) isIntra = true;
+                        }
+
+                        if (isIntra) {
+                            cgstVal = Number((totalTax / 2).toFixed(2));
+                            sgstVal = Number((totalTax - cgstVal).toFixed(2));
+                            ledgerLines.push({ code: 1011, debit: 0, credit: cgstVal });
+                            ledgerLines.push({ code: 1012, debit: 0, credit: sgstVal });
+                        } else {
+                            igstVal = totalTax;
+                            ledgerLines.push({ code: acc_gst, debit: 0, credit: totalTax });
+                        }
+                    }
+
+                    await client.query(`
+                        UPDATE debit_notes SET taxable_amount = $1, tax_amount = $2, cgst_amount = $3, sgst_amount = $4, igst_amount = $5, place_of_supply = $6 WHERE id = $7
+                    `, [totalTaxable, totalTax, cgstVal, sgstVal, igstVal, posVal, newId]);
+
+                    let totalCredits = 0;
+                    ledgerLines.forEach(l => { if (l.credit) totalCredits += l.credit; });
+                    totalCredits = Number(totalCredits.toFixed(2));
+                    const diff = Number((Number(amount) - totalCredits).toFixed(2));
+
+                    if (diff !== 0) {
+                        if (diff > 0) ledgerLines.push({ code: 5003, debit: 0, credit: diff });
+                        else ledgerLines.push({ code: 5003, debit: Math.abs(diff), credit: 0 });
+                    }
                 }
-            }
-            // -----------------------
 
-            // Update Header with Tax Info
-            await client.query(`
-                UPDATE debit_notes SET
-                    taxable_amount = $1,
-                    tax_amount = $2,
-                    cgst_amount = $3,
-                    sgst_amount = $4,
-                    igst_amount = $5,
-                    place_of_supply = $6
-                WHERE id = $7
-            `, [totalTaxable, totalTax, cgstVal, sgstVal, igstVal, posVal, newId]);
+                updateProgress(90);
 
-            // --- ROUNDING FIX ---
-            const totalDebits = Number(amount);
-            // Re-sum credits from actual ledger lines to be safe
-            let totalCredits = 0;
-            ledgerLines.forEach(l => {
-                if (l.credit) totalCredits += l.credit;
-            });
-            totalCredits = Number(totalCredits.toFixed(2));
-
-            const diff = Number((totalDebits - totalCredits).toFixed(2));
-            const acc_rounding = 5003;
-
-            if (diff !== 0) {
-                if (diff > 0) {
-                    ledgerLines.push({ code: acc_rounding, debit: 0, credit: diff });
-                } else {
-                    ledgerLines.push({ code: acc_rounding, debit: Math.abs(diff), credit: 0 });
+                if (note_type !== 'Return Slip') {
+                    await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`, [
+                        debit_note_date || new Date(), desc, 'DN', newId, JSON.stringify(ledgerLines)
+                    ]);
                 }
+
+                await client.query('COMMIT');
+                updateProgress(100);
+                return { success: true, id: newId, message: 'Debit Note Created', debit_note_number: dnNumber };
+
+            } catch (err) {
+                await client.query('ROLLBACK');
+                console.error('Debit Note Job Error:', err);
+                throw err;
+            } finally {
+                client.release();
             }
-        }
+        });
 
-        if (note_type !== 'Return Slip') {
-            await client.query(`
-                SELECT create_journal_entry($1, $2, $3, $4, $5)
-            `, [
-                debit_note_date || new Date(),
-                desc,
-                'DN',
-                newId,
-                JSON.stringify(ledgerLines)
-            ]);
-        }
-
-        await client.query('COMMIT');
-        res.json({ success: true, id: newId, message: 'Debit Note Created', debit_note_number: dnNumber });
+        res.json({ success: true, jobId, message: 'Job Started' });
     } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('Debit Note Create Error:', err);
+        console.error('Debit Note Create Setup Error:', err);
         res.status(500).json({ error: 'Server Error ' + err.message });
-    } finally {
-        client.release();
     }
 });
 

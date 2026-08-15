@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/Input'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { useCreateDebitNote, useVendors, useProducts, useProductsBatches, usePurchaseInvoices } from '../hooks'
 import { CheckCircle2, Package } from 'lucide-react'
+import { JobProgressBar } from '@/components/ui/JobProgressBar'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface Props {
   isOpen: boolean
@@ -12,7 +14,8 @@ interface Props {
 }
 
 export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
-  const { mutateAsync: createDebitNote } = useCreateDebitNote()
+  const queryClient = useQueryClient()
+  const { mutateAsync: createDebitNote, isPending } = useCreateDebitNote()
   const { data: vendors } = useVendors()
   const { data: invoices } = usePurchaseInvoices()
 
@@ -22,6 +25,7 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [reason, setReason] = useState('')
   const [amount, setAmount] = useState('')
+  const [jobId, setJobId] = useState<string | null>(null)
 
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(['Good', 'Damage', 'Expiry'])
   const [searchQuery, setSearchQuery] = useState('')
@@ -185,10 +189,14 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
     }
 
     try {
-      await createDebitNote(payload)
-      handleClose()
+      const res = await createDebitNote(payload)
+      if (res && res.jobId) {
+        setJobId(res.jobId)
+      } else {
+        handleClose()
+      }
     } catch (e: any) {
-      alert('Error: ' + e.message)
+      alert('Error: ' + (e.response?.data?.error || e.message))
     }
   }
 
@@ -200,6 +208,7 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
     setSelectedStatuses(['Good', 'Damage', 'Expiry'])
     setLines([])
     setMode('Financial')
+    setJobId(null)
     onClose()
   }
 
@@ -232,13 +241,27 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
           )}
           
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={handleClose}>Cancel</Button>
-            <Button variant="primary" onClick={handleSubmit}>Create Note</Button>
+            <Button variant="secondary" onClick={handleClose} disabled={!!jobId}>Cancel</Button>
+            <Button variant="primary" onClick={handleSubmit} disabled={isPending || !!jobId}>
+              {isPending ? 'Starting...' : 'Create Note'}
+            </Button>
           </div>
         </div>
       }
-    >
-      <div className="flex flex-col gap-5 py-1">
+      >
+      {jobId ? (
+        <div className="flex-1 flex items-center justify-center min-h-[400px]">
+          <JobProgressBar 
+            jobId={jobId} 
+            title="Creating Debit Note..." 
+            onComplete={() => {
+              queryClient.invalidateQueries({ queryKey: ['debit-notes', 'list'] })
+              handleClose()
+            }}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-5 py-1">
         {/* Compact Segmented Control */}
         <div className="flex bg-surface p-1 rounded-md border border-border-subtle shadow-sm w-full max-w-lg mx-auto">
           <button 
@@ -412,6 +435,7 @@ export function CreateDebitNoteModal({ isOpen, onClose }: Props) {
           </div>
         )}
       </div>
+      )}
     </Dialog>
   )
 }
