@@ -23,9 +23,12 @@ export async function generateSalesOrderExcel(order: any, lines: any[]) {
     // Define columns
     sheet.columns = [
       { header: 'Product Name', key: 'productName', width: 40 },
+      { header: 'MRP', key: 'mrp', width: 15 },
       { header: 'Rate', key: 'rate', width: 15 },
       { header: 'Quantity', key: 'qty', width: 15 },
-      { header: 'Amount', key: 'amount', width: 15 }
+      { header: 'Taxable', key: 'taxable', width: 15 },
+      { header: 'GST', key: 'taxAmt', width: 15 },
+      { header: 'Net', key: 'net', width: 15 }
     ];
 
     // Style the header row
@@ -39,11 +42,18 @@ export async function generateSalesOrderExcel(order: any, lines: any[]) {
 
     // Add data rows
     lines.forEach((line) => {
+      const taxable = Number(line.amount || (line.qty * line.rate));
+      const taxAmount = Number(line.tax_amount || line.tax || 0);
+      const net = taxable + taxAmount;
+
       sheet.addRow({
         productName: line.product_name || `Product ID: ${line.product_id}`,
+        mrp: Number(line.mrp || 0),
         rate: Number(line.rate || 0),
         qty: Number(line.qty || 0),
-        amount: Number(line.amount || (line.qty * line.rate))
+        taxable: taxable,
+        taxAmt: taxAmount,
+        net: net
       });
     });
   }

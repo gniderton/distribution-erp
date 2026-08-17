@@ -11,6 +11,12 @@ router.get('/', async (req, res) => {
             SELECT 
                 so.*,
                 c.customer_name,
+                c.address as customer_address,
+                c.district,
+                c.pin_code,
+                c.gstin,
+                c.phone as customer_phone,
+                c.email as customer_email,
                 c.route_id,
                 r.route_name,
                 e.full_name as dse_name,
@@ -20,7 +26,10 @@ router.get('/', async (req, res) => {
                         'product_name', p.product_name,
                         'qty', sol.ordered_qty,
                         'rate', sol.rate,
-                        'amount', sol.amount
+                        'amount', sol.amount,
+                        'tax_percent', sol.tax_percent,
+                        'tax_amount', sol.tax_amount,
+                        'mrp', p.mrp
                     ))
                     FROM sales_order_lines sol
                     JOIN products p ON sol.product_id = p.id
