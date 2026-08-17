@@ -27,12 +27,13 @@ router.get('/', async (req, res) => {
                         'qty', sol.ordered_qty,
                         'rate', sol.rate,
                         'amount', sol.amount,
-                        'tax_percent', sol.tax_percent,
-                        'tax_amount', sol.tax_amount,
+                        'tax_percent', COALESCE(NULLIF(sol.tax_percent, 0), t.tax_percentage, 0),
+                        'tax_amount', COALESCE(NULLIF(sol.tax_amount, 0), (sol.ordered_qty * sol.rate) * (COALESCE(t.tax_percentage, 0) / 100), 0),
                         'mrp', p.mrp
                     ))
                     FROM sales_order_lines sol
                     JOIN products p ON sol.product_id = p.id
+                    LEFT JOIN taxes t ON p.tax_id = t.id
                     WHERE sol.sales_order_id = so.id
                 ) as lines
             FROM sales_orders so

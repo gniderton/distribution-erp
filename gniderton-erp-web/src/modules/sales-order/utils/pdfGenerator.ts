@@ -107,14 +107,15 @@ export const generateSalesOrderPDF = async (orderData: any, lines: any[]) => {
   autoTable(doc as any, {
     startY: margin + 40 + 95 + 10,
     margin: { left: margin, right: margin, top: 157, bottom: 12 },
-    head: [["S.N", "PRODUCT NAME", "RATE", "QTY", "TAXABLE", "GST", "NET"]],
+    head: [["S.N", "PRODUCT NAME", "MRP", "RATE", "QTY", "TAXABLE", "GST", "NET"]],
     body: lines.map((row, index) => {
       const taxable = Number(row.amount || (row.qty * row.rate));
       const taxAmount = Number(row.tax_amount || row.tax || 0); // fallback if not present
       const net = taxable + taxAmount;
       return [
         index + 1, 
-        row.product_name || `Product ID: ${row.product_id}`, 
+        row.product_name || `Product ID: ${row.product_id}`,
+        Number(row.mrp || 0).toFixed(2),
         Number(row.rate || 0).toFixed(2), 
         row.qty, 
         taxable.toFixed(2),
@@ -129,13 +130,14 @@ export const generateSalesOrderPDF = async (orderData: any, lines: any[]) => {
     styles: { fontSize: 8.5, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.5, textColor: [0, 0, 0] },
     headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold' },
     columnStyles: {
-      0: { cellWidth: 30, halign: 'center' },
+      0: { cellWidth: 25, halign: 'center' },
       1: { cellWidth: 'auto' },
-      2: { cellWidth: 50, halign: 'right' },
-      3: { cellWidth: 40, halign: 'right' },
-      4: { cellWidth: 70, halign: 'right' },
-      5: { cellWidth: 70, halign: 'right' },
-      6: { cellWidth: 70, halign: 'right' }
+      2: { cellWidth: 45, halign: 'right' },
+      3: { cellWidth: 45, halign: 'right' },
+      4: { cellWidth: 35, halign: 'right' },
+      5: { cellWidth: 60, halign: 'right' },
+      6: { cellWidth: 50, halign: 'right' },
+      7: { cellWidth: 60, halign: 'right' }
     }
   });
 
