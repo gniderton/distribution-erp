@@ -6,9 +6,11 @@ import {
   useBulkInvoiceGenerate 
 } from './hooks'
 import { JobProgressBar } from '@/components/ui/JobProgressBar'
+import { generateSalesOrderExcel } from './utils/excel'
+import { generateSalesOrderPDF } from './utils/pdfGenerator'
 import { 
   Eye, RefreshCw, CheckCircle2, AlertTriangle, 
-  X, AlertCircle, Package, Send, Search, Filter, RefreshCcw, DollarSign, MapPin, Users, ShoppingCart, Plus, HelpCircle, Download
+  X, AlertCircle, Package, Send, Search, Filter, RefreshCcw, DollarSign, MapPin, Users, ShoppingCart, Plus, HelpCircle, Download, FileText
 } from 'lucide-react'
 
 interface OrderLine {
@@ -706,16 +708,40 @@ export default function SalesOrderPage() {
                           </span>
                         </td>
                         <td className="p-3 text-center">
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenViewLines(o);
-                            }}
-                            className="p-1.5 rounded hover:bg-ink-100 text-ink-700 transition"
-                            title="Inspect Order Lines"
-                          >
-                            <Eye size={13} />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenViewLines(o);
+                              }}
+                              className="p-1.5 rounded hover:bg-ink-100 text-ink-700 transition"
+                              title="Inspect Order Lines"
+                            >
+                              <Eye size={13} />
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const lines = typeof o.lines === 'string' ? JSON.parse(o.lines) : (o.lines || []);
+                                generateSalesOrderPDF(o, lines);
+                              }}
+                              className="p-1.5 rounded hover:bg-ink-100 text-ink-700 transition"
+                              title="Download PDF"
+                            >
+                              <FileText size={13} />
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const lines = typeof o.lines === 'string' ? JSON.parse(o.lines) : (o.lines || []);
+                                generateSalesOrderExcel(o, lines);
+                              }}
+                              className="p-1.5 rounded hover:bg-ink-100 text-ink-700 transition"
+                              title="Download Excel"
+                            >
+                              <Download size={13} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
