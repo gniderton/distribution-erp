@@ -11,11 +11,11 @@ router.get('/', async (req, res) => {
             SELECT 
                 so.*,
                 c.customer_name,
-                c.address as customer_address,
-                c.district,
-                c.pin_code,
+                ca.address_line1 as customer_address,
+                ca.city as district,
+                ca.pincode as pin_code,
                 c.gstin,
-                c.phone as customer_phone,
+                c.customer_phone,
                 c.email as customer_email,
                 c.route_id,
                 r.route_name,
@@ -37,6 +37,7 @@ router.get('/', async (req, res) => {
                 ) as lines
             FROM sales_orders so
             LEFT JOIN customers c ON so.customer_id = c.id
+            LEFT JOIN customer_addresses ca ON ca.customer_id = c.id AND ca.is_default_billing = true
             LEFT JOIN routes r ON c.route_id = r.id
             LEFT JOIN employees e ON so.dse_id = e.id
             WHERE 1=1

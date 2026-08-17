@@ -14,10 +14,17 @@ router.get('/orders', async (req, res) => {
             SELECT 
                 so.*,
                 c.customer_name,
+                ca.address_line1 as customer_address,
+                ca.city as district,
+                ca.pincode as pin_code,
+                c.gstin,
+                c.customer_phone,
+                c.email as customer_email,
                 e.full_name as created_by_name,
                 (SELECT COUNT(*) FROM sales_order_lines sol WHERE sol.sales_order_id = so.id) as line_count
             FROM sales_orders so
             JOIN customers c ON so.customer_id = c.id
+            LEFT JOIN customer_addresses ca ON ca.customer_id = c.id AND ca.is_default_billing = true
             LEFT JOIN employees e ON so.created_by = e.id
         `;
         const params = [];
