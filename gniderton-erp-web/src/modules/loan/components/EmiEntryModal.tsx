@@ -165,7 +165,7 @@ export function EmiEntryModal({ open, onClose, loan }: Props) {
                 </Select>
               </div>
 
-              {formData.payment_mode !== 'Cheque' ? (
+              {formData.payment_mode === 'Bank Transfer' && (
                 <div>
                   <Label>Bank Statement Link</Label>
                   <Select 
@@ -196,7 +196,9 @@ export function EmiEntryModal({ open, onClose, loan }: Props) {
                     ))}
                   </Select>
                 </div>
-              ) : (
+              )}
+              
+              {formData.payment_mode === 'Cheque' && (
                 <div>
                   <Label>Bank Account</Label>
                   <Select 
@@ -214,7 +216,7 @@ export function EmiEntryModal({ open, onClose, loan }: Props) {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              {formData.payment_mode !== 'Bank Transfer' && (
+              {formData.payment_mode === 'Cheque' && (
                 <div>
                   <Label>Reference No</Label>
                   <Input 

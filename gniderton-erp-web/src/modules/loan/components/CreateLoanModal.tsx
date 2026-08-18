@@ -187,7 +187,7 @@ export function CreateLoanModal({ open, onClose }: Props) {
               </Select>
             </div>
 
-            {formData.payment_mode !== 'Cheque' ? (
+            {formData.payment_mode === 'Bank Transfer' && (
               <div>
                 <Label>Bank Statement Link (Smart Resolution)</Label>
                 <Select 
@@ -217,7 +217,9 @@ export function CreateLoanModal({ open, onClose }: Props) {
                   ))}
                 </Select>
               </div>
-            ) : (
+            )}
+            
+            {formData.payment_mode === 'Cheque' && (
               <div>
                 <Label>Bank Account</Label>
                 <Select 
@@ -235,7 +237,7 @@ export function CreateLoanModal({ open, onClose }: Props) {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {formData.payment_mode !== 'Bank Transfer' && (
+            {formData.payment_mode === 'Cheque' && (
               <div>
                 <Label>Reference No</Label>
                 <Input 
