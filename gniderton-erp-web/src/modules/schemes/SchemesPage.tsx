@@ -25,7 +25,9 @@ export default function SchemesPage() {
 
   // Usage Tab State
   const [selectedSchemeForUsage, setSelectedSchemeForUsage] = useState('')
-  const { data: usageData, isLoading: isUsageLoading } = useSchemeUsage(selectedSchemeForUsage || null)
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const { data: usageData, isLoading: isUsageLoading } = useSchemeUsage(selectedSchemeForUsage || null, { startDate, endDate })
 
   const filteredData = useMemo(() => {
     if (!data) return []
@@ -211,7 +213,7 @@ export default function SchemesPage() {
 
         {activeTab === 'usage' && (
           <>
-            <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex gap-4 items-center mb-6">
+            <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-wrap gap-4 items-center mb-6">
               <div className="w-64">
                 <label className="block text-xs font-medium text-ink-600 mb-1.5">Select Scheme to Track</label>
                 <select 
@@ -225,11 +227,29 @@ export default function SchemesPage() {
                   ))}
                 </select>
               </div>
+              <div className="w-40">
+                <label className="block text-xs font-medium text-ink-600 mb-1.5">Start Date</label>
+                <input 
+                  type="date"
+                  className="w-full bg-surface border border-[#e6e9ee] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-400"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                />
+              </div>
+              <div className="w-40">
+                <label className="block text-xs font-medium text-ink-600 mb-1.5">End Date</label>
+                <input 
+                  type="date"
+                  className="w-full bg-surface border border-[#e6e9ee] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-400"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                />
+              </div>
             </div>
             
             {selectedSchemeForUsage ? (
               <div className="space-y-6 mb-6">
-                <SchemeAnalyticsDashboard schemeId={selectedSchemeForUsage} />
+                <SchemeAnalyticsDashboard schemeId={selectedSchemeForUsage} startDate={startDate} endDate={endDate} />
                 
                 <div className="glass-card bg-white rounded-xl border border-[#e6e9ee] shadow-sm overflow-hidden">
                   <div className="p-4 border-b border-[#e6e9ee] bg-gray-50 flex justify-between items-center">

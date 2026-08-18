@@ -409,13 +409,20 @@ router.get('/:id/usage', async (req, res) => {
 router.get('/:id/analytics', async (req, res) => {
     try {
         const { id } = req.params;
+        const { startDate, endDate } = req.query;
         
         // 1. Get the scheme name for fallback search
         const nameRes = await pool.query('SELECT scheme_name FROM schemes WHERE id = $1', [id]);
         if (nameRes.rows.length === 0) return res.status(404).json({ error: 'Scheme not found' });
         const name = nameRes.rows[0].scheme_name;
 
-        const params = [`%[ID:${id}]%`, `%${name}%`];
+        let dateClause = "";
+        let params = [`%[ID:${id}]%`, `%${name}%`];
+
+        if (startDate && endDate) {
+            dateClause = " AND si.invoice_date BETWEEN $3 AND $4 ";
+            params.push(startDate, endDate);
+        }
 
         const baseCTE = `
             WITH scheme_lines AS (
@@ -440,6 +447,7 @@ router.get('/:id/analytics', async (req, res) => {
                 LEFT JOIN employees e ON c.dse_id = e.id
                 WHERE (sil.tier_applied ILIKE $1 OR sil.tier_applied ILIKE $2)
                   AND si.status != 'Cancelled'
+                  ${dateClause}
             )
         `;
 

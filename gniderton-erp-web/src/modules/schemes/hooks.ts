@@ -24,10 +24,10 @@ export function useSchemeUsage(id: string | null, params: any = {}) {
   })
 }
 
-export function useSchemeAnalytics(id: string | null) {
+export function useSchemeAnalytics(id: string | null, params: any = {}) {
   return useQuery({
-    queryKey: ['schemes', 'analytics', id],
-    queryFn: () => schemeApi.getAnalytics(id!),
+    queryKey: ['schemes', 'analytics', id, params],
+    queryFn: () => schemeApi.getAnalytics(id!, params),
     enabled: !!id
   })
 }

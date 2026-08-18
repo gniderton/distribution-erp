@@ -16,6 +16,8 @@ import { useSchemeAnalytics } from '../hooks';
 
 interface SchemeAnalyticsDashboardProps {
   schemeId: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
@@ -35,8 +37,8 @@ const StatCard = ({ title, value, subtitle, icon: Icon, colorClass }: any) => (
   </div>
 );
 
-export const SchemeAnalyticsDashboard: React.FC<SchemeAnalyticsDashboardProps> = ({ schemeId }) => {
-  const { data, isLoading, error } = useSchemeAnalytics(schemeId);
+export const SchemeAnalyticsDashboard: React.FC<SchemeAnalyticsDashboardProps> = ({ schemeId, startDate, endDate }) => {
+  const { data, isLoading, error } = useSchemeAnalytics(schemeId, { startDate, endDate });
 
   if (isLoading) {
     return (
