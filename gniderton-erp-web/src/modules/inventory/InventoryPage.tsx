@@ -1587,7 +1587,7 @@ export default function InventoryPage() {
       {/* GRN CREATION MODAL */}
       {showGRNModal && (
         <div className="fixed inset-0 bg-ink-950/40 backdrop-blur-sm z-50 flex justify-end">
-          <div className="w-full max-w-6xl bg-white h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-250">
+          <div className="w-[90vw] max-w-none bg-white h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-250">
             {/* Header */}
             <div className="px-6 py-4 border-b border-border-subtle flex justify-between items-center bg-surface">
               <div>
@@ -1693,10 +1693,10 @@ export default function InventoryPage() {
                 <div className="text-center py-20 text-ink-500">Please choose a Vendor or PO above to populate goods receipt lines.</div>
               ) : (
                 <div className="border border-border-subtle rounded-xl overflow-x-auto bg-white shadow-sm">
-                  <table className="text-left text-xs divide-y divide-border-subtle table-fixed w-[1200px]">
+                  <table className="text-left text-xs divide-y divide-border-subtle table-fixed w-full min-w-[1300px]">
                     <thead className="bg-surface text-ink-600 font-semibold uppercase text-[9px] tracking-wider">
                       <tr>
-                        <th className="px-4 py-2 w-[200px] sticky left-0 bg-surface z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Item Name</th>
+                        <th className="px-4 py-2 w-[280px] sticky left-0 bg-surface z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Item Name</th>
                         <th className="px-4 py-2 w-[70px]">MRP</th>
                         <th className="px-4 py-2 w-[80px]">Rate</th>
                         <th className="px-4 py-2 w-[80px]">Inward Qty</th>
@@ -1715,9 +1715,9 @@ export default function InventoryPage() {
                     <tbody className="divide-y divide-border-subtle text-ink-800">
                       {grnLines.map((line, idx) => (
                         <tr key={line._product_id} className="hover:bg-surface/30 transition">
-                          <td className="px-4 py-2 sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                            <span className="font-semibold block truncate">{line.product_name}</span>
-                            <span className="text-[10px] text-ink-500 font-mono truncate">{line.ean_code}</span>
+                          <td className="px-4 py-2 sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] align-top">
+                            <span className="font-semibold block leading-tight">{line.product_name}</span>
+                            <span className="text-[10px] text-ink-500 font-mono mt-1 block">{line.ean_code}</span>
                           </td>
                           <td className="px-4 py-2">₹{line.mrp.toFixed(2)}</td>
                           <td className="px-4 py-2">
