@@ -512,4 +512,53 @@ router.get('/generate-corporate-report', async (req, res) => {
     }
 });
 
+// GET /api/reports/customer-advances - Get Customer Advances Report
+router.get('/customer-advances', async (req, res) => {
+    try {
+        const { start_date, end_date, dse_id, customer_id } = req.query;
+
+        let query = `
+            SELECT 
+                ca.customer_id,
+                c.customer_name,
+                e.full_name as dse_name,
+                SUM(ca.balance) AS total_advance_balance,
+                COUNT(ca.id) AS advance_count,
+                MAX(ca.created_at) AS last_advance_date
+            FROM customer_advances ca
+            JOIN customers c ON ca.customer_id = c.id
+            LEFT JOIN employees e ON c.dse_id = e.id
+            WHERE ca.is_active = true AND ca.balance > 0
+        `;
+        
+        let params = [];
+        let paramIndex = 1;
+
+        if (start_date) {
+            query += ` AND ca.created_at >= $${paramIndex++}`;
+            params.push(start_date);
+        }
+        if (end_date) {
+            query += ` AND ca.created_at <= $${paramIndex++}::timestamp + interval '1 day' - interval '1 second'`;
+            params.push(end_date);
+        }
+        if (dse_id) {
+            query += ` AND c.dse_id = $${paramIndex++}`;
+            params.push(dse_id);
+        }
+        if (customer_id) {
+            query += ` AND ca.customer_id = $${paramIndex++}`;
+            params.push(customer_id);
+        }
+
+        query += ` GROUP BY ca.customer_id, c.customer_name, e.full_name ORDER BY total_advance_balance DESC`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Customer Advance Report Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

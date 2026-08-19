@@ -105,6 +105,14 @@ const REPORT_CATEGORIES = [
         component: <ReceivablesReportView />
       },
       {
+        id: 'customer-advances',
+        title: 'Customer Advances',
+        description: 'Track advance payments and unutilized balances from customers.',
+        icon: Wallet,
+        colorClass: 'text-rose-600 bg-rose-500/10 group-hover:bg-rose-500/20 ring-rose-500/30',
+        component: <CustomerAdvanceReportView />
+      },
+      {
         id: 'dse-performance',
         title: 'DSE Executive Dashboard',
         description: 'Live KPIs, productivity stats, and sales vs collection trends for executives.',
@@ -172,6 +180,7 @@ const REPORT_CATEGORIES = [
 import { StockReportView } from './components/StockReportView'
 import { ReceivablesReportView } from './components/ReceivablesReportView'
 import { DseDashboardView } from './components/DseDashboardView'
+import { CustomerAdvanceReportView } from './components/CustomerAdvanceReportView'
 
 export default function ReportsPage() {
   const [activeReport, setActiveReport] = useState<ReportDefinition | null>(null)
