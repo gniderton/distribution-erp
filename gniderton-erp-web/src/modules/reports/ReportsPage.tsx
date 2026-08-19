@@ -113,6 +113,14 @@ const REPORT_CATEGORIES = [
         component: <CustomerAdvanceReportView />
       },
       {
+        id: 'credit-note-allocations',
+        title: 'Credit Note Allocations',
+        description: 'Track which bills each credit note or return has been applied against.',
+        icon: FileSpreadsheet,
+        colorClass: 'text-indigo-600 bg-indigo-500/10 group-hover:bg-indigo-500/20 ring-indigo-500/30',
+        component: <CreditNoteAllocationReportView />
+      },
+      {
         id: 'dse-performance',
         title: 'DSE Executive Dashboard',
         description: 'Live KPIs, productivity stats, and sales vs collection trends for executives.',
@@ -181,6 +189,7 @@ import { StockReportView } from './components/StockReportView'
 import { ReceivablesReportView } from './components/ReceivablesReportView'
 import { DseDashboardView } from './components/DseDashboardView'
 import { CustomerAdvanceReportView } from './components/CustomerAdvanceReportView'
+import { CreditNoteAllocationReportView } from './components/CreditNoteAllocationReportView'
 
 export default function ReportsPage() {
   const [activeReport, setActiveReport] = useState<ReportDefinition | null>(null)

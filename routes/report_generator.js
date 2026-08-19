@@ -561,4 +561,63 @@ router.get('/customer-advances', async (req, res) => {
     }
 });
 
+// GET /api/analytics/credit-note-allocations - Get Credit Note Allocation Report
+router.get('/credit-note-allocations', async (req, res) => {
+    try {
+        const { start_date, end_date, dse_id, search } = req.query;
+
+        let query = `
+            SELECT 
+                cpa.id as allocation_id,
+                sr.return_date as credit_note_date,
+                sr.return_number as credit_note_no,
+                c.customer_name,
+                e.full_name as dse_name,
+                si.invoice_number as invoice_applied_to,
+                si.invoice_date as invoice_date,
+                cpa.amount as amount_applied
+            FROM customer_payment_allocations cpa
+            JOIN sales_returns sr ON cpa.return_id = sr.id
+            JOIN sales_invoices si ON cpa.invoice_id = si.id
+            JOIN customers c ON sr.customer_id = c.id
+            LEFT JOIN employees e ON c.dse_id = e.id
+            WHERE 1=1
+        `;
+        
+        let params = [];
+        let paramIndex = 1;
+
+        if (start_date) {
+            query += ` AND sr.return_date >= $${paramIndex++}`;
+            params.push(start_date);
+        }
+        if (end_date) {
+            query += ` AND sr.return_date <= $${paramIndex++}`;
+            params.push(end_date);
+        }
+        if (dse_id) {
+            query += ` AND c.dse_id = $${paramIndex++}`;
+            params.push(dse_id);
+        }
+        if (search) {
+            query += ` AND (
+                sr.return_number ILIKE $${paramIndex} OR
+                c.customer_name ILIKE $${paramIndex} OR
+                si.invoice_number ILIKE $${paramIndex} OR
+                e.full_name ILIKE $${paramIndex}
+            )`;
+            params.push(`%${search}%`);
+            paramIndex++;
+        }
+
+        query += ` ORDER BY sr.return_date DESC, cpa.id DESC LIMIT 5000`;
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Credit Note Allocation Report Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
