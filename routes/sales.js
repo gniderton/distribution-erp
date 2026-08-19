@@ -746,6 +746,9 @@ router.post('/orders/:id/dispatch', async (req, res) => {
             WHERE id = $6
         `, [roundedTotal, taxable, cgst, sgst, roundOff, invId]);
 
+        // [FIX] Apply customer advances now that the invoice total is finalized
+        await client.query('SELECT fn_apply_advances_to_invoice($1)', [invId]);
+
         // Accounting
         const acc_revenue = 4001, acc_ar = 1101, acc_gst_cgst = 2011, acc_gst_sgst = 2012, acc_cogs = 5001, acc_inventory = 1001, acc_round = 5003;
         const invoiceLines = [
@@ -1665,6 +1668,9 @@ router.post('/orders/bulk-dispatch', async (req, res) => {
                     WHERE id = $6
                 `, [roundedTotal, taxable, cgst, sgst, roundOff, invId]);
 
+                // [FIX] Apply customer advances now that the invoice total is finalized
+                await client.query('SELECT fn_apply_advances_to_invoice($1)', [invId]);
+
                 // --- ACCOUNTING INTEGRATION ---
                 const acc_revenue = 4001;
                 const acc_ar = 1101;
@@ -2075,6 +2081,9 @@ router.post('/bulk-invoice-generate', async (req, res) => {
                 await client.query('UPDATE sales_invoices SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4, round_off = $5 WHERE id = $6',
                     [roundedTotal, taxable, cgst, sgst, roundOff, invId]);
 
+                // [FIX] Apply customer advances now that the invoice total is finalized
+                await client.query('SELECT fn_apply_advances_to_invoice($1)', [invId]);
+
                 // --- ACCOUNTING INTEGRATION ---
                 const acc_revenue = 4001;
                 const acc_ar = 1101;
@@ -2455,6 +2464,9 @@ router.post('/invoices/regenerate', async (req, res) => {
         const sgst = Number((roundedTax - cgst).toFixed(2));
 
         await client.query('UPDATE sales_invoices SET grand_total = $1, total_taxable = $2, total_cgst = $3, total_sgst = $4, round_off = $5 WHERE id = $6', [roundedTotal, taxable, cgst, sgst, roundOff, invId]);
+        
+        // [FIX] Apply customer advances now that the invoice total is finalized
+        await client.query('SELECT fn_apply_advances_to_invoice($1)', [invId]);
 
         // Accounting 
         const acc_revenue = 4001; const acc_ar = 1101; const acc_gst_cgst = 2011; const acc_gst_sgst = 2012; const acc_cogs = 5001; const acc_inventory = 1001; const acc_round = 5003;
