@@ -3,16 +3,18 @@ import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '../api';
 import { DataTable } from '@/components/shared/DataTable';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Search, Filter, Download } from 'lucide-react';
+import { Search, Filter, Download, Users } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 export const CustomerAdvanceReportView: React.FC = () => {
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [dseId, setDseId] = useState('');
   const [globalFilter, setGlobalFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [dseId, setDseId] = useState('all');
 
   // Fetch DSEs (Sales Reps) for the filter dropdown
   const { data: dses } = useQuery({
@@ -20,9 +22,35 @@ export const CustomerAdvanceReportView: React.FC = () => {
     queryFn: () => fetch('/api/employees?role=DSE').then(res => res.json()),
   });
 
+  // Determine date bounds
+  const getDates = () => {
+    const today = new Date()
+    let start = ''
+    let end = today.toISOString().split('T')[0]
+
+    if (dateFilter === 'today') {
+      start = end
+    } else if (dateFilter === 'this_week') {
+      const firstDay = new Date(today.setDate(today.getDate() - today.getDay()))
+      start = firstDay.toISOString().split('T')[0]
+    } else if (dateFilter === 'this_month') {
+      start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
+    } else if (dateFilter === 'custom') {
+      start = customStartDate
+      end = customEndDate
+    }
+    return { start_date: start || undefined, end_date: end || undefined }
+  }
+
+  const dateParams = getDates()
+
   const { data, isLoading } = useQuery({
-    queryKey: ['customer-advances', startDate, endDate, dseId],
-    queryFn: () => reportsApi.customerAdvances({ start_date: startDate, end_date: endDate, dse_id: dseId }),
+    queryKey: ['customer-advances', dateParams.start_date, dateParams.end_date, dseId],
+    queryFn: () => reportsApi.customerAdvances({ 
+      start_date: dateParams.start_date, 
+      end_date: dateParams.end_date, 
+      dse_id: dseId !== 'all' ? dseId : undefined 
+    }),
   });
 
   const filteredData = React.useMemo(() => {
@@ -77,53 +105,65 @@ export const CustomerAdvanceReportView: React.FC = () => {
     doc.save("Customer_Advances_Report.pdf");
   };
 
+  if (isLoading) return <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-64 w-full" /></div>;
+
   return (
     <div className="space-y-6">
-      <div className="glass-card p-4 rounded-xl border border-border-subtle bg-white shadow-sm flex flex-col md:flex-row gap-4 items-end justify-between">
+      <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col xl:flex-row gap-4 items-center justify-between w-full">
         
-        <div className="flex flex-wrap gap-4 items-end flex-1">
-          <div className="relative w-64">
-            <Label>Search</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 text-ink-500" size={15} />
+        <div className="relative w-full xl:max-w-md">
+          <Search className="absolute left-3.5 top-3 text-ink-600" size={15} />
+          <input 
+            type="text" 
+            placeholder="Search customers or DSE..." 
+            value={globalFilter}
+            onChange={e => setGlobalFilter(e.target.value)}
+            className="w-full bg-surface border border-[#e6e9ee] rounded-lg pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:border-brand-400 text-ink-900 placeholder:text-ink-600"
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-3 w-full xl:w-auto items-center justify-end">
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <Filter size={12} className="text-ink-600" />
+            <select
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="this_week">This Week</option>
+              <option value="this_month">This Month</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+
+          {dateFilter === 'custom' && (
+            <div className="flex items-center gap-2">
               <input 
-                type="text" 
-                placeholder="Search customer or DSE..." 
-                value={globalFilter}
-                onChange={e => setGlobalFilter(e.target.value)}
-                className="w-full bg-surface border border-border-subtle rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-brand-400"
+                type="date" 
+                value={customStartDate} 
+                onChange={e => setCustomStartDate(e.target.value)}
+                className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
+              />
+              <span className="text-xs text-ink-500">to</span>
+              <input 
+                type="date" 
+                value={customEndDate} 
+                onChange={e => setCustomEndDate(e.target.value)}
+                className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
               />
             </div>
-          </div>
+          )}
 
-          <div className="w-40">
-            <Label>Start Date</Label>
-            <input 
-              type="date"
-              className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-400"
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)}
-            />
-          </div>
-          
-          <div className="w-40">
-            <Label>End Date</Label>
-            <input 
-              type="date"
-              className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-400"
-              value={endDate}
-              onChange={e => setEndDate(e.target.value)}
-            />
-          </div>
-
-          <div className="w-48">
-            <Label>Sales Rep (DSE)</Label>
-            <select 
-              className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-400"
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <Users size={12} className="text-ink-600" />
+            <select
               value={dseId}
               onChange={e => setDseId(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer max-w-[120px] truncate"
             >
-              <option value="">All Sales Reps</option>
+              <option value="all">All DSEs</option>
               {dses?.data?.map((d: any) => (
                 <option key={d.id} value={d.id}>{d.full_name}</option>
               )) || dses?.map((d: any) => (
@@ -131,25 +171,22 @@ export const CustomerAdvanceReportView: React.FC = () => {
               ))}
             </select>
           </div>
-        </div>
 
-        <div className="flex gap-2">
-          <button onClick={handleExportExcel} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-sm font-medium transition-colors border border-emerald-200">
-            <Download size={16} /> Excel
-          </button>
-          <button onClick={handleExportPDF} className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-sm font-medium transition-colors border border-rose-200">
-            <Download size={16} /> PDF
-          </button>
+          <div className="flex gap-2 ml-2">
+            <button onClick={handleExportExcel} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-xs font-medium transition-colors border border-emerald-200">
+              <Download size={14} /> Excel
+            </button>
+            <button onClick={handleExportPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-xs font-medium transition-colors border border-rose-200">
+              <Download size={14} /> PDF
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="glass-card bg-white rounded-xl border border-border-subtle shadow-sm overflow-hidden">
-        <DataTable columns={columns} data={filteredData} isLoading={isLoading} hideSearchBar />
+        <DataTable columns={columns} data={filteredData} hideSearchBar />
       </div>
     </div>
   );
 };
 
-const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <label className="block text-xs font-medium text-ink-600 mb-1.5">{children}</label>
-);
