@@ -65,6 +65,10 @@ export function ExpenseDrawer({ open, onClose }: Props) {
         const stmt = unconsumedDebits.find((s: any) => String(s.id) === value)
         if (stmt && stmt.transaction_date) {
           newData.expense_date = stmt.transaction_date.split('T')[0]
+          const available = parseFloat(stmt.debit_amount) - parseFloat(stmt.consumed_amount || 0);
+          if (!newData.is_gst_expense) {
+            newData.grand_total = String(available);
+          }
         }
       }
       
@@ -94,7 +98,11 @@ export function ExpenseDrawer({ open, onClose }: Props) {
     if (paymentMode === 'Online' && formData.bank_statement_entry_id) {
         const stmt = unconsumedDebits.find((s: any) => String(s.id) === formData.bank_statement_entry_id)
         if (stmt) {
-            finalTotal = parseFloat(stmt.debit_amount) - parseFloat(stmt.consumed_amount || 0)
+            const available = parseFloat(stmt.debit_amount) - parseFloat(stmt.consumed_amount || 0)
+            if (finalTotal > available) {
+                toast.error(`Amount cannot exceed the statement's available balance (₹${available.toFixed(2)})`);
+                return;
+            }
             if (!formData.is_gst_expense) {
               taxable = finalTotal;
               tax = 0;
@@ -347,9 +355,9 @@ export function ExpenseDrawer({ open, onClose }: Props) {
             min="0"
             value={formData.grand_total} 
             onChange={handleChange} 
-            placeholder={formData.bank_statement_entry_id ? "Auto-calculated from statement" : "0.00"}
-            required={!formData.bank_statement_entry_id && !formData.is_gst_expense} 
-            disabled={!!formData.bank_statement_entry_id || formData.is_gst_expense}
+            placeholder={formData.bank_statement_entry_id ? "Auto-filled from statement" : "0.00"}
+            required={!formData.is_gst_expense} 
+            disabled={formData.is_gst_expense}
           />
         </div>
 

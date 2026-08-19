@@ -64,6 +64,10 @@ export function IncomeDrawer({ open, onClose }: Props) {
         const stmt = unconsumedCredits.find((s: any) => String(s.id) === value)
         if (stmt && stmt.transaction_date) {
           newData.transaction_date = stmt.transaction_date.split('T')[0]
+          const available = parseFloat(stmt.credit_amount) - parseFloat(stmt.consumed_amount || 0);
+          if (!newData.is_gst_income) {
+            newData.amount = String(available);
+          }
         }
       }
       
@@ -93,7 +97,11 @@ export function IncomeDrawer({ open, onClose }: Props) {
     if (paymentMode === 'Online' && formData.bank_statement_entry_id) {
         const stmt = unconsumedCredits.find((s: any) => String(s.id) === formData.bank_statement_entry_id)
         if (stmt) {
-            finalTotal = parseFloat(stmt.credit_amount) - parseFloat(stmt.consumed_amount || 0)
+            const available = parseFloat(stmt.credit_amount) - parseFloat(stmt.consumed_amount || 0)
+            if (finalTotal > available) {
+                toast.error(`Amount cannot exceed the statement's available balance (₹${available.toFixed(2)})`);
+                return;
+            }
             if (!formData.is_gst_income) {
               taxable = finalTotal;
               tax = 0;
@@ -346,9 +354,9 @@ export function IncomeDrawer({ open, onClose }: Props) {
             min="0"
             value={formData.amount} 
             onChange={handleChange} 
-            placeholder={formData.bank_statement_entry_id ? "Auto-calculated from statement" : "0.00"}
-            required={!formData.bank_statement_entry_id && !formData.is_gst_income} 
-            disabled={!!formData.bank_statement_entry_id || formData.is_gst_income}
+            placeholder={formData.bank_statement_entry_id ? "Auto-filled from statement" : "0.00"}
+            required={!formData.is_gst_income} 
+            disabled={formData.is_gst_income}
           />
         </div>
 
