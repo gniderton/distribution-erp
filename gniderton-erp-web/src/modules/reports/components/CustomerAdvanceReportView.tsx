@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { reportsApi } from '../api';
-import { DataTable } from '@/components/ui/DataTable';
+import { DataTable } from '@/components/shared/DataTable';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { Search, Filter, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
