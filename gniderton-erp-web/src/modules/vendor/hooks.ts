@@ -86,6 +86,7 @@ export function useRecordPayment() {
       qc.invalidateQueries({ queryKey: ['vendors', variables.vendor_id, 'ledger'] })
       qc.invalidateQueries({ queryKey: ['vendors', variables.vendor_id, 'payment-history'] })
       qc.invalidateQueries({ queryKey: ['purchase-invoices'] })
+      qc.invalidateQueries({ queryKey: ['unconsumed-debits'] })
     }
   })
 }

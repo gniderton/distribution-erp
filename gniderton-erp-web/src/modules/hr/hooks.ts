@@ -126,6 +126,7 @@ export function useBulkSalaryAdvance() {
       toast.success('Advance issued successfully')
       qc.invalidateQueries({ queryKey: ['hr', 'advances'] })
       qc.invalidateQueries({ queryKey: ['hr', 'employees'] })
+      qc.invalidateQueries({ queryKey: ['unconsumed-debits'] })
     }
   })
 }
