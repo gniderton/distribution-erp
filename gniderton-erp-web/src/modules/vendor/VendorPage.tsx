@@ -274,7 +274,8 @@ export default function VendorPage() {
       reference_no: '',
       cheque_no: '',
       cheque_date: '',
-      cheque_bank: ''
+      cheque_bank: '',
+      payment_date: new Date().toISOString().split('T')[0]
     })
     setShowPaymentModal(true)
   };
