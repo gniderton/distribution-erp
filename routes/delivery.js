@@ -586,7 +586,7 @@ router.get('/trips/:id/manifest-web', async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT 
-                ti.id as trip_invoice_id, si.id as invoice_id, si.sales_order_id, si.invoice_number, si.invoice_date, si.grand_total, si.balance_amount,
+                ti.id as trip_invoice_id, si.id as invoice_id, si.sales_order_id, si.invoice_number, si.invoice_date, si.grand_total, si.balance_amount, si.eway_bill_number,
                 c.id as customer_id, c.customer_name, 
                 (SELECT address_line1 FROM customer_addresses WHERE customer_id = c.id LIMIT 1) as address,
                 c.latitude, c.longitude, c.customer_phone as phone,
