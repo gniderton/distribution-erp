@@ -84,7 +84,8 @@ export default function VendorPage() {
     reference_no: '',
     cheque_no: '',
     cheque_date: '',
-    cheque_bank: ''
+    cheque_bank: '',
+    payment_date: new Date().toISOString().split('T')[0]
   })
   
   // Address Form state
@@ -332,7 +333,7 @@ export default function VendorPage() {
       const payload = {
         vendor_id: Number(selectedVendor.id),
         amount: totalAmount,
-        payment_date: new Date().toISOString().split('T')[0],
+        payment_date: paymentForm.payment_date || new Date().toISOString().split('T')[0],
         mode: paymentForm.payment_mode,
         transaction_type: paymentForm.transaction_type,
         remarks: paymentForm.remarks,
@@ -1360,19 +1361,31 @@ export default function VendorPage() {
             </div>
 
             <form onSubmit={handleSubmitPayment} className="p-6 space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] text-ink-600 uppercase font-semibold">Payment Amount ($)</label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-3 text-ink-600" size={15} />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-ink-600 uppercase font-semibold">Payment Date</label>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="date"
                     required
-                    value={paymentForm.amount}
-                    onChange={e => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                    className="w-full bg-surface border border-border-subtle rounded-lg pl-9 pr-4 py-2.5 text-xs text-ink-900 focus:outline-none"
-                    placeholder="0.00"
+                    value={paymentForm.payment_date}
+                    onChange={e => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
+                    className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2.5 text-xs focus:outline-none"
                   />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-ink-600 uppercase font-semibold">Payment Amount ($)</label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-3 text-ink-600" size={15} />
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={paymentForm.amount}
+                      onChange={e => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                      className="w-full bg-surface border border-border-subtle rounded-lg pl-9 pr-4 py-2.5 text-xs text-ink-900 focus:outline-none"
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1457,7 +1470,19 @@ export default function VendorPage() {
                   <label className="text-[10px] text-ink-600 uppercase font-semibold">Transaction Reference / UTR (Bank Statement Entry)</label>
                   <select
                     value={paymentForm.reference_no}
-                    onChange={e => handleUtrSelectChange(e.target.value)}
+                    onChange={e => {
+                      const val = e.target.value;
+                      handleUtrSelectChange(val);
+                      if (val && val !== 'CUSTOM') {
+                        const stmt = unconsumedDebits.find(d => String(d.id) === val);
+                        if (stmt && stmt.transaction_date) {
+                          setPaymentForm(prev => ({
+                            ...prev,
+                            payment_date: stmt.transaction_date.split('T')[0]
+                          }));
+                        }
+                      }
+                    }}
                     required
                     className="w-full bg-surface border border-border-subtle rounded-lg px-3 py-2.5 text-xs focus:outline-none"
                   >

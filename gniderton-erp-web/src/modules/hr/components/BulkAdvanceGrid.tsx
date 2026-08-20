@@ -94,7 +94,16 @@ export function BulkAdvanceGrid() {
               <Label>Bank Statement Entry *</Label>
               <select 
                 value={bankStatementEntryId}
-                onChange={e => setBankStatementEntryId(e.target.value)}
+                onChange={e => {
+                  const val = e.target.value;
+                  setBankStatementEntryId(val);
+                  if (val) {
+                    const selected = debits.find((d: any) => d.id.toString() === val);
+                    if (selected && selected.transaction_date) {
+                      setAdvanceDate(new Date(selected.transaction_date).toISOString().split('T')[0]);
+                    }
+                  }
+                }}
                 className="w-full h-[38px] px-3 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400"
                 required
               >
