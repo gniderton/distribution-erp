@@ -110,10 +110,12 @@ export function useBulkSalaryUpdate() {
 }
 
 export function useBulkBonus() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: hrApi.createEmployeesBulkBonus,
     onSuccess: () => {
       toast.success('Bulk bonus added successfully')
+      qc.invalidateQueries({ queryKey: ['unconsumed-debits'] })
     }
   })
 }
@@ -132,8 +134,12 @@ export function useBulkSalaryAdvance() {
 }
 
 export function useBulkSalaryPayment() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: hrApi.createEmployeesBulkSalaryPayment,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['unconsumed-debits'] })
+    }
   })
 }
 

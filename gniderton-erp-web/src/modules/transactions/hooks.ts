@@ -35,6 +35,8 @@ export function useCreateExpense() {
     mutationFn: transactionsApi.createFinanceExpenses,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions', 'expenses'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'unconsumed-debits'] })
+      queryClient.invalidateQueries({ queryKey: ['unconsumed-debits'] })
     }
   })
 }
@@ -86,6 +88,8 @@ export function useCreateOtherIncome() {
     mutationFn: transactionsApi.createFinanceOtherIncome,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions', 'other-income'] })
+      queryClient.invalidateQueries({ queryKey: ['transactions', 'unconsumed-credits'] })
+      queryClient.invalidateQueries({ queryKey: ['unconsumed-credits'] })
     }
   })
 }
