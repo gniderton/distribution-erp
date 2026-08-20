@@ -166,7 +166,7 @@ export const generateInvoicePDF = async (invoiceData: Invoice) => {
       ["TOTAL AMT", Number(grandTotal).toFixed(2)],
       ["DSE", String(invoiceData.dse_name || "-")],
       ["Route", String(invoiceData.route || "-")],
-      ["DSE Phone", "-"],
+      ["E-Way Bill", String(invoiceData.eway_bill_number || "-")],
       ["PAGE", `${currentPage} / ${totalPages}`]
     ], 65);
     return boxesY + boxHeight;
