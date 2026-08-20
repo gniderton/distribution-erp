@@ -218,6 +218,7 @@ router.get('/unified/:id', async (req, res) => {
                 si.invoice_number,
                 si.invoice_date,
                 si.grand_total,
+                si.eway_bill_number,
                 si.total_taxable,
                 si.total_cgst,
                 si.total_sgst,
