@@ -109,8 +109,8 @@ router.post('/upload-response', upload.single('file'), async (req, res) => {
             for (const row of rows) {
                 // NIC portal typically has "Document No" and "E-Way Bill No" columns
                 // Check various possible key names based on common formats
-                const docNo = row['Document No'] || row['Document Number'] || row['Invoice No'] || row['docNo'];
-                const ewbNo = row['E-Way Bill No'] || row['E Way Bill No'] || row['EWB No'] || row['ewayBillNo'];
+                const docNo = row['Doc No'] || row['Document No'] || row['Document Number'] || row['Invoice No'] || row['docNo'];
+                const ewbNo = row['EWB No'] || row['E-Way Bill No'] || row['E Way Bill No'] || row['ewayBillNo'];
 
                 if (docNo && ewbNo) {
                     const updateRes = await client.query(`
