@@ -1197,15 +1197,24 @@ export default function InventoryPage() {
       {/* KPI Cards Section */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="glass-card bg-white p-4 rounded-xl border border-border-subtle shadow-sm flex flex-col justify-center">
-          <p className="text-xs text-ink-500 font-semibold mb-1 uppercase tracking-wider">Active POs</p>
+          <p className="text-xs text-ink-500 font-semibold mb-1 uppercase tracking-wider">Total Taxable Value</p>
           <p className="text-2xl font-bold text-ink-900">
-            {pos.filter((p: any) => p.status === 'Draft' || p.status === 'Issued' || p.status === 'Partial').length}
+            ₹{grns.reduce((sum: number, g: any) => sum + (parseFloat(g.total_taxable) || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
         <div className="glass-card bg-white p-4 rounded-xl border border-border-subtle shadow-sm flex flex-col justify-center">
-          <p className="text-xs text-ink-500 font-semibold mb-1 uppercase tracking-wider">Total GRNs</p>
+          <p className="text-xs text-ink-500 font-semibold mb-1 uppercase tracking-wider">This Month Purchase</p>
           <p className="text-2xl font-bold text-ink-900">
-            {grns.length}
+            ₹{grns.reduce((sum: number, g: any) => {
+              if (g.received_date) {
+                const date = new Date(g.received_date);
+                const now = new Date();
+                if (date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) {
+                  return sum + (parseFloat(g.grand_total) || 0);
+                }
+              }
+              return sum;
+            }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
         </div>
         <div className="glass-card bg-white p-4 rounded-xl border border-border-subtle shadow-sm flex flex-col justify-center">
