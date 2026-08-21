@@ -27,7 +27,7 @@ export function BatchTraceabilityModal({ open, onClose, batch }: BatchTraceabili
   if (!batch) return null
 
   return (
-    <Dialog open={open} onClose={onClose} size="4xl" title={`Traceability: Batch ${batch.batch_code}`}>
+    <Dialog open={open} onClose={onClose} widthClass="max-w-4xl" title={`Traceability: Batch ${batch.batch_code}`}>
       <div className="space-y-4">
         <div className="bg-ink-50 p-4 rounded-lg flex items-center justify-between">
           <div>
