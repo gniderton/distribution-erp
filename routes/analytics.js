@@ -374,6 +374,8 @@ router.get('/employees/:id/dashboard', async (req, res) => {
         }
 
         const monthStart = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
+        const monthEndDate = new Date(currentYear, currentMonth, 0);
+        const monthEnd = `${monthEndDate.getFullYear()}-${(monthEndDate.getMonth() + 1).toString().padStart(2, '0')}-${monthEndDate.getDate().toString().padStart(2, '0')}`;
         
         // Previous Month Range
         let prevMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
@@ -435,17 +437,17 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             };
         };
 
-        const monthMetrics = await getPeriodMetrics(monthStart);
+        const monthMetrics = await getPeriodMetrics(monthStart, monthEnd);
         const prevMonthMetrics = await getPeriodMetrics(prevMonthStart, prevMonthEnd);
         const fyMetrics = await getPeriodMetrics(fyStart);
 
         // Productivity & visits
         const productivityRes = await pool.query(`
             SELECT 
-                (SELECT COUNT(DISTINCT customer_id) FROM sales_invoices WHERE customer_id = ANY($1) AND invoice_date >= $2 AND status != 'Cancelled') as active_customers,
-                (SELECT COUNT(*) FROM customers WHERE dse_id = $3 AND created_at >= $2) as new_customers,
-                (SELECT COUNT(*) FROM customer_visits WHERE dse_id = $3 AND visit_date >= $2) as total_visits
-        `, [customerIds, monthStart, id]);
+                (SELECT COUNT(DISTINCT customer_id) FROM sales_invoices WHERE customer_id = ANY($1) AND invoice_date >= $2 AND invoice_date <= $4 AND status != 'Cancelled') as active_customers,
+                (SELECT COUNT(*) FROM customers WHERE dse_id = $3 AND created_at >= $2 AND created_at <= $4) as new_customers,
+                (SELECT COUNT(*) FROM customer_visits WHERE dse_id = $3 AND visit_date >= $2 AND visit_date <= $4) as total_visits
+        `, [customerIds, monthStart, id, monthEnd]);
 
         const p = productivityRes.rows[0];
         const visitEfficiency = {
@@ -459,11 +461,11 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             SELECT c.customer_name, COALESCE(SUM(si.total_taxable), 0) as taxable_sales
             FROM customers c
             JOIN sales_invoices si ON c.id = si.customer_id
-            WHERE c.dse_id = $1 AND si.invoice_date >= $2 AND si.status != 'Cancelled'
+            WHERE c.dse_id = $1 AND si.invoice_date >= $2 AND si.invoice_date <= $3 AND si.status != 'Cancelled'
             GROUP BY c.id, c.customer_name
             ORDER BY taxable_sales DESC
             LIMIT 10
-        `, [id, monthStart]);
+        `, [id, monthStart, monthEnd]);
 
         const brandSales = await pool.query(`
             SELECT b.brand_name, COALESCE(SUM(sil.rate * sil.shipped_qty), 0) as taxable_sales
@@ -471,10 +473,10 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             JOIN sales_invoices si ON sil.invoice_id = si.id
             JOIN products p ON sil.product_id = p.id
             JOIN brands b ON p.brand_id = b.id
-            WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.status != 'Cancelled'
+            WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.invoice_date <= $3 AND si.status != 'Cancelled'
             GROUP BY b.id, b.brand_name
             ORDER BY taxable_sales DESC
-        `, [customerIds, monthStart]);
+        `, [customerIds, monthStart, monthEnd]);
 
         // [NEW] Top 10 Fast Moving Products
         const topProducts = await pool.query(`
@@ -482,11 +484,11 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             FROM sales_invoice_lines sil
             JOIN sales_invoices si ON sil.invoice_id = si.id
             JOIN products p ON sil.product_id = p.id
-            WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.status != 'Cancelled'
+            WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.invoice_date <= $3 AND si.status != 'Cancelled'
             GROUP BY p.id, p.product_name
             ORDER BY taxable_sales DESC
             LIMIT 10
-        `, [customerIds, monthStart]);
+        `, [customerIds, monthStart, monthEnd]);
 
         // [NEW] Dormant Customers (Assigned but no orders in 30 days)
         const dormantCustomers = await pool.query(`
@@ -502,19 +504,19 @@ router.get('/employees/:id/dashboard', async (req, res) => {
         const paymentSplit = await pool.query(`
             SELECT payment_mode, COALESCE(SUM(amount), 0) as total_amount
             FROM customer_payments
-            WHERE collected_by = $1 AND payment_date >= $2 AND verification_status != 'Rejected'
+            WHERE collected_by = $1 AND payment_date >= $2 AND payment_date <= $3 AND verification_status != 'Rejected'
             GROUP BY payment_mode
-        `, [id, monthStart]);
+        `, [id, monthStart, monthEnd]);
 
         // [NEW] Return Reasons
         const returnReasons = await pool.query(`
             SELECT COALESCE(srl.reason, 'Not Specified') as reason, COALESCE(SUM(srl.taxable_amount), 0) as amount
             FROM sales_return_lines srl
             JOIN sales_returns sr ON srl.return_id = sr.id
-            WHERE sr.customer_id = ANY($1) AND sr.return_date >= $2 AND sr.status = 'Applied'
+            WHERE sr.customer_id = ANY($1) AND sr.return_date >= $2 AND sr.return_date <= $3 AND sr.status = 'Applied'
             GROUP BY srl.reason
             ORDER BY amount DESC
-        `, [customerIds, monthStart]);
+        `, [customerIds, monthStart, monthEnd]);
 
         // [NEW] Route Performance
         const routePerformance = await pool.query(`
@@ -522,10 +524,10 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             FROM routes r
             JOIN customers c ON c.route_id = r.id
             JOIN sales_invoices si ON si.customer_id = c.id
-            WHERE c.dse_id = $1 AND si.invoice_date >= $2 AND si.status != 'Cancelled'
+            WHERE c.dse_id = $1 AND si.invoice_date >= $2 AND si.invoice_date <= $3 AND si.status != 'Cancelled'
             GROUP BY r.id, r.route_name
             ORDER BY taxable_sales DESC
-        `, [id, monthStart]);
+        `, [id, monthStart, monthEnd]);
 
         // [NEW] Pending Orders Summary
         const pendingOrders = await pool.query(`
@@ -540,10 +542,10 @@ router.get('/employees/:id/dashboard', async (req, res) => {
             JOIN sales_invoices si ON sil.invoice_id = si.id
             JOIN products p ON sil.product_id = p.id
             JOIN categories cat ON p.category_id = cat.id
-            WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.status != 'Cancelled'
+            WHERE si.customer_id = ANY($1) AND si.invoice_date >= $2 AND si.invoice_date <= $3 AND si.status != 'Cancelled'
             GROUP BY cat.id, cat.category_name
             ORDER BY taxable_sales DESC
-        `, [customerIds, monthStart]);
+        `, [customerIds, monthStart, monthEnd]);
 
         const ageingRes = await pool.query(`
             SELECT 
@@ -583,9 +585,7 @@ router.get('/employees/:id/dashboard', async (req, res) => {
         `, [id, currentMonth, currentYear]);
 
         // Daily Trend (For Selected Month)
-        const monthEndDate = new Date(currentYear, currentMonth, 0);
-        const monthEnd = `${monthEndDate.getFullYear()}-${(monthEndDate.getMonth() + 1).toString().padStart(2, '0')}-${monthEndDate.getDate().toString().padStart(2, '0')}`;
-        
+
         const dailyTrend = await pool.query(`
             WITH RECURSIVE days AS (
                 SELECT $3::timestamp as day_date
