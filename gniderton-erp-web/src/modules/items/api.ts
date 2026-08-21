@@ -24,7 +24,7 @@ export const itemsApi = {
   deleteStockAdjustment: (id: string | number) => api.delete(`/api/stock/adjust/${id}`).then((r) => r.data),
 
   inventoryLedger: (productId: string | number) => api.get(`/api/inventory/ledger/${productId}`).then((r) => r.data),
-  getBatchTraceability: (batchId: number | string) => api.get(`/api/inventory-ledger/batch/${batchId}`).then(res => res.data),
+  getBatchTraceability: (batchId: number | string) => api.get(`/api/inventory/ledger/batch/${batchId}`).then(res => res.data),
   productProfile: (productId: string | number) => api.get(`/api/analytics/products/${productId}/profile`).then((r) => r.data),
   brandHistory: (brandId: string | number) => api.get(`/api/analytics/brands/${brandId}/history`).then((r) => r.data),
 
