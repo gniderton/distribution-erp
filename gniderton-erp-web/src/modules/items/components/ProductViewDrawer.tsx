@@ -11,8 +11,9 @@ import type { Product } from '../types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { BatchEditModal } from './BatchEditModal'
+import { BatchTraceabilityModal } from './BatchTraceabilityModal'
 import { ProductDashboardTab } from './ProductDashboardTab'
-import { Pencil, LayoutDashboard, FileText, Package, ListOrdered } from 'lucide-react'
+import { Pencil, LayoutDashboard, FileText, Package, ListOrdered, History } from 'lucide-react'
 
 const productSchema = z.object({
   product_name: z.string().min(1, 'Product Name is required'),
@@ -57,6 +58,7 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
   const isEditing = !!product
   const [isEditMode, setIsEditMode] = useState(!product)
   const [editingBatch, setEditingBatch] = useState<any | null>(null)
+  const [traceBatch, setTraceBatch] = useState<any | null>(null)
 
   const { data: batches, isLoading: batchesLoading } = useProductBatches(product?.id || null)
   const { data: ledger, isLoading: ledgerLoading } = useInventoryLedger(product?.id || null)
@@ -274,7 +276,10 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
                 id: 'actions', 
                 header: '',
                 cell: ({ row }) => (
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setTraceBatch(row.original)} title="View Traceability">
+                      <History className="h-4 w-4 text-brand-600" />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => setEditingBatch(row.original)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -311,6 +316,13 @@ export function ProductViewDrawer({ open, onClose, product }: Props) {
             open={!!editingBatch} 
             onClose={() => setEditingBatch(null)} 
             batch={editingBatch} 
+          />
+        )}
+        {traceBatch && (
+          <BatchTraceabilityModal 
+            open={!!traceBatch} 
+            onClose={() => setTraceBatch(null)} 
+            batch={traceBatch} 
           />
         )}
       </div>

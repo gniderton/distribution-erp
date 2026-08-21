@@ -98,4 +98,52 @@ router.get('/:productId', async (req, res) => {
     }
 });
 
+// GET Batch Traceability
+router.get('/batch/:batchId', async (req, res) => {
+    try {
+        const { batchId } = req.params;
+        if (!batchId || isNaN(batchId)) {
+            return res.status(400).json({ error: 'Valid Batch ID is required' });
+        }
+
+        const query = `
+            SELECT 
+                st.id,
+                st.created_at as date,
+                st.transaction_type,
+                st.quantity_change,
+                st.reference_id,
+                st.reference_type,
+                st.notes,
+                ib.batch_code,
+                CASE 
+                    WHEN st.reference_type = 'Sales Invoice' THEN (SELECT invoice_number FROM sales_invoices WHERE id = st.reference_id)
+                    WHEN st.reference_type = 'Purchase Invoice' THEN (SELECT invoice_number FROM purchase_invoice_headers WHERE id = st.reference_id)
+                    WHEN st.reference_type = 'Debit Note' THEN (SELECT debit_note_number FROM debit_notes WHERE id = st.reference_id)
+                    WHEN st.reference_type = 'Return Slip' THEN (SELECT debit_note_number FROM debit_notes WHERE id = st.reference_id)
+                    WHEN st.reference_type = 'Sales Return' THEN (SELECT return_number FROM sales_returns WHERE id = st.reference_id)
+                    WHEN st.reference_type = 'Stock Adjustment' THEN 'ADJ-' || st.reference_id
+                    ELSE st.reference_type || ' #' || st.reference_id
+                END as reference_number,
+                CASE 
+                    WHEN st.reference_type = 'Sales Invoice' THEN (SELECT c.customer_name FROM sales_invoices si JOIN customers c ON si.customer_id = c.id WHERE si.id = st.reference_id)
+                    WHEN st.reference_type = 'Sales Return' THEN (SELECT c.customer_name FROM sales_returns sr JOIN customers c ON sr.customer_id = c.id WHERE sr.id = st.reference_id)
+                    WHEN st.reference_type = 'Purchase Invoice' THEN (SELECT v.vendor_name FROM purchase_invoice_headers pih JOIN vendors v ON pih.vendor_id = v.id WHERE pih.id = st.reference_id)
+                    WHEN st.reference_type IN ('Debit Note', 'Return Slip') THEN (SELECT v.vendor_name FROM debit_notes dn JOIN vendors v ON dn.vendor_id = v.id WHERE dn.id = st.reference_id)
+                    ELSE NULL
+                END as party_name
+            FROM stock_traceability st
+            LEFT JOIN inventory_batches ib ON st.batch_id = ib.id
+            WHERE st.batch_id = $1
+            ORDER BY st.created_at ASC
+        `;
+        
+        const result = await pool.query(query, [batchId]);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching batch traceability:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;

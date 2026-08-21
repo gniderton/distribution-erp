@@ -1,0 +1,9 @@
+<div>
+	<table class="table table-bordered table-striped mb-0" cellspacing="0" rules="all" border="1" id="ctl00_ContentPlaceHolder1_BulkEwayBills" style="font-size:13px;width:100%;border-collapse:collapse;">
+		<tr class="bg-secondary text-white" style="background-color:White;">
+			<th scope="col">SlNo</th><th scope="col">Supply Type</th><th scope="col">Doc No</th><th scope="col">Doc Date</th><th scope="col">Other Party Gstin</th><th scope="col">Supply State</th><th scope="col">Vehicle No</th><th scope="col">No of Items</th><th scope="col" style="color:Blue;">EWB No</th><th scope="col" style="color:Blue;">EWD Date</th><th scope="col">Valid Till Date</th><th scope="col" style="color:Red;">Errors</th><th scope="col">Alerts</th>
+		</tr><tr style="background-color:White;">
+			<td class="text-center" style="mso-number-format:'\@'"></td><td style="mso-number-format:'\@'">Outward</td><td style="mso-number-format:'\@'">INV-26-3267</td><td style="mso-number-format:'\@'">18/08/2026</td><td style="mso-number-format:'\@'">32ACHFM3375R1ZN</td><td style="mso-number-format:'\@'">KERALA</td><td align="left" style="mso-number-format:'\@'">KL11AJ6999</td><td class="text-center" style="mso-number-format:'\@'">55</td><td align="right" style="color:Blue;mso-number-format:'\@'">582057691964</td><td style="color:Blue;mso-number-format:'\@'">8/20/2026 9:37:00 AM</td><td style="mso-number-format:'\@'">8/21/2026 9:37:00 AM</td><td style="color:Red;mso-number-format:'\@'">&nbsp;</td><td style="mso-number-format:'\@'">&nbsp;</td>
+		</tr>
+	</table>
+</div>
