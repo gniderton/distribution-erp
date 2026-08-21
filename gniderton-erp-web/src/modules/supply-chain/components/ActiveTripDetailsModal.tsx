@@ -2,12 +2,12 @@ import React, { useState } from 'react'
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { useTripManifest, useTripPicklist, useDeleteTrip, useInvoiceDetails, useProductBreakdown, useGenerateEwayBills, useUploadEwayBillResponse } from '../hooks'
+import { useTripManifest, useTripPicklist, useDeleteTrip, useInvoiceDetails, useProductBreakdown, useGenerateEwayBills, useUploadEwayBillResponse, useClearEwayBill } from '../hooks'
 import { generatePicklistPDF, generateManifestPDF, downloadCSV } from '../utils/pdfGenerator'
 import { generateInvoicePDF } from '@/modules/invoice/utils/pdfGenerator'
 import { supply_chainApi } from '../api'
 import { format } from 'date-fns'
-import { Activity, Truck, Users, FileText, IndianRupee, ChevronDown, ChevronRight, Download, FileDown, Trash2, LayoutList, Search, Upload } from 'lucide-react'
+import { Activity, Truck, Users, FileText, IndianRupee, ChevronDown, ChevronRight, Download, FileDown, Trash2, LayoutList, Search, Upload, X } from 'lucide-react'
 import { useRef } from 'react'
 
 function ManifestRowExpanded({ salesOrderId }: { salesOrderId: number }) {
@@ -90,6 +90,7 @@ export function ActiveTripDetailsModal({
   const deleteMutation = useDeleteTrip()
   const generateEwayBillsMutation = useGenerateEwayBills()
   const uploadEwayBillMutation = useUploadEwayBillResponse()
+  const clearEwayBillMutation = useClearEwayBill()
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   const [activeTab, setActiveTab] = useState<'manifest' | 'picklist'>('manifest')
@@ -393,7 +394,25 @@ export function ActiveTripDetailsModal({
                       >
                         <td className="px-4 py-3 font-medium">{inv.customer_name}</td>
                         <td className="px-4 py-3">{inv.invoice_number}</td>
-                        <td className="px-4 py-3 text-brand-600 font-mono-figures">{inv.eway_bill_number || '-'}</td>
+                        <td className="px-4 py-3 text-brand-600 font-mono-figures">
+                          <div className="flex items-center justify-between group">
+                            <span>{inv.eway_bill_number || '-'}</span>
+                            {inv.eway_bill_number && (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (confirm('Clear this E-Way Bill number to allow regeneration?')) {
+                                    clearEwayBillMutation.mutate(inv.invoice_id)
+                                  }
+                                }}
+                                className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
+                                title="Clear E-Way Bill"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-ink-600 truncate max-w-xs">{inv.address}</td>
                         <td className="px-4 py-3 text-right font-medium">₹{Number(inv.grand_total).toFixed(2)}</td>
                       </tr>

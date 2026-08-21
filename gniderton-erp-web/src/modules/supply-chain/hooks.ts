@@ -205,3 +205,18 @@ export function useUploadEwayBillResponse() {
     }
   });
 }
+
+export function useClearEwayBill() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (invoiceId: string | number) => supply_chainApi.clearEwayBill(invoiceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery-trip-manifest'] })
+      toast.success('E-Way Bill cleared successfully')
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error || 'Failed to clear E-Way Bill')
+    }
+  })
+}
+

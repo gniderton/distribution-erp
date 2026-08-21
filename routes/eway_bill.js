@@ -168,4 +168,15 @@ router.put('/settings/threshold', async (req, res) => {
     }
 });
 
+// Clear E-Way Bill for an invoice
+router.post('/clear/:invoiceId', async (req, res) => {
+    try {
+        await pool.query('UPDATE sales_invoices SET eway_bill_number = NULL, eway_bill_date = NULL WHERE id = $1', [req.params.invoiceId]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Clear EWB error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
