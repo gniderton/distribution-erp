@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Modal } from '@/components/ui/Modal'
-import { DataTable } from '@/components/ui/DataTable'
+import { Dialog } from '@/components/ui/Dialog'
+import { DataTable } from '@/components/shared/DataTable'
 import { formatDate } from '@/lib/utils'
 import { itemsApi } from '../api'
 
@@ -27,7 +27,7 @@ export function BatchTraceabilityModal({ open, onClose, batch }: BatchTraceabili
   if (!batch) return null
 
   return (
-    <Modal open={open} onClose={onClose} size="4xl" title={`Traceability: Batch ${batch.batch_code}`}>
+    <Dialog open={open} onClose={onClose} size="4xl" title={`Traceability: Batch ${batch.batch_code}`}>
       <div className="space-y-4">
         <div className="bg-ink-50 p-4 rounded-lg flex items-center justify-between">
           <div>
@@ -74,6 +74,6 @@ export function BatchTraceabilityModal({ open, onClose, batch }: BatchTraceabili
           ]}
         />
       </div>
-    </Modal>
+    </Dialog>
   )
 }
