@@ -4,7 +4,10 @@ import { reportsApi } from '../api'
 import { DataTable } from '@/components/shared/DataTable'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { cn, formatCurrency } from '@/lib/utils'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Download } from 'lucide-react'
+import Papa from 'papaparse'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 type FinancialReportType = 'pnl' | 'balanceSheet' | 'cashFlow'
 
@@ -195,6 +198,72 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
 
   // ---- RENDER LOGIC FOR CASH FLOW ----
   if (type === 'cashFlow') {
+    const generateExportData = () => {
+      if (!data?.breakdown) return [];
+      
+      const rows: string[][] = [];
+      const addSection = (title: string, sectionData: any) => {
+          rows.push([title.toUpperCase(), '']);
+          rows.push(['Inflows', '']);
+          sectionData.inflows.forEach((i: any) => rows.push(['  ' + i.category, String(i.amount)]));
+          rows.push(['Outflows', '']);
+          sectionData.outflows.forEach((i: any) => rows.push(['  ' + i.category, String(i.amount)]));
+          rows.push(['Net Activity', String(sectionData.net)]);
+          rows.push(['', '']);
+      };
+
+      addSection('Operating Activities', data.breakdown.operating);
+      addSection('Investing Activities', data.breakdown.investing);
+      addSection('Financing Activities', data.breakdown.financing);
+
+      rows.push(['SUMMARY', '']);
+      rows.push(['Total Inflows', String(data.summary.total_inflow)]);
+      rows.push(['Total Outflows', String(data.summary.total_outflow)]);
+      rows.push(['Net Cash Flow', String(data.summary.net_cash_flow)]);
+
+      return rows;
+    }
+
+    const handleExportCSV = () => {
+      const rows = generateExportData();
+      if (rows.length === 0) return;
+      const csv = Papa.unparse({ fields: ["Category", "Amount"], data: rows });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `CashFlow_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+    }
+
+    const handleExportPDF = () => {
+      const rows = generateExportData();
+      if (rows.length === 0) return;
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text('Cash Flow Statement', 14, 20);
+      doc.setFontSize(10);
+      doc.text(`Period: ${startDate || 'Start of FY'} to ${endDate || 'Present'}`, 14, 28);
+      
+      autoTable(doc, {
+          startY: 35,
+          head: [['Category', 'Amount']],
+          body: rows,
+          theme: 'grid',
+          styles: { fontSize: 9, cellPadding: 2 },
+          didParseCell: (data) => {
+              const rawRow = data.row.raw as string[];
+              if (rawRow && rawRow[1] === '') {
+                  data.cell.styles.fontStyle = 'bold';
+                  data.cell.styles.fillColor = [245, 245, 245];
+              }
+              if (rawRow && (rawRow[0] === 'SUMMARY' || rawRow[0] === 'Net Activity')) {
+                  data.cell.styles.fontStyle = 'bold';
+              }
+          }
+      });
+      doc.save(`CashFlow_${new Date().toISOString().split('T')[0]}.pdf`);
+    }
+
     return (
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
@@ -216,8 +285,17 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
                 className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
               />
             </div>
-            <button className="px-3 py-1.5 text-sm font-medium text-ink-700 bg-white border border-border-subtle rounded hover:bg-surface transition">
-              Export CSV
+            <button 
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-ink-700 bg-white border border-border-subtle rounded hover:bg-surface transition"
+            >
+              <FileText size={16} /> Export CSV
+            </button>
+            <button 
+              onClick={handleExportPDF}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-brand-700 bg-brand-50 border border-brand-200 rounded hover:bg-brand-100 transition"
+            >
+              <Download size={16} /> Export PDF
             </button>
           </div>
         </div>
