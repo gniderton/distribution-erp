@@ -23,28 +23,38 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
   const [month, setMonth] = useState<string>('')
 
   // Cash Flow Filters
-  const [cfFilterType, setCfFilterType] = useState<string>('currentFy')
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  const currentFyStr = String(currentMonth >= 3 ? currentYear : currentYear - 1);
+  
+  const [cfFilterMode, setCfFilterMode] = useState<'fyMonth' | 'custom'>('fyMonth')
+  const [cfFy, setCfFy] = useState<string>(currentFyStr)
+  const [cfMonth, setCfMonth] = useState<string>(String(currentMonth))
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
 
   useEffect(() => {
-    const today = new Date();
-    if (cfFilterType === 'currentMonth') {
-      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      setStartDate(firstDay.toISOString().split('T')[0]);
-      setEndDate(lastDay.toISOString().split('T')[0]);
-    } else if (cfFilterType === 'currentFy') {
-      // Assuming April to March FY
-      const currentYear = today.getFullYear();
-      const currentMonth = today.getMonth(); // 0-11
-      const startYear = currentMonth >= 3 ? currentYear : currentYear - 1;
-      const firstDay = new Date(startYear, 3, 1); // April 1st
-      const lastDay = new Date(startYear + 1, 2, 31); // March 31st next year
-      setStartDate(firstDay.toISOString().split('T')[0]);
-      setEndDate(lastDay.toISOString().split('T')[0]);
+    if (cfFilterMode === 'fyMonth') {
+      const fyStartYear = parseInt(cfFy, 10);
+      if (cfMonth === 'all') {
+         setStartDate(`${fyStartYear}-04-01`);
+         setEndDate(`${fyStartYear + 1}-03-31`);
+      } else {
+         const monthIdx = parseInt(cfMonth, 10);
+         const year = monthIdx >= 3 ? fyStartYear : fyStartYear + 1;
+         const firstDay = new Date(year, monthIdx, 1);
+         const lastDay = new Date(year, monthIdx + 1, 0);
+         
+         const fmt = (d: Date) => {
+             const m = String(d.getMonth() + 1).padStart(2, '0');
+             const day = String(d.getDate()).padStart(2, '0');
+             return `${d.getFullYear()}-${m}-${day}`;
+         };
+         setStartDate(fmt(firstDay));
+         setEndDate(fmt(lastDay));
+      }
     }
-  }, [cfFilterType]);
+  }, [cfFilterMode, cfFy, cfMonth]);
 
   // Determine which API to call
   const { data, isLoading, error } = useQuery({
@@ -259,20 +269,24 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
     const dashboardRef = useRef<HTMLDivElement>(null);
 
     const handleExportPDF = async () => {
-      if (!dashboardRef.current) return;
-      const canvas = await html2canvas(dashboardRef.current, { scale: 2 });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      pdf.setFontSize(16);
-      pdf.text('Cash Flow Dashboard', 14, 15);
-      pdf.setFontSize(10);
-      pdf.text(`Period: ${startDate || 'Start of FY'} to ${endDate || 'Present'}`, 14, 22);
-      
-      pdf.addImage(imgData, 'PNG', 0, 28, pdfWidth, pdfHeight);
-      pdf.save(`CashFlow_${new Date().toISOString().split('T')[0]}.pdf`);
+      try {
+        if (!dashboardRef.current) return;
+        const canvas = await html2canvas(dashboardRef.current, { scale: 2, useCORS: true, logging: true });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        pdf.setFontSize(16);
+        pdf.text('Cash Flow Dashboard', 14, 15);
+        pdf.setFontSize(10);
+        pdf.text(`Period: ${startDate || 'Start of FY'} to ${endDate || 'Present'}`, 14, 22);
+        
+        pdf.addImage(imgData, 'PNG', 0, 28, pdfWidth, Math.min(pdfHeight, pdf.internal.pageSize.getHeight() - 30));
+        pdf.save(`CashFlow_${new Date().toISOString().split('T')[0]}.pdf`);
+      } catch (err) {
+        console.error("Failed to export PDF", err);
+      }
     }
 
     return (
@@ -283,16 +297,48 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2 mr-2">
               <select 
-                value={cfFilterType}
-                onChange={e => setCfFilterType(e.target.value)}
+                value={cfFilterMode}
+                onChange={e => setCfFilterMode(e.target.value as 'fyMonth' | 'custom')}
                 className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
               >
-                <option value="currentFy">Current FY</option>
-                <option value="currentMonth">Current Month</option>
+                <option value="fyMonth">FY & Month</option>
                 <option value="custom">Custom Date</option>
               </select>
               
-              {cfFilterType === 'custom' && (
+              {cfFilterMode === 'fyMonth' ? (
+                <>
+                  <select 
+                    value={cfFy}
+                    onChange={e => setCfFy(e.target.value)}
+                    className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
+                  >
+                    <option value="2023">FY 2023-24</option>
+                    <option value="2024">FY 2024-25</option>
+                    <option value="2025">FY 2025-26</option>
+                    <option value="2026">FY 2026-27</option>
+                    <option value="2027">FY 2027-28</option>
+                  </select>
+                  <select 
+                    value={cfMonth}
+                    onChange={e => setCfMonth(e.target.value)}
+                    className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
+                  >
+                    <option value="all">All Months</option>
+                    <option value="3">April</option>
+                    <option value="4">May</option>
+                    <option value="5">June</option>
+                    <option value="6">July</option>
+                    <option value="7">August</option>
+                    <option value="8">September</option>
+                    <option value="9">October</option>
+                    <option value="10">November</option>
+                    <option value="11">December</option>
+                    <option value="0">January</option>
+                    <option value="1">February</option>
+                    <option value="2">March</option>
+                  </select>
+                </>
+              ) : (
                 <>
                   <input 
                     type="date" 
@@ -324,7 +370,6 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
             </button>
           </div>
         </div>
-
         {isLoading && <div className="space-y-4"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div>}
         {error && <div className="p-4 text-red-600 bg-red-50 rounded-lg">Failed to load Cash Flow data.</div>}
 
