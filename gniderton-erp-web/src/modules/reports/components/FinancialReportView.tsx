@@ -192,7 +192,15 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-64 w-full" /></div>
   if (error) return <div className="p-4 text-red-600 bg-red-50 rounded-lg">Failed to load report data.</div>
 
-  const reportData = Array.isArray(data) ? data : data?.data || data?.results || []
+  let reportData = Array.isArray(data) ? data : data?.data || data?.results || []
+  
+  if (type === 'cashFlow' && data?.summary) {
+    reportData = [{
+      inflow: formatCurrency(data.summary.total_inflow),
+      outflow: formatCurrency(data.summary.total_outflow),
+      net_cash_flow: formatCurrency(data.summary.net_cash_flow)
+    }]
+  }
 
   if (!reportData || reportData.length === 0) {
     return <div className="p-12 text-center text-ink-500 bg-surface rounded-lg">No data available for this report.</div>
