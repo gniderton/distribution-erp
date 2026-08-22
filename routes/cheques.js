@@ -535,9 +535,9 @@ router.post('/:id/unclear', async (req, res) => {
         if (chq.bank_statement_entry_id) {
             await client.query(`
                 UPDATE bank_statement_entries 
-                SET consumed_amount = GREATEST(0, consumed_amount - $1),
+                SET consumed_amount = GREATEST(0, COALESCE(consumed_amount, 0) - $1),
                     status = CASE 
-                        WHEN (consumed_amount - $1) <= 0.01 THEN 'Available'
+                        WHEN (COALESCE(consumed_amount, 0) - $1) <= 0.01 THEN 'Available'
                         ELSE 'Partially Consumed'
                     END
                 WHERE id = $2

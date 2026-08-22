@@ -30,7 +30,7 @@ export const chequeApi = {
   },
 
   revert: async (id: number | string) => {
-    const { data } = await api.post(`/api/finance/cheques/${id}/revert`);
+    const { data } = await api.post(`/api/finance/cheques/${id}/unclear`);
     return data;
   },
 
