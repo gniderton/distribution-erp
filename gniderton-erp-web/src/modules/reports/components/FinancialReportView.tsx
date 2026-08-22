@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { reportsApi } from '../api'
 import { DataTable } from '@/components/shared/DataTable'
@@ -8,6 +8,7 @@ import { ChevronDown, ChevronRight, FileText, Download } from 'lucide-react'
 import Papa from 'papaparse'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import html2canvas from 'html2canvas'
 
 type FinancialReportType = 'pnl' | 'balanceSheet' | 'cashFlow'
 
@@ -22,8 +23,28 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
   const [month, setMonth] = useState<string>('')
 
   // Cash Flow Filters
+  const [cfFilterType, setCfFilterType] = useState<string>('currentFy')
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
+
+  useEffect(() => {
+    const today = new Date();
+    if (cfFilterType === 'currentMonth') {
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      setStartDate(firstDay.toISOString().split('T')[0]);
+      setEndDate(lastDay.toISOString().split('T')[0]);
+    } else if (cfFilterType === 'currentFy') {
+      // Assuming April to March FY
+      const currentYear = today.getFullYear();
+      const currentMonth = today.getMonth(); // 0-11
+      const startYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+      const firstDay = new Date(startYear, 3, 1); // April 1st
+      const lastDay = new Date(startYear + 1, 2, 31); // March 31st next year
+      setStartDate(firstDay.toISOString().split('T')[0]);
+      setEndDate(lastDay.toISOString().split('T')[0]);
+    }
+  }, [cfFilterType]);
 
   // Determine which API to call
   const { data, isLoading, error } = useQuery({
@@ -235,33 +256,23 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
       link.click();
     }
 
-    const handleExportPDF = () => {
-      const rows = generateExportData();
-      if (rows.length === 0) return;
-      const doc = new jsPDF();
-      doc.setFontSize(16);
-      doc.text('Cash Flow Statement', 14, 20);
-      doc.setFontSize(10);
-      doc.text(`Period: ${startDate || 'Start of FY'} to ${endDate || 'Present'}`, 14, 28);
+    const dashboardRef = useRef<HTMLDivElement>(null);
+
+    const handleExportPDF = async () => {
+      if (!dashboardRef.current) return;
+      const canvas = await html2canvas(dashboardRef.current, { scale: 2 });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
-      autoTable(doc, {
-          startY: 35,
-          head: [['Category', 'Amount']],
-          body: rows,
-          theme: 'grid',
-          styles: { fontSize: 9, cellPadding: 2 },
-          didParseCell: (data) => {
-              const rawRow = data.row.raw as string[];
-              if (rawRow && rawRow[1] === '') {
-                  data.cell.styles.fontStyle = 'bold';
-                  data.cell.styles.fillColor = [245, 245, 245];
-              }
-              if (rawRow && (rawRow[0] === 'SUMMARY' || rawRow[0] === 'Net Activity')) {
-                  data.cell.styles.fontStyle = 'bold';
-              }
-          }
-      });
-      doc.save(`CashFlow_${new Date().toISOString().split('T')[0]}.pdf`);
+      pdf.setFontSize(16);
+      pdf.text('Cash Flow Dashboard', 14, 15);
+      pdf.setFontSize(10);
+      pdf.text(`Period: ${startDate || 'Start of FY'} to ${endDate || 'Present'}`, 14, 22);
+      
+      pdf.addImage(imgData, 'PNG', 0, 28, pdfWidth, pdfHeight);
+      pdf.save(`CashFlow_${new Date().toISOString().split('T')[0]}.pdf`);
     }
 
     return (
@@ -270,20 +281,34 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
           <h3 className="text-lg font-display font-medium text-ink-900">Cash Flow Dashboard</h3>
           
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
-              <input 
-                type="date" 
-                value={startDate}
-                onChange={e => setStartDate(e.target.value)}
+            <div className="flex items-center gap-2 mr-2">
+              <select 
+                value={cfFilterType}
+                onChange={e => setCfFilterType(e.target.value)}
                 className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
-              />
-              <span className="text-ink-500 text-sm">to</span>
-              <input 
-                type="date" 
-                value={endDate}
-                onChange={e => setEndDate(e.target.value)}
-                className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
-              />
+              >
+                <option value="currentFy">Current FY</option>
+                <option value="currentMonth">Current Month</option>
+                <option value="custom">Custom Date</option>
+              </select>
+              
+              {cfFilterType === 'custom' && (
+                <>
+                  <input 
+                    type="date" 
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
+                  />
+                  <span className="text-ink-500 text-sm">to</span>
+                  <input 
+                    type="date" 
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
+                  />
+                </>
+              )}
             </div>
             <button 
               onClick={handleExportCSV}
@@ -304,7 +329,7 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
         {error && <div className="p-4 text-red-600 bg-red-50 rounded-lg">Failed to load Cash Flow data.</div>}
 
         {data && data.summary && (
-          <div className="space-y-6">
+          <div className="space-y-6 p-4 bg-surface" ref={dashboardRef}>
             {/* Top Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white p-5 rounded-xl border border-border-subtle shadow-sm flex flex-col justify-center">
