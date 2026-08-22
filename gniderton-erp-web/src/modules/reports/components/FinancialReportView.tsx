@@ -4,6 +4,7 @@ import { reportsApi } from '../api'
 import { DataTable } from '@/components/shared/DataTable'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { cn, formatCurrency } from '@/lib/utils'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 
 type FinancialReportType = 'pnl' | 'balanceSheet' | 'cashFlow'
 
@@ -300,48 +301,82 @@ function SectionBlock({ section }: { section: any }) {
 
 // Helper component to render Cash Flow Sections
 function CashFlowSection({ data }: { data: any }) {
+  const [inflowsOpen, setInflowsOpen] = useState(true);
+  const [outflowsOpen, setOutflowsOpen] = useState(true);
+
   if (!data) return null;
+
+  const totalInflows = data.inflows.reduce((acc: number, item: any) => acc + item.amount, 0);
+  const totalOutflows = data.outflows.reduce((acc: number, item: any) => acc + item.amount, 0);
 
   return (
     <div className="space-y-4">
       {/* Inflows */}
-      <div>
-        <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-2">Inflows</h4>
-        {data.inflows.length === 0 ? (
-          <div className="text-sm text-ink-400 italic py-1">No inflows</div>
-        ) : (
-          <div className="space-y-1">
-            {data.inflows.map((item: any, idx: number) => (
-              <div key={idx} className="flex justify-between text-sm py-1.5 px-2 hover:bg-emerald-50/50 rounded transition-colors">
-                <span className="text-ink-700">{item.category}</span>
-                <span className="text-emerald-600 font-medium">{formatCurrency(item.amount)}</span>
+      <div className="border border-emerald-100 rounded-lg overflow-hidden bg-white">
+        <button 
+          onClick={() => setInflowsOpen(!inflowsOpen)}
+          className="w-full flex items-center justify-between p-3 bg-emerald-50/50 hover:bg-emerald-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            {inflowsOpen ? <ChevronDown size={16} className="text-emerald-600" /> : <ChevronRight size={16} className="text-emerald-600" />}
+            <span className="font-semibold text-emerald-900">Inflows</span>
+          </div>
+          <span className="font-bold text-emerald-700">{formatCurrency(totalInflows)}</span>
+        </button>
+        
+        {inflowsOpen && (
+          <div className="p-3 border-t border-emerald-50 bg-white">
+            {data.inflows.length === 0 ? (
+              <div className="text-sm text-ink-400 italic py-1">No inflows</div>
+            ) : (
+              <div className="space-y-2">
+                {data.inflows.map((item: any, idx: number) => (
+                  <div key={idx} className="flex justify-between text-sm py-1.5 px-2 hover:bg-emerald-50/30 rounded transition-colors">
+                    <span className="text-ink-700">{item.category}</span>
+                    <span className="text-emerald-600 font-medium">{formatCurrency(item.amount)}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
 
       {/* Outflows */}
-      <div className="pt-2 border-t border-border-subtle/50">
-        <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-2">Outflows</h4>
-        {data.outflows.length === 0 ? (
-          <div className="text-sm text-ink-400 italic py-1">No outflows</div>
-        ) : (
-          <div className="space-y-1">
-            {data.outflows.map((item: any, idx: number) => (
-              <div key={idx} className="flex justify-between text-sm py-1.5 px-2 hover:bg-red-50/50 rounded transition-colors">
-                <span className="text-ink-700">{item.category}</span>
-                <span className="text-red-600 font-medium">{formatCurrency(item.amount)}</span>
+      <div className="border border-red-100 rounded-lg overflow-hidden bg-white">
+        <button 
+          onClick={() => setOutflowsOpen(!outflowsOpen)}
+          className="w-full flex items-center justify-between p-3 bg-red-50/50 hover:bg-red-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            {outflowsOpen ? <ChevronDown size={16} className="text-red-600" /> : <ChevronRight size={16} className="text-red-600" />}
+            <span className="font-semibold text-red-900">Outflows</span>
+          </div>
+          <span className="font-bold text-red-700">{formatCurrency(totalOutflows)}</span>
+        </button>
+        
+        {outflowsOpen && (
+          <div className="p-3 border-t border-red-50 bg-white">
+            {data.outflows.length === 0 ? (
+              <div className="text-sm text-ink-400 italic py-1">No outflows</div>
+            ) : (
+              <div className="space-y-2">
+                {data.outflows.map((item: any, idx: number) => (
+                  <div key={idx} className="flex justify-between text-sm py-1.5 px-2 hover:bg-red-50/30 rounded transition-colors">
+                    <span className="text-ink-700">{item.category}</span>
+                    <span className="text-red-600 font-medium">{formatCurrency(item.amount)}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
 
       {/* Net Section */}
-      <div className={`mt-4 pt-3 border-t-2 ${data.net >= 0 ? 'border-emerald-100' : 'border-red-100'} flex justify-between items-center px-2 py-2 rounded bg-surface/50`}>
+      <div className={`mt-4 pt-3 border-t-2 ${data.net >= 0 ? 'border-emerald-100' : 'border-red-100'} flex justify-between items-center px-3 py-3 rounded-lg bg-surface/50`}>
         <span className="font-semibold text-ink-900">Net Activity</span>
-        <span className={`font-bold ${data.net >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+        <span className={`font-bold text-lg ${data.net >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
           {formatCurrency(data.net)}
         </span>
       </div>
