@@ -352,5 +352,78 @@ router.get('/:payment_id/slip-details', async (req, res) => {
         res.status(500).json({ error: 'Server Error fetching slip details' });
     }
 });
+// @route   DELETE /api/vendor-payments/:id
+// @desc    Hard delete a vendor payment, reversing allocations, bank statements, and accounting
+router.delete('/:id', async (req, res) => {
+    const { id } = req.params;
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+
+        // 1. Fetch Payment Details
+        const paymentRes = await client.query('SELECT * FROM vendor_payments WHERE id = $1', [id]);
+        if (paymentRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Payment not found' });
+        }
+        const payment = paymentRes.rows[0];
+
+        // 2. Handle Cheque Deletion Validation
+        if (payment.payment_mode && payment.payment_mode.toUpperCase() === 'CHEQUE') {
+            const chqRes = await client.query('SELECT id, status FROM cheques WHERE reference_type = $1 AND reference_id = $2', ['VENDOR_PAYMENT', id]);
+            if (chqRes.rows.length > 0) {
+                const chq = chqRes.rows[0];
+                if (chq.status === 'CLEARED') {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: 'Cannot delete payment. The associated cheque is CLEARED. Please un-clear it from Cheque Management first.' });
+                }
+                // Delete pending/bounced cheque
+                await client.query('DELETE FROM cheques WHERE id = $1', [chq.id]);
+            }
+        }
+
+        // 3. Delete Allocations (Free up invoice balance)
+        await client.query('DELETE FROM payment_allocations WHERE payment_id = $1', [id]);
+
+        // 4. Reverse Bank Statement Consumption (if any)
+        if (payment.bank_statement_entry_id) {
+            await client.query(`
+                UPDATE bank_statement_entries 
+                SET consumed_amount = GREATEST(0, COALESCE(consumed_amount, 0) - $1),
+                    status = CASE 
+                        WHEN (COALESCE(consumed_amount, 0) - $1) <= 0.01 THEN 'Available'
+                        ELSE 'Partially Consumed'
+                    END
+                WHERE id = $2
+            `, [payment.amount, payment.bank_statement_entry_id]);
+        }
+
+        // 5. Delete Accounting Journal Entry
+        await client.query(`
+            DELETE FROM journal_entries 
+            WHERE reference_type = 'PURCH_PAY' AND reference_id = $1
+        `, [id]);
+
+        // 6. Log to Deleted History
+        await client.query(`
+            INSERT INTO deleted_records_history (entity_type, entity_id, reference_number, record_data, reason)
+            VALUES ($1, $2, $3, $4, $5)
+        `, ['VENDOR_PAYMENT', id, payment.payment_number, JSON.stringify(payment), req.body.reason || 'User initiated deletion']);
+
+        // 7. Hard Delete the Payment
+        await client.query('DELETE FROM vendor_payments WHERE id = $1', [id]);
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Vendor Payment deleted successfully' });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Delete Vendor Payment Error:', err.message);
+        res.status(500).json({ error: 'Server Error deleting payment', details: err.message });
+    } finally {
+        client.release();
+    }
+});
 
 module.exports = router;

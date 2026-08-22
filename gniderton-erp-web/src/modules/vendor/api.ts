@@ -26,6 +26,8 @@ export const vendorApi = {
     api.post<VendorPayment>('/api/vendor-payments', payload).then((r) => r.data),
   paymentSlip: (paymentId: string | number) =>
     api.get(`/api/vendor-payments/${paymentId}/slip-details`).then((r) => r.data),
+  deletePayment: (paymentId: string | number) =>
+    api.delete(`/api/vendor-payments/${paymentId}`).then((r) => r.data),
 
   purchaseInvoices: () => api.get('/api/purchase-invoices').then((r) => r.data),
   purchaseInvoicesAging: () => api.get('/api/purchase-invoices/aging').then((r) => r.data),

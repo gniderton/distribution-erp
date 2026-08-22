@@ -227,7 +227,8 @@ async function initializeDatabase() {
             { id: '192', path: '192_eway_bill_and_settings.sql' },
             { id: '204', path: '204_grn_auto_knockoff_payments.sql' },
             { id: '205', path: '205_grn_hard_delete_audit_log.sql' },
-            { id: '206', path: '206_grn_transit_knockoff_v2.sql' }
+            { id: '206', path: '206_grn_transit_knockoff_v2.sql' },
+            { id: '207', path: '207_deleted_records_history.sql' }
         ];
 
         for (const m of migrations) {

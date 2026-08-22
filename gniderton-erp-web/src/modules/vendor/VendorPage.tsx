@@ -13,12 +13,14 @@ import {
   useVendorLedger,
   useUnconsumedDebits
 } from './hooks'
+import { VendorFormDrawer } from './components/VendorFormDrawer'
+import DeletePaymentModal from './components/DeletePaymentModal'
 import { vendorApi } from './api'
 import { api } from '@/lib/axios'
 import type { Vendor, VendorAddress, VendorPayment } from './types'
 import { 
   Search, Plus, MapPin, RefreshCw, Send, DollarSign, 
-  User, CheckCircle2, AlertCircle, FileText, X, Phone, BookOpen, History, Download, FileDown
+  User, CheckCircle2, AlertCircle, FileText, X, Phone, BookOpen, History, Download, FileDown, Trash2
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -62,6 +64,7 @@ export default function VendorPage() {
   const [showCreateModal, setShowCreateModal] = useState(false) // ModalCreateVendor
   const [showAddAddressModal, setShowAddAddressModal] = useState(false) // modalAddAddress
   const [showPaymentModal, setShowPaymentModal] = useState(false) // modalMakePayment
+  const [deletePaymentState, setDeletePaymentState] = useState<{ isOpen: boolean; payment: VendorPayment | null }>({ isOpen: false, payment: null })
 
   // Tab State inside drawer ('profile', 'invoices', 'ledger', 'history')
   const [activeTab, setActiveTab] = useState<'profile' | 'invoices' | 'ledger' | 'history'>('profile')
@@ -1329,13 +1332,22 @@ export default function VendorPage() {
                             <td className="p-3 font-mono text-ink-600">{pay.transaction_ref || 'N/A'}</td>
                             <td className="p-3 text-ink-600 max-w-xs truncate">{pay.remarks || '—'}</td>
                             <td className="p-3 text-center">
-                              <button 
-                                onClick={() => handleDownloadPaymentSlip(pay)}
-                                className="p-1 rounded bg-brand-500/10 hover:bg-brand-500/20 text-brand-700 transition"
-                                title="Download PDF Voucher Slip"
-                              >
-                                <Download size={13} />
-                              </button>
+                              <div className="flex items-center justify-center gap-2">
+                                <button 
+                                  onClick={() => handleDownloadPaymentSlip(pay)}
+                                  className="p-1 rounded bg-brand-500/10 hover:bg-brand-500/20 text-brand-700 transition"
+                                  title="Download PDF Voucher Slip"
+                                >
+                                  <Download size={13} />
+                                </button>
+                                <button
+                                  onClick={() => setDeletePaymentState({ isOpen: true, payment: pay })}
+                                  className="p-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-600 transition"
+                                  title="Delete Payment"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))
@@ -1785,6 +1797,19 @@ export default function VendorPage() {
             </form>
           </div>
         </div>
+      )}
+      {/* MODAL: Delete Payment */}
+      {deletePaymentState.isOpen && deletePaymentState.payment && (
+        <DeletePaymentModal 
+          isOpen={deletePaymentState.isOpen}
+          paymentId={deletePaymentState.payment.id}
+          paymentNumber={deletePaymentState.payment.payment_number || String(deletePaymentState.payment.id)}
+          onClose={() => setDeletePaymentState({ isOpen: false, payment: null })}
+          onSuccess={() => {
+            refetchHistory()
+            refetchLedger()
+          }}
+        />
       )}
 
     </div>
