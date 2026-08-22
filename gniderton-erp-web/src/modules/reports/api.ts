@@ -5,7 +5,8 @@ export const reportsApi = {
   balanceSheet: () => api.get('/api/analytics/reports/balance-sheet').then((r) => r.data),
   profitAndLoss: (params?: { fy?: string, quarter?: string, month?: string }) => 
     api.get('/api/analytics/reports/p-and-l', { params }).then((r) => r.data),
-  cashFlow: () => api.get('/api/analytics/reports/cash-flow').then((r) => r.data),
+  cashFlow: (params?: { start_date?: string, end_date?: string }) => 
+    api.get('/api/analytics/reports/cash-flow', { params }).then((r) => r.data),
   fyOperatingBalances: () => api.get('/api/analytics/reports/fy-operating-balances').then((r) => r.data),
   integrityAudit: () => api.get('/api/analytics/reports/integrity-audit').then((r) => r.data),
   salesLines: (params?: any) => api.get('/api/analytics/reports/sales-lines', { params }).then((r) => r.data),

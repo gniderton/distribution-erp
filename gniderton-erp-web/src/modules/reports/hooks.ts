@@ -5,8 +5,11 @@ export function useSalesSummary() {
   return useQuery({ queryKey: ['reports', 'sales-summary'], queryFn: reportsApi.salesSummaryDetailed })
 }
 
-export function useCashFlow() {
-  return useQuery({ queryKey: ['reports', 'cash-flow'], queryFn: reportsApi.cashFlow })
+export function useCashFlow(params?: { start_date?: string, end_date?: string }) {
+  return useQuery({ 
+    queryKey: ['reports', 'cash-flow', params], 
+    queryFn: () => reportsApi.cashFlow(params) 
+  })
 }
 
 export function usePnL(params?: { fy?: string, quarter?: string, month?: string }) {

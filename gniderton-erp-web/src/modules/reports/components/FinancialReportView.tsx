@@ -17,13 +17,17 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
   const [quarter, setQuarter] = useState<string>('')
   const [month, setMonth] = useState<string>('')
 
+  // Cash Flow Filters
+  const [startDate, setStartDate] = useState<string>('')
+  const [endDate, setEndDate] = useState<string>('')
+
   // Determine which API to call
   const { data, isLoading, error } = useQuery({
-    queryKey: ['financial-report', type, fy, quarter, month],
+    queryKey: ['financial-report', type, fy, quarter, month, startDate, endDate],
     queryFn: () => {
       if (type === 'pnl') return reportsApi.profitAndLoss({ fy, quarter, month })
       if (type === 'balanceSheet') return reportsApi.balanceSheet()
-      if (type === 'cashFlow') return reportsApi.cashFlow()
+      if (type === 'cashFlow') return reportsApi.cashFlow({ start_date: startDate || undefined, end_date: endDate || undefined })
       return Promise.resolve(null)
     }
   })
@@ -188,50 +192,84 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
     )
   }
 
-  // ---- RENDER LOGIC FOR FLAT TABLES (Cash Flow) ----
-  if (isLoading) return <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-64 w-full" /></div>
-  if (error) return <div className="p-4 text-red-600 bg-red-50 rounded-lg">Failed to load report data.</div>
+  // ---- RENDER LOGIC FOR CASH FLOW ----
+  if (type === 'cashFlow') {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
+          <h3 className="text-lg font-display font-medium text-ink-900">Cash Flow Dashboard</h3>
+          
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
+              />
+              <span className="text-ink-500 text-sm">to</span>
+              <input 
+                type="date" 
+                value={endDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
+              />
+            </div>
+            <button className="px-3 py-1.5 text-sm font-medium text-ink-700 bg-white border border-border-subtle rounded hover:bg-surface transition">
+              Export CSV
+            </button>
+          </div>
+        </div>
 
-  let reportData = Array.isArray(data) ? data : data?.data || data?.results || []
-  
-  if (type === 'cashFlow' && data?.summary) {
-    reportData = [{
-      inflow: formatCurrency(data.summary.total_inflow),
-      outflow: formatCurrency(data.summary.total_outflow),
-      net_cash_flow: formatCurrency(data.summary.net_cash_flow)
-    }]
+        {isLoading && <div className="space-y-4"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div>}
+        {error && <div className="p-4 text-red-600 bg-red-50 rounded-lg">Failed to load Cash Flow data.</div>}
+
+        {data && data.summary && (
+          <div className="space-y-6">
+            {/* Top Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white p-5 rounded-xl border border-border-subtle shadow-sm flex flex-col justify-center">
+                <span className="text-sm font-medium text-ink-500 mb-1">Total Inflows</span>
+                <span className="text-2xl font-bold text-emerald-600">{formatCurrency(data.summary.total_inflow)}</span>
+              </div>
+              <div className="bg-white p-5 rounded-xl border border-border-subtle shadow-sm flex flex-col justify-center">
+                <span className="text-sm font-medium text-ink-500 mb-1">Total Outflows</span>
+                <span className="text-2xl font-bold text-red-600">{formatCurrency(data.summary.total_outflow)}</span>
+              </div>
+              <div className={`bg-white p-5 rounded-xl border shadow-sm flex flex-col justify-center ${data.summary.net_cash_flow >= 0 ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30'}`}>
+                <span className="text-sm font-medium text-ink-600 mb-1">Net Cash Flow</span>
+                <span className={`text-3xl font-bold ${data.summary.net_cash_flow >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                  {formatCurrency(data.summary.net_cash_flow)}
+                </span>
+              </div>
+            </div>
+
+            {/* Breakdown Sections */}
+            {data.breakdown && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="bg-white p-6 rounded-xl border border-border-subtle shadow-sm">
+                  <h3 className="font-display font-semibold text-lg text-ink-900 border-b border-border-subtle pb-3 mb-4">Operating Activities</h3>
+                  <CashFlowSection data={data.breakdown.operating} />
+                </div>
+                
+                <div className="bg-white p-6 rounded-xl border border-border-subtle shadow-sm">
+                  <h3 className="font-display font-semibold text-lg text-ink-900 border-b border-border-subtle pb-3 mb-4">Investing Activities</h3>
+                  <CashFlowSection data={data.breakdown.investing} />
+                </div>
+
+                <div className="bg-white p-6 rounded-xl border border-border-subtle shadow-sm">
+                  <h3 className="font-display font-semibold text-lg text-ink-900 border-b border-border-subtle pb-3 mb-4">Financing Activities</h3>
+                  <CashFlowSection data={data.breakdown.financing} />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
   }
 
-  if (!reportData || reportData.length === 0) {
-    return <div className="p-12 text-center text-ink-500 bg-surface rounded-lg">No data available for this report.</div>
-  }
-
-  // Derive columns from the first object
-  const firstRow = reportData[0] || {}
-  const columns = Object.keys(firstRow).map(key => ({
-    header: key.replace(/_/g, ' ').toUpperCase(),
-    accessorKey: key
-  }))
-
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
-        <h3 className="text-lg font-display font-medium text-ink-900">
-          Cash Flow Statement
-        </h3>
-        <button className="px-3 py-1.5 text-sm font-medium text-ink-700 bg-white border border-border-subtle rounded hover:bg-surface transition">
-          Export CSV
-        </button>
-      </div>
-      
-      <div className="rounded-xl overflow-hidden border border-border-subtle bg-white">
-        <DataTable 
-          data={reportData} 
-          columns={columns} 
-        />
-      </div>
-    </div>
-  )
+  return null;
 }
 
 // Helper component to render a section of the P&L
@@ -255,6 +293,57 @@ function SectionBlock({ section }: { section: any }) {
           <span>Total {section.title}</span>
           <span>{formatCurrency(section.total)}</span>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// Helper component to render Cash Flow Sections
+function CashFlowSection({ data }: { data: any }) {
+  if (!data) return null;
+
+  return (
+    <div className="space-y-4">
+      {/* Inflows */}
+      <div>
+        <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-2">Inflows</h4>
+        {data.inflows.length === 0 ? (
+          <div className="text-sm text-ink-400 italic py-1">No inflows</div>
+        ) : (
+          <div className="space-y-1">
+            {data.inflows.map((item: any, idx: number) => (
+              <div key={idx} className="flex justify-between text-sm py-1.5 px-2 hover:bg-emerald-50/50 rounded transition-colors">
+                <span className="text-ink-700">{item.category}</span>
+                <span className="text-emerald-600 font-medium">{formatCurrency(item.amount)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Outflows */}
+      <div className="pt-2 border-t border-border-subtle/50">
+        <h4 className="text-sm font-semibold text-ink-500 uppercase tracking-wider mb-2">Outflows</h4>
+        {data.outflows.length === 0 ? (
+          <div className="text-sm text-ink-400 italic py-1">No outflows</div>
+        ) : (
+          <div className="space-y-1">
+            {data.outflows.map((item: any, idx: number) => (
+              <div key={idx} className="flex justify-between text-sm py-1.5 px-2 hover:bg-red-50/50 rounded transition-colors">
+                <span className="text-ink-700">{item.category}</span>
+                <span className="text-red-600 font-medium">{formatCurrency(item.amount)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Net Section */}
+      <div className={`mt-4 pt-3 border-t-2 ${data.net >= 0 ? 'border-emerald-100' : 'border-red-100'} flex justify-between items-center px-2 py-2 rounded bg-surface/50`}>
+        <span className="font-semibold text-ink-900">Net Activity</span>
+        <span className={`font-bold ${data.net >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+          {formatCurrency(data.net)}
+        </span>
       </div>
     </div>
   )

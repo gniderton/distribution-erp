@@ -664,14 +664,85 @@ router.get('/reports/cash-flow', async (req, res) => {
 
         const stats = await pool.query(`
             SELECT 
-                (SELECT COALESCE(SUM(jl.debit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'ASSET' AND (coa.code = 1002 OR coa.code = 1003) AND je.transaction_date >= $1 AND je.transaction_date <= $2) as inflow,
-                (SELECT COALESCE(SUM(jl.credit), 0) FROM journal_lines jl JOIN journal_entries je ON jl.journal_entry_id = je.id JOIN chart_of_accounts coa ON jl.account_id = coa.id WHERE coa.type = 'ASSET' AND (coa.code = 1002 OR coa.code = 1003) AND je.transaction_date >= $1 AND je.transaction_date <= $2) as outflow
+                je.reference_type,
+                COALESCE(SUM(jl.debit), 0) as inflow,
+                COALESCE(SUM(jl.credit), 0) as outflow
+            FROM journal_lines jl
+            JOIN journal_entries je ON jl.journal_entry_id = je.id
+            JOIN chart_of_accounts coa ON jl.account_id = coa.id
+            WHERE coa.type = 'ASSET' AND (coa.code = 1002 OR coa.code = 1003) 
+              AND je.transaction_date >= $1 AND je.transaction_date <= $2
+            GROUP BY je.reference_type
         `, [sd, ed]);
 
-        const inflow = parseFloat(stats.rows[0].inflow);
-        const outflow = parseFloat(stats.rows[0].outflow);
+        let operating = { inflows: [], outflows: [], net: 0 };
+        let investing = { inflows: [], outflows: [], net: 0 };
+        let financing = { inflows: [], outflows: [], net: 0 };
+        let total_inflow = 0;
+        let total_outflow = 0;
 
-        res.json({ period: { start: sd, end: ed }, summary: { total_inflow: inflow, total_outflow: outflow, net_cash_flow: inflow - outflow } });
+        const classify = (ref) => {
+            if (['ASSET_PURCHASE', 'ASSET_PAYMENT'].includes(ref)) return 'investing';
+            if (['LOAN_TX', 'LOAN_DISB', 'LOAN_INST'].includes(ref)) return 'financing';
+            return 'operating';
+        };
+
+        const labelMap = {
+            'CUST_PAY': 'Customer Receipts',
+            'CHQ_CLEAR': 'Cheque Clearances',
+            'OTHER_INCOME': 'Other Income',
+            'PURCH_PAY': 'Supplier Payments',
+            'EXPENSE': 'General Expenses',
+            'DSE_EXPENSE': 'DSE Expenses',
+            'SALARY_PAYMENT': 'Salaries Paid',
+            'SALARY_ADVANCE': 'Salary Advances',
+            'PAYMENT': 'Misc Payments',
+            'PAY_REJECT': 'Payment Rejections',
+            'CHQ_BOUNCE_FEE': 'Bank Charges',
+            'ASSET_PURCHASE': 'Asset Purchases',
+            'ASSET_PAYMENT': 'Asset Payments',
+            'LOAN_TX': 'Loan Transactions',
+            'LOAN_DISB': 'Loan Disbursements',
+            'LOAN_INST': 'Loan Installments'
+        };
+
+        for (const row of stats.rows) {
+            const ref = row.reference_type;
+            const inAmt = parseFloat(row.inflow);
+            const outAmt = parseFloat(row.outflow);
+
+            if (['TRANSFER', 'OPENING_BAL', 'MIGRATION'].includes(ref)) continue;
+
+            const label = labelMap[ref] || ref;
+            const cat = classify(ref);
+
+            if (inAmt > 0) {
+                if (cat === 'operating') operating.inflows.push({ category: label, amount: inAmt });
+                else if (cat === 'investing') investing.inflows.push({ category: label, amount: inAmt });
+                else financing.inflows.push({ category: label, amount: inAmt });
+                total_inflow += inAmt;
+            }
+            if (outAmt > 0) {
+                if (cat === 'operating') operating.outflows.push({ category: label, amount: outAmt });
+                else if (cat === 'investing') investing.outflows.push({ category: label, amount: outAmt });
+                else financing.outflows.push({ category: label, amount: outAmt });
+                total_outflow += outAmt;
+            }
+        }
+
+        operating.net = operating.inflows.reduce((a, b) => a + b.amount, 0) - operating.outflows.reduce((a, b) => a + b.amount, 0);
+        investing.net = investing.inflows.reduce((a, b) => a + b.amount, 0) - investing.outflows.reduce((a, b) => a + b.amount, 0);
+        financing.net = financing.inflows.reduce((a, b) => a + b.amount, 0) - financing.outflows.reduce((a, b) => a + b.amount, 0);
+
+        res.json({
+            period: { start: sd, end: ed },
+            summary: {
+                total_inflow,
+                total_outflow,
+                net_cash_flow: total_inflow - total_outflow
+            },
+            breakdown: { operating, investing, financing }
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

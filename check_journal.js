@@ -1,29 +1,23 @@
 const { pool } = require('./config/db');
 
-(async () => {
-  try {
-    const res = await pool.query(`
-      SELECT id, reference_id, reference_type, total_amount 
-      FROM journal_headers 
-      WHERE reference_id = 186 AND reference_type = 'Purchase Invoice'
-    `);
-    console.log('Journal Headers:', res.rows);
-    
-    if (res.rows.length > 0) {
-      const jhId = res.rows[0].id;
-      const lines = await pool.query(`
-        SELECT id, account_id, debit, credit 
-        FROM journal_lines 
-        WHERE journal_header_id = $1
-      `, [jhId]);
-      console.log('Journal Lines:', lines.rows);
-      
-      const invoice = await pool.query(`
-        SELECT grand_total, tax_amount, total_net FROM purchase_invoice_headers WHERE id = 186
-      `);
-      console.log('Invoice Totals:', invoice.rows[0]);
+async function check() {
+    try {
+        const res = await pool.query(`
+            SELECT 
+                je.reference_type,
+                SUM(jl.debit) as inflow,
+                SUM(jl.credit) as outflow
+            FROM journal_lines jl
+            JOIN journal_entries je ON jl.journal_entry_id = je.id
+            JOIN chart_of_accounts coa ON jl.account_id = coa.id
+            WHERE coa.type = 'ASSET' AND (coa.code = 1002 OR coa.code = 1003) 
+            GROUP BY je.reference_type
+        `);
+        console.log(res.rows);
+    } catch(err) {
+        console.error(err);
+    } finally {
+        process.exit();
     }
-  } catch(e) {
-    console.error(e);
-  } finally { process.exit(); }
-})();
+}
+check();
