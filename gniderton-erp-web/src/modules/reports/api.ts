@@ -33,7 +33,7 @@ export const reportsApi = {
   dsePendingInvoices: () => api.get('/api/payments/dse-pending-invoices').then((r) => r.data),
 
   purchaseInvoiceLines: () => api.get('/api/purchase-invoices/lines').then((r) => r.data),
-  salesInvoiceLines: (params?: any) => api.get('/api/sales/invoice-lines', { params }).then((r) => r.data),
+  salesInvoiceLines: (params?: { customer_id?: string; start_date?: string; end_date?: string; brand_id?: string; category_id?: string; page?: number; limit?: number }) => api.get('/api/sales/invoice-lines', { params }).then((r) => r.data),
 
   attendanceDetails: () => api.get('/api/employees/attendance/details').then((r) => r.data),
   customerAdvances: (params?: any) => api.get('/api/analytics/customer-advances', { params }).then(res => res.data),

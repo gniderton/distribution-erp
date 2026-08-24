@@ -2505,7 +2505,7 @@ router.post('/invoices/regenerate', async (req, res) => {
 // @desc    Get sales invoice lines with dynamic COGS and margins
 router.get('/invoice-lines', async (req, res) => {
     try {
-        const { customer_id, start_date, end_date, page = 1, limit } = req.query;
+        const { customer_id, start_date, end_date, brand_id, category_id, page = 1, limit } = req.query;
         let queryParams = [];
         let whereConditions = [];
         let paramIdx = 1;
@@ -2528,6 +2528,18 @@ router.get('/invoice-lines', async (req, res) => {
             paramIdx++;
         }
 
+        if (brand_id && brand_id !== 'all' && brand_id !== '') {
+            queryParams.push(brand_id);
+            whereConditions.push(`p.brand_id = $${paramIdx}`);
+            paramIdx++;
+        }
+
+        if (category_id && category_id !== 'all' && category_id !== '') {
+            queryParams.push(category_id);
+            whereConditions.push(`p.category_id = $${paramIdx}`);
+            paramIdx++;
+        }
+
         const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
         let query = `
@@ -2544,6 +2556,8 @@ router.get('/invoice-lines', async (req, res) => {
                 p.ean_code,
                 p.brand_id,
                 b.brand_name,
+                p.category_id,
+                cat.category_name,
                 sil.shipped_qty,
                 sil.rate as selling_rate,
                 COALESCE(sil.mrp, ib.mrp, p.mrp, 0) as mrp,
@@ -2570,6 +2584,7 @@ router.get('/invoice-lines', async (req, res) => {
             JOIN products p ON sil.product_id = p.id
             JOIN customers c ON si.customer_id = c.id
             LEFT JOIN brands b ON p.brand_id = b.id
+            LEFT JOIN categories cat ON p.category_id = cat.id
             LEFT JOIN inventory_batches ib ON sil.batch_id = ib.id
             ${whereClause}
             ORDER BY si.id DESC, sil.id ASC

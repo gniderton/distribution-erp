@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 
 import { FinancialReportView } from './components/FinancialReportView'
 import { GenericReportView } from './components/GenericReportView'
+import { SalesMarginReportView } from './components/SalesMarginReportView'
 import { BankStatementWrapper } from './components/BankStatementWrapper'
 import { ReconciliationAuditWrapper } from './components/ReconciliationAuditWrapper'
 import { SalesLinesDashboard } from './components/SalesLinesDashboard'
@@ -94,7 +95,7 @@ const REPORT_CATEGORIES = [
         description: 'Profitability analysis on sales transactions.',
         icon: PieChart,
         colorClass: 'text-amber-600 bg-amber-500/10 group-hover:bg-amber-500/20 ring-amber-500/30',
-        component: <GenericReportView title="Sales Margin" queryKey="sales-margin" fetchFn={() => reportsApi.salesInvoiceLines({ limit: 500 })} />
+        component: <SalesMarginReportView />
       },
       {
         id: 'receivables',
