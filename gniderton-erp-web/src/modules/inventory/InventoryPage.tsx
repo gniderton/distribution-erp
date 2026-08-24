@@ -478,6 +478,33 @@ export default function InventoryPage() {
 
   const handleOpenEditPO = () => {
     setPoMode('EDIT')
+    // Augment poLines with all products from this vendor that aren't currently in the PO
+    const vendorProds = products.filter(p => Number(p.vendor_id) === Number(poVendorId))
+    const existingIds = new Set(poLines.map(line => Number(line._product_id)))
+    
+    const additionalLines = vendorProds
+      .filter(p => !existingIds.has(Number(p.id)))
+      .map(p => ({
+        _product_id: p.id,
+        product_name: p.product_name,
+        ean_code: p.ean_code || '',
+        mrp: Number(p.mrp || 0),
+        price: Number(p.purchase_rate || 0),
+        qty: 0,
+        sch: 0,
+        disc_pct: 0,
+        gst_pct: Number(p.tax_percentage || 5),
+        gross: 0,
+        disc_amt: 0,
+        taxable: 0,
+        gst_amt: 0,
+        net: 0,
+        current_stock: parseFloat(p.current_stock || 0)
+      }))
+
+    if (additionalLines.length > 0) {
+      setPoLines(prev => [...prev, ...additionalLines])
+    }
   }
 
   const handleVendorChange = (vId: string) => {
