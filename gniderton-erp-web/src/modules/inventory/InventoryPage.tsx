@@ -747,6 +747,11 @@ export default function InventoryPage() {
   }
 
   const handleSaveGRN = async () => {
+    if (!vendorInvoiceNo.trim()) {
+      setAlertMsg({ type: 'error', text: 'Vendor Invoice Number is required.' })
+      return
+    }
+
     const validLines = grnLines.filter(l => l.qty > 0)
     if (validLines.length === 0) {
       setAlertMsg({ type: 'error', text: 'Please add items with quantity.' })
@@ -1920,6 +1925,7 @@ export default function InventoryPage() {
                 <Button
                   onClick={handleSaveGRN}
                   loading={createGRNMutation.isPending}
+                  disabled={createGRNMutation.isPending || !vendorInvoiceNo.trim()}
                 >
                   Confirm GRN
                 </Button>
