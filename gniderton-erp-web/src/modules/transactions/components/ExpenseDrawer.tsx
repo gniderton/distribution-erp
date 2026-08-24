@@ -49,16 +49,37 @@ export function ExpenseDrawer({ open, onClose }: Props) {
     
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked
-      setFormData(prev => ({ ...prev, [name]: checked }))
+      setFormData(prev => {
+        const newData = { ...prev, [name]: checked }
+        if (name === 'is_gst_expense' && checked) {
+          const total = parseFloat(prev.grand_total) || 0;
+          if (total > 0) {
+             const taxable = total / 1.18;
+             const tax = total - taxable;
+             newData.taxable_amount = taxable.toFixed(2);
+             newData.tax_amount = tax.toFixed(2);
+          }
+        }
+        return newData;
+      })
       return
     }
 
     setFormData(prev => {
       const newData = { ...prev, [name]: value };
-      if (newData.is_gst_expense && (name === 'taxable_amount' || name === 'tax_amount')) {
-        const taxable = parseFloat(newData.taxable_amount) || 0;
-        const tax = parseFloat(newData.tax_amount) || 0;
-        newData.grand_total = (taxable + tax).toFixed(2);
+      
+      if (newData.is_gst_expense) {
+        if (name === 'taxable_amount' || name === 'tax_amount') {
+          const taxable = parseFloat(newData.taxable_amount) || 0;
+          const tax = parseFloat(newData.tax_amount) || 0;
+          newData.grand_total = (taxable + tax).toFixed(2);
+        } else if (name === 'grand_total') {
+          const total = parseFloat(value) || 0;
+          const taxable = total / 1.18;
+          const tax = total - taxable;
+          newData.taxable_amount = taxable.toFixed(2);
+          newData.tax_amount = tax.toFixed(2);
+        }
       }
       
       if (paymentMode === 'Online' && name === 'bank_statement_entry_id' && value) {
@@ -66,8 +87,13 @@ export function ExpenseDrawer({ open, onClose }: Props) {
         if (stmt && stmt.transaction_date) {
           newData.expense_date = stmt.transaction_date.split('T')[0]
           const available = parseFloat(stmt.debit_amount) - parseFloat(stmt.consumed_amount || 0);
-          if (!newData.is_gst_expense) {
-            newData.grand_total = String(available);
+          newData.grand_total = String(available);
+          
+          if (newData.is_gst_expense) {
+            const taxable = available / 1.18;
+            const tax = available - taxable;
+            newData.taxable_amount = taxable.toFixed(2);
+            newData.tax_amount = tax.toFixed(2);
           }
         }
       }
@@ -356,8 +382,7 @@ export function ExpenseDrawer({ open, onClose }: Props) {
             value={formData.grand_total} 
             onChange={handleChange} 
             placeholder={formData.bank_statement_entry_id ? "Auto-filled from statement" : "0.00"}
-            required={!formData.is_gst_expense} 
-            disabled={formData.is_gst_expense}
+            required
           />
         </div>
 
