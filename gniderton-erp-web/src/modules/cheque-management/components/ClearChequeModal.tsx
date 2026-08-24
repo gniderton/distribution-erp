@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { GroupedCheque } from '../types';
 import { useClearCheque, useBulkClearCheques, useBankStatementEntries } from '../hooks';
 import { Dialog } from '@/components/ui/Dialog';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatCurrency } from '../../../lib/utils';
 import toast from 'react-hot-toast';
+import { X } from 'lucide-react';
 
 interface ClearChequeModalProps {
   isOpen: boolean;
@@ -15,19 +16,70 @@ interface ClearChequeModalProps {
 }
 
 export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onSuccess }: ClearChequeModalProps) {
+  const [activeCheques, setActiveCheques] = useState<GroupedCheque[]>([]);
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [clearanceDate, setClearanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [remarks, setRemarks] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setActiveCheques(selectedCheques);
+      setMappings({});
+      setClearanceDate(new Date().toISOString().split('T')[0]);
+      setRemarks('');
+    }
+  }, [isOpen, selectedCheques]);
 
   const clearMutation = useClearCheque();
   const bulkClearMutation = useBulkClearCheques();
   const { data: bankStatementEntries = [], isLoading: isLoadingEntries } = useBankStatementEntries();
 
+  const handleRemoveCheque = (id: string) => {
+    setActiveCheques(prev => prev.filter(c => c.id !== id));
+    setMappings(prev => {
+      const newMappings = { ...prev };
+      delete newMappings[id];
+      return newMappings;
+    });
+  };
+
   const handleClear = async () => {
+    if (activeCheques.length === 0) {
+      toast.error('No cheques to clear.');
+      return;
+    }
+
+    // 1. Validation: Ensure all cheques have a mapping
+    const allMapped = activeCheques.every(c => mappings[c.id]);
+    if (!allMapped) {
+      toast.error('Please select a Bank Statement Entry for all cheques.');
+      return;
+    }
+
+    // 2. Validation: Ensure total amount per statement entry does not exceed its balance
+    const statementTotals: Record<string, number> = {};
+    for (const cheque of activeCheques) {
+      const entryId = mappings[cheque.id];
+      if (entryId) {
+        statementTotals[entryId] = (statementTotals[entryId] || 0) + cheque.amount;
+      }
+    }
+
+    for (const [entryId, totalChequeAmount] of Object.entries(statementTotals)) {
+      const entry = bankStatementEntries.find((e: any) => e.id.toString() === entryId);
+      if (entry) {
+        const entryBalance = Number(entry.balance_amount ?? entry.unreconciled_amount ?? Math.abs(entry.amount));
+        if (totalChequeAmount > entryBalance + 0.01) {
+          toast.error(`Total cheque amount (${formatCurrency(totalChequeAmount)}) exceeds bank statement entry balance (${formatCurrency(entryBalance)}) for entry: ${entry.particulars}`);
+          return;
+        }
+      }
+    }
+
     // Collect all mappings (expanding GroupedCheque to underlying Cheque IDs)
     const payloadMappings: { cheque_id: number; bank_statement_entry_id: number }[] = [];
     
-    for (const group of selectedCheques) {
+    for (const group of activeCheques) {
       const entryId = mappings[group.id];
       if (entryId) {
         for (const uc of group.underlyingCheques) {
@@ -64,13 +116,13 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
   const isPending = clearMutation.isPending || bulkClearMutation.isPending;
 
   // Total calculation for modal
-  const totalValue = selectedCheques.reduce((sum, c) => sum + c.amount, 0);
+  const totalValue = activeCheques.reduce((sum, c) => sum + c.amount, 0);
 
   return (
     <Dialog 
       open={isOpen} 
       onClose={onClose} 
-      title={selectedCheques.length > 1 ? "Bulk Clear Cheques" : "Clear Cheque"} 
+      title={activeCheques.length > 1 ? "Bulk Clear Cheques" : "Clear Cheque"} 
       widthClass="max-w-6xl"
       footer={
         <div className="flex justify-end gap-3 w-full">
@@ -79,7 +131,7 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
             variant="primary" 
             onClick={handleClear} 
             loading={isPending}
-            disabled={isPending}
+            disabled={isPending || activeCheques.length === 0}
           >
             Confirm Clearance
           </Button>
@@ -96,7 +148,7 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
           </div>
           <div className="text-right">
             <p className="text-sm text-brand-700 font-medium">Selected Cheques</p>
-            <p className="text-2xl font-bold text-brand-900">{selectedCheques.length}</p>
+            <p className="text-2xl font-bold text-brand-900">{activeCheques.length}</p>
           </div>
         </div>
 
@@ -121,50 +173,69 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
           </div>
         </div>
 
-        <div className="border border-border-subtle rounded-xl overflow-hidden bg-surface">
+        <div className="border border-border-subtle rounded-xl overflow-hidden bg-surface max-h-[60vh] overflow-y-auto">
           <table className="w-full text-left text-sm divide-y divide-border-subtle">
-            <thead className="bg-ink-50">
+            <thead className="bg-ink-50 sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="p-3 font-medium text-ink-700">Cheque No.</th>
                 <th className="p-3 font-medium text-ink-700">Party</th>
                 <th className="p-3 font-medium text-ink-700">Amount</th>
                 <th className="p-3 font-medium text-ink-700">Bank</th>
-                <th className="p-3 font-medium text-ink-700 w-1/2">Bank Statement Entry</th>
+                <th className="p-3 font-medium text-ink-700 w-[45%]">Bank Statement Entry</th>
+                <th className="p-3 font-medium text-ink-700 text-center w-12"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border-subtle">
-              {selectedCheques.map(cheque => {
-                const validEntries = bankStatementEntries.filter((e: any) => {
-                  if (e.status === 'Exhausted') return false;
-                  if (cheque.type === 'INCOMING') return Number(e.credit_amount) > 0;
-                  if (cheque.type === 'OUTGOING') return Number(e.debit_amount) > 0;
-                  return true;
-                });
+            <tbody className="divide-y divide-border-subtle bg-white">
+              {activeCheques.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-4 text-center text-ink-500">No cheques remaining in this clearance batch.</td>
+                </tr>
+              ) : (
+                activeCheques.map(cheque => {
+                  const validEntries = bankStatementEntries.filter((e: any) => {
+                    if (e.status === 'Exhausted') return false;
+                    if (cheque.type === 'INCOMING') return Number(e.credit_amount) > 0;
+                    if (cheque.type === 'OUTGOING') return Number(e.debit_amount) > 0;
+                    return true;
+                  });
 
-                return (
-                  <tr key={cheque.id}>
-                    <td className="p-3 font-medium">{cheque.cheque_number}</td>
-                    <td className="p-3 text-ink-900">{cheque.party_name}</td>
-                    <td className="p-3 font-semibold">{formatCurrency(cheque.amount)}</td>
-                    <td className="p-3 text-ink-600">{cheque.bank_name || 'N/A'}</td>
-                    <td className="p-3">
-                      <select
-                        className="w-full h-9 rounded-lg border border-border-subtle text-sm px-3 outline-none focus:border-brand-500"
-                        value={mappings[cheque.id] || ''}
-                        onChange={(e) => setMappings({ ...mappings, [cheque.id]: e.target.value })}
-                        disabled={isLoadingEntries}
-                      >
-                        <option value="">Select Statement Entry...</option>
-                        {validEntries.map((e: any) => (
-                          <option key={e.id} value={e.id}>
-                            {e.transaction_date?.split('T')[0]} - {formatCurrency(Math.abs(e.amount))} - {e.particulars}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
+                  return (
+                    <tr key={cheque.id} className="hover:bg-ink-50/50">
+                      <td className="p-3 font-medium">{cheque.cheque_number}</td>
+                      <td className="p-3 text-ink-900">{cheque.party_name}</td>
+                      <td className="p-3 font-semibold">{formatCurrency(cheque.amount)}</td>
+                      <td className="p-3 text-ink-600">{cheque.bank_name || 'N/A'}</td>
+                      <td className="p-3">
+                        <select
+                          className="w-full h-9 rounded-lg border border-border-subtle text-sm px-3 outline-none focus:border-brand-500"
+                          value={mappings[cheque.id] || ''}
+                          onChange={(e) => setMappings({ ...mappings, [cheque.id]: e.target.value })}
+                          disabled={isLoadingEntries}
+                        >
+                          <option value="">Select Statement Entry...</option>
+                          {validEntries.map((e: any) => {
+                            const entryBalance = Number(e.balance_amount ?? e.unreconciled_amount ?? Math.abs(e.amount));
+                            return (
+                              <option key={e.id} value={e.id}>
+                                {e.transaction_date?.split('T')[0]} - {formatCurrency(Math.abs(e.amount))} {entryBalance !== Math.abs(e.amount) ? `(Bal: ${formatCurrency(entryBalance)})` : ''} - {e.particulars}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </td>
+                      <td className="p-3 text-center">
+                        <button 
+                          onClick={() => handleRemoveCheque(cheque.id)}
+                          className="text-ink-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"
+                          title="Remove from batch"
+                        >
+                          <X size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
