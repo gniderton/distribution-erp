@@ -29,6 +29,7 @@ interface DataTableProps<T> {
   rowSelection?: Record<string, boolean>
   onRowSelectionChange?: (value: Record<string, boolean>) => void
   hideSearchBar?: boolean
+  hidePagination?: boolean
 }
 
 /**
@@ -50,6 +51,7 @@ export function DataTable<T>({
   rowSelection,
   onRowSelectionChange,
   hideSearchBar,
+  hidePagination,
 }: DataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>([])
 
@@ -152,7 +154,7 @@ export function DataTable<T>({
         <EmptyState title={emptyTitle} description={emptyDescription} />
       )}
 
-      {!isLoading && !isError && (data?.length ?? 0) > 0 && (
+      {!isLoading && !isError && (data?.length ?? 0) > 0 && !hidePagination && (
         <div className="mt-auto shrink-0 flex items-center justify-between px-4 py-3 border-t border-border-subtle">
           <p className="text-xs text-ink-600">
             Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount() || 1}

@@ -157,38 +157,59 @@ export function SalesMarginReportView() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-4 rounded-xl border border-border-subtle shadow-sm flex flex-col md:flex-row gap-4 items-end">
-        <div className="flex-1">
-          <Label>Start Date</Label>
-          <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-        </div>
-        <div className="flex-1">
-          <Label>End Date</Label>
-          <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
-        </div>
-        <div className="flex-1">
-          <Label>Brand</Label>
-          <Select value={brandId} onChange={e => setBrandId(e.target.value)}>
-            <option value="all">All Brands</option>
-            {brands.map((b: any) => (
-              <option key={b.id} value={b.id}>{b.brand_name}</option>
-            ))}
-          </Select>
-        </div>
-        <div className="flex-1">
-          <Label>Category</Label>
-          <Select value={categoryId} onChange={e => setCategoryId(e.target.value)}>
-            <option value="all">All Categories</option>
-            {categories.map((c: any) => (
-              <option key={c.id} value={c.id}>{c.category_name}</option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <Button variant="secondary" onClick={handleDownloadCSV}>
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </Button>
+      <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col xl:flex-row gap-4 items-center justify-between w-full">
+        
+        <div className="flex flex-wrap gap-3 w-full items-center justify-end">
+          {/* Custom Date Inputs if needed, or just keep them as simple date inputs but styled like custom */}
+          <div className="flex items-center gap-2">
+            <input 
+              type="date" 
+              value={startDate} 
+              onChange={e => setStartDate(e.target.value)}
+              className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
+            />
+            <span className="text-xs text-ink-500">to</span>
+            <input 
+              type="date" 
+              value={endDate} 
+              onChange={e => setEndDate(e.target.value)}
+              className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <Package size={12} className="text-ink-600" />
+            <select
+              value={brandId}
+              onChange={e => setBrandId(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer max-w-[120px] truncate"
+            >
+              <option value="all">All Brands</option>
+              {brands.map((b: any) => (
+                <option key={b.id} value={b.id}>{b.brand_name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <PieChart size={12} className="text-ink-600" />
+            <select
+              value={categoryId}
+              onChange={e => setCategoryId(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer max-w-[120px] truncate"
+            >
+              <option value="all">All Categories</option>
+              {categories.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.category_name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-2 ml-2">
+            <button onClick={handleDownloadCSV} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-xs font-medium transition-colors border border-emerald-200">
+              <Download size={14} /> Excel
+            </button>
+          </div>
         </div>
       </div>
 
@@ -219,6 +240,7 @@ export function SalesMarginReportView() {
         <div className="bg-white rounded-xl border border-border-subtle shadow-sm p-4 overflow-hidden">
           <h3 className="font-semibold text-ink-900 mb-4">Margin by Brand</h3>
           <DataTable 
+            hidePagination={true}
             columns={[{ header: 'Brand', accessorKey: 'brand' }, { header: 'Net Sales', accessorKey: 'net_sales' }, { header: 'Margin Amt', accessorKey: 'margin_amount' }, { header: 'Margin %', accessorKey: 'margin_percent' }]} 
             data={brandMargins} 
           />
@@ -227,6 +249,7 @@ export function SalesMarginReportView() {
         <div className="bg-white rounded-xl border border-border-subtle shadow-sm p-4 overflow-hidden">
           <h3 className="font-semibold text-ink-900 mb-4">Margin by Category</h3>
           <DataTable 
+            hidePagination={true}
             columns={[{ header: 'Category', accessorKey: 'category' }, { header: 'Net Sales', accessorKey: 'net_sales' }, { header: 'Margin Amt', accessorKey: 'margin_amount' }, { header: 'Margin %', accessorKey: 'margin_percent' }]} 
             data={categoryMargins} 
           />
@@ -237,6 +260,7 @@ export function SalesMarginReportView() {
         <div className="bg-white rounded-xl border border-border-subtle shadow-sm p-4 overflow-hidden">
           <h3 className="font-semibold text-ink-900 mb-4">Top 10 Highest Margin Products (By Amount)</h3>
           <DataTable 
+            hidePagination={true}
             columns={[{ header: 'Product', accessorKey: 'product' }, { header: 'Margin Amt', accessorKey: 'margin_amount' }]} 
             data={top10Amt} 
           />
@@ -245,6 +269,7 @@ export function SalesMarginReportView() {
         <div className="bg-white rounded-xl border border-border-subtle shadow-sm p-4 overflow-hidden">
           <h3 className="font-semibold text-ink-900 mb-4">Top 10 Highest Margin Products (By Percentage)</h3>
           <DataTable 
+            hidePagination={true}
             columns={[{ header: 'Product', accessorKey: 'product' }, { header: 'Margin %', accessorKey: 'margin_percent' }]} 
             data={top10Pct} 
           />
