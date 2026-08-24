@@ -291,15 +291,15 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
 
     return (
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
-          <h3 className="text-lg font-display font-medium text-ink-900">Cash Flow Dashboard</h3>
+        <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col xl:flex-row gap-4 items-center justify-between w-full">
+          <h3 className="text-lg font-display font-medium text-ink-900 whitespace-nowrap">Cash Flow Dashboard</h3>
           
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 mr-2">
+          <div className="flex flex-wrap gap-3 w-full items-center justify-end">
+            <div className="flex flex-wrap items-center gap-2">
               <select 
                 value={cfFilterMode}
                 onChange={e => setCfFilterMode(e.target.value as 'fyMonth' | 'custom')}
-                className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
+                className="bg-surface border border-[#e6e9ee] rounded-lg text-xs text-ink-900 px-3 py-1.5 focus:outline-none focus:border-brand-400"
               >
                 <option value="fyMonth">FY & Month</option>
                 <option value="custom">Custom Date</option>
@@ -310,7 +310,7 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
                   <select 
                     value={cfFy}
                     onChange={e => setCfFy(e.target.value)}
-                    className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
+                    className="bg-surface border border-[#e6e9ee] rounded-lg text-xs text-ink-900 px-3 py-1.5 focus:outline-none focus:border-brand-400"
                   >
                     <option value="2023">FY 2023-24</option>
                     <option value="2024">FY 2024-25</option>
@@ -321,7 +321,7 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
                   <select 
                     value={cfMonth}
                     onChange={e => setCfMonth(e.target.value)}
-                    className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
+                    className="bg-surface border border-[#e6e9ee] rounded-lg text-xs text-ink-900 px-3 py-1.5 focus:outline-none focus:border-brand-400"
                   >
                     <option value="all">All Months</option>
                     <option value="3">April</option>
@@ -344,14 +344,14 @@ export function FinancialReportView({ type }: FinancialReportViewProps) {
                     type="date" 
                     value={startDate}
                     onChange={e => setStartDate(e.target.value)}
-                    className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
+                    className="bg-surface border border-[#e6e9ee] rounded-lg text-xs text-ink-900 px-3 py-1.5 focus:outline-none focus:border-brand-400"
                   />
-                  <span className="text-ink-500 text-sm">to</span>
+                  <span className="text-ink-500 text-xs">to</span>
                   <input 
                     type="date" 
                     value={endDate}
                     onChange={e => setEndDate(e.target.value)}
-                    className="text-sm rounded-md border-border-subtle bg-surface text-ink-900 px-3 py-1.5 focus:ring-brand-500 focus:border-brand-500"
+                    className="bg-surface border border-[#e6e9ee] rounded-lg text-xs text-ink-900 px-3 py-1.5 focus:outline-none focus:border-brand-400"
                   />
                 </>
               )}

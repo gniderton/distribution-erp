@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { DataTable } from '@/components/shared/DataTable'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -10,10 +10,40 @@ import { reportsApi } from '../api'
 import { useBrands, useCategories } from '@/modules/items/hooks'
 
 export function SalesMarginReportView() {
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  const currentFyStr = String(currentMonth >= 3 ? currentYear : currentYear - 1);
+
+  const [filterMode, setFilterMode] = useState<'fyMonth' | 'custom'>('fyMonth')
+  const [fy, setFy] = useState<string>(currentFyStr)
+  const [month, setMonth] = useState<string>(String(currentMonth))
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [brandId, setBrandId] = useState('')
-  const [categoryId, setCategoryId] = useState('')
+  const [categoryId, setCategoryId] = useState('all')
+
+  useEffect(() => {
+    if (filterMode === 'fyMonth') {
+      const fyStartYear = parseInt(fy, 10);
+      if (month === 'all') {
+         setStartDate(`${fyStartYear}-04-01`);
+         setEndDate(`${fyStartYear + 1}-03-31`);
+      } else {
+         const monthIdx = parseInt(month, 10);
+         const year = monthIdx >= 3 ? fyStartYear : fyStartYear + 1;
+         const firstDay = new Date(year, monthIdx, 1);
+         const lastDay = new Date(year, monthIdx + 1, 0);
+         
+         const fmt = (d: Date) => {
+             const m = String(d.getMonth() + 1).padStart(2, '0');
+             const day = String(d.getDate()).padStart(2, '0');
+             return `${d.getFullYear()}-${m}-${day}`;
+         };
+         setStartDate(fmt(firstDay));
+         setEndDate(fmt(lastDay));
+      }
+    }
+  }, [filterMode, fy, month]);
 
   const { data: brands = [] } = useBrands()
   const { data: categories = [] } = useCategories()
@@ -160,21 +190,66 @@ export function SalesMarginReportView() {
       <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col xl:flex-row gap-4 items-center justify-between w-full">
         
         <div className="flex flex-wrap gap-3 w-full items-center justify-end">
-          {/* Custom Date Inputs if needed, or just keep them as simple date inputs but styled like custom */}
           <div className="flex items-center gap-2">
-            <input 
-              type="date" 
-              value={startDate} 
-              onChange={e => setStartDate(e.target.value)}
-              className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
-            />
-            <span className="text-xs text-ink-500">to</span>
-            <input 
-              type="date" 
-              value={endDate} 
-              onChange={e => setEndDate(e.target.value)}
-              className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
-            />
+            <select 
+              value={filterMode}
+              onChange={e => setFilterMode(e.target.value as 'fyMonth' | 'custom')}
+              className="bg-surface border border-[#e6e9ee] rounded-lg text-xs text-ink-900 px-3 py-1.5 focus:outline-none focus:border-brand-400"
+            >
+              <option value="fyMonth">FY & Month</option>
+              <option value="custom">Custom Date</option>
+            </select>
+
+            {filterMode === 'fyMonth' ? (
+              <>
+                <select 
+                  value={fy}
+                  onChange={e => setFy(e.target.value)}
+                  className="bg-surface border border-[#e6e9ee] rounded-lg text-xs text-ink-900 px-3 py-1.5 focus:outline-none focus:border-brand-400"
+                >
+                  <option value="2023">FY 2023-24</option>
+                  <option value="2024">FY 2024-25</option>
+                  <option value="2025">FY 2025-26</option>
+                  <option value="2026">FY 2026-27</option>
+                  <option value="2027">FY 2027-28</option>
+                </select>
+                <select 
+                  value={month}
+                  onChange={e => setMonth(e.target.value)}
+                  className="bg-surface border border-[#e6e9ee] rounded-lg text-xs text-ink-900 px-3 py-1.5 focus:outline-none focus:border-brand-400"
+                >
+                  <option value="all">All Months</option>
+                  <option value="3">April</option>
+                  <option value="4">May</option>
+                  <option value="5">June</option>
+                  <option value="6">July</option>
+                  <option value="7">August</option>
+                  <option value="8">September</option>
+                  <option value="9">October</option>
+                  <option value="10">November</option>
+                  <option value="11">December</option>
+                  <option value="0">January</option>
+                  <option value="1">February</option>
+                  <option value="2">March</option>
+                </select>
+              </>
+            ) : (
+              <>
+                <input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={e => setStartDate(e.target.value)}
+                  className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
+                />
+                <span className="text-xs text-ink-500">to</span>
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={e => setEndDate(e.target.value)}
+                  className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
+                />
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
