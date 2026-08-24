@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatCurrency } from '../../../lib/utils';
 import toast from 'react-hot-toast';
-import { X } from 'lucide-react';
+import { X, CheckCircle, XCircle } from 'lucide-react';
 
 interface ClearChequeModalProps {
   isOpen: boolean;
@@ -43,20 +43,11 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
     });
   };
 
-  const handleClear = async () => {
-    if (activeCheques.length === 0) {
-      toast.error('No cheques to clear.');
-      return;
-    }
+  // 1. Validation: Ensure all cheques have a mapping
+  const allMapped = useMemo(() => activeCheques.every(c => mappings[c.id]), [activeCheques, mappings]);
 
-    // 1. Validation: Ensure all cheques have a mapping
-    const allMapped = activeCheques.every(c => mappings[c.id]);
-    if (!allMapped) {
-      toast.error('Please select a Bank Statement Entry for all cheques.');
-      return;
-    }
-
-    // 2. Validation: Ensure total amount per statement entry does not exceed its balance
+  // 2. Validation: Ensure total amount per statement entry does not exceed its balance
+  const overAllocatedEntry = useMemo(() => {
     const statementTotals: Record<string, number> = {};
     for (const cheque of activeCheques) {
       const entryId = mappings[cheque.id];
@@ -70,11 +61,22 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
       if (entry) {
         const entryBalance = Number(entry.balance_amount ?? entry.unreconciled_amount ?? Math.abs(entry.amount));
         if (totalChequeAmount > entryBalance + 0.01) {
-          toast.error(`Total cheque amount (${formatCurrency(totalChequeAmount)}) exceeds bank statement entry balance (${formatCurrency(entryBalance)}) for entry: ${entry.particulars}`);
-          return;
+          return {
+            entry,
+            totalChequeAmount,
+            entryBalance
+          };
         }
       }
     }
+    return null;
+  }, [activeCheques, mappings, bankStatementEntries]);
+
+  const isReady = activeCheques.length > 0 && allMapped && !overAllocatedEntry;
+  const isPending = clearMutation.isPending || bulkClearMutation.isPending;
+
+  const handleClear = async () => {
+    if (!isReady) return;
 
     // Collect all mappings (expanding GroupedCheque to underlying Cheque IDs)
     const payloadMappings: { cheque_id: number; bank_statement_entry_id: number }[] = [];
@@ -113,8 +115,6 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
     }
   };
 
-  const isPending = clearMutation.isPending || bulkClearMutation.isPending;
-
   // Total calculation for modal
   const totalValue = activeCheques.reduce((sum, c) => sum + c.amount, 0);
 
@@ -131,7 +131,7 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
             variant="primary" 
             onClick={handleClear} 
             loading={isPending}
-            disabled={isPending || activeCheques.length === 0}
+            disabled={!isReady || isPending}
           >
             Confirm Clearance
           </Button>
@@ -239,6 +239,30 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
             </tbody>
           </table>
         </div>
+
+        {/* Validation Status */}
+        {activeCheques.length > 0 && (
+          <div className={`flex items-center gap-2 p-3 rounded-lg border ${isReady ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+            {!allMapped ? (
+              <>
+                <XCircle size={18} className="text-red-500 flex-shrink-0" />
+                <span className="text-sm text-red-600 font-medium">Please select a Bank Statement Entry for all cheques.</span>
+              </>
+            ) : overAllocatedEntry ? (
+              <>
+                <XCircle size={18} className="text-red-500 flex-shrink-0" />
+                <span className="text-sm text-red-600 font-medium">
+                  Total cheque amount ({formatCurrency(overAllocatedEntry.totalChequeAmount)}) exceeds balance ({formatCurrency(overAllocatedEntry.entryBalance)}) for entry: {overAllocatedEntry.entry.particulars}
+                </span>
+              </>
+            ) : (
+              <>
+                <CheckCircle size={18} className="text-green-500 flex-shrink-0" />
+                <span className="text-sm text-green-600 font-medium">Ready to clear</span>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </Dialog>
   );
