@@ -87,7 +87,6 @@ export function SyncHistoryModal({ open, onClose, syncId }: { open: boolean, onC
 
   const tabs = [
     { id: 'summary', label: 'Trip Summary', icon: LayoutList },
-    { id: 'picklist', label: 'Products (Picklist)', icon: Package },
     { id: 'invoices', label: `Invoices (${allInvoices.length})`, icon: Truck },
     { id: 'returns', label: `Returns (${data?.returns?.length || 0})`, icon: XCircle },
     { id: 'financials', label: `Financials`, icon: IndianRupee },
@@ -148,72 +147,74 @@ export function SyncHistoryModal({ open, onClose, syncId }: { open: boolean, onC
                     <div className="text-xl font-bold text-success-600 mt-1">₹{(data.payments?.reduce((acc: number, val: any) => acc + Number(val.amount), 0) - data.expenses?.reduce((acc: number, val: any) => acc + Number(val.amount), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {activeTab === 'picklist' && (
-              <div className="glass-card rounded-xl border border-border-subtle overflow-hidden bg-white shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-surface/50 text-ink-600 text-[10px] uppercase tracking-wider font-semibold">
-                      <tr>
-                        <th className="px-4 py-3 w-10"></th>
-                        <th className="px-4 py-3">Product Name</th>
-                        <th className="px-4 py-3 text-right">MRP</th>
-                        <th className="px-4 py-3 text-right">Billed Qty</th>
-                        <th className="px-4 py-3 text-right">Delivered Qty</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border-subtle">
-                      {picklist.map((p, idx) => {
-                        const isExpanded = expandedProduct === p.product_name;
-                        return (
-                          <Fragment key={idx}>
-                            <tr className="bg-white hover:bg-surface/30 transition-colors cursor-pointer" onClick={() => setExpandedProduct(isExpanded ? null : p.product_name)}>
-                              <td className="px-4 py-3 text-ink-400">
-                                {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                              </td>
-                              <td className="px-4 py-3 font-medium text-ink-900">{p.product_name}</td>
-                              <td className="px-4 py-3 text-right text-ink-600">₹{p.mrp.toFixed(2)}</td>
-                              <td className="px-4 py-3 text-right font-medium text-ink-900">{p.billed}</td>
-                              <td className="px-4 py-3 text-right font-medium text-success-600">{p.delivered}</td>
-                            </tr>
-                            {isExpanded && (
-                              <tr className="bg-surface/20">
-                                <td colSpan={5} className="p-0">
-                                  <div className="px-12 py-3">
-                                    <table className="w-full text-xs text-left">
-                                      <thead className="text-ink-500 uppercase tracking-wider">
-                                        <tr>
-                                          <th className="pb-2 font-medium">Customer</th>
-                                          <th className="pb-2 font-medium">Invoice #</th>
-                                          <th className="pb-2 text-right font-medium">Billed</th>
-                                          <th className="pb-2 text-right font-medium">Delivered</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-border-subtle border-t border-border-subtle">
-                                        {p.details.map((d, didx) => (
-                                          <tr key={didx}>
-                                            <td className="py-2 text-ink-900">{d.customer_name}</td>
-                                            <td className="py-2 text-ink-600">{d.invoice_number}</td>
-                                            <td className="py-2 text-right text-ink-900">{d.billed}</td>
-                                            <td className="py-2 text-right font-medium text-success-600">{d.delivered}</td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
+                <div className="glass-card rounded-xl border border-border-subtle overflow-hidden bg-white shadow-sm">
+                  <div className="px-4 py-3 border-b border-border-subtle bg-surface/30 font-medium text-sm text-ink-900 flex items-center justify-between">
+                    <span>Product Picklist (Delivery Summary)</span>
+                    <Badge tone="neutral">{picklist.length} Products</Badge>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-surface/50 text-ink-600 text-[10px] uppercase tracking-wider font-semibold">
+                        <tr>
+                          <th className="px-4 py-3 w-10"></th>
+                          <th className="px-4 py-3">Product Name</th>
+                          <th className="px-4 py-3 text-right">MRP</th>
+                          <th className="px-4 py-3 text-right">Billed Qty</th>
+                          <th className="px-4 py-3 text-right">Delivered Qty</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border-subtle">
+                        {picklist.map((p, idx) => {
+                          const isExpanded = expandedProduct === p.product_name;
+                          return (
+                            <Fragment key={idx}>
+                              <tr className="bg-white hover:bg-surface/30 transition-colors cursor-pointer" onClick={() => setExpandedProduct(isExpanded ? null : p.product_name)}>
+                                <td className="px-4 py-3 text-ink-400">
+                                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                                 </td>
+                                <td className="px-4 py-3 font-medium text-ink-900">{p.product_name}</td>
+                                <td className="px-4 py-3 text-right text-ink-600">₹{p.mrp.toFixed(2)}</td>
+                                <td className="px-4 py-3 text-right font-medium text-ink-900">{p.billed}</td>
+                                <td className="px-4 py-3 text-right font-medium text-success-600">{p.delivered}</td>
                               </tr>
-                            )}
-                          </Fragment>
-                        );
-                      })}
-                      {picklist.length === 0 && (
-                        <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-500 text-xs">No products in picklist.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
+                              {isExpanded && (
+                                <tr className="bg-surface/20">
+                                  <td colSpan={5} className="p-0">
+                                    <div className="px-12 py-3">
+                                      <table className="w-full text-xs text-left">
+                                        <thead className="text-ink-500 uppercase tracking-wider">
+                                          <tr>
+                                            <th className="pb-2 font-medium">Customer</th>
+                                            <th className="pb-2 font-medium">Invoice #</th>
+                                            <th className="pb-2 text-right font-medium">Billed</th>
+                                            <th className="pb-2 text-right font-medium">Delivered</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border-subtle border-t border-border-subtle">
+                                          {p.details.map((d, didx) => (
+                                            <tr key={didx}>
+                                              <td className="py-2 text-ink-900">{d.customer_name}</td>
+                                              <td className="py-2 text-ink-600">{d.invoice_number}</td>
+                                              <td className="py-2 text-right text-ink-900">{d.billed}</td>
+                                              <td className="py-2 text-right font-medium text-success-600">{d.delivered}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                        {picklist.length === 0 && (
+                          <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-500 text-xs">No products in picklist.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
