@@ -6,7 +6,7 @@ import {
   BarChart3, TrendingUp, Wallet, FileBarChart, 
   BookOpen, Landmark, FileText, Activity, 
   Users, PackageSearch, Receipt, FileSpreadsheet,
-  PieChart
+  PieChart, Store
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -181,6 +181,14 @@ const REPORT_CATEGORIES = [
         icon: PackageSearch,
         colorClass: 'text-rose-600 bg-rose-500/10 group-hover:bg-rose-500/20 ring-rose-500/30',
         component: <StockReportView />
+      },
+      {
+        id: 'purchase-analytics',
+        title: 'Purchase Analytics',
+        description: 'Line level purchase insights and vendor analytics.',
+        icon: Store,
+        colorClass: 'text-rose-600 bg-rose-500/10 group-hover:bg-rose-500/20 ring-rose-500/30',
+        component: <PurchaseAnalyticsDashboard />
       }
     ]
   }
@@ -191,6 +199,7 @@ import { ReceivablesReportView } from './components/ReceivablesReportView'
 import { DseDashboardView } from './components/DseDashboardView'
 import { CustomerAdvanceReportView } from './components/CustomerAdvanceReportView'
 import { CreditNoteAllocationReportView } from './components/CreditNoteAllocationReportView'
+import { PurchaseAnalyticsDashboard } from './components/PurchaseAnalyticsDashboard'
 
 export default function ReportsPage() {
   const [activeReport, setActiveReport] = useState<ReportDefinition | null>(null)
