@@ -183,6 +183,73 @@ export function PurchaseAnalyticsDashboard() {
 
   return (
     <div className="space-y-6">
+      <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col xl:flex-row gap-4 items-center justify-between w-full">
+        <div className="relative w-full xl:max-w-md">
+          <Search className="absolute left-3.5 top-3 text-ink-600" size={15} />
+          <input 
+            type="text" 
+            placeholder="Search lines by invoice, vendor, product, brand..." 
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full bg-surface border border-[#e6e9ee] rounded-lg pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:border-brand-400 text-ink-900 placeholder:text-ink-600"
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-3 w-full xl:w-auto items-center justify-end">
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <Filter size={12} className="text-ink-600" />
+            <select
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer"
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="this_week">This Week</option>
+              <option value="this_month">This Month</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+
+          {dateFilter === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={customStartDate} 
+                onChange={e => setCustomStartDate(e.target.value)}
+                className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
+              />
+              <span className="text-xs text-ink-500">to</span>
+              <input 
+                type="date" 
+                value={customEndDate} 
+                onChange={e => setCustomEndDate(e.target.value)}
+                className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
+              />
+            </div>
+          )}
+
+          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
+            <Store size={12} className="text-ink-600" />
+            <select
+              value={vendorFilter}
+              onChange={e => setVendorFilter(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer max-w-[120px] truncate"
+            >
+              <option value="all">All Vendors</option>
+              {vendors?.map((v: any) => <option key={v.id} value={v.id}>{v.vendor_name}</option>)}
+            </select>
+          </div>
+          
+          <button 
+            onClick={handleExportExcel}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition"
+          >
+            <Download size={12} />
+            Export Excel
+          </button>
+        </div>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard label="Total Items (Lines)" value={String(stats.totalLines)} icon={Tag} tone="neutral" />
@@ -281,73 +348,6 @@ export function PurchaseAnalyticsDashboard() {
 
       </div>
 
-      <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col xl:flex-row gap-4 items-center justify-between w-full">
-        <div className="relative w-full xl:max-w-md">
-          <Search className="absolute left-3.5 top-3 text-ink-600" size={15} />
-          <input 
-            type="text" 
-            placeholder="Search lines by invoice, vendor, product, brand..." 
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full bg-surface border border-[#e6e9ee] rounded-lg pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:border-brand-400 text-ink-900 placeholder:text-ink-600"
-          />
-        </div>
-
-        <div className="flex flex-wrap gap-3 w-full xl:w-auto items-center justify-end">
-          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
-            <Filter size={12} className="text-ink-600" />
-            <select
-              value={dateFilter}
-              onChange={e => setDateFilter(e.target.value)}
-              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer"
-            >
-              <option value="all">All Time</option>
-              <option value="today">Today</option>
-              <option value="this_week">This Week</option>
-              <option value="this_month">This Month</option>
-              <option value="custom">Custom Range</option>
-            </select>
-          </div>
-
-          {dateFilter === 'custom' && (
-            <div className="flex items-center gap-2">
-              <input 
-                type="date" 
-                value={customStartDate} 
-                onChange={e => setCustomStartDate(e.target.value)}
-                className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
-              />
-              <span className="text-xs text-ink-500">to</span>
-              <input 
-                type="date" 
-                value={customEndDate} 
-                onChange={e => setCustomEndDate(e.target.value)}
-                className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
-              />
-            </div>
-          )}
-
-          <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
-            <Store size={12} className="text-ink-600" />
-            <select
-              value={vendorFilter}
-              onChange={e => setVendorFilter(e.target.value)}
-              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer max-w-[120px] truncate"
-            >
-              <option value="all">All Vendors</option>
-              {vendors?.map((v: any) => <option key={v.id} value={v.id}>{v.vendor_name}</option>)}
-            </select>
-          </div>
-          
-          <button 
-            onClick={handleExportExcel}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition"
-          >
-            <Download size={12} />
-            Export Excel
-          </button>
-        </div>
-      </div>
 
       <div className="rounded-xl overflow-hidden border border-border-subtle bg-white">
         {filteredLines.length > 0 ? (
