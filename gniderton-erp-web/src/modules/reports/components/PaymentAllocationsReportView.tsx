@@ -1,32 +1,67 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { Search, Users, DollarSign, CheckCircle2, Download, FileSpreadsheet } from 'lucide-react'
+import { Search, Users, DollarSign, CheckCircle2, Download, FileSpreadsheet, Filter, X } from 'lucide-react'
 import { reportsApi } from '../api'
 import { DataTable } from '@/components/shared/DataTable'
 import { StatCard } from '@/components/shared/StatCard'
 import { formatCurrency } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import * as XLSX from 'xlsx'
 
 export function PaymentAllocationsReportView() {
   const [search, setSearch] = useState('')
   const [customerFilter, setCustomerFilter] = useState('all')
+  const [dateFilter, setDateFilter] = useState('all')
+  const [customStartDate, setCustomStartDate] = useState('')
+  const [customEndDate, setCustomEndDate] = useState('')
 
   const { data: rawAllocations, isLoading, error } = useQuery({
     queryKey: ['payment-allocations'],
     queryFn: () => reportsApi.paymentAllocations()
   })
 
+  const getDates = useCallback(() => {
+    const today = new Date()
+    let start = ''
+    let end = today.toISOString().split('T')[0]
+
+    if (dateFilter === 'today') {
+      start = end
+    } else if (dateFilter === 'this_week') {
+      const firstDay = new Date(today.setDate(today.getDate() - today.getDay()))
+      start = firstDay.toISOString().split('T')[0]
+    } else if (dateFilter === 'this_month') {
+      start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
+    } else if (dateFilter === 'custom') {
+      start = customStartDate
+      end = customEndDate
+    }
+    return { start_date: start || undefined, end_date: end || undefined }
+  }, [dateFilter, customStartDate, customEndDate])
+
   // Client-side mapping & filtering
   const filteredData = useMemo(() => {
     if (!rawAllocations) return []
-    let list = rawAllocations.map((a: any) => ({
-      ...a,
-      payment_date: a.payment_date ? format(new Date(a.payment_date), 'MMM dd, yyyy') : a.payment_date,
-      invoice_date: a.invoice_date ? format(new Date(a.invoice_date), 'MMM dd, yyyy') : a.invoice_date,
-      allocated_at: a.allocated_at ? format(new Date(a.allocated_at), 'MMM dd, yyyy HH:mm') : a.allocated_at
-    }))
+    let list = [...rawAllocations]
+
+    if (dateFilter !== 'all') {
+      const { start_date, end_date } = getDates()
+      if (start_date && end_date) {
+        list = list.filter((a: any) => {
+          if (!a.payment_date) return true
+          const rawDate = new Date(a.payment_date)
+          rawDate.setHours(0,0,0,0)
+          const s = new Date(start_date)
+          s.setHours(0,0,0,0)
+          const e = new Date(end_date)
+          e.setHours(23,59,59,999)
+          
+          return rawDate >= s && rawDate <= e
+        })
+      }
+    }
 
     if (customerFilter !== 'all') {
       list = list.filter((a: any) => a.customer_name === customerFilter)
@@ -42,8 +77,14 @@ export function PaymentAllocationsReportView() {
         a.bank_name?.toLowerCase().includes(q)
       )
     }
-    return list
-  }, [rawAllocations, search, customerFilter])
+    
+    return list.map((a: any) => ({
+      ...a,
+      payment_date: a.payment_date ? format(new Date(a.payment_date), 'MMM dd, yyyy') : a.payment_date,
+      invoice_date: a.invoice_date ? format(new Date(a.invoice_date), 'MMM dd, yyyy') : a.invoice_date,
+      allocated_at: a.allocated_at ? format(new Date(a.allocated_at), 'MMM dd, yyyy HH:mm') : a.allocated_at
+    }))
+  }, [rawAllocations, search, customerFilter, dateFilter, getDates])
 
   // Derive Summary Stats from filtered lines
   const stats = useMemo(() => {
@@ -102,21 +143,35 @@ export function PaymentAllocationsReportView() {
     XLSX.writeFile(wb, "Payment_Allocations_Report.xlsx")
   }
 
+  const handleClearFilters = () => {
+    setSearch('')
+    setCustomerFilter('all')
+    setDateFilter('all')
+    setCustomStartDate('')
+    setCustomEndDate('')
+  }
+
   if (isLoading) return <div className="space-y-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-64 w-full" /></div>
   if (error) return <div className="p-4 text-red-600 bg-red-50 rounded-lg">Failed to load allocation data.</div>
 
   // Create unique list of customers from raw data for dropdown
   const uniqueCustomers = Array.from(new Set((rawAllocations || []).map((a: any) => a.customer_name))).filter(Boolean).sort()
+  const customerOptions = [
+    { value: 'all', label: 'All Customers' },
+    ...uniqueCustomers.map((c: any) => ({ value: c, label: c as string }))
+  ]
+
+  const hasActiveFilters = search || customerFilter !== 'all' || dateFilter !== 'all'
 
   return (
     <div className="space-y-6">
       
       <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col xl:flex-row gap-4 items-center justify-between w-full">
-        <div className="relative w-full xl:max-w-md">
+        <div className="relative w-full xl:max-w-[280px]">
           <Search className="absolute left-3.5 top-3 text-ink-600" size={15} />
           <input 
             type="text" 
-            placeholder="Search by invoice, payment ref, customer, bank..." 
+            placeholder="Search by invoice, payment ref, customer..." 
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full bg-surface border border-[#e6e9ee] rounded-lg pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:border-brand-400 text-ink-900 placeholder:text-ink-600"
@@ -124,17 +179,58 @@ export function PaymentAllocationsReportView() {
         </div>
 
         <div className="flex flex-wrap gap-3 w-full xl:w-auto items-center justify-end">
+          
           <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-lg border border-[#e6e9ee]">
-            <Users size={12} className="text-ink-600" />
+            <Filter size={12} className="text-ink-600" />
             <select
-              value={customerFilter}
-              onChange={e => setCustomerFilter(e.target.value)}
-              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer max-w-[150px] truncate"
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              className="bg-transparent text-xs text-ink-900 focus:outline-none pr-2 cursor-pointer"
             >
-              <option value="all">All Customers</option>
-              {uniqueCustomers.map((c: any) => <option key={c} value={c}>{c as string}</option>)}
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="this_week">This Week</option>
+              <option value="this_month">This Month</option>
+              <option value="custom">Custom Range</option>
             </select>
           </div>
+
+          {dateFilter === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={customStartDate} 
+                onChange={e => setCustomStartDate(e.target.value)}
+                className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
+              />
+              <span className="text-xs text-ink-500">to</span>
+              <input 
+                type="date" 
+                value={customEndDate} 
+                onChange={e => setCustomEndDate(e.target.value)}
+                className="bg-surface border border-[#e6e9ee] rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-400"
+              />
+            </div>
+          )}
+
+          <div className="w-[200px]">
+             <SearchableSelect
+                options={customerOptions}
+                value={customerFilter}
+                onChange={(val) => setCustomerFilter(val as string)}
+                placeholder="All Customers"
+             />
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              onClick={handleClearFilters}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-ink-600 hover:text-ink-900 bg-surface border border-border-subtle rounded-lg hover:bg-ink-50 transition"
+            >
+              <X size={12} />
+              Clear
+            </button>
+          )}
           
           <button 
             onClick={handleExportExcel}
