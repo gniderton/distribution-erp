@@ -1004,6 +1004,32 @@ router.get('/sync/:id/history', async (req, res) => {
 
         const allInvoices = manifest.rows;
         
+        // G. Invoice Lines
+        const invoiceIds = allInvoices.map(r => r.invoice_id);
+        let invoiceLines = [];
+        if (invoiceIds.length > 0) {
+            const linesRes = await pool.query(`
+                SELECT sil.*, p.product_name 
+                FROM sales_invoice_lines sil
+                JOIN products p ON sil.product_id = p.id
+                WHERE sil.invoice_id = ANY($1)
+            `, [invoiceIds]);
+            invoiceLines = linesRes.rows;
+        }
+
+        // H. Credit Note Lines
+        const cnIds = creditNotes.rows.map(r => r.id);
+        let cnLines = [];
+        if (cnIds.length > 0) {
+            const cnLinesRes = await pool.query(`
+                SELECT srl.*, p.product_name
+                FROM sales_return_lines srl
+                JOIN products p ON srl.product_id = p.id
+                WHERE srl.return_id = ANY($1)
+            `, [cnIds]);
+            cnLines = cnLinesRes.rows;
+        }
+
         const delivered = allInvoices.filter(r => r.delivery_status === 'Delivered' && r.verification_status === 'Approved');
         const rejected = allInvoices.filter(r => r.delivery_status === 'Returned' || r.verification_status === 'Rejected');
         const undelivered = allInvoices.filter(r => r.delivery_status !== 'Delivered' && r.delivery_status !== 'Returned');
@@ -1046,7 +1072,9 @@ router.get('/sync/:id/history', async (req, res) => {
             returns_summary: getReturnSummary(returns.rows),
             payments: payments.rows,
             expenses: expenses.rows,
-            credit_notes: creditNotes.rows
+            credit_notes: creditNotes.rows,
+            invoice_lines: invoiceLines,
+            credit_note_lines: cnLines
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
