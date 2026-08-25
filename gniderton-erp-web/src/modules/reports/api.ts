@@ -29,7 +29,7 @@ export const reportsApi = {
   uploadBankStatement: (payload: { content: string, bank_type: string }) =>
     api.post('/api/finance/reconciliation/bank/upload', payload).then((r) => r.data),
 
-  paymentAllocations: () => api.get('/api/payments/allocations').then((r) => r.data),
+  paymentAllocations: (params?: any) => api.get('/api/payments/allocations', { params }).then((r) => r.data),
   dsePendingInvoices: () => api.get('/api/payments/dse-pending-invoices').then((r) => r.data),
 
   purchaseInvoiceLines: (params?: any) => api.get('/api/purchase-invoices/lines', { params }).then((r) => r.data),

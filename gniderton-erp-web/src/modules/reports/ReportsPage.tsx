@@ -17,6 +17,7 @@ import { BankStatementWrapper } from './components/BankStatementWrapper'
 import { ReconciliationAuditWrapper } from './components/ReconciliationAuditWrapper'
 import { SalesLinesDashboard } from './components/SalesLinesDashboard'
 import { SalesAnalyticsDashboard } from './components/SalesAnalyticsDashboard'
+import { PaymentAllocationsReportView } from './components/PaymentAllocationsReportView'
 import { reportsApi } from './api'
 
 type ReportDefinition = {
@@ -151,6 +152,14 @@ const REPORT_CATEGORIES = [
         icon: FileText,
         colorClass: 'text-blue-600 bg-blue-500/10 group-hover:bg-blue-500/20 ring-blue-500/30',
         component: <ReconciliationAuditWrapper />
+      },
+      {
+        id: 'payment-allocations',
+        title: 'Payment Allocations',
+        description: 'View how payments are distributed across specific invoices.',
+        icon: Activity,
+        colorClass: 'text-blue-600 bg-blue-500/10 group-hover:bg-blue-500/20 ring-blue-500/30',
+        component: <PaymentAllocationsReportView />
       }
     ]
   },
