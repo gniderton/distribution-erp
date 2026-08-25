@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
-import { Search, Filter, Store, DollarSign, CheckCircle2, TrendingUp, Download, Tag } from 'lucide-react'
+import { Search, Filter, Store, DollarSign, CheckCircle2, TrendingUp, Download, Tag, Package, Box } from 'lucide-react'
 import { reportsApi } from '../api'
 import { itemsApi } from '@/modules/items/api'
 import { DataTable } from '@/components/shared/DataTable'
@@ -9,6 +9,12 @@ import { StatCard } from '@/components/shared/StatCard'
 import { formatCurrency } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/Skeleton'
 import * as XLSX from 'xlsx'
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
+  PieChart, Pie, Cell, Legend
+} from 'recharts'
+
+const COLORS = ['#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#f97316', '#eab308']
 
 export function PurchaseAnalyticsDashboard() {
   const [search, setSearch] = useState('')
@@ -92,6 +98,39 @@ export function PurchaseAnalyticsDashboard() {
     return { totalTaxable, totalTax, totalGrand, totalLines }
   }, [filteredLines])
 
+  // Derive Chart Data
+  const chartData = useMemo(() => {
+    const brands: Record<string, number> = {}
+    const categories: Record<string, number> = {}
+    const vendorTotals: Record<string, number> = {}
+    const products: Record<string, { qty: number, amount: number }> = {}
+
+    filteredLines.forEach((l: any) => {
+      const amount = Number(l.net_amount || 0)
+      const qty = Number(l.accepted_qty || 0)
+
+      const bName = l.brand_name || 'Unbranded'
+      const cName = l.category_name || 'Uncategorized'
+      const vName = l.vendor_name || 'Unknown'
+      const pName = l.product_name || 'Unknown'
+
+      brands[bName] = (brands[bName] || 0) + amount
+      categories[cName] = (categories[cName] || 0) + amount
+      vendorTotals[vName] = (vendorTotals[vName] || 0) + amount
+      
+      if (!products[pName]) products[pName] = { qty: 0, amount: 0 }
+      products[pName].qty += qty
+      products[pName].amount += amount
+    })
+
+    return {
+      brands: Object.entries(brands).map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount).slice(0, 10),
+      categories: Object.entries(categories).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10),
+      vendors: Object.entries(vendorTotals).map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount).slice(0, 5),
+      products: Object.entries(products).map(([name, data]) => ({ product_name: name, qty: data.qty, amount: data.amount })).sort((a, b) => b.amount - a.amount).slice(0, 5)
+    }
+  }, [filteredLines])
+
   // Derive Table Columns
   const columns = useMemo(() => {
     return [
@@ -100,6 +139,7 @@ export function PurchaseAnalyticsDashboard() {
       { header: 'RECEIVED DATE', accessorKey: 'received_date' },
       { header: 'PRODUCT', accessorKey: 'product_name' },
       { header: 'BRAND', accessorKey: 'brand_name' },
+      { header: 'CATEGORY', accessorKey: 'category_name' },
       { header: 'QTY', accessorKey: 'accepted_qty' },
       { header: 'RATE', accessorKey: 'rate' },
       { header: 'TAX', accessorKey: 'tax_amount' },
@@ -122,6 +162,7 @@ export function PurchaseAnalyticsDashboard() {
       'Product Code': r.product_code,
       'Product Name': r.product_name,
       'Brand': r.brand_name,
+      'Category': r.category_name,
       'Batch Code': r.batch_code,
       'Accepted Qty': Number(r.accepted_qty),
       'Rate': Number(r.rate),
@@ -148,6 +189,96 @@ export function PurchaseAnalyticsDashboard() {
         <StatCard label="Total Taxable" value={formatCurrency(stats.totalTaxable)} icon={DollarSign} tone="success" />
         <StatCard label="Total Tax" value={formatCurrency(stats.totalTax)} icon={TrendingUp} tone="neutral" />
         <StatCard label="Grand Total Value" value={formatCurrency(stats.totalGrand)} icon={CheckCircle2} tone="success" />
+      </div>
+
+      {/* Main Charts Row */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        
+        {/* Brand Performance */}
+        <div className="bg-white border border-[#e6e9ee] rounded-xl shadow-sm p-5">
+          <h3 className="text-sm font-semibold text-ink-900 mb-4 flex items-center gap-2"><Tag size={16} className="text-brand-500" /> Top Brands by Purchase Value</h3>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData.brands} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e5e7eb" />
+                <XAxis type="number" tickFormatter={(val) => `₹${(val/1000).toFixed(0)}k`} tick={{ fontSize: 12, fill: '#6b7280' }} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#4b5563' }} width={100} />
+                <RechartsTooltip 
+                  formatter={(value: any) => [formatCurrency(Number(value) || 0), 'Value']}
+                  contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                />
+                <Bar dataKey="amount" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Category Breakdown */}
+        <div className="bg-white border border-[#e6e9ee] rounded-xl shadow-sm p-5">
+          <h3 className="text-sm font-semibold text-ink-900 mb-4 flex items-center gap-2"><Package size={16} className="text-fuchsia-500" /> Purchase Value by Category</h3>
+          <div className="h-[300px] w-full flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={chartData.categories}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={80}
+                  outerRadius={110}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
+                  {chartData.categories.map((entry: any, index: number) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <RechartsTooltip 
+                  formatter={(value: any) => formatCurrency(Number(value) || 0)}
+                  contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                />
+                <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Leaderboards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Top Products */}
+        <div className="bg-white border border-[#e6e9ee] rounded-xl shadow-sm p-5">
+          <h3 className="text-sm font-semibold text-ink-900 mb-4 flex items-center gap-2"><Box size={16} className="text-emerald-500" /> Top 5 Purchased Products</h3>
+          <div className="space-y-4">
+            {chartData.products.map((p: any, i: number) => (
+              <div key={i} className="flex justify-between items-center pb-3 border-b border-border-subtle last:border-0 last:pb-0">
+                <div className="truncate pr-4">
+                  <p className="text-xs font-medium text-ink-900 truncate">{p.product_name}</p>
+                  <p className="text-[10px] text-ink-500">{p.qty} units purchased</p>
+                </div>
+                <div className="font-semibold text-xs text-ink-900">{formatCurrency(p.amount)}</div>
+              </div>
+            ))}
+            {chartData.products.length === 0 && <div className="text-xs text-ink-500 text-center py-4">No product data</div>}
+          </div>
+        </div>
+
+        {/* Top Vendors */}
+        <div className="bg-white border border-[#e6e9ee] rounded-xl shadow-sm p-5">
+          <h3 className="text-sm font-semibold text-ink-900 mb-4 flex items-center gap-2"><Store size={16} className="text-amber-500" /> Top 5 Vendors by Purchase Value</h3>
+          <div className="space-y-4">
+            {chartData.vendors.map((v: any, i: number) => (
+              <div key={i} className="flex justify-between items-center pb-3 border-b border-border-subtle last:border-0 last:pb-0">
+                <div className="truncate pr-4">
+                  <p className="text-xs font-medium text-ink-900 truncate">{v.name}</p>
+                </div>
+                <div className="font-semibold text-xs text-ink-900">{formatCurrency(v.amount)}</div>
+              </div>
+            ))}
+            {chartData.vendors.length === 0 && <div className="text-xs text-ink-500 text-center py-4">No vendor data</div>}
+          </div>
+        </div>
+
       </div>
 
       <div className="glass-card p-4 rounded-xl border border-[#e6e9ee] bg-white shadow-sm flex flex-col xl:flex-row gap-4 items-center justify-between w-full">
