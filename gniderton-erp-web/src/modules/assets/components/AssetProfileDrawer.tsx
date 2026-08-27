@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Drawer } from '@/components/ui/Drawer'
+import { Button } from '@/components/ui/Button'
 import { DataTable } from '@/components/shared/DataTable'
 import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
 import { api } from '@/lib/axios'
-import { Building2, Hash, Wrench, Wallet, TrendingUp, TrendingDown, Tags, FileText, IndianRupee } from 'lucide-react'
+import { Building2, Hash, Wrench, Wallet, TrendingUp, TrendingDown, Tags, FileText, IndianRupee, Plus } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts'
+import { AssignAssetModal } from './modals/AssignAssetModal'
+import { AddMaintenanceModal } from './modals/AddMaintenanceModal'
 
 interface Props {
   open: boolean
@@ -15,17 +18,20 @@ interface Props {
 }
 
 export function AssetProfileDrawer({ open, onClose, asset }: Props) {
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<'analytics' | 'subassets' | 'maintenance' | 'assignments' | 'depreciations'>('analytics')
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false)
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery({
     queryKey: ['asset-analytics', asset?.id],
-    queryFn: () => api.get(`/api/finance/assets/${asset?.id}/analytics`).then(res => res.data),
+    queryFn: () => api.get(`/api/assets/${asset?.id}/analytics`).then(res => res.data),
     enabled: !!asset?.id && activeTab === 'analytics'
   })
 
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['asset-profile', asset?.id],
-    queryFn: () => api.get(`/api/finance/assets/${asset?.id}/profile`).then(res => res.data),
+    queryFn: () => api.get(`/api/assets/${asset?.id}/profile`).then(res => res.data),
     enabled: !!asset?.id && (activeTab === 'maintenance' || activeTab === 'assignments' || activeTab === 'depreciations')
   })
 
@@ -173,34 +179,61 @@ export function AssetProfileDrawer({ open, onClose, asset }: Props) {
           )}
 
           {activeTab === 'maintenance' && (
-            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
-              <DataTable 
-                data={profile?.maintenance || []} 
-                columns={[
-                  { header: 'Date', accessorKey: 'maintenance_date', cell: (i: any) => i.getValue() ? format(new Date(i.getValue()), 'MMM dd, yyyy') : '-' },
-                  { header: 'Provider', accessorKey: 'service_provider' },
-                  { header: 'Remarks', accessorKey: 'remarks' },
-                  { header: 'Amount', accessorKey: 'amount', cell: (i: any) => formatCurrency(i.getValue()) }
-                ]}
-              />
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <Button size="sm" className="gap-2" onClick={() => setMaintenanceOpen(true)}>
+                  <Plus size={16} /> Log Maintenance
+                </Button>
+              </div>
+              <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+                <DataTable 
+                  data={profile?.maintenance || []} 
+                  columns={[
+                    { header: 'Date', accessorKey: 'maintenance_date', cell: (i: any) => i.getValue() ? format(new Date(i.getValue()), 'MMM dd, yyyy') : '-' },
+                    { header: 'Provider', accessorKey: 'service_provider' },
+                    { header: 'Remarks', accessorKey: 'remarks' },
+                    { header: 'Amount', accessorKey: 'amount', cell: (i: any) => formatCurrency(i.getValue()) }
+                  ]}
+                />
+              </div>
             </div>
           )}
 
           {activeTab === 'assignments' && (
-            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
-              <DataTable 
-                data={profile?.assignments || []} 
-                columns={[
-                  { header: 'Date', accessorKey: 'assigned_date', cell: (i: any) => i.getValue() ? format(new Date(i.getValue()), 'MMM dd, yyyy') : '-' },
-                  { header: 'Employee', accessorKey: 'employee_name' },
-                  { header: 'Status', accessorKey: 'status' }
-                ]}
-              />
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <Button size="sm" className="gap-2" onClick={() => setAssignOpen(true)}>
+                  <Plus size={16} /> Assign to Employee
+                </Button>
+              </div>
+              <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+                <DataTable 
+                  data={profile?.assignments || []} 
+                  columns={[
+                    { header: 'Date', accessorKey: 'assigned_date', cell: (i: any) => i.getValue() ? format(new Date(i.getValue()), 'MMM dd, yyyy') : '-' },
+                    { header: 'Employee', accessorKey: 'employee_name', cell: (i: any) => i.getValue() || 'Employee ID: ' + i.row.original.employee_id },
+                    { header: 'Status', accessorKey: 'status' }
+                  ]}
+                />
+              </div>
             </div>
           )}
 
         </div>
       </div>
+
+      <AssignAssetModal 
+        open={assignOpen} 
+        onClose={() => setAssignOpen(false)} 
+        asset={asset}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['asset-profile', asset?.id] })}
+      />
+      <AddMaintenanceModal 
+        open={maintenanceOpen} 
+        onClose={() => setMaintenanceOpen(false)} 
+        asset={asset}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['asset-profile', asset?.id] })}
+      />
     </Drawer>
   )
 }
