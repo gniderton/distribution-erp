@@ -8,9 +8,10 @@ import { useQueryClient } from '@tanstack/react-query'
 interface Props {
   open: boolean
   onClose: () => void
+  onSuccess?: () => void
 }
 
-export function CreateAssetEntityModal({ open, onClose }: Props) {
+export function CreateAssetEntityModal({ open, onClose, onSuccess }: Props) {
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState({
     entity_type: 'Vendor',
@@ -33,7 +34,7 @@ export function CreateAssetEntityModal({ open, onClose }: Props) {
     try {
       await assetsApi.createAssetEntities(formData)
       queryClient.invalidateQueries({ queryKey: ['asset-entities'] })
-      onClose()
+      onSuccess?.(); onClose();
     } catch (err) {
       console.error(err)
       alert("Failed to create entity")

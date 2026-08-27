@@ -8,9 +8,10 @@ import { useQueryClient } from '@tanstack/react-query'
 interface Props {
   open: boolean
   onClose: () => void
+  onSuccess?: () => void
 }
 
-export function CreateCategoryModal({ open, onClose }: Props) {
+export function CreateCategoryModal({ open, onClose, onSuccess }: Props) {
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState({
     category_name: '',
@@ -29,7 +30,7 @@ export function CreateCategoryModal({ open, onClose }: Props) {
     try {
       await assetsApi.createAssetCategory(formData)
       queryClient.invalidateQueries({ queryKey: ['asset-categories-list'] })
-      onClose()
+      onSuccess?.(); onClose();
     } catch (err) {
       console.error(err)
       alert("Failed to create category")

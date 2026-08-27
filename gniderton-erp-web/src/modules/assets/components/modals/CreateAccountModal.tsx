@@ -8,9 +8,10 @@ import { useQueryClient } from '@tanstack/react-query'
 interface Props {
   open: boolean
   onClose: () => void
+  onSuccess?: () => void
 }
 
-export function CreateAccountModal({ open, onClose }: Props) {
+export function CreateAccountModal({ open, onClose, onSuccess }: Props) {
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState({
     code: '',
@@ -29,7 +30,7 @@ export function CreateAccountModal({ open, onClose }: Props) {
     try {
       await assetsApi.createAssetAccount(formData)
       queryClient.invalidateQueries({ queryKey: ['asset-accounts-list'] })
-      onClose()
+      onSuccess?.(); onClose();
     } catch (err) {
       console.error(err)
       alert("Failed to create account")

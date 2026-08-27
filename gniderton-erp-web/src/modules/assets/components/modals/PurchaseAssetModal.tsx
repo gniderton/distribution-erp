@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Input, Label, Select } from '@/components/ui/Input'
 import { assetsApi } from '../../api'
+import { CreateCategoryModal } from './CreateCategoryModal'
+import { CreateAccountModal } from './CreateAccountModal'
+import { CreateAssetEntityModal } from './CreateAssetEntityModal'
 
 interface Props {
   open: boolean
@@ -12,10 +15,16 @@ interface Props {
 }
 
 export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
+  const queryClient = useQueryClient()
+  
   const { data: categories = [] } = useQuery({ queryKey: ['asset-categories'], queryFn: () => assetsApi.getAssetsCategories() })
   const { data: accounts = [] } = useQuery({ queryKey: ['asset-accounts'], queryFn: () => assetsApi.getAssetsAccounts() })
   const { data: entities = [] } = useQuery({ queryKey: ['asset-entities'], queryFn: () => assetsApi.getAssetEntities() })
   const { data: activeAssets = [] } = useQuery({ queryKey: ['assets'], queryFn: () => assetsApi.getAssets() })
+
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false)
+  const [isAccountOpen, setIsAccountOpen] = useState(false)
+  const [isVendorOpen, setIsVendorOpen] = useState(false)
 
   const [formData, setFormData] = useState({
     asset_name: '',
@@ -36,6 +45,22 @@ export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
+
+    if (value === 'CREATE_NEW_CATEGORY') {
+      setIsCategoryOpen(true)
+      setFormData(prev => ({ ...prev, [name]: '' }))
+      return
+    }
+    if (value === 'CREATE_NEW_ACCOUNT') {
+      setIsAccountOpen(true)
+      setFormData(prev => ({ ...prev, [name]: '' }))
+      return
+    }
+    if (value === 'CREATE_NEW_VENDOR') {
+      setIsVendorOpen(true)
+      setFormData(prev => ({ ...prev, [name]: '' }))
+      return
+    }
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked
       setFormData(prev => {
@@ -102,6 +127,7 @@ export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
   }
 
   return (
+    <>
     <Drawer 
       open={open} 
       onClose={onClose} 
@@ -159,6 +185,7 @@ export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
                       {c.category_name || c}
                     </option>
                   ))}
+                  <option value="CREATE_NEW_CATEGORY" className="font-bold text-brand-600">+ Create New Category</option>
                 </Select>
               </div>
               
@@ -174,6 +201,7 @@ export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
                   {accounts.map((a: any) => (
                     <option key={a.code} value={a.code}>{a.name} ({a.code})</option>
                   ))}
+                  <option value="CREATE_NEW_ACCOUNT" className="font-bold text-brand-600">+ Create New Account</option>
                 </Select>
               </div>
             </div>
@@ -190,6 +218,7 @@ export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
                 {entities.map((e: any) => (
                   <option key={e.id} value={e.id}>{e.entity_name}</option>
                 ))}
+                <option value="CREATE_NEW_VENDOR" className="font-bold text-brand-600">+ Create New Vendor</option>
               </Select>
             </div>
           </section>
@@ -301,5 +330,22 @@ export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
         </div>
       </form>
     </Drawer>
+
+    <CreateCategoryModal 
+      open={isCategoryOpen} 
+      onClose={() => setIsCategoryOpen(false)}
+      onSuccess={() => queryClient.invalidateQueries({ queryKey: ['asset-categories'] })}
+    />
+    <CreateAccountModal 
+      open={isAccountOpen} 
+      onClose={() => setIsAccountOpen(false)}
+      onSuccess={() => queryClient.invalidateQueries({ queryKey: ['asset-accounts'] })}
+    />
+    <CreateAssetEntityModal 
+      open={isVendorOpen} 
+      onClose={() => setIsVendorOpen(false)}
+      onSuccess={() => queryClient.invalidateQueries({ queryKey: ['asset-entities'] })}
+    />
+    </>
   )
 }
