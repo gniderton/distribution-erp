@@ -3,7 +3,7 @@ import { api } from '@/lib/axios'
 /** Full endpoint surface for the Assets module — extracted from the source app (Build Spec §8). */
 export const assetsApi = {
   getAssetEntities: () => api.get('/api/asset-entities').then((r) => r.data),
-  getAssetEntitiesLedger: (id: string | number) => api.get(`/api/asset-entities/${id}/ledger`).then((r) => r.data),
+  getAssetEntitiesLedger: (id: string | number, params?: any) => api.get(`/api/asset-entities/${id}/ledger`, { params }).then((r) => r.data),
   getAssets: () => api.get('/api/assets').then((r) => r.data),
   getAssetsAccounts: () => api.get('/api/assets/accounts').then((r) => r.data),
   getAssetsCategories: () => api.get('/api/assets/categories').then((r) => r.data),
