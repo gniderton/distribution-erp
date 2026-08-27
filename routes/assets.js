@@ -736,7 +736,60 @@ router.get('/depreciations', async (req, res) => {
 // @route   GET /api/finance/assets/categories
 // @desc    Get list of asset categories
 router.get('/categories', async (req, res) => {
-    res.json(['Vehicles', 'Machinery', 'Furniture', 'Electronics', 'Buildings', 'Land', 'Software']);
+    try {
+        const result = await pool.query('SELECT * FROM asset_categories ORDER BY category_name ASC');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   POST /api/finance/assets/categories
+// @desc    Create new asset category
+router.post('/categories', async (req, res) => {
+    try {
+        const { category_name, default_depreciation_rate, default_depreciation_method } = req.body;
+        const result = await pool.query(`
+            INSERT INTO asset_categories (category_name, default_depreciation_rate, default_depreciation_method)
+            VALUES ($1, $2, $3) RETURNING *
+        `, [category_name, default_depreciation_rate || 0, default_depreciation_method || 'Straight Line']);
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   PUT /api/finance/assets/categories/:id
+// @desc    Update asset category
+router.put('/categories/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { category_name, default_depreciation_rate, default_depreciation_method, status } = req.body;
+        const result = await pool.query(`
+            UPDATE asset_categories
+            SET category_name = COALESCE($1, category_name),
+                default_depreciation_rate = COALESCE($2, default_depreciation_rate),
+                default_depreciation_method = COALESCE($3, default_depreciation_method),
+                status = COALESCE($4, status),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $5 RETURNING *
+        `, [category_name, default_depreciation_rate, default_depreciation_method, status, id]);
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   DELETE /api/finance/assets/categories/:id
+// @desc    Delete asset category
+router.delete('/categories/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await pool.query('DELETE FROM asset_categories WHERE id = $1', [id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // @route   GET /api/finance/assets/accounts
@@ -750,6 +803,21 @@ router.get('/accounts', async (req, res) => {
             ORDER BY code ASC
         `);
         res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   POST /api/finance/assets/accounts
+// @desc    Create new asset account in COA
+router.post('/accounts', async (req, res) => {
+    try {
+        const { code, name, description } = req.body;
+        const result = await pool.query(`
+            INSERT INTO chart_of_accounts (code, name, type, description)
+            VALUES ($1, $2, 'ASSET', $3) RETURNING *
+        `, [code, name, description]);
+        res.status(201).json(result.rows[0]);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

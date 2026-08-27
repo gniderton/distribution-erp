@@ -4,45 +4,42 @@ import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { DataTable } from '@/components/shared/DataTable'
 import { assetsApi } from '../api'
-import { CreateCategoryModal } from './modals/CreateCategoryModal'
+import { CreateAccountModal } from './modals/CreateAccountModal'
 
-export function AssetCategories() {
+export function AssetAccounts() {
   const [createOpen, setCreateOpen] = useState(false)
 
-  const { data: categories, isLoading, isError } = useQuery({
-    queryKey: ['asset-categories-list'],
-    queryFn: () => assetsApi.getAssetsCategories()
+  const { data: accounts, isLoading, isError } = useQuery({
+    queryKey: ['asset-accounts-list'],
+    queryFn: () => assetsApi.getAssetsAccounts()
   })
 
   const columns = useMemo(() => [
-    { header: 'ID', accessorKey: 'id' },
-    { header: 'Category Name', accessorKey: 'category_name' },
-    { header: 'Depreciation Rate (%)', accessorKey: 'default_depreciation_rate' },
-    { header: 'Depreciation Method', accessorKey: 'default_depreciation_method' },
-    { header: 'Status', accessorKey: 'status' }
+    { header: 'Account Code', accessorKey: 'code' },
+    { header: 'Account Name', accessorKey: 'name' }
   ], [])
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
-        <h3 className="font-medium text-ink-900">Asset Categories</h3>
+        <h3 className="font-medium text-ink-900">Asset Accounts</h3>
         <Button size="sm" className="gap-2" onClick={() => setCreateOpen(true)}>
           <Plus size={16} />
-          New Category
+          New Account
         </Button>
       </div>
 
       <div className="bg-white rounded-xl border border-border-subtle overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-ink-500">Loading categories...</div>
+          <div className="p-8 text-center text-ink-500">Loading accounts...</div>
         ) : isError ? (
-          <div className="p-8 text-center text-red-500">Failed to load categories.</div>
+          <div className="p-8 text-center text-red-500">Failed to load accounts.</div>
         ) : (
-          <DataTable data={categories || []} columns={columns} />
+          <DataTable data={accounts || []} columns={columns} />
         )}
       </div>
 
-      <CreateCategoryModal 
+      <CreateAccountModal 
         open={createOpen} 
         onClose={() => setCreateOpen(false)} 
       />

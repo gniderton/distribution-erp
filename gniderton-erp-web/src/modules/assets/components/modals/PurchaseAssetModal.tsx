@@ -133,8 +133,10 @@ export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
                   onChange={handleChange}
                 >
                   <option value="">-- Select --</option>
-                  {categories.map((c: string) => (
-                    <option key={c} value={c}>{c}</option>
+                  {categories.map((c: any) => (
+                    <option key={c.id || c.category_name || c} value={c.category_name || c}>
+                      {c.category_name || c}
+                    </option>
                   ))}
                 </Select>
               </div>

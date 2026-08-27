@@ -23,4 +23,10 @@ export const assetsApi = {
   assignAsset: (id: string | number, payload: any = {}) => api.post(`/api/assets/${id}/assign`, payload).then((r) => r.data),
   addMaintenanceLog: (id: string | number, payload: any = {}) => api.post(`/api/assets/${id}/maintenance`, payload).then((r) => r.data),
   getAssetProfile: (id: string | number) => api.get(`/api/assets/${id}/profile`).then((r) => r.data),
+  
+  createAssetCategory: (payload: any) => api.post('/api/assets/categories', payload).then((r) => r.data),
+  updateAssetCategory: (id: string | number, payload: any) => api.put(`/api/assets/categories/${id}`, payload).then((r) => r.data),
+  deleteAssetCategory: (id: string | number) => api.delete(`/api/assets/categories/${id}`).then((r) => r.data),
+  createAssetAccount: (payload: any) => api.post('/api/assets/accounts', payload).then((r) => r.data),
+  updateAssetEntity: (id: string | number, payload: any) => api.put(`/api/asset-entities/${id}`, payload).then((r) => r.data),
 }
