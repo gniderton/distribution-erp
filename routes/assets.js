@@ -842,18 +842,50 @@ router.post('/:id/scrap', async (req, res) => {
         if (assetRes.rows.length === 0) throw new Error('Asset not found');
         const asset = assetRes.rows[0];
         
+        const purchaseCost = Number(asset.purchase_cost);
+        const accumDep = Number(asset.total_dep);
+        const scrapValue = Number(scrap_amount) || 0;
+        const lossAmount = purchaseCost - accumDep - scrapValue;
+        
         // 2. Mark as Scrapped
         await client.query(`
             UPDATE assets 
             SET status = 'Scrapped', is_scrapped = true, scrap_date = $1, scrap_amount = $2, scrap_remarks = $3
             WHERE id = $4
-        `, [scrap_date, scrap_amount || 0, remarks, assetId]);
+        `, [scrap_date, scrapValue, remarks, assetId]);
         
-        if (Number(scrap_amount) > 0) {
+        // 3. Create Journal Entries
+        // Debit: Accum Dep
+        // Debit: Bank/Cash (If scrapValue > 0)
+        // Debit: Loss on Asset Write-off (5021)
+        // Credit: Asset Account (Original Cost)
+        const ledgerLines = [];
+        
+        if (accumDep > 0) {
+            ledgerLines.push({ code: asset.accum_dep_account_code, debit: accumDep, credit: 0 });
+        }
+        if (scrapValue > 0) {
+            ledgerLines.push({ code: 1002, debit: scrapValue, credit: 0 }); // 1002 is Bank Account
+        }
+        if (lossAmount > 0) {
+            ledgerLines.push({ code: 5021, debit: lossAmount, credit: 0 }); // 5021 is Loss on Sale of Assets
+        } else if (lossAmount < 0) {
+            // It's a profit
+            ledgerLines.push({ code: 4010, debit: 0, credit: Math.abs(lossAmount) }); // 4010 is Gain on Sale of Assets
+        }
+        
+        ledgerLines.push({ code: asset.asset_account_code, debit: 0, credit: purchaseCost });
+        
+        const description = `Asset Write-Off/Scrap: ${asset.asset_name}`;
+        const journalId = await client.query(`SELECT create_journal_entry($1, $2, $3, $4, $5)`,
+            [scrap_date, description, 'ASSET_SCRAP', assetId, JSON.stringify(ledgerLines)]);
+            
+        // 4. Record Asset Transaction
+        if (scrapValue > 0) {
             await client.query(`
-                INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, remarks)
-                VALUES ($1, 'SCRAP_RECEIPT', $2, $3, $4)
-            `, [assetId, scrap_date, scrap_amount, remarks]);
+                INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, remarks, journal_entry_id)
+                VALUES ($1, 'SCRAP_RECEIPT', $2, $3, $4, $5)
+            `, [assetId, scrap_date, scrapValue, remarks, journalId.rows[0].create_journal_entry]);
         }
         
         await client.query('COMMIT');

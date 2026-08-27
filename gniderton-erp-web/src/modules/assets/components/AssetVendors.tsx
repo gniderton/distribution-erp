@@ -1,14 +1,16 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, User } from 'lucide-react'
+import { Plus, User, Edit2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { DataTable } from '@/components/shared/DataTable'
 import { assetsApi } from '../api'
 import { CreateAssetEntityModal } from './modals/CreateAssetEntityModal'
+import { EditAssetEntityModal } from './modals/EditAssetEntityModal'
 import { AssetVendorProfileDrawer } from './AssetVendorProfileDrawer'
 
 export function AssetVendors() {
   const [createOpen, setCreateOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const [selectedVendor, setSelectedVendor] = useState<any>(null)
   const [profileOpen, setProfileOpen] = useState(false)
 
@@ -26,13 +28,22 @@ export function AssetVendors() {
       header: 'Actions',
       id: 'actions',
       cell: ({ row }: any) => (
-        <button 
-          onClick={() => { setSelectedVendor(row.original); setProfileOpen(true) }}
-          className="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 tooltip-trigger"
-          title="View Ledger & Profile"
-        >
-          <User size={14} />
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => { setSelectedVendor(row.original); setProfileOpen(true) }}
+            className="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 tooltip-trigger"
+            title="View Ledger & Profile"
+          >
+            <User size={14} />
+          </button>
+          <button 
+            onClick={() => { setSelectedVendor(row.original); setEditOpen(true) }}
+            className="p-1.5 text-amber-600 bg-amber-50 rounded hover:bg-amber-100 tooltip-trigger"
+            title="Edit Vendor"
+          >
+            <Edit2 size={14} />
+          </button>
+        </div>
       )
     }
   ], [])
@@ -60,6 +71,11 @@ export function AssetVendors() {
       <CreateAssetEntityModal 
         open={createOpen} 
         onClose={() => setCreateOpen(false)} 
+      />
+      <EditAssetEntityModal 
+        open={editOpen} 
+        onClose={() => setEditOpen(false)} 
+        entity={selectedVendor}
       />
       <AssetVendorProfileDrawer
         open={profileOpen}
