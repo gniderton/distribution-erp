@@ -23,7 +23,8 @@ router.post('/', async (req, res) => {
             tax_amount,          
             gst_no,              
             bill_no,             
-            created_by           
+            created_by,
+            parent_asset_id
         } = req.body;
 
         const effective_purchase_entity_id = purchase_entity_id || vendor_id;
@@ -46,15 +47,15 @@ router.post('/', async (req, res) => {
                 useful_life_years, salvage_value, asset_account_code, 
                 vendor_id, purchase_entity_id,
                 is_gst_purchase, taxable_amount, tax_amount, gst_no, bill_no, created_by,
-                asset_purchase_no
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                asset_purchase_no, parent_asset_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             RETURNING id
         `, [
             asset_name, category, purchase_date, purchase_cost,
             useful_life_years, salvage_value, asset_account_code, 
             effective_purchase_entity_id, effective_purchase_entity_id,
             is_gst_purchase || false, taxable_amount || 0, tax_amount || 0, gst_no, bill_no, created_by,
-            assetPurchaseNo
+            assetPurchaseNo, parent_asset_id || null
         ]);
 
         const assetId = assetRes.rows[0].id;
@@ -109,6 +110,7 @@ router.get('/', async (req, res) => {
         const result = await pool.query(`
             SELECT 
                 a.*,
+                pa.asset_name as parent_asset_name,
                 pe.entity_name as purchase_vendor_name,
                 pe.gst_number as purchase_vendor_gst,
                 se.entity_name as sale_customer_name,
@@ -118,6 +120,7 @@ router.get('/', async (req, res) => {
                 (a.purchase_cost - COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'DEPRECIATION'), 0)) as net_book_value,
                 (a.purchase_cost - COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'PAYMENT'), 0)) as balance_payable
             FROM assets a
+            LEFT JOIN assets pa ON a.parent_asset_id = pa.id
             LEFT JOIN asset_entities pe ON a.purchase_entity_id = pe.id
             LEFT JOIN asset_entities se ON a.sale_entity_id = se.id
             ORDER BY a.purchase_date DESC, a.created_at DESC
@@ -944,8 +947,83 @@ router.get('/:id/profile', async (req, res) => {
     try {
         const assignments = await pool.query('SELECT * FROM asset_assignments WHERE asset_id = $1 ORDER BY assigned_date DESC', [req.params.id]);
         const maintenance = await pool.query('SELECT * FROM asset_maintenance WHERE asset_id = $1 ORDER BY maintenance_date DESC', [req.params.id]);
-        res.json({ assignments: assignments.rows, maintenance: maintenance.rows });
+        const depreciations = await pool.query('SELECT * FROM asset_transactions WHERE asset_id = $1 AND transaction_type = $2 ORDER BY transaction_date DESC', [req.params.id, 'DEPRECIATION']);
+        res.json({ assignments: assignments.rows, maintenance: maintenance.rows, depreciations: depreciations.rows });
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   GET /api/finance/assets/:id/analytics
+// @desc    Get ROI Analytics for an Asset (including TCO, Expenses, Income, Depreciation)
+router.get('/:id/analytics', async (req, res) => {
+    try {
+        const assetId = req.params.id;
+        
+        // 1. Sub-assets
+        const subAssetsRes = await pool.query(`SELECT id, asset_name, purchase_cost FROM assets WHERE parent_asset_id = $1 AND status != 'Scrapped'`, [assetId]);
+        
+        // 2. Expenses tied to this asset
+        const expensesRes = await pool.query(`
+            SELECT COALESCE(SUM(grand_total), 0) as total_expenses 
+            FROM expenses WHERE asset_id = $1 AND is_active = true
+        `, [assetId]);
+        
+        // 3. Maintenance tied to this asset (if any)
+        const maintenanceRes = await pool.query(`
+            SELECT COALESCE(SUM(amount), 0) as total_maintenance 
+            FROM asset_maintenance WHERE asset_id = $1
+        `, [assetId]);
+
+        // 4. Income tied to this asset
+        const incomeRes = await pool.query(`
+            SELECT COALESCE(SUM(amount), 0) as total_income 
+            FROM other_income WHERE asset_id = $1 AND is_active = true
+        `, [assetId]);
+        
+        // 5. Depreciation
+        const depRes = await pool.query(`
+            SELECT COALESCE(SUM(amount), 0) as total_depreciation 
+            FROM asset_transactions WHERE asset_id = $1 AND transaction_type = 'DEPRECIATION'
+        `, [assetId]);
+        
+        // 6. Monthly Trend (for charts)
+        const trendRes = await pool.query(`
+            WITH months AS (
+                SELECT date_trunc('month', d)::date as month
+                FROM generate_series(
+                    (SELECT COALESCE(MIN(purchase_date), CURRENT_DATE - INTERVAL '6 months') FROM assets WHERE id = $1),
+                    CURRENT_DATE,
+                    '1 month'
+                ) d
+            ),
+            exp_trend AS (
+                SELECT date_trunc('month', expense_date)::date as month, SUM(grand_total) as val
+                FROM expenses WHERE asset_id = $1 AND is_active = true GROUP BY 1
+            ),
+            inc_trend AS (
+                SELECT date_trunc('month', transaction_date)::date as month, SUM(amount) as val
+                FROM other_income WHERE asset_id = $1 AND is_active = true GROUP BY 1
+            )
+            SELECT 
+                to_char(m.month, 'Mon YYYY') as name,
+                COALESCE(e.val, 0) as expense,
+                COALESCE(i.val, 0) as income
+            FROM months m
+            LEFT JOIN exp_trend e ON m.month = e.month
+            LEFT JOIN inc_trend i ON m.month = i.month
+            ORDER BY m.month ASC
+        `, [assetId]);
+
+        res.json({
+            sub_assets: subAssetsRes.rows,
+            total_expenses: Number(expensesRes.rows[0].total_expenses) + Number(maintenanceRes.rows[0].total_maintenance),
+            total_income: Number(incomeRes.rows[0].total_income),
+            total_depreciation: Number(depRes.rows[0].total_depreciation),
+            trend: trendRes.rows
+        });
+    } catch (err) {
+        console.error('Analytics Error:', err);
         res.status(500).json({ error: err.message });
     }
 });

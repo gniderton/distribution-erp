@@ -89,6 +89,7 @@ router.post('/', async (req, res) => {
         bank_id,
         bank_name: chq_bank_name,
         bank_statement_entry_id,
+        asset_id,
         user_id
     } = req.body;
 
@@ -101,6 +102,7 @@ router.post('/', async (req, res) => {
         const pSourceId = cleanID(payment_source_id);
         const pCatId = cleanID(category_account_id);
         const cleanStmtId = cleanID(bank_statement_entry_id);
+        const cleanAssetId = cleanID(asset_id);
 
         let resolvedPaymentSourceId = pSourceId;
 
@@ -179,14 +181,14 @@ router.post('/', async (req, res) => {
                 expense_date, category_account_id, payment_source_id, 
                 taxable_amount, tax_amount, grand_total, is_gst_expense,
                 entity_id, bill_no, gst_no, description, reference_no,
-                created_by, journal_entry_id, expense_number, bank_statement_entry_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                created_by, journal_entry_id, expense_number, bank_statement_entry_id, asset_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             RETURNING id
         `, [
             expense_date || new Date(), pCatId, resolvedPaymentSourceId,
             taxable_amount, tax_amount, grand_total, is_gst_expense,
             vendor_name, bill_no, gst_no, description, reference_no,
-            user_id, journalEntryId, expenseNumber, cleanStmtId
+            user_id, journalEntryId, expenseNumber, cleanStmtId, cleanAssetId
         ]);
         const expenseId = expenseRes.rows[0].id;
 

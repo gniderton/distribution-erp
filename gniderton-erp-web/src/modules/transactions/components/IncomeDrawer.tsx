@@ -3,6 +3,8 @@ import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { Input, Label, Select } from '@/components/ui/Input'
 import toast from 'react-hot-toast'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/axios'
 import { useCreateOtherIncome, useOtherIncomeCategories, useIncomeEntities, useBankAccounts, useUnconsumedCredits, useCreateIncomeEntity } from '../hooks'
 
 interface Props {
@@ -18,6 +20,11 @@ export function IncomeDrawer({ open, onClose }: Props) {
   const { data: unconsumedCredits = [] } = useUnconsumedCredits()
   const { mutate: createEntity, isPending: isCreatingEntity } = useCreateIncomeEntity()
 
+  const { data: assets = [] } = useQuery({
+    queryKey: ['assets'],
+    queryFn: () => api.get('/api/finance/assets').then(res => res.data)
+  })
+
   const [paymentMode, setPaymentMode] = useState('Online')
   const [showCreateEntity, setShowCreateEntity] = useState(false)
   const [newEntityName, setNewEntityName] = useState('')
@@ -26,6 +33,7 @@ export function IncomeDrawer({ open, onClose }: Props) {
     transaction_date: new Date().toISOString().split('T')[0],
     category_account_id: '',
     entity_id: '',
+    asset_id: '',
     payment_source_id: '',
     bank_statement_entry_id: '',
     cheque_no: '',
@@ -189,6 +197,21 @@ export function IncomeDrawer({ open, onClose }: Props) {
             <option value="">Select a category</option>
             {categories.map((cat: any) => (
               <option key={cat.id} value={cat.id}>{cat.name}</option>
+            ))}
+          </Select>
+        </div>
+
+        <div>
+          <Label htmlFor="asset_id">Tag to Asset (Optional)</Label>
+          <Select 
+            id="asset_id" 
+            name="asset_id" 
+            value={formData.asset_id} 
+            onChange={handleChange}
+          >
+            <option value="">-- No Asset --</option>
+            {assets.filter((a: any) => a.status === 'Active').map((a: any) => (
+              <option key={a.id} value={a.id}>{a.asset_name}</option>
             ))}
           </Select>
         </div>

@@ -15,10 +15,12 @@ export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
   const { data: categories = [] } = useQuery({ queryKey: ['asset-categories'], queryFn: () => assetsApi.getAssetsCategories() })
   const { data: accounts = [] } = useQuery({ queryKey: ['asset-accounts'], queryFn: () => assetsApi.getAssetsAccounts() })
   const { data: entities = [] } = useQuery({ queryKey: ['asset-entities'], queryFn: () => assetsApi.getAssetEntities() })
+  const { data: activeAssets = [] } = useQuery({ queryKey: ['assets'], queryFn: () => assetsApi.getAssets() })
 
   const [formData, setFormData] = useState({
     asset_name: '',
     category: '',
+    parent_asset_id: '',
     purchase_date: new Date().toISOString().split('T')[0],
     purchase_cost: '', // Grand Total
     useful_life_years: '5',
@@ -85,7 +87,10 @@ export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
     if (!isValid) return
     setIsSubmitting(true)
     try {
-      await assetsApi.createAssets(formData)
+      await assetsApi.createAssets({
+        ...formData,
+        parent_asset_id: formData.parent_asset_id || undefined
+      })
       onSuccess()
       onClose()
     } catch (err) {
@@ -112,18 +117,34 @@ export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
           <section className="space-y-4">
             <h3 className="text-sm font-medium text-brand-600 border-b border-border-subtle pb-2">Asset Info</h3>
             
-            <div>
-              <Label>Name</Label>
-              <Input 
-                name="asset_name"
-                required
-                value={formData.asset_name}
-                onChange={handleChange}
-                placeholder="e.g. MacBook Pro M3"
-              />
-            </div>
-            
             <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <Label>Name</Label>
+                <Input 
+                  name="asset_name"
+                  required
+                  value={formData.asset_name}
+                  onChange={handleChange}
+                  placeholder="e.g. MacBook Pro M3"
+                />
+              </div>
+
+              <div>
+                <Label>Parent Asset (Optional)</Label>
+                <Select 
+                  name="parent_asset_id"
+                  value={formData.parent_asset_id}
+                  onChange={handleChange}
+                >
+                  <option value="">-- None (Standalone Asset) --</option>
+                  {activeAssets.filter((a: any) => a.status === 'Active' && !a.parent_asset_id).map((a: any) => (
+                    <option key={a.id} value={a.id}>
+                      {a.asset_name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
               <div>
                 <Label>Category</Label>
                 <Select 

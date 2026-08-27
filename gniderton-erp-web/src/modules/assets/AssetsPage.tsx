@@ -5,13 +5,15 @@ import { AssetVendors } from './components/AssetVendors'
 // Note: We'll create AssetCategories and AssetAccounts next.
 import { AssetCategories } from './components/AssetCategories'
 import { AssetAccounts } from './components/AssetAccounts'
-import { LayoutList, Tags, Users, Wallet } from 'lucide-react'
+import { AssetDepreciations } from './components/AssetDepreciations'
+import { LayoutList, Tags, Users, Wallet, TrendingDown } from 'lucide-react'
 
 export default function AssetsPage() {
-  const [activeTab, setActiveTab] = useState<'register' | 'vendors' | 'categories' | 'accounts'>('register')
+  const [activeTab, setActiveTab] = useState<'register' | 'vendors' | 'categories' | 'accounts' | 'depreciations'>('register')
 
   const tabs = [
     { id: 'register', label: 'Asset Register', icon: LayoutList },
+    { id: 'depreciations', label: 'Depreciations', icon: TrendingDown },
     { id: 'vendors', label: 'Entities', icon: Users },
     { id: 'categories', label: 'Categories', icon: Tags },
     { id: 'accounts', label: 'Accounts', icon: Wallet },
@@ -46,6 +48,7 @@ export default function AssetsPage() {
       {/* Content */}
       <div className="min-h-[500px]">
         {activeTab === 'register' && <AssetRegister />}
+        {activeTab === 'depreciations' && <AssetDepreciations />}
         {activeTab === 'vendors' && <AssetVendors />}
         {activeTab === 'categories' && <AssetCategories />}
         {activeTab === 'accounts' && <AssetAccounts />}

@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, Wrench, UserPlus, FileText, CheckCircle2, AlertCircle } from 'lucide-react'
 import { Drawer } from '@/components/ui/Drawer'
-import { Button } from '@/components/ui/Button'
-import { format } from 'date-fns'
+import { DataTable } from '@/components/shared/DataTable'
 import { formatCurrency } from '@/lib/utils'
-import { assetsApi } from '../api'
+import { format } from 'date-fns'
+import { api } from '@/lib/axios'
+import { Building2, Hash, Wrench, Wallet, TrendingUp, TrendingDown, Tags, FileText, IndianRupee } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts'
 
 interface Props {
   open: boolean
@@ -14,171 +15,191 @@ interface Props {
 }
 
 export function AssetProfileDrawer({ open, onClose, asset }: Props) {
-  const [activeTab, setActiveTab] = useState<'custody' | 'maintenance' | 'documents'>('custody')
+  const [activeTab, setActiveTab] = useState<'analytics' | 'subassets' | 'maintenance' | 'assignments' | 'depreciations'>('analytics')
 
-  const { data: profile, isLoading } = useQuery({
+  const { data: analytics, isLoading: analyticsLoading } = useQuery({
+    queryKey: ['asset-analytics', asset?.id],
+    queryFn: () => api.get(`/api/finance/assets/${asset?.id}/analytics`).then(res => res.data),
+    enabled: !!asset?.id && activeTab === 'analytics'
+  })
+
+  const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['asset-profile', asset?.id],
-    queryFn: () => assetsApi.getAssetProfile(asset.id),
-    enabled: !!asset?.id && open
+    queryFn: () => api.get(`/api/finance/assets/${asset?.id}/profile`).then(res => res.data),
+    enabled: !!asset?.id && (activeTab === 'maintenance' || activeTab === 'assignments' || activeTab === 'depreciations')
   })
 
   if (!asset) return null
+
+  const netROI = (analytics?.total_income || 0) - (analytics?.total_expenses || 0) - (analytics?.total_depreciation || 0)
+  const roiIsPositive = netROI >= 0
 
   return (
     <Drawer 
       open={open} 
       onClose={onClose} 
-      title={
-        <div className="flex items-center gap-2">
-          {asset.asset_name}
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-50 text-brand-700 border border-brand-200">
-            {asset.status}
-          </span>
-        </div>
-      }
-      description={asset.category}
-      widthClass="max-w-2xl"
+      title={asset.asset_name}
+      description="Asset Profitability & Sub-asset Tracking"
+      widthClass="max-w-4xl"
     >
       <div className="flex flex-col h-full -mx-6 -my-5">
         
-        {/* Custom Header Stats */}
-        <div className="px-6 pb-4 bg-white border-b border-border-subtle shrink-0">
-          <div className="flex gap-6 mt-2">
-            <div>
-              <p className="text-xs text-ink-500 font-medium mb-1">Current Value</p>
-              <p className="text-base font-semibold text-ink-900">{formatCurrency(asset.net_book_value)}</p>
+        {/* Header */}
+        <div className="bg-brand-50 border-b border-brand-100 p-6 shrink-0">
+          <div className="flex gap-4 items-start">
+            <div className="h-16 w-16 bg-white rounded-xl shadow-sm border border-brand-100 flex items-center justify-center text-brand-600">
+              <Building2 size={32} />
             </div>
             <div>
-              <p className="text-xs text-ink-500 font-medium mb-1">Custodian</p>
-              <p className="text-sm font-medium text-ink-900 mt-1">{asset.custodian || 'Unassigned'}</p>
+              <h2 className="text-xl font-bold text-brand-900">{asset.asset_name}</h2>
+              <div className="flex items-center gap-4 mt-2 text-sm text-brand-700">
+                <span className="flex items-center gap-1"><Tags size={14} /> {asset.category}</span>
+                <span className="flex items-center gap-1"><Hash size={14} /> {asset.asset_purchase_no}</span>
+                <span className="flex items-center gap-1 font-medium text-brand-800">
+                  Val: {formatCurrency(asset.net_book_value || asset.purchase_cost)}
+                </span>
+                {asset.parent_asset_name && (
+                  <span className="bg-brand-200 text-brand-800 px-2 py-0.5 rounded-full text-xs font-semibold">
+                    Child of: {asset.parent_asset_name}
+                  </span>
+                )}
+              </div>
             </div>
+          </div>
+          
+          {/* Tabs */}
+          <div className="flex gap-6 mt-6 border-b border-brand-200">
+            {[
+              { id: 'analytics', label: 'ROI Analytics', icon: TrendingUp },
+              { id: 'subassets', label: 'Sub-Assets', icon: Tags },
+              { id: 'depreciations', label: 'Depreciations', icon: TrendingDown },
+              { id: 'maintenance', label: 'Maintenance & Repairs', icon: Wrench },
+              { id: 'assignments', label: 'Assignments', icon: FileText }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 pb-3 text-sm font-semibold transition-colors border-b-2 -mb-[1px] ${
+                  activeTab === tab.id 
+                    ? 'border-brand-600 text-brand-800' 
+                    : 'border-transparent text-brand-600/70 hover:text-brand-800'
+                }`}
+              >
+                <tab.icon size={16} /> {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="px-6 pt-4 bg-white border-b border-border-subtle shrink-0 flex gap-6">
-          <button
-            onClick={() => setActiveTab('custody')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'custody' ? 'border-brand-500 text-brand-700' : 'border-transparent text-ink-500 hover:text-ink-900'
-            }`}
-          >
-            Custody
-          </button>
-          <button
-            onClick={() => setActiveTab('maintenance')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'maintenance' ? 'border-brand-500 text-brand-700' : 'border-transparent text-ink-500 hover:text-ink-900'
-            }`}
-          >
-            Maintenance
-          </button>
-          <button
-            onClick={() => setActiveTab('documents')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'documents' ? 'border-brand-500 text-brand-700' : 'border-transparent text-ink-500 hover:text-ink-900'
-            }`}
-          >
-            Documents
-          </button>
-        </div>
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {isLoading ? (
-            <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div></div>
-          ) : (
-            <>
-              {/* Custody Tab */}
-              {activeTab === 'custody' && (
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-medium text-ink-900">Assignment History</h3>
-                    <Button size="sm" variant="secondary" className="gap-2">
-                      <UserPlus size={14} /> Assign Asset
-                    </Button>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+          
+          {activeTab === 'analytics' && (
+            <div className="space-y-6">
+              {analyticsLoading ? (
+                <div className="text-center p-8 text-ink-500">Calculating advanced ROI metrics...</div>
+              ) : (
+                <>
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
+                      <div className="text-xs font-bold text-ink-500 uppercase tracking-wider mb-1">Total Income</div>
+                      <div className="text-xl font-bold text-emerald-600">{formatCurrency(analytics?.total_income || 0)}</div>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
+                      <div className="text-xs font-bold text-ink-500 uppercase tracking-wider mb-1">Maint. & Expenses</div>
+                      <div className="text-xl font-bold text-rose-600">{formatCurrency(analytics?.total_expenses || 0)}</div>
+                    </div>
+                    <div className="bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
+                      <div className="text-xs font-bold text-ink-500 uppercase tracking-wider mb-1">Depreciation</div>
+                      <div className="text-xl font-bold text-amber-600">{formatCurrency(analytics?.total_depreciation || 0)}</div>
+                    </div>
+                    <div className={`p-4 rounded-xl border shadow-sm ${roiIsPositive ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+                      <div className={`text-xs font-bold uppercase tracking-wider mb-1 ${roiIsPositive ? 'text-emerald-700' : 'text-rose-700'}`}>Net ROI Profitability</div>
+                      <div className={`text-xl font-bold ${roiIsPositive ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {formatCurrency(netROI)}
+                      </div>
+                    </div>
                   </div>
-                  
-                  {profile?.assignments?.length > 0 ? (
-                    <div className="space-y-3">
-                      {profile.assignments.map((a: any) => (
-                        <div key={a.id} className="p-4 bg-white rounded-lg border border-border-subtle flex justify-between items-center">
-                          <div>
-                            <p className="font-medium text-ink-900">{a.assigned_to}</p>
-                            <p className="text-xs text-ink-500 mt-1">
-                              {format(new Date(a.assigned_date), 'MMM dd, yyyy')} - {a.return_date ? format(new Date(a.return_date), 'MMM dd, yyyy') : 'Present'}
-                            </p>
-                          </div>
-                          {a.status === 'Active' ? (
-                            <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full"><CheckCircle2 size={12}/> Active</span>
-                          ) : (
-                            <span className="text-xs font-medium text-ink-500 bg-surface px-2 py-1 rounded-full border border-border-subtle">Returned</span>
-                          )}
-                        </div>
-                      ))}
+
+                  {/* Chart */}
+                  <div className="bg-white p-6 rounded-xl border border-border-subtle shadow-sm">
+                    <h3 className="font-bold text-ink-900 mb-6">Income vs Expenses (6 Months)</h3>
+                    <div className="h-72">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={analytics?.trend || []} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
+                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(val) => `₹${val/1000}k`} />
+                          <RechartsTooltip 
+                            cursor={{ fill: '#f8fafc' }}
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                          />
+                          <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                          <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="expense" name="Expenses" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
-                  ) : (
-                    <div className="p-8 text-center bg-white border border-dashed border-border-subtle rounded-lg text-ink-500">
-                      No assignment history.
-                    </div>
-                  )}
-                </div>
+                  </div>
+                </>
               )}
-
-              {/* Maintenance Tab */}
-              {activeTab === 'maintenance' && (
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-medium text-ink-900">Maintenance & Repairs</h3>
-                    <Button size="sm" variant="secondary" className="gap-2">
-                      <Wrench size={14} /> Log Maintenance
-                    </Button>
-                  </div>
-
-                  {profile?.maintenance?.length > 0 ? (
-                    <div className="space-y-3">
-                      {profile.maintenance.map((m: any) => (
-                        <div key={m.id} className="p-4 bg-white rounded-lg border border-border-subtle">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <p className="font-medium text-ink-900">{m.service_provider || 'Unknown Provider'}</p>
-                              <p className="text-xs text-ink-500 mt-0.5">{format(new Date(m.maintenance_date), 'MMM dd, yyyy')}</p>
-                            </div>
-                            <span className="font-semibold text-rose-600">{formatCurrency(m.amount)}</span>
-                          </div>
-                          {m.remarks && <p className="text-sm text-ink-700 mt-2 bg-surface p-2 rounded">{m.remarks}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-8 text-center bg-white border border-dashed border-border-subtle rounded-lg text-ink-500">
-                      No maintenance records found.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Documents Tab (Coming Soon) */}
-              {activeTab === 'documents' && (
-                <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-dashed border-border-subtle text-center">
-                  <div className="w-16 h-16 bg-brand-50 rounded-full flex items-center justify-center mb-4">
-                    <FileText className="text-brand-600" size={32} />
-                  </div>
-                  <h3 className="text-lg font-semibold text-ink-900 mb-2">Document Storage</h3>
-                  <p className="text-sm text-ink-600 max-w-sm mb-6">
-                    Upload and manage purchase invoices, warranty certificates, and insurance policies directly on the asset profile.
-                  </p>
-                  
-                  <div className="flex items-center gap-2 text-sm font-medium text-amber-600 bg-amber-50 px-4 py-2 rounded-full border border-amber-200">
-                    <AlertCircle size={16} />
-                    Feature Coming Soon (Phase 2)
-                  </div>
-                </div>
-              )}
-            </>
+            </div>
           )}
-        </div>
 
+          {activeTab === 'subassets' && (
+            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+              <DataTable 
+                data={analytics?.sub_assets || []} 
+                columns={[
+                  { header: 'Sub-Asset Name', accessorKey: 'asset_name' },
+                  { header: 'Purchase Cost', accessorKey: 'purchase_cost', cell: (i: any) => formatCurrency(i.getValue()) }
+                ]}
+              />
+            </div>
+          )}
+
+          {activeTab === 'depreciations' && (
+            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+              <DataTable 
+                data={profile?.depreciations || []} 
+                columns={[
+                  { header: 'Date', accessorKey: 'transaction_date', cell: (i: any) => i.getValue() ? format(new Date(i.getValue()), 'MMM dd, yyyy') : '-' },
+                  { header: 'Amount', accessorKey: 'amount', cell: (i: any) => <span className="font-medium text-amber-600">{formatCurrency(i.getValue())}</span> },
+                  { header: 'Remarks', accessorKey: 'remarks', cell: (i: any) => i.getValue() || '-' }
+                ]}
+              />
+            </div>
+          )}
+
+          {activeTab === 'maintenance' && (
+            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+              <DataTable 
+                data={profile?.maintenance || []} 
+                columns={[
+                  { header: 'Date', accessorKey: 'maintenance_date', cell: (i: any) => i.getValue() ? format(new Date(i.getValue()), 'MMM dd, yyyy') : '-' },
+                  { header: 'Provider', accessorKey: 'service_provider' },
+                  { header: 'Remarks', accessorKey: 'remarks' },
+                  { header: 'Amount', accessorKey: 'amount', cell: (i: any) => formatCurrency(i.getValue()) }
+                ]}
+              />
+            </div>
+          )}
+
+          {activeTab === 'assignments' && (
+            <div className="bg-white border border-border-subtle rounded-xl overflow-hidden">
+              <DataTable 
+                data={profile?.assignments || []} 
+                columns={[
+                  { header: 'Date', accessorKey: 'assigned_date', cell: (i: any) => i.getValue() ? format(new Date(i.getValue()), 'MMM dd, yyyy') : '-' },
+                  { header: 'Employee', accessorKey: 'employee_name' },
+                  { header: 'Status', accessorKey: 'status' }
+                ]}
+              />
+            </div>
+          )}
+
+        </div>
       </div>
     </Drawer>
   )

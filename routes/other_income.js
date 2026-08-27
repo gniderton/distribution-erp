@@ -76,6 +76,7 @@ router.post('/', async (req, res) => {
         bank_name,
         bank_id,
         bank_statement_entry_id,
+        asset_id,
         user_id
     } = req.body;
 
@@ -161,14 +162,14 @@ router.post('/', async (req, res) => {
                 income_number, transaction_date, category_account_id, 
                 destination_account_id, amount, taxable_amount, tax_amount, 
                 is_gst_income, gst_no, entity_id, reference_no, 
-                description, created_by, journal_entry_id, bank_statement_entry_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                description, created_by, journal_entry_id, bank_statement_entry_id, asset_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             RETURNING id
         `, [
             incomeNumber, transaction_date || new Date(), category_account_id,
             resolvedDestinationId, amount, taxable_amount || amount, tax_amount || 0,
             is_gst_income || false, gst_no, received_from, /* Reused received_from variable for ID */
-            reference_no, description, user_id, journalEntryId, bank_statement_entry_id || null
+            reference_no, description, user_id, journalEntryId, bank_statement_entry_id || null, (asset_id === 'undefined' || asset_id === '') ? null : asset_id
         ]);
         const incomeId = insertRes.rows[0].id;
 
