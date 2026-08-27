@@ -19,4 +19,8 @@ export const assetsApi = {
   createAssetsPayment: (payload: any) => api.post('/api/assets/payment', payload).then((r) => r.data),
   createAssetsSale: (id: string | number, payload: any = {}) => api.post(`/api/assets/${id}/sale`, payload).then((r) => r.data),
   createAssetsSalePayment: (id: string | number, payload: any = {}) => api.post(`/api/assets/${id}/sale-payment`, payload).then((r) => r.data),
+  scrapAsset: (id: string | number, payload: any = {}) => api.post(`/api/assets/${id}/scrap`, payload).then((r) => r.data),
+  assignAsset: (id: string | number, payload: any = {}) => api.post(`/api/assets/${id}/assign`, payload).then((r) => r.data),
+  addMaintenanceLog: (id: string | number, payload: any = {}) => api.post(`/api/assets/${id}/maintenance`, payload).then((r) => r.data),
+  getAssetProfile: (id: string | number) => api.get(`/api/assets/${id}/profile`).then((r) => r.data),
 }

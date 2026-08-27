@@ -755,4 +755,99 @@ router.get('/accounts', async (req, res) => {
     }
 });
 
+// @route   POST /api/assets/:id/scrap
+// @desc    Scrap/Write-off an asset
+router.post('/:id/scrap', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { scrap_date, scrap_amount, remarks } = req.body;
+        const assetId = req.params.id;
+        
+        await client.query('BEGIN');
+        
+        // 1. Get asset current value
+        const assetRes = await client.query(`
+            SELECT a.id, a.asset_name, a.purchase_cost, a.accum_dep_account_code, a.asset_account_code,
+                   COALESCE((SELECT SUM(amount) FROM asset_transactions WHERE asset_id = a.id AND transaction_type = 'DEPRECIATION'), 0) as total_dep
+            FROM assets a WHERE a.id = $1`, [assetId]);
+            
+        if (assetRes.rows.length === 0) throw new Error('Asset not found');
+        const asset = assetRes.rows[0];
+        
+        // 2. Mark as Scrapped
+        await client.query(`
+            UPDATE assets 
+            SET status = 'Scrapped', is_scrapped = true, scrap_date = $1, scrap_amount = $2, scrap_remarks = $3
+            WHERE id = $4
+        `, [scrap_date, scrap_amount || 0, remarks, assetId]);
+        
+        if (Number(scrap_amount) > 0) {
+            await client.query(`
+                INSERT INTO asset_transactions (asset_id, transaction_type, transaction_date, amount, remarks)
+                VALUES ($1, 'SCRAP_RECEIPT', $2, $3, $4)
+            `, [assetId, scrap_date, scrap_amount, remarks]);
+        }
+        
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Asset scrapped successfully' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Scrap Error:', err.message);
+        res.status(500).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// @route   POST /api/assets/:id/assign
+// @desc    Assign asset to custodian
+router.post('/:id/assign', async (req, res) => {
+    try {
+        const { assigned_to, assigned_date, remarks } = req.body;
+        const assetId = req.params.id;
+        
+        // Return previous active assignment if any
+        await pool.query(`UPDATE asset_assignments SET return_date = $1, status = 'Returned' WHERE asset_id = $2 AND status = 'Active'`, [assigned_date, assetId]);
+        
+        // Insert new assignment
+        await pool.query(`INSERT INTO asset_assignments (asset_id, assigned_to, assigned_date, remarks) VALUES ($1, $2, $3, $4)`, [assetId, assigned_to, assigned_date, remarks]);
+        
+        // Update current custodian on asset
+        await pool.query(`UPDATE assets SET custodian = $1 WHERE id = $2`, [assigned_to, assetId]);
+        
+        res.json({ success: true, message: 'Asset assigned' });
+    } catch (err) {
+        console.error('Assign Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   POST /api/assets/:id/maintenance
+// @desc    Add maintenance log
+router.post('/:id/maintenance', async (req, res) => {
+    try {
+        const { maintenance_date, amount, service_provider, warranty_expiry_date, remarks } = req.body;
+        await pool.query(`
+            INSERT INTO asset_maintenance (asset_id, maintenance_date, amount, service_provider, warranty_expiry_date, remarks)
+            VALUES ($1, $2, $3, $4, $5, $6)
+        `, [req.params.id, maintenance_date, amount || 0, service_provider, warranty_expiry_date || null, remarks]);
+        res.json({ success: true, message: 'Maintenance logged' });
+    } catch (err) {
+        console.error('Maintenance Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   GET /api/assets/:id/profile
+// @desc    Get asset full profile (maintenance, assignments)
+router.get('/:id/profile', async (req, res) => {
+    try {
+        const assignments = await pool.query('SELECT * FROM asset_assignments WHERE asset_id = $1 ORDER BY assigned_date DESC', [req.params.id]);
+        const maintenance = await pool.query('SELECT * FROM asset_maintenance WHERE asset_id = $1 ORDER BY maintenance_date DESC', [req.params.id]);
+        res.json({ assignments: assignments.rows, maintenance: maintenance.rows });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

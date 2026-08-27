@@ -1,32 +1,48 @@
 import { useState } from 'react'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { AutoTable } from '@/components/shared/AutoTable'
-import { useList } from './hooks'
+import { AssetRegister } from './components/AssetRegister'
+import { AssetCategories } from './components/AssetCategories'
 
 export default function AssetsPage() {
-  const { data, isLoading, isError } = useList()
-  const [_selected, setSelected] = useState<any>(null)
+  const [activeTab, setActiveTab] = useState<'register' | 'categories'>('register')
 
   return (
-    <div>
+    <div className="space-y-6 max-w-[1600px] mx-auto w-full pb-12">
       <PageHeader
         eyebrow="AST · Finance"
-        title="Assets"
-        description="Company assets, depreciation, and disposals."
+        title="Asset Management"
+        description="Track company assets, run depreciation, manage assignments, and handle disposals."
       />
-      <AutoTable
-        data={data}
-        isLoading={isLoading}
-        isError={isError}
-        emptyTitle="No records yet"
-        emptyDescription="Data from the connected API will appear here once available."
-        onRowClick={(row) => setSelected(row)}
-      />
-      <p className="text-xs text-ink-600/60 mt-3">
-        Read-only scaffold — see Build Spec §8 for the full endpoint list and
-        the Vendor / Items / Customer / Invoice modules for the complete
-        create/edit/drawer pattern to extend this page with.
-      </p>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-border-subtle overflow-x-auto hide-scrollbar">
+        <button
+          onClick={() => setActiveTab('register')}
+          className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors relative border-b-2 ${
+            activeTab === 'register' 
+              ? 'border-brand-500 text-brand-700' 
+              : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-border-base'
+          }`}
+        >
+          Asset Register
+        </button>
+        <button
+          onClick={() => setActiveTab('categories')}
+          className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors relative border-b-2 ${
+            activeTab === 'categories' 
+              ? 'border-brand-500 text-brand-700' 
+              : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-border-base'
+          }`}
+        >
+          Asset Categories
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="min-h-[500px]">
+        {activeTab === 'register' && <AssetRegister />}
+        {activeTab === 'categories' && <AssetCategories />}
+      </div>
     </div>
   )
 }

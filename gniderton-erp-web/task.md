@@ -1,0 +1,10 @@
+- [x] Backend: Update DB Schema (Add `asset_assignments`, `asset_maintenance` tables)
+- [x] Backend: Update `assets.js` route with new endpoints (Scrap, Assign, Maintenance)
+- [x] Frontend: Create `src/modules/assets/api.ts`
+- [x] Frontend: Create `src/modules/assets/AssetsPage.tsx`
+- [x] Frontend: Create `src/modules/assets/components/AssetRegister.tsx`
+- [x] Frontend: Create `src/modules/assets/components/AssetCategories.tsx`
+- [x] Frontend: Create `src/modules/assets/components/AssetProfileDrawer.tsx` (with Documents placeholder)
+- [x] Frontend: Create Modals (Purchase, Sell, Scrap, Pay, Receive, Depreciate, Ledger)
+- [x] Frontend: Update `src/App.tsx` and `src/components/layout/Sidebar.tsx`
+- [ ] Verification: Build and run sanity tests
