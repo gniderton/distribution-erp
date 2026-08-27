@@ -1,16 +1,14 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, User, Edit2 } from 'lucide-react'
+import { Plus, User } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { DataTable } from '@/components/shared/DataTable'
 import { assetsApi } from '../api'
 import { CreateAssetEntityModal } from './modals/CreateAssetEntityModal'
-import { EditAssetEntityModal } from './modals/EditAssetEntityModal'
 import { AssetVendorProfileDrawer } from './AssetVendorProfileDrawer'
 
 export function AssetVendors() {
   const [createOpen, setCreateOpen] = useState(false)
-  const [editOpen, setEditOpen] = useState(false)
   const [selectedVendor, setSelectedVendor] = useState<any>(null)
   const [profileOpen, setProfileOpen] = useState(false)
 
@@ -20,7 +18,7 @@ export function AssetVendors() {
   })
 
   const columns = useMemo(() => [
-    { header: 'Vendor Name', accessorKey: 'entity_name' },
+    { header: 'Entity Name', accessorKey: 'entity_name' },
     { header: 'Type', accessorKey: 'entity_type' },
     { header: 'Email', accessorKey: 'email' },
     { header: 'Contact', accessorKey: 'contact_number' },
@@ -36,13 +34,6 @@ export function AssetVendors() {
           >
             <User size={14} />
           </button>
-          <button 
-            onClick={() => { setSelectedVendor(row.original); setEditOpen(true) }}
-            className="p-1.5 text-amber-600 bg-amber-50 rounded hover:bg-amber-100 tooltip-trigger"
-            title="Edit Vendor"
-          >
-            <Edit2 size={14} />
-          </button>
         </div>
       )
     }
@@ -51,18 +42,18 @@ export function AssetVendors() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
-        <h3 className="font-medium text-ink-900">Asset Vendors</h3>
+        <h3 className="font-medium text-ink-900">Asset Entities</h3>
         <Button size="sm" className="gap-2" onClick={() => setCreateOpen(true)}>
           <Plus size={16} />
-          New Vendor
+          New Entity
         </Button>
       </div>
 
       <div className="bg-white rounded-xl border border-border-subtle overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-ink-500">Loading vendors...</div>
+          <div className="p-8 text-center text-ink-500">Loading entities...</div>
         ) : isError ? (
-          <div className="p-8 text-center text-red-500">Failed to load vendors.</div>
+          <div className="p-8 text-center text-red-500">Failed to load entities.</div>
         ) : (
           <DataTable data={entities || []} columns={columns} />
         )}
@@ -71,11 +62,6 @@ export function AssetVendors() {
       <CreateAssetEntityModal 
         open={createOpen} 
         onClose={() => setCreateOpen(false)} 
-      />
-      <EditAssetEntityModal 
-        open={editOpen} 
-        onClose={() => setEditOpen(false)} 
-        entity={selectedVendor}
       />
       <AssetVendorProfileDrawer
         open={profileOpen}

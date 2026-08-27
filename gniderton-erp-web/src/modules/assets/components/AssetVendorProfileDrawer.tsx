@@ -6,9 +6,10 @@ import { api } from '@/lib/axios'
 import { DataTable } from '@/components/shared/DataTable'
 import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
-import { Building2, Mail, Phone, MapPin, Hash, Briefcase, FileDown, FileText } from 'lucide-react'
+import { Building2, Mail, Phone, MapPin, Hash, Briefcase, FileDown, FileText, Edit2 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { EditAssetEntityModal } from './modals/EditAssetEntityModal'
 
 interface Props {
   open: boolean
@@ -20,6 +21,7 @@ export function AssetVendorProfileDrawer({ open, onClose, vendor }: Props) {
   const [ledgerStartDate, setLedgerStartDate] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0])
   const [ledgerEndDate, setLedgerEndDate] = useState(new Date().toISOString().split('T')[0])
   const [companySettings, setCompanySettings] = useState<any>(null)
+  const [editOpen, setEditOpen] = useState(false)
 
   useEffect(() => {
     api.get('/api/company-settings').then(res => setCompanySettings(res.data)).catch(() => {})
@@ -127,13 +129,21 @@ export function AssetVendorProfileDrawer({ open, onClose, vendor }: Props) {
       <div className="flex flex-col h-full -mx-6 -my-5">
         
         {/* Profile Header Block */}
-        <div className="bg-brand-50 border-b border-brand-100 p-6 shrink-0">
+        <div className="bg-brand-50 border-b border-brand-100 p-6 shrink-0 relative">
+          
+          <button 
+            onClick={() => setEditOpen(true)}
+            className="absolute top-6 right-6 flex items-center gap-1.5 bg-white border border-brand-200 text-brand-700 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-brand-100 transition-colors shadow-sm"
+          >
+            <Edit2 size={14} /> Edit Profile
+          </button>
+
           <div className="flex gap-4 items-start">
             <div className="h-16 w-16 bg-white rounded-xl shadow-sm border border-brand-100 flex items-center justify-center text-brand-600">
               <Building2 size={32} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-brand-900">{vendor.entity_name}</h2>
+              <h2 className="text-xl font-bold text-brand-900 pr-24">{vendor.entity_name}</h2>
               <div className="flex items-center gap-3 mt-2 text-sm text-brand-700">
                 <span className="flex items-center gap-1"><Briefcase size={14} /> {vendor.entity_type}</span>
                 <span className="flex items-center gap-1"><Hash size={14} /> {vendor.entity_code}</span>
@@ -224,6 +234,12 @@ export function AssetVendorProfileDrawer({ open, onClose, vendor }: Props) {
         </div>
         
       </div>
+      
+      <EditAssetEntityModal 
+        open={editOpen} 
+        onClose={() => setEditOpen(false)} 
+        entity={vendor}
+      />
     </Drawer>
   )
 }

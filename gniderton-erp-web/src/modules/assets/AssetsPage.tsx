@@ -12,7 +12,7 @@ export default function AssetsPage() {
 
   const tabs = [
     { id: 'register', label: 'Asset Register', icon: LayoutList },
-    { id: 'vendors', label: 'Vendors', icon: Users },
+    { id: 'vendors', label: 'Entities', icon: Users },
     { id: 'categories', label: 'Categories', icon: Tags },
     { id: 'accounts', label: 'Accounts', icon: Wallet },
   ]
