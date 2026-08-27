@@ -71,8 +71,18 @@ export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
     })
   }
 
+  const isValid = Boolean(
+    formData.asset_name.trim() &&
+    formData.category &&
+    formData.asset_account_code &&
+    formData.vendor_id &&
+    formData.purchase_cost &&
+    Number(formData.purchase_cost) > 0
+  )
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!isValid) return
     setIsSubmitting(true)
     try {
       await assetsApi.createAssets(formData)
@@ -261,7 +271,7 @@ export function PurchaseAssetModal({ open, onClose, onSuccess }: Props) {
         <div className="p-6 border-t border-border-subtle bg-white shrink-0">
           <div className="flex justify-end gap-3">
             <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || !isValid}>
               {isSubmitting ? 'Saving...' : 'Register Purchase'}
             </Button>
           </div>

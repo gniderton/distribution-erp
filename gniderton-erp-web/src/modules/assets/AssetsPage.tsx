@@ -2,12 +2,18 @@ import { useState } from 'react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { AssetRegister } from './components/AssetRegister'
 import { AssetCategories } from './components/AssetCategories'
+import { LayoutList, Tags } from 'lucide-react'
 
 export default function AssetsPage() {
   const [activeTab, setActiveTab] = useState<'register' | 'categories'>('register')
 
+  const tabs = [
+    { id: 'register', label: 'Asset Register', icon: LayoutList },
+    { id: 'categories', label: 'Asset Categories', icon: Tags },
+  ]
+
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto w-full pb-12">
+    <div>
       <PageHeader
         eyebrow="AST · Finance"
         title="Asset Management"
@@ -15,27 +21,21 @@ export default function AssetsPage() {
       />
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b border-border-subtle overflow-x-auto hide-scrollbar">
-        <button
-          onClick={() => setActiveTab('register')}
-          className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors relative border-b-2 ${
-            activeTab === 'register' 
-              ? 'border-brand-500 text-brand-700' 
-              : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-border-base'
-          }`}
-        >
-          Asset Register
-        </button>
-        <button
-          onClick={() => setActiveTab('categories')}
-          className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors relative border-b-2 ${
-            activeTab === 'categories' 
-              ? 'border-brand-500 text-brand-700' 
-              : 'border-transparent text-ink-600 hover:text-ink-900 hover:border-border-base'
-          }`}
-        >
-          Asset Categories
-        </button>
+      <div className="flex border-y border-border-subtle mt-6 mb-6">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 -mb-[2px] transition-all ${
+              activeTab === tab.id
+                ? 'border-brand-600 text-brand-600'
+                : 'border-transparent text-ink-600 hover:text-ink-900'
+            }`}
+          >
+            <tab.icon size={14} />
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Content */}
