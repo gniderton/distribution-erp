@@ -43,11 +43,15 @@ export function AddMaintenanceModal({ open, onClose, onSuccess, asset }: Props) 
   return (
     <Dialog open={open} onClose={onClose} title="Log Maintenance & Repairs">
       <form onSubmit={handleSubmit} className="p-4 space-y-4">
-        
-        <div className="bg-brand-50 text-brand-800 p-3 rounded-lg border border-brand-100 text-sm mb-4">
-          Log a repair or maintenance event for <strong>{asset.asset_name}</strong>.
+        <div className="bg-blue-50 text-blue-900 p-4 rounded-lg border border-blue-100 text-sm mb-4 space-y-2">
+          <p><strong>Note: This is an informational operations log.</strong> It does not create accounting journal entries or affect your bank ledger. Use this form for:</p>
+          <ul className="list-disc pl-5 space-y-1">
+            <li><strong>In-House Repairs:</strong> When own employees fix the asset (no external cash payment).</li>
+            <li><strong>Warranty Work:</strong> When a repair costs ₹0 but you need a service record.</li>
+            <li><strong>Part Warranties:</strong> Track expiry dates of newly installed sub-parts (e.g. new battery).</li>
+          </ul>
+          <p className="text-xs text-blue-700 italic mt-2">To record a paid vendor invoice that affects your accounting, use the standard Expense form and tag this asset.</p>
         </div>
-
         <div>
           <Label>Maintenance Date</Label>
           <Input 
