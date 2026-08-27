@@ -8,7 +8,7 @@ import { formatCurrency } from '@/lib/utils'
 import { format } from 'date-fns'
 import { Building2, Mail, Phone, MapPin, Hash, Briefcase, FileDown, FileText } from 'lucide-react'
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
+import autoTable from 'jspdf-autotable'
 
 interface Props {
   open: boolean
@@ -32,13 +32,11 @@ export function AssetVendorProfileDrawer({ open, onClose, vendor }: Props) {
   })
 
   const ledgerCols = [
-    { header: 'Date', accessorKey: 'date', cell: (i: any) => format(new Date(i.getValue()), 'MMM dd, yyyy') },
+    { header: 'Date', accessorKey: 'date', cell: (i: any) => i.getValue() ? format(new Date(i.getValue()), 'MMM dd, yyyy') : '-' },
     { header: 'Particulars', accessorKey: 'particulars' },
-    { header: 'Voucher Type', accessorKey: 'voucher_type' },
-    { header: 'Voucher No', accessorKey: 'voucher_no' },
     { header: 'Debit', accessorKey: 'debit', cell: (i: any) => Number(i.getValue()) > 0 ? formatCurrency(i.getValue()) : '-' },
     { header: 'Credit', accessorKey: 'credit', cell: (i: any) => Number(i.getValue()) > 0 ? formatCurrency(i.getValue()) : '-' },
-    { header: 'Balance', accessorKey: 'balance', cell: (i: any) => formatCurrency(i.getValue()) },
+    { header: 'Balance', accessorKey: 'running_balance', cell: (i: any) => formatCurrency(i.getValue() || 0) },
   ]
 
   const handleDownloadExcel = () => {
@@ -49,11 +47,11 @@ export function AssetVendorProfileDrawer({ open, onClose, vendor }: Props) {
       csv += `Vendor:,${escapeCSV(vendor.entity_name)}\n`
       csv += `Code:,${escapeCSV(vendor.entity_code)}\n`
       csv += `Period:,${ledgerStartDate} to ${ledgerEndDate}\n\n`
-      csv += `DATE,PARTICULARS,VOUCHER TYPE,VOUCHER NO,DEBIT,CREDIT,BALANCE\n`
+      csv += `DATE,PARTICULARS,DEBIT,CREDIT,BALANCE\n`
 
       ledger.forEach((r: any) => {
         const d = r.date ? format(new Date(r.date), 'yyyy-MM-dd') : ''
-        csv += `${d},${escapeCSV(r.particulars)},${escapeCSV(r.voucher_type)},${escapeCSV(r.voucher_no)},${Number(r.debit || 0).toFixed(2)},${Number(r.credit || 0).toFixed(2)},${Number(r.balance || 0).toFixed(2)}\n`
+        csv += `${d},${escapeCSV(r.particulars)},${Number(r.debit || 0).toFixed(2)},${Number(r.credit || 0).toFixed(2)},${Number(r.running_balance || 0).toFixed(2)}\n`
       })
 
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -93,16 +91,14 @@ export function AssetVendorProfileDrawer({ open, onClose, vendor }: Props) {
       const body = ledger.map((r: any) => [
         r.date ? format(new Date(r.date), 'MMM dd, yyyy') : '',
         r.particulars || '',
-        r.voucher_type || '',
-        r.voucher_no || '',
         Number(r.debit) > 0 ? formatCurrency(r.debit) : '-',
         Number(r.credit) > 0 ? formatCurrency(r.credit) : '-',
-        formatCurrency(r.balance)
+        formatCurrency(r.running_balance || 0)
       ])
 
-      ;(doc as any).autoTable({
+      autoTable(doc, {
         startY: margin + 110,
-        head: [['Date', 'Particulars', 'Voucher', 'Ref No', 'Debit', 'Credit', 'Balance']],
+        head: [['Date', 'Particulars', 'Debit', 'Credit', 'Balance']],
         body,
         styles: { fontSize: 8 },
         headStyles: { fillColor: [63, 63, 70] },
@@ -117,8 +113,8 @@ export function AssetVendorProfileDrawer({ open, onClose, vendor }: Props) {
   if (!vendor) return null
 
   // Calculate opening/closing natively since we don't have a ledgerData wrapper object here
-  const firstBal = ledger?.length ? ledger[0].balance - ledger[0].debit + ledger[0].credit : 0
-  const lastBal = ledger?.length ? ledger[ledger.length - 1].balance : 0
+  const firstBal = ledger?.length ? Number(ledger[0].running_balance || 0) - Number(ledger[0].debit || 0) + Number(ledger[0].credit || 0) : 0
+  const lastBal = ledger?.length ? Number(ledger[ledger.length - 1].running_balance || 0) : 0
 
   return (
     <Drawer 
@@ -167,7 +163,7 @@ export function AssetVendorProfileDrawer({ open, onClose, vendor }: Props) {
 
         {/* Ledger Content */}
         <div className="flex-1 overflow-y-auto p-6 scrollbar-thin space-y-4">
-          <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
+          <div className="flex flex-col md:flex-row gap-4 justify-between items-end bg-white p-4 rounded-xl border border-border-subtle shadow-sm">
             <div className="flex gap-3 items-center">
               <div className="flex flex-col gap-1">
                 <span className="text-[9px] text-ink-600 uppercase font-semibold">Start Date</span>
@@ -206,7 +202,7 @@ export function AssetVendorProfileDrawer({ open, onClose, vendor }: Props) {
               </button>
             </div>
 
-            <div className="flex gap-6 text-right">
+            <div className="flex gap-6 text-right pb-1">
               <div>
                 <span className="text-[9px] text-ink-600 block uppercase">Opening Balance</span>
                 <span className="text-sm font-bold text-ink-900">{formatCurrency(firstBal)}</span>
