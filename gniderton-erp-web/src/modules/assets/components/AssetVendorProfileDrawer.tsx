@@ -70,43 +70,136 @@ export function AssetVendorProfileDrawer({ open, onClose, vendor }: Props) {
     if (!vendor || !ledger) return
     try {
       const doc = new jsPDF('p', 'pt', 'a4')
-      const margin = 20
+      const margin = 17.5
+      const pageWidth = 595
+      const downloadTimestamp = new Date().toLocaleString()
+
       const brand = {
-        name: companySettings?.company_name || "GNIDERTON DISTRIBUTIONS PVT LTD",
-        address: [companySettings?.address, companySettings?.district].filter(Boolean).join(', '),
-        gst: companySettings?.gstin || "32AAACG1924D1ZS",
+        regt_name: companySettings?.company_name || companySettings?.regt_name || "GNIDERTON DISTRIBUTIONS PVT LTD",
+        address: [companySettings?.address, companySettings?.district].filter(Boolean).join(', ') || "Industrial Development Area, Kozhikode, Kerala",
+        gst: companySettings?.gstin || companySettings?.gst || "32AAACG1924D1ZS",
+        email: companySettings?.email || "accounts@gniderton.com",
+        contact_no: companySettings?.contact_no || "+91 495 272 1924"
       }
 
-      doc.setFontSize(16)
-      doc.text("ASSET VENDOR LEDGER", 595/2, margin + 20, { align: 'center' })
-      doc.setFontSize(10)
-      doc.text(`${ledgerStartDate} to ${ledgerEndDate}`, 595/2, margin + 35, { align: 'center' })
+      // Calculate balances natively for the summary box
+      const firstBal = ledger?.length ? Number(ledger[0].running_balance || 0) - Number(ledger[0].debit || 0) + Number(ledger[0].credit || 0) : 0
+      const lastBal = ledger?.length ? Number(ledger[ledger.length - 1].running_balance || 0) : 0
+      const totalDebit = ledger.reduce((acc: number, t: any) => acc + (Number(t.debit) || 0), 0)
+      const totalCredit = ledger.reduce((acc: number, t: any) => acc + (Number(t.credit) || 0), 0)
 
-      doc.setFontSize(9)
-      doc.text(`Vendor: ${vendor.entity_name}`, margin, margin + 60)
-      doc.text(`Code: ${vendor.entity_code || '-'}`, margin, margin + 75)
-      doc.text(`GSTIN: ${vendor.gst_number || '-'}`, margin, margin + 90)
+      const drawMainHeader = (currentPage: number, totalPages: number) => {
+        try {
+          if (companySettings?.logo) {
+            const logoData = companySettings.logo.startsWith('data:image') 
+              ? companySettings.logo 
+              : `data:image/png;base64,${companySettings.logo}`;
+            doc.addImage(logoData, 'PNG', margin, margin, 75, 25)
+          }
+        } catch(e) {}
 
-      doc.text(`Company: ${brand.name}`, 595 - margin, margin + 60, { align: 'right' })
-      doc.text(`GST: ${brand.gst}`, 595 - margin, margin + 75, { align: 'right' })
+        doc.setTextColor(0, 0, 0)
+        doc.setFont("helvetica", "bold")
+        doc.setFontSize(16)
+        doc.text(`ASSET ${vendor.entity_type?.toUpperCase() || 'ENTITY'} LEDGER STATEMENT`, pageWidth / 2, margin + 15, { align: "center" })
+        doc.setFontSize(11)
+        doc.text(`${ledgerStartDate} to ${ledgerEndDate}`, pageWidth / 2, margin + 30, { align: "center" })
 
-      const body = ledger.map((r: any) => [
-        r.date ? format(new Date(r.date), 'MMM dd, yyyy') : '',
-        r.particulars || '',
-        Number(r.debit) > 0 ? formatCurrency(r.debit) : '-',
-        Number(r.credit) > 0 ? formatCurrency(r.credit) : '-',
-        formatCurrency(r.running_balance || 0)
+        const boxesY = margin + 40
+        const gap = 8
+        const boxWidth = (pageWidth - (margin * 2) - (gap * 2)) / 3
+        const boxHeight = 95
+
+        // BOX 1: Our Details
+        drawSimpleBox(doc, margin, boxesY, boxWidth, boxHeight, [
+          ["From", brand.regt_name],
+          ["Address", brand.address],
+          ["GST", brand.gst],
+          ["Email", brand.email],
+          ["Phone", brand.contact_no]
+        ])
+
+        // BOX 2: Vendor Details
+        const vAddr = [vendor.state].filter(Boolean).join(", ")
+        drawSimpleBox(doc, margin + boxWidth + gap, boxesY, boxWidth, boxHeight, [
+          ["To", vendor.entity_name],
+          ["Address", vAddr || "-"],
+          ["Code", vendor.entity_code || "-"],
+          ["GSTIN", vendor.gst_number || "-"],
+          ["Phone", vendor.contact_number || "-"]
+        ], 50)
+
+        // BOX 3: Summary
+        drawSimpleBox(doc, margin + (boxWidth * 2) + (gap * 2), boxesY, boxWidth, boxHeight, [
+          ["Opening Bal", `$${firstBal.toFixed(2)}`, true],
+          ["Total Debit", `$${totalDebit.toFixed(2)}`, true],
+          ["Total Credit", `$${totalCredit.toFixed(2)}`, true],
+          ["Closing Bal", `$${lastBal.toFixed(2)}`, true],
+          ["Printed On", downloadTimestamp],
+          ["PAGE", `${currentPage} / ${totalPages}`]
+        ], 65)
+
+        return boxesY + boxHeight
+      }
+
+      const drawSimpleBox = (docObj: any, x: number, y: number, width: number, height: number, rows: any[], labelWidth = 58) => {
+        docObj.setDrawColor(0, 0, 0)
+        docObj.setLineWidth(0.5)
+        docObj.rect(x, y, width, height)
+        let rowY = y + 11
+
+        rows.forEach((r: any) => {
+          docObj.setFontSize(8)
+          docObj.setFont("helvetica", "bold")
+          docObj.setTextColor(0, 0, 0)
+          const label = String(r[0]) + ":"
+          docObj.text(label, x + 5, rowY)
+          docObj.setFont("helvetica", "normal")
+
+          const val = String(r[1] || "-")
+          const isRightAlign = r[2] === true
+
+          if (isRightAlign) {
+            docObj.text(val, x + width - 5, rowY, { align: 'right' })
+            rowY += 11
+          } else {
+            const splitVal = docObj.splitTextToSize(val, width - labelWidth - 5)
+            docObj.text(splitVal, x + labelWidth, rowY)
+            rowY += (splitVal.length * 9.5) + 1.5
+          }
+        })
+      }
+
+      const tableStartY = margin + 40 + 95 + 10
+      const bodyRows = ledger.map((row: any) => [
+        row.date ? format(new Date(row.date), 'yyyy-MM-dd') : '-',
+        row.particulars || '-',
+        Number(row.debit || 0).toFixed(2),
+        Number(row.credit || 0).toFixed(2),
+        Number(row.running_balance || 0).toFixed(2)
       ])
 
       autoTable(doc, {
-        startY: margin + 110,
-        head: [['Date', 'Particulars', 'Debit', 'Credit', 'Balance']],
-        body,
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [63, 63, 70] },
+        startY: tableStartY,
+        margin: { left: margin, right: margin, top: 157, bottom: 15 },
+        head: [["DATE", "PARTICULARS", "DEBIT", "CREDIT", "BALANCE"]],
+        body: bodyRows.length > 0 ? bodyRows : [['-', 'No transactions in this period', '0.00', '0.00', firstBal.toFixed(2)]],
+        didDrawPage: (data) => {
+          drawMainHeader(data.pageNumber, doc.getNumberOfPages())
+        },
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 3, lineColor: [0, 0, 0], lineWidth: 0.5, textColor: [0, 0, 0], overflow: 'linebreak', valign: 'middle' },
+        headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.5 },
+        columnStyles: {
+          0: { cellWidth: 70 },
+          1: { cellWidth: 'auto', minCellWidth: 150 },
+          2: { halign: 'right', cellWidth: 70 },
+          3: { halign: 'right', cellWidth: 70 },
+          4: { halign: 'right', cellWidth: 80, fontStyle: 'bold' }
+        }
       })
 
-      doc.save(`Ledger_${vendor.entity_name}.pdf`)
+      doc.save(`Ledger_${vendor.entity_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`)
     } catch (e) {
       console.error(e)
     }
