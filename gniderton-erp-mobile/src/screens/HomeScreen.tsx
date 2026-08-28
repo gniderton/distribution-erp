@@ -20,9 +20,10 @@ export default function HomeScreen({ navigation }: any) {
   const [search, setSearch] = useState('');
 
   const { data: customers, isLoading, refetch } = useQuery({
-    queryKey: ['customers', currentUser?.id],
+    queryKey: ['customers', currentUser?.id, 'today'],
     queryFn: async () => {
-      const res = await axios.get(`${API_URL}/customers`, { params: { dse_id: currentUser?.id } });
+      const day = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+      const res = await axios.get(`${API_URL}/customers`, { params: { dse_id: currentUser?.id, day } });
       return res.data;
     },
     enabled: !!currentUser?.id

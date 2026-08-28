@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Search, UserPlus, Phone, MapPin } from 'lucide-react-native';
@@ -11,7 +11,7 @@ export default function AdHocCustomersScreen({ navigation }: any) {
   const { currentUser, setSelectedCustomer } = useAppStore();
   const [search, setSearch] = useState('');
 
-  const { data: customers, isLoading } = useQuery({
+  const { data: allCustomers, isLoading: loadingAll } = useQuery({
     queryKey: ['customers', currentUser?.id, 'all'],
     queryFn: async () => {
       const res = await axios.get(`${API_URL}/customers`, { params: { dse_id: currentUser?.id } });
@@ -20,10 +20,25 @@ export default function AdHocCustomersScreen({ navigation }: any) {
     enabled: !!currentUser?.id
   });
 
-  const filtered = (customers || []).filter((c: any) => 
-    (c.customer_name || '').toLowerCase().includes(search.toLowerCase()) ||
-    (c.customer_code || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const { data: todayCustomers, isLoading: loadingToday } = useQuery({
+    queryKey: ['customers', currentUser?.id, 'today'],
+    queryFn: async () => {
+      const day = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+      const res = await axios.get(`${API_URL}/customers`, { params: { dse_id: currentUser?.id, day } });
+      return res.data;
+    },
+    enabled: !!currentUser?.id
+  });
+
+  const isLoading = loadingAll || loadingToday;
+
+  const filtered = (allCustomers || []).filter((c: any) => {
+    if (todayCustomers?.some((tc: any) => tc.id === c.id)) return false;
+    return (
+      (c.customer_name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.customer_code || '').toLowerCase().includes(search.toLowerCase())
+    );
+  });
 
   const handleSelect = (customer: any) => {
     setSelectedCustomer(customer);
