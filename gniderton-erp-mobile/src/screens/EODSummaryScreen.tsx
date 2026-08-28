@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12, color: '#6b7280', marginBottom: 4 },
   statValue: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
 
-  nextBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#111827', padding: 16, borderRadius: 12 },
+  nextBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#2f7f74', padding: 16, borderRadius: 12 },
   nextBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   btnDisabled: { opacity: 0.5 },
 
