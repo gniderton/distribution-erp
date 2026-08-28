@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, User, TrendingUp, RefreshCw, LogOut, Plus, Bell, Trash2, Phone, MapPin } from 'lucide-react-native';
+import { Search, User, TrendingUp, RefreshCw, LogOut, Plus, Bell, Trash2, Phone, MapPin, Pencil } from 'lucide-react-native';
 import { useAppStore } from '../store';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
@@ -15,7 +15,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
 ];
 
 export default function HomeScreen({ navigation }: any) {
-  const { currentUser, setSelectedCustomer, pendingOrders, pendingPayments, removePayment, setUser } = useAppStore();
+  const { currentUser, setSelectedCustomer, pendingOrders, pendingPayments, removePayment, setUser, removeOrder, clearCart, setCartItem } = useAppStore();
   const [tab, setTab] = useState<Tab>('customers');
   const [search, setSearch] = useState('');
 
@@ -43,7 +43,18 @@ export default function HomeScreen({ navigation }: any) {
     navigation.replace('Login');
   };
 
-  const orderTotal = pendingOrders.reduce((acc, o) => acc + (o.items || []).reduce((sum, i) => sum + (i.amount || 0), 0), 0);
+  const editOrder = (order: any) => {
+    const fullCustomer = (customers || []).find((c: any) => String(c.id) === String(order.customer_id));
+    setSelectedCustomer(fullCustomer ?? { id: order.customer_id, customer_name: order.customer_name });
+    clearCart();
+    (order.items || []).forEach((item: any) => {
+      setCartItem(item.product_id, item.qty);
+    });
+    removeOrder(order.tempId);
+    navigation.navigate('OrderForm');
+  };
+
+  const orderTotal = pendingOrders.reduce((acc, o) => acc + (o.items || []).reduce((sum, i) => sum + (i.amount || (i.qty * i.rate) || 0), 0), 0);
   const paymentTotal = pendingPayments.reduce((acc, p) => acc + Number(p.amount), 0);
 
   return (
@@ -171,11 +182,37 @@ export default function HomeScreen({ navigation }: any) {
             renderItem={({ item }) => (
               <View style={styles.itemCard}>
                 <View style={styles.itemCardHeader}>
-                  <Text style={styles.itemCardTitle}>{item.customer_name}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.itemCardTitle}>{item.customer_name}</Text>
+                    <Text style={[styles.itemCardSub, { fontFamily: 'monospace' }]}>{item.offline_no}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => editOrder(item)} style={styles.actionCircle}>
+                      <Pencil size={16} color="#4b5563" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => removeOrder(item.tempId)} style={[styles.actionCircle, { backgroundColor: '#fef2f2' }]}>
+                      <Trash2 size={16} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <View style={styles.itemCardFooter}>
+                <View style={{ paddingVertical: 8, gap: 4 }}>
+                  {(item.items || []).map((lineItem: any, idx: number) => (
+                    <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ flex: 1, fontSize: 12, color: '#111827' }} numberOfLines={1}>
+                        {lineItem.product_name ?? `Product #${lineItem.product_id}`}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#6b7280', marginHorizontal: 8 }}>
+                        {lineItem.qty} × ₹{Number(lineItem.rate || 0).toLocaleString('en-IN')}
+                      </Text>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#111827', width: 60, textAlign: 'right' }}>
+                        ₹{(lineItem.qty * Number(lineItem.rate || 0)).toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={[styles.itemCardFooter, { borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 8, marginTop: 4 }]}>
                   <Text style={styles.itemCardSub}>{item.items?.length || 0} items</Text>
-                  <Text style={styles.itemCardVal}>₹{(item.items || []).reduce((sum: number, i: any) => sum + (i.amount || 0), 0).toLocaleString('en-IN')}</Text>
+                  <Text style={styles.itemCardVal}>₹{(item.items || []).reduce((sum: number, i: any) => sum + (i.amount || (i.qty * i.rate) || 0), 0).toLocaleString('en-IN')}</Text>
                 </View>
               </View>
             )}
