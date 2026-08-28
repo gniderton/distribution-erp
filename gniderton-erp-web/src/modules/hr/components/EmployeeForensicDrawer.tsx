@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/Button'
 import { User, DollarSign, Clock, AlertTriangle, Mail, Phone, Calendar as CalendarIcon, Shield, CreditCard, Banknote, CalendarDays, CheckCircle2, XCircle, Clock4 } from 'lucide-react'
 import { UpdateSalaryDialog } from './UpdateSalaryDialog'
 import { RecordLiabilityDialog } from './RecordLiabilityDialog'
-import { useEmployeeLiabilities, useDeleteLiability } from '../hooks'
-import { Trash2 } from 'lucide-react'
-interface Props {
-  employeeId: string | null
+import { useEmployeeLiabilities, useDeleteLiability, useClearEmployeeDevice } from '../hooks'
+import { Trash2, SmartphoneNfc } from 'lucide-react'
+
+type Props = {
+  employeeId: string | number | null
   onClose: () => void
 }
 
@@ -17,6 +18,7 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
   const { data, isLoading } = useEmployeeProfile(employeeId)
   const { data: liabilities, isLoading: isLiabilitiesLoading } = useEmployeeLiabilities(employeeId)
   const { mutate: deleteLiability } = useDeleteLiability()
+  const { mutate: clearDevice, isPending: isClearingDevice } = useClearEmployeeDevice()
   
   const [isSalaryOpen, setIsSalaryOpen] = useState(false)
   const [isLiabilityOpen, setIsLiabilityOpen] = useState(false)
@@ -53,6 +55,19 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
             </div>
             
             <div className="flex space-x-2">
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to clear the device binding for this employee?')) {
+                    clearDevice(employeeId!)
+                  }
+                }}
+                disabled={isClearingDevice}
+              >
+                <SmartphoneNfc className="w-4 h-4 mr-1" />
+                Clear Device
+              </Button>
               <Button variant="secondary" size="sm" onClick={() => setIsLiabilityOpen(true)}>Record Liability</Button>
               <Button variant="secondary" size="sm" onClick={() => setIsSalaryOpen(true)}>Update Salary</Button>
               <Button variant="danger" size="sm">Resign</Button>

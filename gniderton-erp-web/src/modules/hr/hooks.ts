@@ -174,3 +174,17 @@ export function useDeleteLiability() {
     }
   })
 }
+
+export function useClearEmployeeDevice() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: hrApi.clearEmployeeDevice,
+    onSuccess: () => {
+      toast.success('Device binding cleared')
+      qc.invalidateQueries({ queryKey: ['hr'] })
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Failed to clear device binding')
+    }
+  })
+}

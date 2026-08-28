@@ -1,0 +1,145 @@
+﻿import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ChevronLeft, TrendingUp, TrendingDown, Clock, DollarSign } from 'lucide-react-native';
+import { useAppStore } from '../store';
+import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
+import { API_URL } from '../api/config';
+
+export default function CustomerDashboardScreen({ navigation }: any) {
+  const { selectedCustomer } = useAppStore();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['customerDashboard', selectedCustomer?.id],
+    queryFn: async () => {
+      const res = await axios.get(`${API_URL}/analytics/customers/${selectedCustomer?.id}/dashboard`);
+      return res.data;
+    },
+    enabled: !!selectedCustomer?.id
+  });
+
+  const metrics = data?.metrics || {};
+  const activity = data?.recent_activity || [];
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <ChevronLeft size={24} color="#111827" />
+        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{selectedCustomer?.customer_name}</Text>
+          <Text style={styles.headerSub}>Customer Dashboard</Text>
+        </View>
+      </View>
+      <ScrollView contentContainerStyle={styles.content}>
+        
+        {isLoading ? (
+          <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 40 }} />
+        ) : (
+          <>
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricCard}>
+                <View style={styles.metricHeader}>
+                  <Text style={styles.metricLabel}>Total Sales</Text>
+                  <TrendingUp size={16} color="#16a34a" />
+                </View>
+                <Text style={styles.metricVal}>₹{Number(metrics.total_sales || 0).toLocaleString('en-IN')}</Text>
+                <Text style={styles.metricGrowth}>+{metrics.growth_sales_pct}% YoY</Text>
+              </View>
+
+              <View style={styles.metricCard}>
+                <View style={styles.metricHeader}>
+                  <Text style={styles.metricLabel}>Rank</Text>
+                </View>
+                <Text style={styles.metricVal}>#{metrics.sales_rank || '-'}</Text>
+                <Text style={styles.metricGrowth}>in territory</Text>
+              </View>
+            </View>
+
+            <View style={styles.creditBox}>
+              <Text style={styles.creditTitle}>Credit Summary</Text>
+              
+              <View style={styles.creditRow}>
+                <View style={styles.creditItem}>
+                  <Text style={styles.creditLabel}>Outstanding</Text>
+                  <Text style={[styles.creditVal, { color: '#dc2626' }]}>₹{Number(metrics.current_balance || 0).toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={styles.creditItem}>
+                  <Text style={styles.creditLabel}>Limit</Text>
+                  <Text style={styles.creditVal}>₹{Number(metrics.credit_limit || 0).toLocaleString('en-IN')}</Text>
+                </View>
+              </View>
+
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${Math.min(100, ((metrics.current_balance || 0) / (metrics.credit_limit || 1)) * 100)}%` }]} />
+              </View>
+
+              <View style={styles.creditRow}>
+                <View style={styles.creditItem}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                    <Clock size={12} color="#6b7280" />
+                    <Text style={styles.creditLabel}>Avg Collection</Text>
+                  </View>
+                  <Text style={styles.creditVal}>{metrics.avg_credit_days || 0} days</Text>
+                </View>
+                <View style={styles.creditItem}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                    <DollarSign size={12} color="#6b7280" />
+                    <Text style={styles.creditLabel}>Receivables Ratio</Text>
+                  </View>
+                  <Text style={styles.creditVal}>{metrics.receivables_vs_sales_ratio || 0}%</Text>
+                </View>
+              </View>
+            </View>
+
+            <Text style={styles.sectionTitle}>Recent Activity</Text>
+            {activity.map((act: any, i: number) => (
+              <View key={i} style={styles.activityCard}>
+                <View style={[styles.activityIcon, { backgroundColor: act.type === 'order' ? '#eff6ff' : '#f0fdf4' }]}>
+                  {act.type === 'order' ? <TrendingUp size={16} color="#2563eb" /> : <DollarSign size={16} color="#16a34a" />}
+                </View>
+                <View style={styles.activityInfo}>
+                  <Text style={styles.activityTitle}>{act.type === 'order' ? 'Order Placed' : 'Payment Received'}</Text>
+                  <Text style={styles.activityDate}>{act.date} â€¢ {act.ref}</Text>
+                </View>
+                <Text style={styles.activityVal}>₹{Number(act.value).toLocaleString('en-IN')}</Text>
+              </View>
+            ))}
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f9fafb' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  backBtn: { padding: 4, marginRight: 8, marginLeft: -4 },
+  headerTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
+  headerSub: { fontSize: 12, color: '#6b7280' },
+  content: { padding: 16 },
+  metricsGrid: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  metricCard: { flex: 1, backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
+  metricHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  metricLabel: { fontSize: 12, color: '#6b7280', fontWeight: '500' },
+  metricVal: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
+  metricGrowth: { fontSize: 12, color: '#16a34a' },
+  creditBox: { backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 24 },
+  creditTitle: { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 16 },
+  creditRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  creditItem: { flex: 1 },
+  creditLabel: { fontSize: 12, color: '#6b7280', marginBottom: 4 },
+  creditVal: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
+  progressBar: { height: 6, backgroundColor: '#f3f4f6', borderRadius: 3, marginBottom: 16, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: '#dc2626', borderRadius: 3 },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 12 },
+  activityCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
+  activityIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  activityInfo: { flex: 1 },
+  activityTitle: { fontSize: 14, fontWeight: '500', color: '#111827', marginBottom: 2 },
+  activityDate: { fontSize: 12, color: '#6b7280' },
+  activityVal: { fontSize: 14, fontWeight: 'bold', color: '#111827' },
+});

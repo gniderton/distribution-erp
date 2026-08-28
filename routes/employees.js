@@ -1461,4 +1461,40 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+// @route   POST /api/employees/:id/register-device
+router.post('/:id/register-device', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { device_id } = req.body;
+        
+        if (!device_id) return res.status(400).json({ error: 'device_id is required' });
+
+        // Check if device_id is already set
+        const empRes = await pool.query('SELECT device_id FROM employees WHERE id = $1', [id]);
+        if (empRes.rows.length === 0) return res.status(404).json({ error: 'Employee not found' });
+        
+        if (empRes.rows[0].device_id) {
+            return res.status(400).json({ error: 'Device is already registered for this employee' });
+        }
+
+        await pool.query('UPDATE employees SET device_id = $1 WHERE id = $2', [device_id, id]);
+        res.json({ success: true, message: 'Device registered successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// @route   POST /api/employees/:id/clear-device
+router.post('/:id/clear-device', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await pool.query('UPDATE employees SET device_id = NULL WHERE id = $1', [id]);
+        res.json({ success: true, message: 'Device binding cleared successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
