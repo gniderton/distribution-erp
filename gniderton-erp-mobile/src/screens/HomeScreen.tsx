@@ -1,7 +1,7 @@
-﻿import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, User, TrendingUp, RefreshCw, LogOut, Plus, Bell, Trash2 } from 'lucide-react-native';
+import { Search, User, TrendingUp, RefreshCw, LogOut, Plus, Bell, Trash2, Phone, MapPin } from 'lucide-react-native';
 import { useAppStore } from '../store';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
@@ -52,8 +52,8 @@ export default function HomeScreen({ navigation }: any) {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={styles.userInfo}>
-            <Text style={styles.greeting}>Hello, {currentUser?.name || 'DSE'}</Text>
-            <Text style={styles.title}>Your Field Hub</Text>
+            <Text style={styles.greeting}>{currentUser?.full_name ?? currentUser?.employee_name ?? 'Home'}</Text>
+            <Text style={styles.title}>{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}</Text>
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity onPress={() => navigation.navigate('PriceAlerts')} style={styles.iconBtn}>
@@ -106,11 +106,11 @@ export default function HomeScreen({ navigation }: any) {
               />
             </View>
 
-            {isLoading ? (
+            {isLoading • (
               <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>
-            ) : filtered.length === 0 ? (
+            ) : filtered.length === 0 • (
               <View style={styles.center}>
-                <Text style={styles.emptyText}>{search ? 'No customers match your search' : 'No customers for today'}</Text>
+                <Text style={styles.emptyText}>{search • 'No customers match your search' : 'No customers for today'}</Text>
               </View>
             ) : (
               <FlatList
@@ -125,6 +125,24 @@ export default function HomeScreen({ navigation }: any) {
                     <View style={styles.customerInfo}>
                       <Text style={styles.customerName}>{item.customer_name}</Text>
                       <Text style={styles.customerCode}>{item.customer_code}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {item.customer_phone ? (
+                        <TouchableOpacity 
+                          style={styles.actionCircle}
+                          onPress={() => Linking.openURL(`tel:${item.customer_phone}`)}
+                        >
+                          <Phone size={16} color="#2f7f74" />
+                        </TouchableOpacity>
+                      ) : null}
+                      {item.latitude && item.longitude ? (
+                        <TouchableOpacity 
+                          style={styles.actionCircle}
+                          onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`)}
+                        >
+                          <MapPin size={16} color="#9ca3af" />
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                   </TouchableOpacity>
                 )}
@@ -253,6 +271,7 @@ const styles = StyleSheet.create({
   customerInfo: { flex: 1 },
   customerName: { fontSize: 15, fontWeight: '600', color: '#111827', marginBottom: 2 },
   customerCode: { fontSize: 13, color: '#6b7280' },
+  actionCircle: { padding: 8, borderRadius: 20, backgroundColor: '#f3f4f6' },
   summaryCard: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 16 },
   summaryLabel: { fontSize: 13, color: '#6b7280', marginBottom: 4 },
   summaryValue: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
@@ -267,3 +286,4 @@ const styles = StyleSheet.create({
   eodBtnText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   fab: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 6 },
 });
+
