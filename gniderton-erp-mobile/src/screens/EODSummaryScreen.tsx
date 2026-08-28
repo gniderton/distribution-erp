@@ -44,6 +44,7 @@ export default function EODSummaryScreen({ navigation }: any) {
   const denomTotal = DENOM_ROWS.reduce((s, r) => s + (denominations[r.key as keyof typeof denominations] || 0) * r.value, 0);
   const expectedCash = Math.max(0, cashTotal - expenseTotal);
   const cashMatch = denomTotal === expectedCash;
+  const hasData = pendingOrders.length > 0 || pendingPayments.length > 0 || expenses.length > 0;
 
   // Group Cheques
   const groupedCheques = Object.values(
@@ -140,27 +141,33 @@ export default function EODSummaryScreen({ navigation }: any) {
             <Text style={styles.stepTitle}>1. Record Expenses</Text>
             <Text style={styles.stepDesc}>Enter any expenses incurred today (Max ₹{MAX_EXPENSE_TOTAL})</Text>
 
-            <View style={styles.expenseForm}>
-              <Text style={styles.label}>Category</Text>
-              <View style={styles.typeRow}>
-                {EXPENSE_TYPES.map(t => (
-                  <TouchableOpacity key={t} style={[styles.typeBtn, expType === t && styles.typeBtnActive]} onPress={() => setExpType(t)}>
-                    <Text style={[styles.typeBtnText, expType === t && styles.typeBtnTextActive]}>{t}</Text>
-                  </TouchableOpacity>
-                ))}
+            {cashTotal === 0 ? (
+              <View style={[styles.infoBox, { marginBottom: 16 }]}>
+                <Text style={styles.infoBoxText}>No cash collected today. Expenses cannot be claimed.</Text>
               </View>
+            ) : (
+              <View style={styles.expenseForm}>
+                <Text style={styles.label}>Category</Text>
+                <View style={styles.typeRow}>
+                  {EXPENSE_TYPES.map(t => (
+                    <TouchableOpacity key={t} style={[styles.typeBtn, expType === t && styles.typeBtnActive]} onPress={() => setExpType(t)}>
+                      <Text style={[styles.typeBtnText, expType === t && styles.typeBtnTextActive]}>{t}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-              <Text style={styles.label}>Amount</Text>
-              <TextInput style={styles.input} value={expAmount} onChangeText={setExpAmount} keyboardType="numeric" placeholder="0" />
+                <Text style={styles.label}>Amount</Text>
+                <TextInput style={styles.input} value={expAmount} onChangeText={setExpAmount} keyboardType="numeric" placeholder="0" />
 
-              <Text style={styles.label}>Description</Text>
-              <TextInput style={styles.input} value={expDesc} onChangeText={setExpDesc} placeholder="e.g. Lunch with client" />
+                <Text style={styles.label}>Description</Text>
+                <TextInput style={styles.input} value={expDesc} onChangeText={setExpDesc} placeholder="e.g. Lunch with client" />
 
-              <TouchableOpacity style={styles.addBtn} onPress={handleAddExpense}>
-                <PlusCircle size={18} color="#fff" style={{ marginRight: 6 }} />
-                <Text style={styles.addBtnText}>Save Expense</Text>
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity style={styles.addBtn} onPress={handleAddExpense}>
+                  <PlusCircle size={18} color="#fff" style={{ marginRight: 6 }} />
+                  <Text style={styles.addBtnText}>Save Expense</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {expenses.length > 0 && (
               <View style={styles.expenseList}>
@@ -377,7 +384,7 @@ export default function EODSummaryScreen({ navigation }: any) {
               )}
             </View>
 
-            <TouchableOpacity style={styles.syncBtn} onPress={handleSync} disabled={syncing}>
+            <TouchableOpacity style={[styles.syncBtn, (!hasData || syncing) && styles.btnDisabled]} onPress={handleSync} disabled={syncing || !hasData}>
               {syncing ? <ActivityIndicator color="#fff" /> : <RefreshCw size={20} color="#fff" style={{ marginRight: 8 }} />}
               <Text style={styles.syncBtnText}>{syncing ? 'Syncing...' : 'Sync to Server'}</Text>
             </TouchableOpacity>
