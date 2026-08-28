@@ -87,7 +87,7 @@ const REPORT_CATEGORIES = [
         title: 'Sales Analytics Dashboard',
         description: 'Comprehensive visual dashboard of sales performance, top brands, and leaderboards.',
         icon: TrendingUp,
-        colorClass: 'text-indigo-600 bg-indigo-500/10 group-hover:bg-indigo-500/20 ring-indigo-500/30',
+        colorClass: 'text-brand-600 bg-brand-500/10 group-hover:bg-brand-500/20 ring-brand-500/30',
         component: <SalesAnalyticsDashboard />
       },
       {
@@ -119,7 +119,7 @@ const REPORT_CATEGORIES = [
         title: 'Credit Note Allocations',
         description: 'Track which bills each credit note or return has been applied against.',
         icon: FileSpreadsheet,
-        colorClass: 'text-indigo-600 bg-indigo-500/10 group-hover:bg-indigo-500/20 ring-indigo-500/30',
+        colorClass: 'text-brand-600 bg-brand-500/10 group-hover:bg-brand-500/20 ring-brand-500/30',
         component: <CreditNoteAllocationReportView />
       },
       {
@@ -142,7 +142,7 @@ const REPORT_CATEGORIES = [
         title: 'Bank Statements',
         description: 'Uploaded statements and matching status.',
         icon: FileSpreadsheet,
-        colorClass: 'text-blue-600 bg-blue-500/10 group-hover:bg-blue-500/20 ring-blue-500/30',
+        colorClass: 'text-brand-600 bg-brand-500/10 group-hover:bg-brand-500/20 ring-brand-500/30',
         component: <BankStatementWrapper />
       },
       {
@@ -150,7 +150,7 @@ const REPORT_CATEGORIES = [
         title: 'Reconciliation Audit',
         description: 'Deep dive into payment allocations and forensic catches.',
         icon: FileText,
-        colorClass: 'text-blue-600 bg-blue-500/10 group-hover:bg-blue-500/20 ring-blue-500/30',
+        colorClass: 'text-brand-600 bg-brand-500/10 group-hover:bg-brand-500/20 ring-brand-500/30',
         component: <ReconciliationAuditWrapper />
       },
       {
@@ -158,7 +158,7 @@ const REPORT_CATEGORIES = [
         title: 'Payment Allocations',
         description: 'View how payments are distributed across specific invoices.',
         icon: Activity,
-        colorClass: 'text-blue-600 bg-blue-500/10 group-hover:bg-blue-500/20 ring-blue-500/30',
+        colorClass: 'text-brand-600 bg-brand-500/10 group-hover:bg-brand-500/20 ring-brand-500/30',
         component: <PaymentAllocationsReportView />
       }
     ]
@@ -173,7 +173,7 @@ const REPORT_CATEGORIES = [
         title: 'Attendance Report',
         description: 'Daily attendance logs for all staff.',
         icon: Users,
-        colorClass: 'text-indigo-600 bg-indigo-500/10 group-hover:bg-indigo-500/20 ring-indigo-500/30',
+        colorClass: 'text-brand-600 bg-brand-500/10 group-hover:bg-brand-500/20 ring-brand-500/30',
         component: <GenericReportView title="Attendance Report" queryKey="attendance" fetchFn={reportsApi.attendanceDetails} />
       }
     ]

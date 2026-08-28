@@ -123,9 +123,9 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
         </Card>
 
         {/* Recent Purchases */}
-        <Card className="col-span-1 border-t-4 border-t-blue-500 h-full">
+        <Card className="col-span-1 border-t-4 border-t-brand-500 h-full">
           <CardHeader>
-            <CardTitle className="text-ink-900"><Package className="w-5 h-5 text-blue-500" /> Recent Vendor Restocks</CardTitle>
+            <CardTitle className="text-ink-900"><Package className="w-5 h-5 text-brand-500" /> Recent Vendor Restocks</CardTitle>
           </CardHeader>
           <CardContent className="flex-1 overflow-auto">
             {(!history?.purchases || history.purchases.length === 0) ? (
@@ -136,7 +136,7 @@ export function ProductDashboardTab({ productId }: { productId: string | number 
                 columns={[
                   { accessorKey: 'invoice_date', header: 'Date', cell: c => <span className="text-ink-500">{formatDate(c.getValue() as string)}</span> },
                   { accessorKey: 'vendor_name', header: 'Vendor', cell: c => <span className="font-medium">{c.getValue() as string}</span> },
-                  { accessorKey: 'qty', header: 'Qty', cell: c => <span className="font-mono-figures font-bold text-blue-600">+{c.getValue() as number}</span> },
+                  { accessorKey: 'qty', header: 'Qty', cell: c => <span className="font-mono-figures font-bold text-brand-600">+{c.getValue() as number}</span> },
                 ]}
               />
             )}

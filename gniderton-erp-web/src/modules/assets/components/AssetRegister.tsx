@@ -54,7 +54,7 @@ export function AssetRegister() {
           <div className="flex items-center gap-2">
             <button 
               onClick={() => { setSelectedAsset(asset); setProfileOpen(true) }}
-              className="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 tooltip-trigger"
+              className="p-1.5 text-brand-600 bg-brand-50 rounded hover:bg-brand-100 tooltip-trigger"
               title="Profile & Documents"
             >
               <User size={14} />

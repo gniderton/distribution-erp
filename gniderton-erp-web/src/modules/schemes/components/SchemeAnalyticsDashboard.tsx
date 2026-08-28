@@ -43,7 +43,7 @@ export const SchemeAnalyticsDashboard: React.FC<SchemeAnalyticsDashboardProps> =
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
       </div>
     );
   }
@@ -100,7 +100,7 @@ export const SchemeAnalyticsDashboard: React.FC<SchemeAnalyticsDashboardProps> =
         {/* DSE Performance Chart */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Users className="w-5 h-5 mr-2 text-indigo-500" />
+            <Users className="w-5 h-5 mr-2 text-brand-500" />
             DSE Performance (Revenue vs Discount)
           </h3>
           <div className="h-[300px]">
@@ -136,7 +136,7 @@ export const SchemeAnalyticsDashboard: React.FC<SchemeAnalyticsDashboardProps> =
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
                 <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                <Bar yAxisId="left" dataKey="sales_value" name="Sales Generated" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                <Bar yAxisId="left" dataKey="sales_value" name="Sales Generated" fill="var(--color-brand-500)" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 <Bar yAxisId="right" dataKey="discount_given" name="Discount Given" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
               </BarChart>
             </ResponsiveContainer>
@@ -146,7 +146,7 @@ export const SchemeAnalyticsDashboard: React.FC<SchemeAnalyticsDashboardProps> =
         {/* Tier Distribution Doughnut */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Activity className="w-5 h-5 mr-2 text-indigo-500" />
+            <Activity className="w-5 h-5 mr-2 text-brand-500" />
             Tier Usage Breakdown
           </h3>
           <div className="h-[250px] flex-grow">
@@ -184,7 +184,7 @@ export const SchemeAnalyticsDashboard: React.FC<SchemeAnalyticsDashboardProps> =
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <Users className="w-5 h-5 mr-2 text-indigo-500" />
+              <Users className="w-5 h-5 mr-2 text-brand-500" />
               Top Beneficiary Customers
             </h3>
             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">By Discount</span>
@@ -220,7 +220,7 @@ export const SchemeAnalyticsDashboard: React.FC<SchemeAnalyticsDashboardProps> =
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <Package className="w-5 h-5 mr-2 text-indigo-500" />
+              <Package className="w-5 h-5 mr-2 text-brand-500" />
               Top Scheme Products
             </h3>
             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">By Revenue</span>

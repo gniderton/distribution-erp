@@ -550,7 +550,7 @@ export default function SalesOrderPage() {
             <span className="text-[10px] text-ink-500 uppercase font-semibold tracking-wider">Active Routes</span>
             <h4 className="text-2xl font-bold text-ink-900 mt-1">{kpis.routesCount}</h4>
           </div>
-          <div className="p-3 bg-indigo-500/10 text-indigo-600 rounded-lg">
+          <div className="p-3 bg-brand-500/10 text-brand-600 rounded-lg">
             <MapPin size={20} />
           </div>
         </div>

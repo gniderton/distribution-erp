@@ -122,9 +122,9 @@ export function CustomerDashboardTab({ customerId }: { customerId: string | numb
         </Card>
 
         {/* Recent Activity */}
-        <Card className="col-span-1 border-t-4 border-t-blue-500">
+        <Card className="col-span-1 border-t-4 border-t-brand-500">
           <CardHeader>
-            <CardTitle className="text-ink-900"><Activity className="w-5 h-5 text-blue-500" /> Recent Ledger Activity</CardTitle>
+            <CardTitle className="text-ink-900"><Activity className="w-5 h-5 text-brand-500" /> Recent Ledger Activity</CardTitle>
           </CardHeader>
           <CardContent>
             {(!recent_activity || recent_activity.length === 0) ? (

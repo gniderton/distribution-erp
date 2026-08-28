@@ -274,7 +274,7 @@ export function PurchaseAnalyticsDashboard() {
                   formatter={(value: any) => [formatCurrency(Number(value) || 0), 'Value']}
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="amount" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="amount" fill="var(--color-brand-500)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

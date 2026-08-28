@@ -1,6 +1,7 @@
 import { Bell, Search, ChevronDown, LogOut } from 'lucide-react'
 import { useAuth } from '@/auth/AuthContext'
 import { useState } from 'react'
+import { ThemeSwitcher } from '@/components/shared/ThemeSwitcher'
 
 export function Topbar() {
   const { user, logout } = useAuth()
@@ -17,6 +18,8 @@ export function Topbar() {
       </div>
 
       <div className="flex items-center gap-3">
+        <ThemeSwitcher />
+        
         <button className="relative p-2 rounded-lg hover:bg-surface transition">
           <Bell className="h-4 w-4 text-ink-700" />
           <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-accent-500" />

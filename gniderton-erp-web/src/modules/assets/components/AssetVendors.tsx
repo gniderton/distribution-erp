@@ -29,7 +29,7 @@ export function AssetVendors() {
         <div className="flex gap-2">
           <button 
             onClick={() => { setSelectedVendor(row.original); setProfileOpen(true) }}
-            className="p-1.5 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 tooltip-trigger"
+            className="p-1.5 text-brand-600 bg-brand-50 rounded hover:bg-brand-100 tooltip-trigger"
             title="View Ledger & Profile"
           >
             <User size={14} />

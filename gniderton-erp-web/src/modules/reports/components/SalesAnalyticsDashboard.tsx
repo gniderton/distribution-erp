@@ -168,7 +168,7 @@ export function SalesAnalyticsDashboard() {
                   formatter={(value: any) => [formatCurrency(Number(value) || 0), 'Revenue']}
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="amount" fill="#0ea5e9" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="amount" fill="var(--color-brand-500)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -241,7 +241,7 @@ export function SalesAnalyticsDashboard() {
 
         {/* Top Routes */}
         <div className="bg-white border border-[#e6e9ee] rounded-xl shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-ink-900 mb-4 flex items-center gap-2"><Map size={16} className="text-indigo-500" /> Route Performance</h3>
+          <h3 className="text-sm font-semibold text-ink-900 mb-4 flex items-center gap-2"><Map size={16} className="text-brand-500" /> Route Performance</h3>
           <div className="space-y-4">
             {data?.by_route?.slice(0, 5).map((r: any, i: number) => (
               <div key={i} className="flex justify-between items-center pb-3 border-b border-border-subtle last:border-0 last:pb-0">

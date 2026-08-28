@@ -142,8 +142,8 @@ export function AssetProfileDrawer({ open, onClose, asset }: Props) {
                             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                           />
                           <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                          <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="expense" name="Expenses" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="income" name="Income" fill="var(--color-success-500)" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="expense" name="Expenses" fill="var(--color-danger-500)" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>

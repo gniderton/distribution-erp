@@ -151,7 +151,7 @@ export default function CustomerPage() {
             title="Total Customers" 
             value={total} 
             icon={Users} 
-            iconClass="bg-blue-50 text-blue-600 border-blue-100"
+            iconClass="bg-brand-50 text-brand-600 border-brand-100"
           />
           <StatCard 
             title="Active / Verified" 

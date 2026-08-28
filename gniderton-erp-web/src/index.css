@@ -40,6 +40,22 @@
 
   --radius-card: 0.875rem;
 }
+  /* Dark Mode Overrides */
+  html.dark {
+    --color-surface: #0f172a;
+    --color-surface-raised: #1e293b;
+    --color-border-subtle: #334155;
+    
+    /* Invert Ink (Text) Colors */
+    --color-ink-950: #f8fafc;
+    --color-ink-900: #f1f5f9;
+    --color-ink-800: #e2e8f0;
+    --color-ink-700: #cbd5e1;
+    --color-ink-600: #94a3b8;
+    
+    /* Adjust accents for better dark mode visibility if needed */
+  }
+
 
 @layer base {
   html {
@@ -66,5 +82,35 @@
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background-color: var(--color-border-subtle);
     border-radius: 999px;
+  }
+}
+
+@layer base {
+  /* Blue Theme */
+  :root[data-theme="blue"] {
+    --color-brand-50: #eff6ff;
+    --color-brand-100: #dbeafe;
+    --color-brand-200: #bfdbfe;
+    --color-brand-300: #93c5fd;
+    --color-brand-400: #60a5fa;
+    --color-brand-500: #3b82f6;
+    --color-brand-600: #2563eb;
+    --color-brand-700: #1d4ed8;
+    --color-brand-800: #1e40af;
+    --color-brand-900: #1e3a8a;
+  }
+
+  /* Purple Theme */
+  :root[data-theme="purple"] {
+    --color-brand-50: #faf5ff;
+    --color-brand-100: #f3e8ff;
+    --color-brand-200: #e9d5ff;
+    --color-brand-300: #d8b4fe;
+    --color-brand-400: #c084fc;
+    --color-brand-500: #a855f7;
+    --color-brand-600: #9333ea;
+    --color-brand-700: #7e22ce;
+    --color-brand-800: #6b21a8;
+    --color-brand-900: #581c87;
   }
 }

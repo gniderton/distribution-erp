@@ -149,7 +149,7 @@ export function DseDashboardView() {
               <Target size={14} />
               Goal Met: {metDays} Days
             </div>
-            <div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200 text-sm font-medium">
+            <div className="flex items-center gap-2 bg-brand-50 text-brand-700 px-3 py-1.5 rounded-lg border border-brand-200 text-sm font-medium">
               <Users size={14} />
               New Customers: {p.new_customers_this_month || 0}
             </div>
@@ -281,7 +281,7 @@ export function DseDashboardView() {
             
             {/* Brand Sales */}
             <div className="bg-white border border-[#e6e9ee] rounded-xl shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-ink-900 mb-4 flex items-center gap-2"><Package size={16} className="text-indigo-500" /> Brand Sales Mix</h3>
+              <h3 className="text-sm font-semibold text-ink-900 mb-4 flex items-center gap-2"><Package size={16} className="text-brand-500" /> Brand Sales Mix</h3>
               <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.brand_sales || []} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
@@ -292,7 +292,7 @@ export function DseDashboardView() {
                       formatter={(value: any) => [formatCurrency(Number(value)), 'Sales']}
                       contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
                     />
-                    <Bar dataKey="taxable_sales" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={20} />
+                    <Bar dataKey="taxable_sales" fill="var(--color-brand-500)" radius={[0, 4, 4, 0]} barSize={20} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
