@@ -103,7 +103,7 @@ export default function OrderFormScreen({ navigation }: any) {
     });
   };
 
-  const allProducts = useMemo(() => applyPricing(products, selectedCustomer), [products, selectedCustomer]);
+  const allProducts = useMemo(() => applyPricing(products.filter((p: any) => p.is_active), selectedCustomer), [products, selectedCustomer]);
   
   const filtered = useMemo(() => {
     let list = allProducts;
@@ -123,9 +123,8 @@ export default function OrderFormScreen({ navigation }: any) {
   const cartTotal = useMemo(() => {
     return (allProducts || []).reduce((sum, p) => {
       const base = Number(p.current_price || p.dealer_rate || 0);
-      const tax = Number(p.tax_percentage || 0);
       const qty = (cart || {})[String(p.id)] || 0;
-      return sum + (qty * base * (1 + tax / 100));
+      return sum + (qty * base);
     }, 0);
   }, [allProducts, cart]);
 

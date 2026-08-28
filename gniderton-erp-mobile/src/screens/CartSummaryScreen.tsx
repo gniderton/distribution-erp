@@ -26,7 +26,7 @@ export default function CartSummaryScreen({ navigation }: any) {
           id,
           product_name: product?.product_name || `Product #${id}`,
           qty,
-          rate: baseRate * (1 + taxPct / 100),
+          rate: baseRate,
           tax_pct: taxPct,
         };
       });
