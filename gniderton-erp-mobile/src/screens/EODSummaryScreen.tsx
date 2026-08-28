@@ -35,16 +35,17 @@ export default function EODSummaryScreen({ navigation }: any) {
   // Summaries
   const expenseTotal = expenses.reduce((s, e) => s + e.amount, 0);
   const cashPayments = pendingPayments.filter(p => p.mode === 'CASH');
-  const bankPayments = pendingPayments.filter(p => p.mode !== 'CASH');
+  const chequePayments = pendingPayments.filter(p => p.mode === 'CHEQUE');
+  const onlinePayments = pendingPayments.filter(p => p.mode === 'UPI' || p.mode === 'NEFT');
   const cashTotal = cashPayments.reduce((s, p) => s + p.amount, 0);
-  const bankTotal = bankPayments.reduce((s, p) => s + p.amount, 0);
+  const chequeTotal = chequePayments.reduce((s, p) => s + p.amount, 0);
+  const onlineTotal = onlinePayments.reduce((s, p) => s + p.amount, 0);
 
   const denomTotal = DENOM_ROWS.reduce((s, r) => s + (denominations[r.key as keyof typeof denominations] || 0) * r.value, 0);
   const expectedCash = Math.max(0, cashTotal - expenseTotal);
   const cashMatch = denomTotal === expectedCash;
 
   // Group Cheques
-  const chequePayments = pendingPayments.filter(p => p.mode === 'CHEQUE');
   const groupedCheques = Object.values(
     chequePayments.reduce((acc, p) => {
       const key = `${p.customer_id}_${p.bank_name}_${p.reference}_${p.cheque_date}`;
@@ -56,6 +57,23 @@ export default function EODSummaryScreen({ navigation }: any) {
       return acc;
     }, {} as Record<string, any>)
   );
+
+  const productSummary = Object.values(
+    pendingOrders.reduce((acc, order) => {
+      (order.items || []).forEach(item => {
+        const id = item.product_id || item.id;
+        const name = item.product_name || 'Unknown Product';
+        const qty = item.qty || 0;
+        const val = qty * Number(item.rate || 0);
+        if (!acc[id]) acc[id] = { name, qty: 0, value: 0 };
+        acc[id].qty += qty;
+        acc[id].value += val;
+      });
+      return acc;
+    }, {} as Record<string, { name: string; qty: number; value: number }>)
+  ).sort((a, b) => b.value - a.value);
+
+  const orderTotal = productSummary.reduce((s, p) => s + p.value, 0);
 
   const chequesMatch = groupedCheques.every(c => Number(chequeInputs[c.key] || 0) === c.expected_amount);
 
@@ -283,23 +301,80 @@ export default function EODSummaryScreen({ navigation }: any) {
             <Text style={styles.stepTitle}>4. Final Summary</Text>
             <Text style={styles.stepDesc}>Review today's activity before syncing.</Text>
 
-            <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Total Orders</Text>
-                <Text style={styles.statValue}>{pendingOrders.length}</Text>
+            {/* Orders Taken */}
+            <View style={styles.summarySection}>
+              <View style={styles.summarySectionHeader}>
+                <Text style={styles.summarySectionTitle}>Orders Taken</Text>
+                <Text style={styles.summarySectionSub}>
+                  {pendingOrders.length} order{pendingOrders.length !== 1 ? 's' : ''} • ₹{orderTotal.toLocaleString('en-IN')}
+                </Text>
               </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Total Expenses</Text>
-                <Text style={styles.statValue}>₹{expenseTotal}</Text>
+              {productSummary.length === 0 ? (
+                <Text style={styles.emptyText}>No orders yet</Text>
+              ) : (
+                <>
+                  <View style={styles.tableHeader}>
+                    <Text style={[styles.tableCol, { flex: 2 }]}>Product</Text>
+                    <Text style={[styles.tableCol, { flex: 1, textAlign: 'right' }]}>Qty</Text>
+                    <Text style={[styles.tableCol, { flex: 1, textAlign: 'right' }]}>Value</Text>
+                  </View>
+                  {productSummary.map((p, i) => (
+                    <View key={i} style={styles.tableRow}>
+                      <Text style={[styles.tableCell, { flex: 2 }]} numberOfLines={1}>{p.name}</Text>
+                      <Text style={[styles.tableCell, { flex: 1, textAlign: 'right', color: '#6b7280' }]}>{p.qty}</Text>
+                      <Text style={[styles.tableCell, { flex: 1, textAlign: 'right', fontWeight: '500' }]}>₹{p.value.toLocaleString('en-IN')}</Text>
+                    </View>
+                  ))}
+                  <View style={styles.tableFooter}>
+                    <Text style={[styles.tableFooterCell, { flex: 2 }]}>Total</Text>
+                    <Text style={[styles.tableFooterCell, { flex: 1, textAlign: 'right' }]}>{productSummary.reduce((s, p) => s + p.qty, 0)}</Text>
+                    <Text style={[styles.tableFooterCell, { flex: 1, textAlign: 'right' }]}>₹{orderTotal.toLocaleString('en-IN')}</Text>
+                  </View>
+                </>
+              )}
+            </View>
+
+            {/* Payments Collected */}
+            <View style={styles.summarySection}>
+              <Text style={styles.summarySectionTitle}>Payments Collected</Text>
+              <View style={{ marginTop: 8 }}>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Cash</Text>
+                  <Text style={styles.summaryValue}>₹{cashTotal.toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Cheque</Text>
+                  <Text style={styles.summaryValue}>₹{chequeTotal.toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Online (UPI/NEFT)</Text>
+                  <Text style={styles.summaryValue}>₹{onlineTotal.toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 4, paddingTop: 8 }]}>
+                  <Text style={[styles.summaryLabel, { fontWeight: 'bold', color: '#111827' }]}>Total</Text>
+                  <Text style={[styles.summaryValue, { fontWeight: 'bold' }]}>₹{(cashTotal + chequeTotal + onlineTotal).toLocaleString('en-IN')}</Text>
+                </View>
               </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Total Cash</Text>
-                <Text style={styles.statValue}>₹{cashTotal}</Text>
+            </View>
+
+            {/* Expenses */}
+            <View style={styles.summarySection}>
+              <View style={styles.summarySectionHeader}>
+                <Text style={styles.summarySectionTitle}>Expenses</Text>
+                <Text style={styles.summarySectionSub}>
+                  {expenses.length} entrie{expenses.length !== 1 ? 's' : ''} • ₹{expenseTotal.toLocaleString('en-IN')}
+                </Text>
               </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statLabel}>Total Cheque/Online</Text>
-                <Text style={styles.statValue}>₹{bankTotal}</Text>
-              </View>
+              {expenses.length > 0 && (
+                <View style={{ marginTop: 8 }}>
+                  {expenses.map(e => (
+                    <View key={e.id} style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>{e.type} - {e.desc}</Text>
+                      <Text style={styles.summaryValue}>₹{e.amount}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
 
             <TouchableOpacity style={styles.syncBtn} onPress={handleSync} disabled={syncing}>
@@ -379,5 +454,17 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.5 },
 
   syncBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#2f7f74', padding: 16, borderRadius: 12 },
-  syncBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
+  syncBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+
+  summarySection: { backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 16 },
+  summarySectionHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  summarySectionTitle: { fontSize: 14, fontWeight: 'bold', color: '#111827' },
+  summarySectionSub: { fontSize: 12, color: '#6b7280' },
+  tableHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingBottom: 8, marginBottom: 8 },
+  tableCol: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
+  tableRow: { flexDirection: 'row', marginBottom: 8 },
+  tableCell: { fontSize: 13, color: '#111827' },
+  tableFooter: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 8, marginTop: 4 },
+  tableFooterCell: { fontSize: 13, fontWeight: 'bold', color: '#111827' },
+  emptyText: { fontSize: 13, color: '#6b7280', fontStyle: 'italic', marginTop: 8 }
 });
