@@ -9,18 +9,40 @@ import { API_URL } from '../api/config';
 
 function ProductRow({ product, qty, onChange }: { product: any, qty: number, onChange: (id: string, qty: number) => void }) {
   if (!product) return null;
-  const price = Number(product?.current_price || product?.dealer_rate || 0).toFixed(2);
+  const baseRate = Number(product?.current_price || product?.dealer_rate || 0);
+  const taxPct = Number(product?.tax_percentage || 0);
+  const rateWithTax = baseRate * (1 + taxPct / 100);
+  
+  const handleTextChange = (val: string) => {
+    const n = parseInt(val, 10);
+    onChange(String(product.id), isNaN(n) || n < 0 ? 0 : n);
+  };
+
   return (
-    <View style={styles.productRow}>
+    <View style={[styles.productRow, qty > 0 && { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
       <View style={styles.prodInfo}>
         <Text style={styles.prodName}>{product?.product_name}</Text>
-        <Text style={styles.prodCode}>{product?.product_code} • ₹{price}</Text>
+        <Text style={styles.prodCode}>{product?.ean_code || 'No EAN'}</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 }}>
+          <Text style={{ fontSize: 12, color: '#6b7280' }}>MRP ₹{Number(product?.mrp || 0).toFixed(2)}</Text>
+          <Text style={{ fontSize: 12, color: '#6b7280' }}>Rate ₹{rateWithTax.toFixed(2)}</Text>
+          {Number(product?.current_stock) > 0 && (
+            <Text style={{ fontSize: 12, color: '#16a34a', fontWeight: '500' }}>Stk {Number(product.current_stock)}</Text>
+          )}
+        </View>
       </View>
       <View style={styles.qtyBox}>
         <TouchableOpacity style={styles.qtyBtn} onPress={() => onChange(String(product?.id), Math.max(0, qty - 1))}>
           <Text style={styles.qtyBtnText}>-</Text>
         </TouchableOpacity>
-        <Text style={styles.qtyText}>{qty}</Text>
+        <TextInput 
+          style={styles.qtyInput} 
+          keyboardType="numeric" 
+          value={qty > 0 ? String(qty) : ''} 
+          onChangeText={handleTextChange} 
+          placeholder="0"
+          placeholderTextColor="#9ca3af"
+        />
         <TouchableOpacity style={styles.qtyBtn} onPress={() => onChange(String(product.id), qty + 1)}>
           <Text style={styles.qtyBtnText}>+</Text>
         </TouchableOpacity>
@@ -99,7 +121,12 @@ export default function OrderFormScreen({ navigation }: any) {
   const cartItems = Object.entries(cart || {}).filter(([_, q]) => q > 0);
   const cartCount = cartItems.length;
   const cartTotal = useMemo(() => {
-    return (allProducts || []).reduce((sum, p) => sum + ((cart || {})[String(p.id)] || 0) * Number(p.current_price || p.dealer_rate || 0), 0);
+    return (allProducts || []).reduce((sum, p) => {
+      const base = Number(p.current_price || p.dealer_rate || 0);
+      const tax = Number(p.tax_percentage || 0);
+      const qty = (cart || {})[String(p.id)] || 0;
+      return sum + (qty * base * (1 + tax / 100));
+    }, 0);
   }, [allProducts, cart]);
 
   const loading = loadingProducts || loadingBrands;
@@ -213,6 +240,7 @@ const styles = StyleSheet.create({
   qtyBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', borderRadius: 6, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
   qtyBtnText: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
   qtyText: { width: 32, textAlign: 'center', fontSize: 14, fontWeight: 'bold', color: '#111827' },
+  qtyInput: { width: 44, textAlign: 'center', fontSize: 14, fontWeight: 'bold', color: '#111827' },
   footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', padding: 16, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
   checkoutBtn: { flexDirection: 'row', backgroundColor: '#2f7f74', padding: 16, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   checkoutText: { color: '#fff', fontSize: 15, fontWeight: 'bold' }

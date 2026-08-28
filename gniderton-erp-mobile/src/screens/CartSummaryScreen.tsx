@@ -20,12 +20,14 @@ export default function CartSummaryScreen({ navigation }: any) {
       .filter(([_, qty]) => qty > 0)
       .map(([id, qty]) => {
         const product = products.find(p => String(p.id) === id);
+        const baseRate = Number(product?.current_price || product?.dealer_rate || 0);
+        const taxPct = Number(product?.tax_percentage || 0);
         return {
           id,
           product_name: product?.product_name || `Product #${id}`,
           qty,
-          rate: Number(product?.current_price || product?.dealer_rate || 0),
-          tax_pct: 0,
+          rate: baseRate * (1 + taxPct / 100),
+          tax_pct: taxPct,
         };
       });
   }, [cart, products]);
