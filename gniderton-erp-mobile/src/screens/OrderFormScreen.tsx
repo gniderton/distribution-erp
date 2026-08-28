@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, ShoppingCart, Search } from 'lucide-react-native';
 import { useAppStore } from '../store';
@@ -183,21 +183,24 @@ export default function OrderFormScreen({ navigation }: any) {
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color="#2f7f74" /></View>
       ) : (
-        <FlatList
-          data={filtered || []}
-          keyExtractor={item => String(item.id)}
-          contentContainerStyle={styles.listContent}
-          initialNumToRender={20}
-          maxToRenderPerBatch={20}
-          ListHeaderComponent={<Text style={styles.listCount}>{(filtered || []).length} products</Text>}
-          renderItem={({ item }) => (
-            <ProductRow 
-              product={item} 
-              qty={cart[String(item.id)] || 0} 
-              onChange={setCartItem} 
-            />
-          )}
-        />
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <FlatList
+            data={filtered || []}
+            keyExtractor={item => String(item.id)}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={20}
+            maxToRenderPerBatch={20}
+            ListHeaderComponent={<Text style={styles.listCount}>{(filtered || []).length} products</Text>}
+            renderItem={({ item }) => (
+              <ProductRow 
+                product={item} 
+                qty={cart[String(item.id)] || 0} 
+                onChange={setCartItem} 
+              />
+            )}
+          />
+        </KeyboardAvoidingView>
       )}
 
       {cartCount > 0 && (
@@ -229,7 +232,7 @@ const styles = StyleSheet.create({
   brandChipText: { fontSize: 12, fontWeight: '500', color: '#6b7280' },
   brandChipTextActive: { color: '#fff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  listContent: { padding: 16, paddingBottom: 80 },
+  listContent: { padding: 16, paddingBottom: 200 },
   listCount: { fontSize: 12, color: '#6b7280', marginBottom: 12 },
   productRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
   prodInfo: { flex: 1 },

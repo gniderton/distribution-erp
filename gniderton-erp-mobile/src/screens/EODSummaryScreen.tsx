@@ -320,7 +320,7 @@ export default function EODSummaryScreen({ navigation }: any) {
                   </View>
                   {productSummary.map((p, i) => (
                     <View key={i} style={styles.tableRow}>
-                      <Text style={[styles.tableCell, { flex: 2 }]} numberOfLines={1}>{p.name}</Text>
+                      <Text style={[styles.tableCell, { flex: 2 }]}>{p.name}</Text>
                       <Text style={[styles.tableCell, { flex: 1, textAlign: 'right', color: '#6b7280' }]}>{p.qty}</Text>
                       <Text style={[styles.tableCell, { flex: 1, textAlign: 'right', fontWeight: '500' }]}>₹{p.value.toLocaleString('en-IN')}</Text>
                     </View>
