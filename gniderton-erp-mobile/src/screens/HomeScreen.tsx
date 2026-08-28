@@ -106,11 +106,11 @@ export default function HomeScreen({ navigation }: any) {
               />
             </View>
 
-            {isLoading • (
+            {isLoading ? (
               <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>
-            ) : filtered.length === 0 • (
+            ) : filtered.length === 0 ? (
               <View style={styles.center}>
-                <Text style={styles.emptyText}>{search • 'No customers match your search' : 'No customers for today'}</Text>
+                <Text style={styles.emptyText}>{search ? 'No customers match your search' : 'No customers for today'}</Text>
               </View>
             ) : (
               <FlatList
@@ -216,7 +216,7 @@ export default function HomeScreen({ navigation }: any) {
                   </TouchableOpacity>
                 </View>
                 <View style={styles.itemCardFooter}>
-                  <Text style={styles.itemCardSub}>{item.mode} â€¢ {item.invoice_no}</Text>
+                  <Text style={styles.itemCardSub}>{item.mode} • {item.invoice_no}</Text>
                   <Text style={styles.itemCardVal}>₹{Number(item.amount).toLocaleString('en-IN')}</Text>
                 </View>
               </View>
