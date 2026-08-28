@@ -34,6 +34,8 @@ export default function CartSummaryScreen({ navigation }: any) {
 
   const total = useMemo(() => cartItems.reduce((s, i) => s + i.qty * i.rate, 0), [cartItems]);
 
+  const hasSaved = React.useRef(false);
+
   const handleSave = () => {
     if (!currentUser || !selectedCustomer || cartItems.length === 0) return;
 
@@ -55,13 +57,23 @@ export default function CartSummaryScreen({ navigation }: any) {
       items,
     };
 
+    hasSaved.current = true;
     addOrder(order);
-    navigation.navigate('CustomerHub');
+    
+    // Replace the current stack properly so we don't end up with broken back buttons
+    navigation.reset({
+      index: 1,
+      routes: [
+        { name: 'Home' },
+        { name: 'CustomerHub' }
+      ]
+    });
   };
 
   if (cartItems.length === 0) {
-    // If empty, go back
-    setTimeout(() => navigation.goBack(), 0);
+    if (!hasSaved.current) {
+      setTimeout(() => navigation.goBack(), 0);
+    }
     return null;
   }
 
