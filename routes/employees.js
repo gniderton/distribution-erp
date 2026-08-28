@@ -26,7 +26,7 @@ router.get('/profile', async (req, res) => {
 
         if (!id) return res.status(400).json({ error: 'Employee ID or Email is required' });
 
-        // Execute all queries in parallel
+        // Execute all queries in parallel for maximum performance
         const [
             profileRes,
             advanceRes,
@@ -36,7 +36,8 @@ router.get('/profile', async (req, res) => {
             paymentHistoryRes,
             attendanceRes
         ] = await Promise.all([
-            pool.query('SELECT * FROM view_employee_details WHERE id = $1', [id]),
+            // 1. Basic Profile
+            pool.query('SELECT v.*, e.device_id FROM view_employee_details v JOIN employees e ON v.id = e.id WHERE v.id = $1', [id]),
             pool.query('SELECT COALESCE(SUM(amount), 0) as total FROM employee_advances WHERE employee_id = $1 AND is_settled = FALSE', [id]),
             pool.query('SELECT COALESCE(SUM(amount), 0) as total FROM employee_liabilities WHERE employee_id = $1 AND status = \'PENDING\'', [id]),
             pool.query(`
@@ -102,7 +103,7 @@ router.get('/profile/:id', async (req, res) => {
             attendanceRes
         ] = await Promise.all([
             // 1. Basic Profile
-            pool.query('SELECT * FROM view_employee_details WHERE id = $1', [id]),
+            pool.query('SELECT v.*, e.device_id FROM view_employee_details v JOIN employees e ON v.id = e.id WHERE v.id = $1', [id]),
             
             // 2. Financials: Advances
             pool.query('SELECT COALESCE(SUM(amount), 0) as total FROM employee_advances WHERE employee_id = $1 AND is_settled = FALSE', [id]),
@@ -1453,7 +1454,7 @@ router.delete('/advances/:id', async (req, res) => {
 // @route   GET /api/employees/:id - Get Details (Generic fallback)
 router.get('/:id', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM view_employee_details WHERE id = $1', [req.params.id]);
+        const result = await pool.query('SELECT v.*, e.device_id FROM view_employee_details v JOIN employees e ON v.id = e.id WHERE v.id = $1', [req.params.id]);
         if (result.rows.length === 0) return res.status(404).json({ error: "Not found" });
         res.json(result.rows[0]);
     } catch (err) {

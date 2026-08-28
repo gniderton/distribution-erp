@@ -97,6 +97,10 @@ export function EmployeeForensicDrawer({ employeeId, onClose }: Props) {
                   <Shield className="w-4 h-4 text-ink-400" />
                   <span>Role: <span className="font-medium text-ink-900">{profile?.role || 'N/A'}</span></span>
                 </div>
+                <div className="flex items-center space-x-3 text-ink-700 pt-2 border-t border-border-subtle">
+                  <SmartphoneNfc className="w-4 h-4 text-ink-400" />
+                  <span>Device: <span className="font-mono text-xs font-semibold bg-gray-100 px-1 py-0.5 rounded text-gray-800">{profile?.device_id || 'Not Bound'}</span></span>
+                </div>
               </div>
             </div>
 
