@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Send, MapPin } from 'lucide-react-native';
@@ -31,7 +31,7 @@ export default function CustomerEditScreen({ navigation }: any) {
   const canSubmit = name.trim().length > 0 && phoneValid && gstValid && hasChanges && !loading;
 
   const handleSubmit = async () => {
-    if (!canSubmit || !currentUser) return;
+    if (!canSubmit || !currentUser || loading) return;
     setLoading(true);
 
     try {
@@ -43,12 +43,16 @@ export default function CustomerEditScreen({ navigation }: any) {
         gstin: gstin.trim().toUpperCase() || undefined,
         latitude: 0,
         longitude: 0,
-      }).catch(() => {});
+      });
+      
+      setName('');
+      setPhone('');
+      setGstin('');
       
       setSuccess(true);
       setTimeout(() => navigation.navigate('CustomerHub'), 2000);
     } catch {
-      Alert.alert('Error', 'Submission failed');
+      Alert.alert('Error', 'Submission failed. Please try again.');
     } finally {
       setLoading(false);
     }

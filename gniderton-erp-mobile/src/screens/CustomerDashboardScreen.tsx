@@ -120,18 +120,25 @@ export default function CustomerDashboardScreen({ navigation }: any) {
             )}
 
             <Text style={styles.sectionTitle}>Recent Activity</Text>
-            {activity.map((act: any, i: number) => (
-              <View key={i} style={styles.activityCard}>
-                <View style={[styles.activityIcon, { backgroundColor: act.type === 'order' ? '#eff6ff' : '#f0fdf4' }]}>
-                  {act.type === 'order' ? <TrendingUp size={16} color="#2563eb" /> : <DollarSign size={16} color="#16a34a" />}
+            {activity.map((act: any, i: number) => {
+              const isCredit = (Number(act.credit_amount) || 0) > 0;
+              const amt = isCredit ? act.credit_amount : act.debit_amount;
+              const dateStr = act.date ? new Date(act.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '';
+              return (
+                <View key={i} style={styles.activityCard}>
+                  <View style={[styles.activityIcon, { backgroundColor: isCredit ? '#dcfce7' : '#fee2e2' }]}>
+                    {isCredit ? <TrendingUp size={16} color="#16a34a" /> : <TrendingDown size={16} color="#dc2626" />}
+                  </View>
+                  <View style={styles.activityInfo}>
+                    <Text style={styles.activityTitle}>{act.reference_number || ''} {act.type ? `(${act.type})` : ''}</Text>
+                    {!!dateStr && <Text style={styles.activityDate}>{dateStr}</Text>}
+                  </View>
+                  <Text style={[styles.activityVal, { color: isCredit ? '#16a34a' : '#dc2626' }]}>
+                    {isCredit ? '+' : '-'}₹{Number(amt || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </Text>
                 </View>
-                <View style={styles.activityInfo}>
-                  <Text style={styles.activityTitle}>{act.type === 'order' ? 'Order Placed' : 'Payment Received'}</Text>
-                  <Text style={styles.activityDate}>{act.date} • {act.ref}</Text>
-                </View>
-                <Text style={styles.activityVal}>₹{Number(act.value).toLocaleString('en-IN')}</Text>
-              </View>
-            ))}
+              );
+            })}
           </>
         )}
       </ScrollView>
