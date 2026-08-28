@@ -94,7 +94,7 @@ export default function PaymentListScreen({ navigation }: any) {
                 <View style={styles.billHeader}>
                   <View>
                     <Text style={styles.billNo}>{bill.invoice_number}</Text>
-                    <Text style={styles.billDate}>{new Date(bill.invoice_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} • {daysOld}d ago</Text>
+                    <Text style={styles.billDate}>{new Date(bill.invoice_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
                   </View>
                   <View style={[styles.badge, isPaid ? styles.badgePaid : (daysOld > 30 ? styles.badgeDanger : styles.badgeWarn)]}>
                     <Text style={[styles.badgeText, isPaid ? styles.badgeTextPaid : (daysOld > 30 ? styles.badgeTextDanger : styles.badgeTextWarn)]}>

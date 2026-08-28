@@ -38,7 +38,7 @@ const BillCard = memo(function BillCard({ bill, alreadyPaid, onSelect }: {
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>
           <p className="font-semibold text-foreground text-sm">{bill.invoice_number}</p>
-          <p className="text-xs text-muted-foreground">{new Date(bill.invoice_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} • {daysOld}d ago</p>
+          <p className="text-xs text-muted-foreground">{new Date(bill.invoice_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
         </div>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
           isPaid
