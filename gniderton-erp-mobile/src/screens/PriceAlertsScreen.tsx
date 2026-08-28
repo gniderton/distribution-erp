@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, RefreshCw, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react-native';
@@ -50,7 +50,7 @@ export default function PriceAlertsScreen({ navigation }: any) {
 
       <ScrollView contentContainerStyle={styles.content}>
         {isLoading && alerts.length === 0 ? (
-          <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="large" color="#2f7f74" style={{ marginTop: 40 }} />
         ) : alerts.length === 0 ? (
           <View style={styles.emptyBox}>
             <AlertCircle size={48} color="#9ca3af" />
@@ -98,13 +98,13 @@ export default function PriceAlertsScreen({ navigation }: any) {
                     <View style={styles.mrpRow}>
                       <View style={styles.mrpBox}>
                         <Text style={styles.mrpLabel}>Old MRP</Text>
-                        <Text style={styles.mrpValOld}>₹{Number(alert.old_mrp).toFixed(2)}</Text>
+                        <Text style={styles.mrpValOld}>?{Number(alert.old_mrp).toFixed(2)}</Text>
                       </View>
                       <Text style={styles.arrow}>A?</Text>
                       <View style={[styles.mrpBox, { backgroundColor: increased ? '#fef2f2' : '#f0fdf4' }]}>
                         <Text style={styles.mrpLabel}>New MRP</Text>
                         <Text style={[styles.mrpValNew, { color: increased ? '#dc2626' : '#16a34a' }]}>
-                          ₹{Number(alert.new_mrp).toFixed(2)}
+                          ?{Number(alert.new_mrp).toFixed(2)}
                         </Text>
                       </View>
                     </View>

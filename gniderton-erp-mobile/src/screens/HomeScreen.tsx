@@ -119,7 +119,7 @@ export default function HomeScreen({ navigation }: any) {
             </View>
 
             {isLoading ? (
-              <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>
+              <View style={styles.center}><ActivityIndicator size="large" color="#2f7f74" /></View>
             ) : filtered.length === 0 ? (
               <View style={styles.center}>
                 <Text style={styles.emptyText}>{search ? 'No customers match your search' : 'No customers for today'}</Text>
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   activeTab: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
   tabText: { fontSize: 14, fontWeight: '500', color: '#6b7280' },
   activeTabText: { color: '#111827', fontWeight: '600' },
-  badge: { backgroundColor: '#2563eb', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6 },
+  badge: { backgroundColor: '#2f7f74', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6 },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
   body: { flex: 1 },
   searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', margin: 16, marginBottom: 8, borderRadius: 10, paddingHorizontal: 12, height: 44, borderWidth: 1, borderColor: '#e5e7eb' },
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   listContent: { padding: 16, paddingBottom: 100 },
   customerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  avatarText: { color: '#2563eb', fontWeight: 'bold', fontSize: 16 },
+  avatarText: { color: '#2f7f74', fontWeight: 'bold', fontSize: 16 },
   customerInfo: { flex: 1 },
   customerName: { fontSize: 15, fontWeight: '600', color: '#111827', marginBottom: 2 },
   customerCode: { fontSize: 13, color: '#6b7280' },
@@ -332,8 +332,8 @@ const styles = StyleSheet.create({
   itemCardFooter: { flexDirection: 'row', justifyContent: 'space-between' },
   itemCardSub: { fontSize: 13, color: '#6b7280' },
   itemCardVal: { fontSize: 14, fontWeight: 'bold', color: '#111827' },
-  eodBtn: { backgroundColor: '#2563eb', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 8 },
+  eodBtn: { backgroundColor: '#2f7f74', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 8 },
   eodBtnText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
-  fab: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#2563eb', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 6 },
+  fab: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#2f7f74', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 6 },
 });
 

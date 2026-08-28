@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, UserPlus, MapPin } from 'lucide-react-native';
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   successSub: { fontSize: 14, color: '#6b7280', textAlign: 'center' },
   infoBox: { backgroundColor: '#eff6ff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe', marginBottom: 16 },
   infoTitle: { fontSize: 13, fontWeight: '600', color: '#1d4ed8', marginBottom: 2 },
-  infoSub: { fontSize: 12, color: '#2563eb' },
+  infoSub: { fontSize: 12, color: '#2f7f74' },
   inputGroup: { marginBottom: 16 },
   label: { fontSize: 13, fontWeight: '500', color: '#6b7280', marginBottom: 6 },
   asterisk: { color: '#ef4444' },
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   gpsBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 24 },
   gpsIconBox: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   gpsText: { fontSize: 13, color: '#6b7280' },
-  submitBtn: { flexDirection: 'row', backgroundColor: '#2563eb', height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  submitBtn: { flexDirection: 'row', backgroundColor: '#2f7f74', height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
   submitBtnDisabled: { opacity: 0.5 },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   footerNote: { textAlign: 'center', fontSize: 12, color: '#6b7280' }

@@ -65,13 +65,13 @@ export default function PaymentListScreen({ navigation }: any) {
       <View style={styles.subHeader}>
         <Text style={styles.customerName} numberOfLines={1}>{selectedCustomer?.customer_name}</Text>
         <TouchableOpacity style={styles.advanceBtn} onPress={goAdvance}>
-          <Plus size={16} color="#2563eb" />
+          <Plus size={16} color="#2f7f74" />
           <Text style={styles.advanceBtnText}>Advance</Text>
         </TouchableOpacity>
       </View>
 
       {isLoading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>
+        <View style={styles.center}><ActivityIndicator size="large" color="#2f7f74" /></View>
       ) : bills.length === 0 ? (
         <View style={styles.center}><Text style={styles.emptyText}>No pending bills</Text></View>
       ) : (
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
   subHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
   customerName: { fontSize: 14, color: '#6b7280', flex: 1, marginRight: 8 },
   advanceBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#eff6ff' },
-  advanceBtnText: { fontSize: 12, fontWeight: '600', color: '#2563eb' },
+  advanceBtnText: { fontSize: 12, fontWeight: '600', color: '#2f7f74' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyText: { color: '#6b7280', fontSize: 14 },
   listContent: { padding: 16, paddingBottom: 40 },

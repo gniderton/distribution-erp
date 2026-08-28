@@ -70,7 +70,7 @@ export default function AdHocCustomersScreen({ navigation }: any) {
       </View>
 
       {isLoading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>
+        <View style={styles.center}><ActivityIndicator size="large" color="#2f7f74" /></View>
       ) : (
         <FlatList
           data={filtered}
@@ -91,7 +91,7 @@ export default function AdHocCustomersScreen({ navigation }: any) {
                     style={styles.actionBtn} 
                     onPress={() => Linking.openURL(`tel:${item.customer_phone || item.contact_primary}`)}
                   >
-                    <Phone size={18} color="#2563eb" />
+                    <Phone size={18} color="#2f7f74" />
                   </TouchableOpacity>
                 )}
                 {item.latitude && item.longitude && (
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   backBtn: { padding: 4, marginRight: 8, marginLeft: -4 },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#111827' },
-  newBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 4 },
+  newBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2f7f74', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 4 },
   newBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
   searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', margin: 16, borderRadius: 10, paddingHorizontal: 12, height: 44, borderWidth: 1, borderColor: '#e5e7eb' },
   searchIcon: { marginRight: 8 },
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: 16, paddingBottom: 40 },
   customerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  avatarText: { color: '#2563eb', fontWeight: 'bold', fontSize: 16 },
+  avatarText: { color: '#2f7f74', fontWeight: 'bold', fontSize: 16 },
   customerInfo: { flex: 1, marginRight: 8 },
   customerName: { fontSize: 15, fontWeight: '600', color: '#111827', marginBottom: 2 },
   customerCode: { fontSize: 13, color: '#6b7280' },

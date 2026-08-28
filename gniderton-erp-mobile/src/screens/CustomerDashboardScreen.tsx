@@ -37,7 +37,7 @@ export default function CustomerDashboardScreen({ navigation }: any) {
       <ScrollView contentContainerStyle={styles.content}>
         
         {isLoading ? (
-          <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="large" color="#2f7f74" style={{ marginTop: 40 }} />
         ) : (
           <>
             <View style={styles.metricsGrid}>
@@ -111,7 +111,7 @@ export default function CustomerDashboardScreen({ navigation }: any) {
                         <Text style={{ fontSize: 13, color: '#6b7280' }}>₹{Number(b.taxable_sales).toLocaleString('en-IN')} ({pct}%)</Text>
                       </View>
                       <View style={styles.progressBar}>
-                        <View style={[styles.progressFill, { backgroundColor: '#2563eb', opacity: i === 0 ? 1 : 0.6, width: `${pct}%` }]} />
+                        <View style={[styles.progressFill, { backgroundColor: '#2f7f74', opacity: i === 0 ? 1 : 0.6, width: `${pct}%` }]} />
                       </View>
                     </View>
                   );

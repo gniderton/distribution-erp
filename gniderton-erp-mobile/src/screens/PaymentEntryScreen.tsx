@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   saveBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   content: { padding: 16 },
   infoBox: { backgroundColor: '#eff6ff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe', marginBottom: 20 },
-  infoLabel: { fontSize: 12, color: '#2563eb', fontWeight: '600', marginBottom: 2 },
+  infoLabel: { fontSize: 12, color: '#2f7f74', fontWeight: '600', marginBottom: 2 },
   infoValue: { fontSize: 14, color: '#1e3a8a', fontWeight: '500' },
   section: { marginBottom: 20 },
   flexBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },

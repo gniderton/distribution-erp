@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RefreshCw, Users, ArrowRight, LogOut } from 'lucide-react-native';
@@ -72,16 +72,16 @@ export default function DseDashboardScreen({ navigation }: any) {
               <View style={styles.flex1}>
                 <MetricCard 
                   label="Net Sales (Month)" 
-                  value={`â‚¹${((dash.metrics?.month?.net_sales_taxable || 0) / 1000).toFixed(1)}K`}
+                  value={`₹${((dash.metrics?.month?.net_sales_taxable || 0) / 1000).toFixed(1)}K`}
                   sub={`${dash.metrics?.growth_sales_pct || 0}% vs last month`}
-                  color="#2563eb"
+                  color="#2f7f74"
                 />
               </View>
               <View style={{ width: 12 }} />
               <View style={styles.flex1}>
                 <MetricCard 
                   label="Collections" 
-                  value={`â‚¹${((dash.metrics?.month?.collection || 0) / 1000).toFixed(1)}K`}
+                  value={`₹${((dash.metrics?.month?.collection || 0) / 1000).toFixed(1)}K`}
                   sub={`${dash.metrics?.growth_collection_pct || 0}% vs last month`}
                   color="#16a34a"
                 />
@@ -121,7 +121,7 @@ export default function DseDashboardScreen({ navigation }: any) {
                 {dash.top_customers.slice(0, 5).map((c: any, i: number) => (
                   <View key={i} style={styles.listItem}>
                     <Text style={styles.listTextMain} numberOfLines={1}>{c.customer_name}</Text>
-                    <Text style={styles.listTextVal}>â‚¹{Number(c.taxable_sales).toLocaleString('en-IN')}</Text>
+                    <Text style={styles.listTextVal}>₹{Number(c.taxable_sales).toLocaleString('en-IN')}</Text>
                   </View>
                 ))}
               </View>
