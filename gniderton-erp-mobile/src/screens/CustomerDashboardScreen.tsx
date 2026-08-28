@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, TrendingUp, TrendingDown, Clock, DollarSign } from 'lucide-react-native';
@@ -21,6 +21,7 @@ export default function CustomerDashboardScreen({ navigation }: any) {
 
   const metrics = data?.metrics || {};
   const activity = data?.recent_activity || [];
+  const brandSales = data?.brand_sales_fy || [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -43,10 +44,12 @@ export default function CustomerDashboardScreen({ navigation }: any) {
               <View style={styles.metricCard}>
                 <View style={styles.metricHeader}>
                   <Text style={styles.metricLabel}>Total Sales</Text>
-                  <TrendingUp size={16} color="#16a34a" />
+                  {metrics.growth_sales_pct >= 0 ? <TrendingUp size={16} color="#16a34a" /> : <TrendingDown size={16} color="#dc2626" />}
                 </View>
                 <Text style={styles.metricVal}>₹{Number(metrics.total_sales || 0).toLocaleString('en-IN')}</Text>
-                <Text style={styles.metricGrowth}>+{metrics.growth_sales_pct}% YoY</Text>
+                <Text style={[styles.metricGrowth, (metrics.growth_sales_pct < 0) && { color: '#dc2626' }]}>
+                  {metrics.growth_sales_pct >= 0 ? '+' : ''}{metrics.growth_sales_pct}% YoY
+                </Text>
               </View>
 
               <View style={styles.metricCard}>
@@ -54,7 +57,7 @@ export default function CustomerDashboardScreen({ navigation }: any) {
                   <Text style={styles.metricLabel}>Rank</Text>
                 </View>
                 <Text style={styles.metricVal}>#{metrics.sales_rank || '-'}</Text>
-                <Text style={styles.metricGrowth}>in territory</Text>
+                <Text style={[styles.metricGrowth, { color: '#6b7280' }]}>in territory</Text>
               </View>
             </View>
 
@@ -89,10 +92,32 @@ export default function CustomerDashboardScreen({ navigation }: any) {
                     <DollarSign size={12} color="#6b7280" />
                     <Text style={styles.creditLabel}>Receivables Ratio</Text>
                   </View>
-                  <Text style={styles.creditVal}>{metrics.receivables_vs_sales_ratio || 0}%</Text>
+                  <Text style={styles.creditVal}>{Math.round(metrics.receivables_vs_sales_ratio * 100 || 0)}%</Text>
                 </View>
               </View>
             </View>
+
+            {/* Brand Sales */}
+            {brandSales.length > 0 && (
+              <View style={styles.creditBox}>
+                <Text style={styles.creditTitle}>Brand Sales (FY)</Text>
+                {brandSales.map((b: any, i: number) => {
+                  const total = brandSales.reduce((s: number, x: any) => s + Number(x.taxable_sales), 0);
+                  const pct = total > 0 ? Math.round((Number(b.taxable_sales) / total) * 100) : 0;
+                  return (
+                    <View key={i} style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '500', color: '#111827', maxWidth: '60%' }} numberOfLines={1}>{b.brand_name}</Text>
+                        <Text style={{ fontSize: 13, color: '#6b7280' }}>₹{Number(b.taxable_sales).toLocaleString('en-IN')} ({pct}%)</Text>
+                      </View>
+                      <View style={styles.progressBar}>
+                        <View style={[styles.progressFill, { backgroundColor: '#2563eb', opacity: i === 0 ? 1 : 0.6, width: `${pct}%` }]} />
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
 
             <Text style={styles.sectionTitle}>Recent Activity</Text>
             {activity.map((act: any, i: number) => (
@@ -102,7 +127,7 @@ export default function CustomerDashboardScreen({ navigation }: any) {
                 </View>
                 <View style={styles.activityInfo}>
                   <Text style={styles.activityTitle}>{act.type === 'order' ? 'Order Placed' : 'Payment Received'}</Text>
-                  <Text style={styles.activityDate}>{act.date} â€¢ {act.ref}</Text>
+                  <Text style={styles.activityDate}>{act.date} • {act.ref}</Text>
                 </View>
                 <Text style={styles.activityVal}>₹{Number(act.value).toLocaleString('en-IN')}</Text>
               </View>
@@ -133,7 +158,7 @@ const styles = StyleSheet.create({
   creditItem: { flex: 1 },
   creditLabel: { fontSize: 12, color: '#6b7280', marginBottom: 4 },
   creditVal: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
-  progressBar: { height: 6, backgroundColor: '#f3f4f6', borderRadius: 3, marginBottom: 16, overflow: 'hidden' },
+  progressBar: { height: 6, backgroundColor: '#f3f4f6', borderRadius: 3, marginBottom: 4, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: '#dc2626', borderRadius: 3 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 12 },
   activityCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
