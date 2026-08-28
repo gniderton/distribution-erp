@@ -26,13 +26,13 @@ export default function PaymentEntryScreen({ navigation }: any) {
 
   const { data: banksData, refetch: refetchBanks } = useQuery({
     queryKey: ['banks'],
-    queryFn: async () => { const res = await axios.get(API_URL + '/master-data/banks'); return res.data; }
+    queryFn: async () => { const res = await axios.get(API_URL + '/master/banks'); return res.data; }
   });
   const banks = banksData || [];
 
   const { data: creditsData, refetch: refetchCredits } = useQuery({
     queryKey: ['unconsumedCredits'],
-    queryFn: async () => { const res = await axios.get(API_URL + '/bank-recon/unconsumed-credits'); return res.data; }
+    queryFn: async () => { const res = await axios.get(API_URL + '/finance/reconciliation/bank/unconsumed-credits'); return res.data; }
   });
   const credits = creditsData || [];
 
