@@ -253,7 +253,19 @@ export default function HomeScreen({ navigation }: any) {
                   </TouchableOpacity>
                 </View>
                 <View style={styles.itemCardFooter}>
-                  <Text style={styles.itemCardSub}>{item.mode} • {item.invoice_no}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.itemCardSub}>{item.mode} • {item.invoice_no}</Text>
+                    {item.mode === 'CHEQUE' && (
+                      <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                        {item.bank_name} • No: {item.reference || item.cheque_no} • {item.cheque_date}
+                      </Text>
+                    )}
+                    {(item.mode === 'UPI' || item.mode === 'NEFT') && (
+                      <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                        Ref: {item.reference}
+                      </Text>
+                    )}
+                  </View>
                   <Text style={styles.itemCardVal}>₹{Number(item.amount).toLocaleString('en-IN')}</Text>
                 </View>
               </View>

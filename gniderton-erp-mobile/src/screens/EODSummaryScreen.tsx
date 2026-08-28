@@ -40,7 +40,7 @@ export default function EODSummaryScreen({ navigation }: any) {
   const bankTotal = bankPayments.reduce((s, p) => s + p.amount, 0);
 
   const denomTotal = DENOM_ROWS.reduce((s, r) => s + (denominations[r.key as keyof typeof denominations] || 0) * r.value, 0);
-  const expectedCash = cashTotal;
+  const expectedCash = Math.max(0, cashTotal - expenseTotal);
   const cashMatch = denomTotal === expectedCash;
 
   // Group Cheques
@@ -64,6 +64,10 @@ export default function EODSummaryScreen({ navigation }: any) {
     if (isNaN(amt) || amt <= 0) return;
     if (expenseTotal + amt > MAX_EXPENSE_TOTAL) {
       Alert.alert('Limit Exceeded', `Total expenses cannot exceed ₹${MAX_EXPENSE_TOTAL}.`);
+      return;
+    }
+    if (expenseTotal + amt > cashTotal) {
+      Alert.alert('Not enough cash', `Total expenses cannot exceed the collected cash (₹${cashTotal}).`);
       return;
     }
     addExpense({ id: Date.now(), type: expType, amount: amt, desc: expDesc.trim() });
@@ -172,7 +176,7 @@ export default function EODSummaryScreen({ navigation }: any) {
 
             {expectedCash === 0 ? (
               <View style={styles.infoBox}>
-                <Text style={styles.infoBoxText}>No cash collections recorded today.</Text>
+                <Text style={styles.infoBoxText}>No cash expected to be deposited today.</Text>
               </View>
             ) : (
               <>
@@ -191,7 +195,7 @@ export default function EODSummaryScreen({ navigation }: any) {
                 ))}
                 <View style={styles.denomSummary}>
                   <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Expected Cash</Text>
+                    <Text style={styles.summaryLabel}>Expected Cash (Sales - Expenses)</Text>
                     <Text style={styles.summaryValue}>₹{expectedCash}</Text>
                   </View>
                   <View style={styles.summaryRow}>
@@ -236,8 +240,8 @@ export default function EODSummaryScreen({ navigation }: any) {
                     <View key={c.key} style={[styles.chequeCard, hasInput && (isMatch ? styles.chequeCardMatch : styles.chequeCardError)]}>
                       <View style={styles.chequeHeader}>
                         <Text style={styles.chequeTitle}>{c.customer_name}</Text>
-                        <Text style={styles.chequeBank}>{c.bank_name}</Text>
                       </View>
+                      <Text style={styles.chequeBank}>{c.bank_name}</Text>
                       <Text style={styles.chequeDetail}>No: {c.cheque_no} • {c.cheque_date}</Text>
                       <Text style={styles.chequeDetail}>For invoices: {c.invoices.join(', ')}</Text>
                       

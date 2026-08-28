@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, Modal, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, CheckSquare, RefreshCw, X } from 'lucide-react-native';
@@ -23,6 +24,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
 
   const [showBankModal, setShowBankModal] = useState(false);
   const [showCreditModal, setShowCreditModal] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const { data: banksData, refetch: refetchBanks } = useQuery({
     queryKey: ['banks'],
@@ -169,14 +171,28 @@ export default function PaymentEntryScreen({ navigation }: any) {
               />
             </View>
             <View style={styles.section}>
-              <Text style={styles.label}>Cheque Date</Text>
-              <TextInput
-                style={styles.input}
-                value={chequeDate}
-                onChangeText={setChequeDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#9ca3af"
-              />
+                <Text style={styles.label}>Cheque Date</Text>
+                <TouchableOpacity
+                  style={[styles.input, { justifyContent: 'center' }]}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={{ color: chequeDate ? '#111827' : '#9ca3af', fontSize: 14 }}>
+                    {chequeDate || 'YYYY-MM-DD'}
+                  </Text>
+                </TouchableOpacity>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={chequeDate ? new Date(chequeDate) : new Date()}
+                    mode="date"
+                    display="default"
+                    onChange={(event: any, selectedDate?: Date) => {
+                      setShowDatePicker(false);
+                      if (selectedDate) {
+                        setChequeDate(selectedDate.toISOString().split('T')[0]);
+                      }
+                    }}
+                  />
+                )}
             </View>
           </>
         )}
