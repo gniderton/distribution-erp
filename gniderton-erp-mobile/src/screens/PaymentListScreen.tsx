@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, RefreshCw, Plus } from 'lucide-react-native';
@@ -94,7 +94,7 @@ export default function PaymentListScreen({ navigation }: any) {
                 <View style={styles.billHeader}>
                   <View>
                     <Text style={styles.billNo}>{bill.invoice_number}</Text>
-                    <Text style={styles.billDate}>{bill.invoice_date} â€¢ {daysOld}d ago</Text>
+                    <Text style={styles.billDate}>{new Date(bill.invoice_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} • {daysOld}d ago</Text>
                   </View>
                   <View style={[styles.badge, isPaid ? styles.badgePaid : (daysOld > 30 ? styles.badgeDanger : styles.badgeWarn)]}>
                     <Text style={[styles.badgeText, isPaid ? styles.badgeTextPaid : (daysOld > 30 ? styles.badgeTextDanger : styles.badgeTextWarn)]}>
@@ -113,7 +113,7 @@ export default function PaymentListScreen({ navigation }: any) {
                   </View>
                   <View style={styles.col}>
                     <Text style={styles.colLabel}>Balance</Text>
-                    <Text style={[styles.colVal, { color: isPaid ? '#9ca3af' : '#dc2626' }]}>
+                    <Text style={[styles.colVal, isPaid ? { color: '#9ca3af' } : { color: '#ef4444' }]}>
                       ₹{Math.max(0, remaining).toLocaleString('en-IN')}
                     </Text>
                   </View>
