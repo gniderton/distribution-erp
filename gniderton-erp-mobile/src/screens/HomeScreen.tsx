@@ -1,25 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, User, TrendingUp, RefreshCw, LogOut, Plus, Bell, Trash2, Phone, MapPin, Pencil } from 'lucide-react-native';
+import { Search, UserPlus, Phone, Plus, ShoppingCart, IndianRupee, Menu, Bell, TrendingUp, RefreshCw, LogOut, CheckSquare } from 'lucide-react-native';
 import { useAppStore } from '../store';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { API_URL } from '../api/config';
 
-type Tab = 'customers' | 'orders' | 'payments';
-const TABS: Array<{ id: Tab; label: string }> = [
-  { id: 'customers', label: 'Customers' },
-  { id: 'orders', label: 'Orders' },
-  { id: 'payments', label: 'Payments' },
-];
-
 export default function HomeScreen({ navigation }: any) {
-  const { currentUser, setSelectedCustomer, pendingOrders, pendingPayments, removePayment, setUser, removeOrder, clearCart, setCartItem } = useAppStore();
-  const [tab, setTab] = useState<Tab>('customers');
+  const { currentUser, pendingOrders, pendingPayments, setSelectedCustomer, logout } = useAppStore();
   const [search, setSearch] = useState('');
+  const [menuVisible, setMenuVisible] = useState(false);
 
-  const { data: customers, isLoading, refetch } = useQuery({
+  const { data: customers, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['customers', currentUser?.id, 'today'],
     queryFn: async () => {
       const day = new Date().toLocaleDateString('en-US', { weekday: 'long' });
@@ -40,300 +33,180 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const handleLogout = () => {
-    setUser(null);
-    navigation.replace('Login');
+    setMenuVisible(false);
+    logout();
   };
-
-  const editOrder = (order: any) => {
-    const fullCustomer = (customers || []).find((c: any) => String(c.id) === String(order.customer_id));
-    setSelectedCustomer(fullCustomer ?? { id: order.customer_id, customer_name: order.customer_name });
-    clearCart();
-    (order.items || []).forEach((item: any) => {
-      setCartItem(item.product_id, item.qty);
-    });
-    removeOrder(order.tempId);
-    navigation.navigate('OrderForm');
-  };
-
-  const orderTotal = pendingOrders.reduce((acc, o) => acc + (o.items || []).reduce((sum, i) => sum + (i.amount || (i.qty * i.rate) || 0), 0), 0);
-  const paymentTotal = pendingPayments.reduce((acc, p) => acc + Number(p.amount), 0);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.userInfo}>
-            <Text style={styles.greeting}>{currentUser?.full_name ?? currentUser?.employee_name ?? 'Home'}</Text>
-            <Text style={styles.title}>{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}</Text>
-          </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={() => navigation.navigate('PriceAlerts')} style={styles.iconBtn}>
-              <Bell size={20} color="#6b7280" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.navigate('DseDashboard')} style={styles.iconBtn}>
-              <TrendingUp size={20} color="#6b7280" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => refetch()} style={styles.iconBtn}>
-              <RefreshCw size={20} color="#6b7280" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleLogout} style={styles.iconBtn}>
-              <LogOut size={20} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
+        <View style={styles.userInfo}>
+          <Text style={styles.greeting}>Hi, {currentUser?.full_name ?? currentUser?.employee_name}</Text>
+          <Text style={styles.title}>{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}</Text>
         </View>
 
-        {/* Tabs */}
-        <View style={styles.tabContainer}>
-          {TABS.map(t => (
-            <TouchableOpacity
-              key={t.id}
-              style={[styles.tab, tab === t.id && styles.activeTab]}
-              onPress={() => setTab(t.id)}
-            >
-              <Text style={[styles.tabText, tab === t.id && styles.activeTabText]}>{t.label}</Text>
-              {t.id === 'orders' && pendingOrders.length > 0 && (
-                <View style={styles.badge}><Text style={styles.badgeText}>{pendingOrders.length}</Text></View>
-              )}
-              {t.id === 'payments' && pendingPayments.length > 0 && (
-                <View style={styles.badge}><Text style={styles.badgeText}>{pendingPayments.length}</Text></View>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => navigation.navigate('PendingOrders')} style={styles.iconBtn}>
+            <ShoppingCart size={24} color="#4b5563" />
+            {pendingOrders.length > 0 && (
+              <View style={styles.badge}><Text style={styles.badgeText}>{pendingOrders.length}</Text></View>
+            )}
+          </TouchableOpacity>
 
-      {/* Body */}
-      <View style={styles.body}>
-        {tab === 'customers' && (
-          <>
-            <View style={styles.searchBox}>
-              <Search size={18} color="#9ca3af" style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search customers..."
-                value={search}
-                onChangeText={setSearch}
-                placeholderTextColor="#9ca3af"
-              />
+          <TouchableOpacity onPress={() => navigation.navigate('PendingPayments')} style={styles.iconBtn}>
+            <IndianRupee size={24} color="#4b5563" />
+            {pendingPayments.length > 0 && (
+              <View style={styles.badge}><Text style={styles.badgeText}>{pendingPayments.length}</Text></View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => setMenuVisible(true)} style={[styles.iconBtn, { marginLeft: 8 }]}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {currentUser?.full_name?.charAt(0) || 'U'}
+              </Text>
             </View>
+          </TouchableOpacity>
+        </View>
+      </View>
 
-            {isLoading ? (
-              <View style={styles.center}><ActivityIndicator size="large" color="#2f7f74" /></View>
-            ) : filtered.length === 0 ? (
-              <View style={styles.center}>
-                <Text style={styles.emptyText}>{search ? 'No customers match your search' : 'No customers for today'}</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={filtered}
-                keyExtractor={item => String(item.id)}
-                contentContainerStyle={styles.listContent}
-                renderItem={({ item }) => (
-                  <TouchableOpacity style={styles.customerCard} onPress={() => handleSelect(item)}>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>{(item.customer_name || 'C').charAt(0).toUpperCase()}</Text>
-                    </View>
-                    <View style={styles.customerInfo}>
-                      <Text style={styles.customerName}>{item.customer_name}</Text>
-                      <Text style={styles.customerCode}>{item.customer_code}</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      {item.customer_phone ? (
-                        <TouchableOpacity 
-                          style={styles.actionCircle}
-                          onPress={() => Linking.openURL(`tel:${item.customer_phone}`)}
-                        >
-                          <Phone size={16} color="#2f7f74" />
-                        </TouchableOpacity>
-                      ) : null}
-                      {item.latitude && item.longitude ? (
-                        <TouchableOpacity 
-                          style={styles.actionCircle}
-                          onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`)}
-                        >
-                          <MapPin size={16} color="#9ca3af" />
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  </TouchableOpacity>
-                )}
-              />
-            )}
-          </>
-        )}
-
-        {tab === 'orders' && (
-          <FlatList
-            data={pendingOrders}
-            keyExtractor={item => String(item.tempId)}
-            contentContainerStyle={styles.listContent}
-            ListHeaderComponent={
-              <View style={[styles.summaryCard, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
-                <View>
-                  <Text style={styles.summaryLabel}>Orders</Text>
-                  <Text style={styles.summaryValue}>{pendingOrders.length}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.summaryLabel}>Total Value</Text>
-                  <Text style={styles.summaryValue}>₹{orderTotal.toLocaleString('en-IN')}</Text>
-                </View>
-              </View>
-            }
-            renderItem={({ item }) => (
-              <View style={styles.itemCard}>
-                <View style={styles.itemCardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.itemCardTitle}>{item.customer_name}</Text>
-                    <Text style={[styles.itemCardSub, { fontFamily: 'monospace' }]}>{item.offline_no}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity onPress={() => editOrder(item)} style={styles.actionCircle}>
-                      <Pencil size={16} color="#4b5563" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => removeOrder(item.tempId)} style={[styles.actionCircle, { backgroundColor: '#fef2f2' }]}>
-                      <Trash2 size={16} color="#ef4444" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <View style={{ paddingVertical: 8, gap: 4 }}>
-                  {(item.items || []).map((lineItem: any, idx: number) => (
-                    <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ flex: 1, fontSize: 12, color: '#111827' }} numberOfLines={1}>
-                        {lineItem.product_name ?? `Product #${lineItem.product_id}`}
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#6b7280', marginHorizontal: 8 }}>
-                        {lineItem.qty} × ₹{Number(lineItem.rate || 0).toLocaleString('en-IN')}
-                      </Text>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#111827', width: 60, textAlign: 'right' }}>
-                        ₹{(lineItem.qty * Number(lineItem.rate || 0)).toLocaleString('en-IN')}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-                <View style={[styles.itemCardFooter, { borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 8, marginTop: 4 }]}>
-                  <Text style={styles.itemCardSub}>{item.items?.length || 0} items</Text>
-                  <Text style={styles.itemCardVal}>₹{(item.items || []).reduce((sum: number, i: any) => sum + (i.amount || (i.qty * i.rate) || 0), 0).toLocaleString('en-IN')}</Text>
-                </View>
-              </View>
-            )}
-            ListEmptyComponent={
-              <View style={styles.center}><Text style={styles.emptyText}>No orders saved yet</Text></View>
-            }
-            ListFooterComponent={
-              <TouchableOpacity style={styles.eodBtn} onPress={() => navigation.navigate('EODSummary')}>
-                <Text style={styles.eodBtnText}>View EOD Summary</Text>
-              </TouchableOpacity>
-            }
+      {/* Main Body - Today's Route */}
+      <View style={styles.body}>
+        <View style={styles.searchBox}>
+          <Search size={18} color="#9ca3af" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search today's route..."
+            value={search}
+            onChangeText={setSearch}
+            placeholderTextColor="#9ca3af"
           />
-        )}
+        </View>
 
-        {tab === 'payments' && (
+        {isLoading ? (
+          <View style={styles.center}><ActivityIndicator size="large" color="#2f7f74" /></View>
+        ) : (
           <FlatList
-            data={pendingPayments}
-            keyExtractor={item => item.uid}
+            data={filtered}
+            keyExtractor={item => String(item.id)}
             contentContainerStyle={styles.listContent}
-            ListHeaderComponent={
-              <View style={[styles.summaryCard, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
-                <View>
-                  <Text style={styles.summaryLabel}>Payments</Text>
-                  <Text style={styles.summaryValue}>{pendingPayments.length}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.summaryLabel}>Total Collected</Text>
-                  <Text style={[styles.summaryValue, { color: '#16a34a' }]}>₹{paymentTotal.toLocaleString('en-IN')}</Text>
-                </View>
-              </View>
-            }
             renderItem={({ item }) => (
-              <View style={styles.itemCard}>
-                <View style={styles.itemCardHeader}>
-                  <Text style={styles.itemCardTitle}>{item.customer_name}</Text>
-                  <TouchableOpacity onPress={() => removePayment(item.uid)} style={styles.deleteBtn}>
-                    <Trash2 size={16} color="#ef4444" />
-                  </TouchableOpacity>
+              <TouchableOpacity style={styles.customerCard} onPress={() => handleSelect(item)}>
+                <View style={styles.customerAvatar}>
+                  <Text style={styles.customerAvatarText}>
+                    {item.customer_name.substring(0, 2).toUpperCase()}
+                  </Text>
                 </View>
-                <View style={styles.itemCardFooter}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.itemCardSub}>{item.mode} • {item.invoice_no}</Text>
-                    {item.mode === 'CHEQUE' && (
-                      <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
-                        {item.bank_name} • No: {item.reference || item.cheque_no} • {item.cheque_date}
-                      </Text>
-                    )}
-                    {(item.mode === 'UPI' || item.mode === 'NEFT') && (
-                      <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
-                        Ref: {item.reference}
-                      </Text>
-                    )}
-                  </View>
-                  <Text style={styles.itemCardVal}>₹{Number(item.amount).toLocaleString('en-IN')}</Text>
+                <View style={styles.customerInfo}>
+                  <Text style={styles.customerName}>{item.customer_name}</Text>
+                  <Text style={styles.customerCode}>{item.customer_code} • {item.address_line1 || item.city}</Text>
                 </View>
-              </View>
+                <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                  {item.contact_primary && (
+                    <TouchableOpacity onPress={() => {}}>
+                      <Phone size={18} color="#2f7f74" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </TouchableOpacity>
             )}
             ListEmptyComponent={
-              <View style={styles.center}><Text style={styles.emptyText}>No payments recorded yet</Text></View>
+              <View style={styles.center}><Text style={styles.emptyText}>No customers on route today.</Text></View>
             }
           />
         )}
       </View>
 
-      {/* FAB */}
-      <TouchableOpacity 
-        style={styles.fab} 
-        onPress={() => {
-          if (tab === 'customers') navigation.navigate('AdHocCustomers');
-          else navigation.navigate('EODSummary');
-        }}
-      >
-        <Plus size={24} color="#fff" />
-      </TouchableOpacity>
+      {/* Sticky Bottom Bar for EOD */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity style={styles.eodBtn} onPress={() => navigation.navigate('EODSummary')}>
+          <CheckSquare size={20} color="#fff" style={{ marginRight: 8 }} />
+          <Text style={styles.eodBtnText}>Run End of Day</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Side Menu Modal */}
+      <Modal visible={menuVisible} transparent animationType="fade">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setMenuVisible(false)}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Menu</Text>
+            </View>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); navigation.navigate('AdHocCustomers'); }}>
+              <UserPlus size={20} color="#4b5563" style={styles.menuIcon} />
+              <Text style={styles.menuText}>Ad-Hoc Customers</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); navigation.navigate('DseDashboard'); }}>
+              <TrendingUp size={20} color="#4b5563" style={styles.menuIcon} />
+              <Text style={styles.menuText}>Performance Dashboard</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); navigation.navigate('PriceAlerts'); }}>
+              <Bell size={20} color="#4b5563" style={styles.menuIcon} />
+              <Text style={styles.menuText}>Price Alerts</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); refetch(); }}>
+              {isRefetching ? <ActivityIndicator size="small" color="#4b5563" style={styles.menuIcon} /> : <RefreshCw size={20} color="#4b5563" style={styles.menuIcon} />}
+              <Text style={styles.menuText}>Refresh Data</Text>
+            </TouchableOpacity>
+
+            <View style={{ height: 1, backgroundColor: '#e5e7eb', marginVertical: 8 }} />
+            
+            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+              <LogOut size={20} color="#ef4444" style={styles.menuIcon} />
+              <Text style={[styles.menuText, { color: '#ef4444' }]}>Logout</Text>
+            </TouchableOpacity>
+
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12 },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 },
   userInfo: { flex: 1 },
   greeting: { fontSize: 13, color: '#6b7280', marginBottom: 2 },
   title: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
-  headerActions: { flexDirection: 'row', gap: 4 },
-  iconBtn: { padding: 8, borderRadius: 20 },
-  tabContainer: { flexDirection: 'row', backgroundColor: '#f3f4f6', padding: 4, borderRadius: 10 },
-  tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8, flexDirection: 'row', justifyContent: 'center' },
-  activeTab: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  tabText: { fontSize: 14, fontWeight: '500', color: '#6b7280' },
-  activeTabText: { color: '#111827', fontWeight: '600' },
-  badge: { backgroundColor: '#2f7f74', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconBtn: { padding: 8, position: 'relative' },
+  badge: { position: 'absolute', top: 0, right: 0, backgroundColor: '#ef4444', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#fff' },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#eef6f5', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#a7d3cd' },
+  avatarText: { color: '#2f7f74', fontWeight: 'bold', fontSize: 16 },
+  
   body: { flex: 1 },
   searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', margin: 16, marginBottom: 8, borderRadius: 10, paddingHorizontal: 12, height: 44, borderWidth: 1, borderColor: '#e5e7eb' },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, fontSize: 15, color: '#111827' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
   emptyText: { color: '#6b7280', fontSize: 14, textAlign: 'center' },
-  listContent: { padding: 16, paddingBottom: 100 },
+  listContent: { padding: 16, paddingBottom: 40 },
+  
   customerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  avatarText: { color: '#2f7f74', fontWeight: 'bold', fontSize: 16 },
+  customerAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  customerAvatarText: { color: '#2f7f74', fontWeight: 'bold', fontSize: 16 },
   customerInfo: { flex: 1 },
   customerName: { fontSize: 15, fontWeight: '600', color: '#111827', marginBottom: 2 },
   customerCode: { fontSize: 13, color: '#6b7280' },
-  actionCircle: { padding: 8, borderRadius: 20, backgroundColor: '#f3f4f6' },
-  summaryCard: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderRadius: 12, borderWidth: 1, marginBottom: 16 },
-  summaryLabel: { fontSize: 13, color: '#6b7280', marginBottom: 4 },
-  summaryValue: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
-  itemCard: { backgroundColor: '#fff', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
-  itemCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  itemCardTitle: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  deleteBtn: { padding: 4, borderRadius: 4, backgroundColor: '#fef2f2' },
-  itemCardFooter: { flexDirection: 'row', justifyContent: 'space-between' },
-  itemCardSub: { fontSize: 13, color: '#6b7280' },
-  itemCardVal: { fontSize: 14, fontWeight: 'bold', color: '#111827' },
-  eodBtn: { backgroundColor: '#2f7f74', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 8 },
-  eodBtnText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
-  fab: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#2f7f74', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 6 },
-});
 
+  bottomBar: { padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb' },
+  eodBtn: { flexDirection: 'row', backgroundColor: '#2f7f74', padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  eodBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingTop: 60, paddingRight: 16 },
+  modalContent: { width: 240, backgroundColor: '#fff', borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 8, overflow: 'hidden' },
+  modalHeader: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
+  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 16 },
+  menuIcon: { marginRight: 12 },
+  menuText: { fontSize: 15, color: '#4b5563', fontWeight: '500' }
+});

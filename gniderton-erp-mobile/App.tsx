@@ -19,6 +19,8 @@ import CustomerDashboardScreen from './src/screens/CustomerDashboardScreen';
 import CustomerProfileScreen from './src/screens/CustomerProfileScreen';
 import CustomerEditScreen from './src/screens/CustomerEditScreen';
 import PriceAlertsScreen from './src/screens/PriceAlertsScreen';
+import PendingOrdersScreen from './src/screens/PendingOrdersScreen';
+import PendingPaymentsScreen from './src/screens/PendingPaymentsScreen';
 import { useAppStore } from './src/store';
 
 const Stack = createNativeStackNavigator();
@@ -49,6 +51,8 @@ export default function App() {
                 <Stack.Screen name="CartSummary" component={CartSummaryScreen} />
                 <Stack.Screen name="PaymentList" component={PaymentListScreen} />
                 <Stack.Screen name="PaymentEntry" component={PaymentEntryScreen} />
+                <Stack.Screen name="PendingOrders" component={PendingOrdersScreen} />
+                <Stack.Screen name="PendingPayments" component={PendingPaymentsScreen} />
                 <Stack.Screen name="EODSummary" component={EODSummaryScreen} />
               </>
             )}
