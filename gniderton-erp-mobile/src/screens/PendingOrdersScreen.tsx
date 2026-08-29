@@ -10,7 +10,13 @@ export default function PendingOrdersScreen({ navigation }: any) {
 
   const editOrder = (order: any) => {
     setSelectedCustomer({ id: order.customer_id, customer_name: order.customer_name });
-    setCart(order.items || {});
+    
+    const newCart: Record<string, number> = {};
+    (order.items || []).forEach((item: any) => {
+      newCart[String(item.product_id || item.id)] = item.qty;
+    });
+    setCart(newCart);
+    
     removeOrder(order.tempId);
     navigation.navigate('OrderForm');
   };

@@ -191,7 +191,7 @@ router.get('/', async (req, res) => {
     try {
         const { role, employment_status, limit = 50, offset = 0 } = req.query;
 
-        let query = 'SELECT * FROM view_employee_details WHERE 1=1';
+        let query = 'SELECT v.*, e.device_id FROM view_employee_details v JOIN employees e ON v.id = e.id WHERE 1=1';
         const params = [];
         let pIdx = 1;
 
