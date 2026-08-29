@@ -6,6 +6,7 @@ import { useAppStore } from '../store';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { API_URL } from '../api/config';
+import { useTheme } from '../theme';
 
 interface Bill {
   id: string
@@ -17,6 +18,8 @@ interface Bill {
 }
 
 export default function PaymentListScreen({ navigation }: any) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const { selectedCustomer, pendingPayments, setSelectedInvoice } = useAppStore();
 
   const { data, isLoading, refetch } = useQuery({
@@ -54,24 +57,24 @@ export default function PaymentListScreen({ navigation }: any) {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ChevronLeft size={24} color="#111827" />
+          <ChevronLeft size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pending Bills</Text>
         <TouchableOpacity onPress={() => refetch()} style={styles.iconBtn}>
-          <RefreshCw size={20} color="#6b7280" />
+          <RefreshCw size={20} color={theme.textSecondary} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.subHeader}>
         <Text style={styles.customerName} numberOfLines={1}>{selectedCustomer?.customer_name}</Text>
         <TouchableOpacity style={styles.advanceBtn} onPress={goAdvance}>
-          <Plus size={16} color="#2f7f74" />
+          <Plus size={16} color={theme.primary} />
           <Text style={styles.advanceBtnText}>Advance</Text>
         </TouchableOpacity>
       </View>
 
       {isLoading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#2f7f74" /></View>
+        <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View>
       ) : bills.length === 0 ? (
         <View style={styles.center}><Text style={styles.emptyText}>No pending bills</Text></View>
       ) : (
@@ -109,11 +112,11 @@ export default function PaymentListScreen({ navigation }: any) {
                   </View>
                   <View style={styles.col}>
                     <Text style={styles.colLabel}>Paid</Text>
-                    <Text style={[styles.colVal, { color: '#16a34a' }]}>₹{Number(bill.amount_paid).toLocaleString('en-IN')}</Text>
+                    <Text style={[styles.colVal, { color: theme.success }]}>₹{Number(bill.amount_paid).toLocaleString('en-IN')}</Text>
                   </View>
                   <View style={styles.col}>
                     <Text style={styles.colLabel}>Balance</Text>
-                    <Text style={[styles.colVal, isPaid ? { color: '#9ca3af' } : { color: '#ef4444' }]}>
+                    <Text style={[styles.colVal, isPaid ? { color: theme.textMuted } : { color: theme.error }]}>
                       ₹{Math.max(0, remaining).toLocaleString('en-IN')}
                     </Text>
                   </View>
@@ -127,34 +130,34 @@ export default function PaymentListScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border },
   backBtn: { padding: 4, marginRight: 8, marginLeft: -4 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827', flex: 1 },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text, flex: 1 },
   iconBtn: { padding: 4 },
   subHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
-  customerName: { fontSize: 14, color: '#6b7280', flex: 1, marginRight: 8 },
-  advanceBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#bfdbfe', backgroundColor: '#eff6ff' },
-  advanceBtnText: { fontSize: 12, fontWeight: '600', color: '#2f7f74' },
+  customerName: { fontSize: 14, color: theme.textSecondary, flex: 1, marginRight: 8 },
+  advanceBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.input },
+  advanceBtnText: { fontSize: 12, fontWeight: '600', color: theme.primary },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { color: '#6b7280', fontSize: 14 },
+  emptyText: { color: theme.textSecondary, fontSize: 14 },
   listContent: { padding: 16, paddingBottom: 40 },
-  billCard: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', padding: 16, marginBottom: 12 },
-  paidCard: { backgroundColor: '#f3f4f6', opacity: 0.7 },
+  billCard: { backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.border, padding: 16, marginBottom: 12 },
+  paidCard: { backgroundColor: theme.input, opacity: 0.7 },
   billHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-  billNo: { fontSize: 15, fontWeight: '600', color: '#111827' },
-  billDate: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  billNo: { fontSize: 15, fontWeight: '600', color: theme.text },
+  billDate: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
   badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
-  badgePaid: { backgroundColor: '#dcfce7' },
-  badgeDanger: { backgroundColor: '#fee2e2' },
-  badgeWarn: { backgroundColor: '#fef3c7' },
+  badgePaid: { backgroundColor: theme.isDark ? '#143823' : '#dcfce7' },
+  badgeDanger: { backgroundColor: theme.isDark ? '#3d1a1a' : '#fee2e2' },
+  badgeWarn: { backgroundColor: theme.isDark ? '#3d3014' : '#fef3c7' },
   badgeText: { fontSize: 11, fontWeight: '600' },
-  badgeTextPaid: { color: '#15803d' },
-  badgeTextDanger: { color: '#b91c1c' },
-  badgeTextWarn: { color: '#b45309' },
+  badgeTextPaid: { color: theme.success },
+  badgeTextDanger: { color: theme.error },
+  badgeTextWarn: { color: theme.isDark ? '#fcd34d' : '#b45309' },
   grid: { flexDirection: 'row', justifyContent: 'space-between' },
   col: { flex: 1 },
-  colLabel: { fontSize: 12, color: '#6b7280', marginBottom: 2 },
-  colVal: { fontSize: 13, fontWeight: 'bold', color: '#111827' },
+  colLabel: { fontSize: 12, color: theme.textSecondary, marginBottom: 2 },
+  colVal: { fontSize: 13, fontWeight: 'bold', color: theme.text },
 });

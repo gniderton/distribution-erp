@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, CheckCircle } from 'lucide-react-native';
 import { useAppStore, PendingOrder } from '../store';
+import { useTheme } from '../theme';
 
 function genOfflineId(code: string) {
   const ts = new Date();
@@ -13,6 +14,8 @@ function genOfflineId(code: string) {
 }
 
 export default function CartSummaryScreen({ navigation }: any) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const { currentUser, selectedCustomer, cart, products, addOrder } = useAppStore();
 
   const cartItems = useMemo(() => {
@@ -81,7 +84,7 @@ export default function CartSummaryScreen({ navigation }: any) {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ChevronLeft size={24} color="#111827" />
+          <ChevronLeft size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Cart Preview</Text>
         <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
@@ -133,29 +136,29 @@ export default function CartSummaryScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border },
   backBtn: { marginRight: 12, marginLeft: -4 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#111827' },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2f7f74', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: theme.text },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
   saveBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   content: { padding: 16 },
   itemsList: { gap: 8, marginBottom: 16 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
+  itemRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
   itemInfo: { flex: 1, marginRight: 16 },
-  itemName: { fontSize: 14, fontWeight: '500', color: '#111827', marginBottom: 4 },
-  itemSub: { fontSize: 12, color: '#6b7280' },
-  itemTotal: { fontSize: 15, fontWeight: 'bold', color: '#111827' },
-  totalsBox: { backgroundColor: '#eef6f5', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#a7d3cd', marginBottom: 16 },
+  itemName: { fontSize: 14, fontWeight: '500', color: theme.text, marginBottom: 4 },
+  itemSub: { fontSize: 12, color: theme.textSecondary },
+  itemTotal: { fontSize: 15, fontWeight: 'bold', color: theme.text },
+  totalsBox: { backgroundColor: theme.input, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginBottom: 16 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  totalLabel: { fontSize: 14, color: '#4d9e92', fontWeight: '500' },
-  totalLabelBig: { fontSize: 18, color: '#111827', fontWeight: 'bold' },
-  totalValueBig: { fontSize: 18, color: '#111827', fontWeight: 'bold' },
-  customerBox: { backgroundColor: '#f3f4f6', padding: 12, borderRadius: 12, marginBottom: 24 },
-  customerLabel: { fontSize: 12, color: '#6b7280', marginBottom: 2 },
-  customerValue: { fontSize: 14, fontWeight: '500', color: '#111827' },
-  mainSaveBtn: { backgroundColor: '#2f7f74', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 12 },
+  totalLabel: { fontSize: 14, color: theme.primary, fontWeight: '500' },
+  totalLabelBig: { fontSize: 18, color: theme.text, fontWeight: 'bold' },
+  totalValueBig: { fontSize: 18, color: theme.text, fontWeight: 'bold' },
+  customerBox: { backgroundColor: theme.input, padding: 12, borderRadius: 12, marginBottom: 24 },
+  customerLabel: { fontSize: 12, color: theme.textSecondary, marginBottom: 2 },
+  customerValue: { fontSize: 14, fontWeight: '500', color: theme.text },
+  mainSaveBtn: { backgroundColor: theme.primary, padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 12 },
   mainSaveText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  footerNote: { textAlign: 'center', fontSize: 12, color: '#6b7280' }
+  footerNote: { textAlign: 'center', fontSize: 12, color: theme.textSecondary }
 });

@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Send, MapPin } from 'lucide-react-native';
+import { useTheme } from '../theme';
 import { useAppStore } from '../store';
 import axios from 'axios';
 import { API_URL } from '../api/config';
 
 export default function CustomerEditScreen({ navigation }: any) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const { currentUser, selectedCustomer } = useAppStore();
   
   const [name, setName] = useState(selectedCustomer?.customer_name || '');
@@ -62,7 +65,7 @@ export default function CustomerEditScreen({ navigation }: any) {
     return (
       <View style={styles.successContainer}>
         <View style={styles.successIconBox}>
-          <Send size={32} color="#16a34a" />
+          <Send size={32} color={theme.success} />
         </View>
         <Text style={styles.successTitle}>Update Requested!</Text>
         <Text style={styles.successSub}>Edit request has been sent to the admin for approval.</Text>
@@ -74,7 +77,7 @@ export default function CustomerEditScreen({ navigation }: any) {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ChevronLeft size={24} color="#111827" />
+          <ChevronLeft size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Details</Text>
       </View>
@@ -91,7 +94,7 @@ export default function CustomerEditScreen({ navigation }: any) {
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={theme.textMuted}
           />
         </View>
 
@@ -103,7 +106,7 @@ export default function CustomerEditScreen({ navigation }: any) {
             onChangeText={setPhone}
             keyboardType="numeric"
             maxLength={10}
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={theme.textMuted}
           />
           {!!phone && !phoneValid && <Text style={styles.errorText}>Enter a valid 10-digit mobile number</Text>}
         </View>
@@ -116,7 +119,7 @@ export default function CustomerEditScreen({ navigation }: any) {
             onChangeText={(t) => setGstin(t.toUpperCase())}
             autoCapitalize="characters"
             maxLength={15}
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={theme.textMuted}
           />
           {!!gstin && !gstValid && <Text style={styles.errorText}>Invalid GSTIN format</Text>}
         </View>
@@ -126,9 +129,9 @@ export default function CustomerEditScreen({ navigation }: any) {
           onPress={handleSubmit}
           disabled={!canSubmit}
         >
-          {loading ? <ActivityIndicator color="#fff" /> : (
+          {loading ? <ActivityIndicator color={theme.card} /> : (
             <>
-              <Send size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Send size={20} color={theme.card} style={{ marginRight: 8 }} />
               <Text style={styles.submitBtnText}>Submit Changes</Text>
             </>
           )}
@@ -139,26 +142,26 @@ export default function CustomerEditScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border },
   backBtn: { padding: 4, marginRight: 8, marginLeft: -4 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#111827' },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: theme.text },
   content: { padding: 16 },
-  successContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb', padding: 32 },
-  successIconBox: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#dcfce7', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-  successTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 8 },
-  successSub: { fontSize: 14, color: '#6b7280', textAlign: 'center' },
-  infoBox: { backgroundColor: '#eff6ff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe', marginBottom: 16 },
-  infoTitle: { fontSize: 13, fontWeight: '600', color: '#1d4ed8', marginBottom: 2 },
-  infoSub: { fontSize: 12, color: '#2f7f74' },
+  successContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background, padding: 32 },
+  successIconBox: { width: 64, height: 64, borderRadius: 32, backgroundColor: theme.isDark ? '#14532d' : '#dcfce7', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  successTitle: { fontSize: 20, fontWeight: 'bold', color: theme.text, marginBottom: 8 },
+  successSub: { fontSize: 14, color: theme.textSecondary, textAlign: 'center' },
+  infoBox: { backgroundColor: theme.isDark ? '#1e293b' : '#eff6ff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.isDark ? '#334155' : '#bfdbfe', marginBottom: 16 },
+  infoTitle: { fontSize: 13, fontWeight: '600', color: theme.isDark ? '#60a5fa' : '#1d4ed8', marginBottom: 2 },
+  infoSub: { fontSize: 12, color: theme.primary },
   inputGroup: { marginBottom: 16 },
-  label: { fontSize: 13, fontWeight: '500', color: '#6b7280', marginBottom: 6 },
-  asterisk: { color: '#ef4444' },
-  input: { backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 16, height: 48, fontSize: 15, color: '#111827' },
-  inputError: { borderWidth: 1, borderColor: '#ef4444' },
-  errorText: { color: '#ef4444', fontSize: 12, marginTop: 4 },
-  submitBtn: { flexDirection: 'row', backgroundColor: '#2f7f74', height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 12 },
+  label: { fontSize: 13, fontWeight: '500', color: theme.textSecondary, marginBottom: 6 },
+  asterisk: { color: theme.error },
+  input: { backgroundColor: theme.input, borderRadius: 12, paddingHorizontal: 16, height: 48, fontSize: 15, color: theme.text },
+  inputError: { borderWidth: 1, borderColor: theme.error },
+  errorText: { color: theme.error, fontSize: 12, marginTop: 4 },
+  submitBtn: { flexDirection: 'row', backgroundColor: theme.primary, height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 12 },
   submitBtnDisabled: { opacity: 0.5 },
-  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  submitBtnText: { color: theme.card, fontSize: 16, fontWeight: 'bold' },
 });

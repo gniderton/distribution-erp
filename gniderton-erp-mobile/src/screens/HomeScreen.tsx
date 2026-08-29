@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
+import { useTheme } from '../theme';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, UserPlus, Phone, Plus, ShoppingCart, IndianRupee, Menu, Bell, TrendingUp, RefreshCw, LogOut, CheckSquare } from 'lucide-react-native';
+import { Search, UserPlus, Phone, Plus, ShoppingCart, IndianRupee, Menu, Bell, TrendingUp, RefreshCw, LogOut, CheckSquare, Moon, Sun, Droplet } from 'lucide-react-native';
 import { useAppStore } from '../store';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { API_URL } from '../api/config';
 
 export default function HomeScreen({ navigation }: any) {
-  const { currentUser, pendingOrders, pendingPayments, setSelectedCustomer, logout } = useAppStore();
+  const theme = useTheme();
+  const styles = getStyles(theme);
+
+  const { currentUser, pendingOrders, pendingPayments, setSelectedCustomer, logout, activeTheme, setActiveTheme } = useAppStore();
   const [search, setSearch] = useState('');
   const [menuVisible, setMenuVisible] = useState(false);
 
@@ -145,6 +149,27 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={styles.menuText}>Performance Dashboard</Text>
             </TouchableOpacity>
             
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); navigation.navigate('CustomerHub'); }}>
+              <Search size={20} color={theme.textSecondary} style={styles.menuIcon} />
+              <Text style={styles.menuText}>Search Network</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={() => {
+              const nextTheme = activeTheme === 'light' ? 'dark' : (activeTheme === 'dark' ? 'glass' : 'light');
+              setActiveTheme(nextTheme);
+            }}>
+              {activeTheme === 'light' ? (
+                <Moon size={20} color={theme.textSecondary} style={styles.menuIcon} />
+              ) : activeTheme === 'dark' ? (
+                <Droplet size={20} color={theme.textSecondary} style={styles.menuIcon} />
+              ) : (
+                <Sun size={20} color={theme.textSecondary} style={styles.menuIcon} />
+              )}
+              <Text style={styles.menuText}>
+                Theme: {activeTheme.charAt(0).toUpperCase() + activeTheme.slice(1)}
+              </Text>
+            </TouchableOpacity>
+
             <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); navigation.navigate('PriceAlerts'); }}>
               <Bell size={20} color="#4b5563" style={styles.menuIcon} />
               <Text style={styles.menuText}>Price Alerts</Text>
@@ -155,11 +180,11 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={styles.menuText}>Refresh Data</Text>
             </TouchableOpacity>
 
-            <View style={{ height: 1, backgroundColor: '#e5e7eb', marginVertical: 8 }} />
+            <View style={{ height: 1, backgroundColor: theme.border, marginVertical: 8 }} />
             
             <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
               <LogOut size={20} color="#ef4444" style={styles.menuIcon} />
-              <Text style={[styles.menuText, { color: '#ef4444' }]}>Logout</Text>
+              <Text style={[styles.menuText, { color: theme.error }]}>Logout</Text>
             </TouchableOpacity>
 
           </View>
@@ -170,43 +195,43 @@ export default function HomeScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16 },
   userInfo: { flex: 1 },
-  greeting: { fontSize: 13, color: '#6b7280', marginBottom: 2 },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+  greeting: { fontSize: 13, color: theme.textSecondary, marginBottom: 2 },
+  title: { fontSize: 20, fontWeight: 'bold', color: theme.text },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconBtn: { padding: 8, position: 'relative' },
-  badge: { position: 'absolute', top: 0, right: 0, backgroundColor: '#ef4444', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#fff' },
-  badgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  badge: { position: 'absolute', top: 0, right: 0, backgroundColor: theme.error, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: theme.card },
+  badgeText: { color: theme.card, fontSize: 10, fontWeight: 'bold' },
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#eef6f5', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#a7d3cd' },
-  avatarText: { color: '#2f7f74', fontWeight: 'bold', fontSize: 16 },
+  avatarText: { color: theme.primary, fontWeight: 'bold', fontSize: 16 },
   
   body: { flex: 1 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', margin: 16, marginBottom: 8, borderRadius: 10, paddingHorizontal: 12, height: 44, borderWidth: 1, borderColor: '#e5e7eb' },
+  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, margin: 16, marginBottom: 8, borderRadius: 10, paddingHorizontal: 12, height: 44, borderWidth: 1, borderColor: theme.border },
   searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 15, color: '#111827' },
+  searchInput: { flex: 1, fontSize: 15, color: theme.text },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  emptyText: { color: '#6b7280', fontSize: 14, textAlign: 'center' },
+  emptyText: { color: theme.textSecondary, fontSize: 14, textAlign: 'center' },
   listContent: { padding: 16, paddingBottom: 40 },
   
-  customerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
-  customerAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  customerAvatarText: { color: '#2f7f74', fontWeight: 'bold', fontSize: 16 },
+  customerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginBottom: 8 },
+  customerAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.input, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  customerAvatarText: { color: theme.primary, fontWeight: 'bold', fontSize: 16 },
   customerInfo: { flex: 1 },
-  customerName: { fontSize: 15, fontWeight: '600', color: '#111827', marginBottom: 2 },
-  customerCode: { fontSize: 13, color: '#6b7280' },
+  customerName: { fontSize: 15, fontWeight: '600', color: theme.text, marginBottom: 2 },
+  customerCode: { fontSize: 13, color: theme.textSecondary },
 
-  bottomBar: { padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  eodBtn: { flexDirection: 'row', backgroundColor: '#2f7f74', padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  eodBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  bottomBar: { padding: 16, backgroundColor: theme.card, borderTopWidth: 1, borderTopColor: theme.border },
+  eodBtn: { flexDirection: 'row', backgroundColor: theme.primary, padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  eodBtnText: { color: theme.card, fontSize: 16, fontWeight: 'bold' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-start', alignItems: 'flex-end', paddingTop: 60, paddingRight: 16 },
-  modalContent: { width: 240, backgroundColor: '#fff', borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 8, overflow: 'hidden' },
-  modalHeader: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
+  modalContent: { width: 240, backgroundColor: theme.card, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 8, overflow: 'hidden' },
+  modalHeader: { padding: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
+  modalTitle: { fontSize: 16, fontWeight: 'bold', color: theme.text },
   menuItem: { flexDirection: 'row', alignItems: 'center', padding: 16 },
   menuIcon: { marginRight: 12 },
-  menuText: { fontSize: 15, color: '#4b5563', fontWeight: '500' }
+  menuText: { fontSize: 15, color: theme.textSecondary, fontWeight: '500' }
 });

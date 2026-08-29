@@ -2,12 +2,13 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RefreshCw, Users, ArrowRight, LogOut } from 'lucide-react-native';
+import { useTheme } from '../theme';
 import { useAppStore } from '../store';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { API_URL } from '../api/config';
 
-function MetricCard({ label, value, sub, color }: { label: string, value: string, sub?: string, color?: string }) {
+function MetricCard({ label, value, sub, color, styles }: { label: string, value: string, sub?: string, color?: string, styles: any }) {
   return (
     <View style={styles.card}>
       <Text style={styles.cardLabel}>{label}</Text>
@@ -18,6 +19,8 @@ function MetricCard({ label, value, sub, color }: { label: string, value: string
 }
 
 export default function DseDashboardScreen({ navigation }: any) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const currentUser = useAppStore(state => state.currentUser);
   const setUser = useAppStore(state => state.setUser);
 
@@ -47,10 +50,10 @@ export default function DseDashboardScreen({ navigation }: any) {
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={() => refetch()} style={styles.iconBtn}>
-            <RefreshCw size={20} color="#6b7280" />
+            <RefreshCw size={20} color={theme.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleLogout} style={styles.iconBtn}>
-            <LogOut size={20} color="#6b7280" />
+            <LogOut size={20} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -58,11 +61,11 @@ export default function DseDashboardScreen({ navigation }: any) {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {isLoading || isRefetching ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color="#2f7f74" />
+            <ActivityIndicator size="large" color={theme.primary} />
           </View>
         ) : !dash ? (
           <View style={styles.center}>
-            <Text style={{ color: '#6b7280' }}>No data available</Text>
+            <Text style={{ color: theme.textSecondary }}>No data available</Text>
           </View>
         ) : (
           <View style={styles.gridContainer}>
@@ -74,7 +77,8 @@ export default function DseDashboardScreen({ navigation }: any) {
                   label="Net Sales (Month)" 
                   value={`₹${((dash.metrics?.month?.net_sales_taxable || 0) / 1000).toFixed(1)}K`}
                   sub={`${dash.metrics?.growth_sales_pct || 0}% vs last month`}
-                  color="#2f7f74"
+                  color={theme.primary}
+                  styles={styles}
                 />
               </View>
               <View style={{ width: 12 }} />
@@ -83,7 +87,8 @@ export default function DseDashboardScreen({ navigation }: any) {
                   label="Collections" 
                   value={`₹${((dash.metrics?.month?.collection || 0) / 1000).toFixed(1)}K`}
                   sub={`${dash.metrics?.growth_collection_pct || 0}% vs last month`}
-                  color="#16a34a"
+                  color={theme.success}
+                  styles={styles}
                 />
               </View>
             </View>
@@ -94,6 +99,7 @@ export default function DseDashboardScreen({ navigation }: any) {
                 <MetricCard 
                   label="Active" 
                   value={`${dash.productivity?.active_customers || 0}/${dash.productivity?.total_assigned_customers || 0}`}
+                  styles={styles}
                 />
               </View>
               <View style={{ width: 8 }} />
@@ -102,6 +108,7 @@ export default function DseDashboardScreen({ navigation }: any) {
                   label="Coverage" 
                   value={`${dash.productivity?.market_coverage_pct || 0}%`}
                   color="#d97706"
+                  styles={styles}
                 />
               </View>
               <View style={{ width: 8 }} />
@@ -110,6 +117,7 @@ export default function DseDashboardScreen({ navigation }: any) {
                   label="Avg Credit" 
                   value={String(dash.metrics?.month?.avg_credit_days || 0)}
                   sub="days"
+                  styles={styles}
                 />
               </View>
             </View>
@@ -131,7 +139,7 @@ export default function DseDashboardScreen({ navigation }: any) {
             {(dash.zero_billing?.length || 0) > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionTitleRow}>
-                  <Users size={16} color="#ef4444" />
+                  <Users size={16} color={theme.error} />
                   <Text style={[styles.sectionTitle, { marginBottom: 0, marginLeft: 8 }]}>Unvisited Today</Text>
                 </View>
                 {dash.zero_billing.slice(0, 5).map((c: any, i: number) => (
@@ -145,7 +153,7 @@ export default function DseDashboardScreen({ navigation }: any) {
 
             <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Home')}>
               <Text style={styles.actionBtnText}>Go to Customers</Text>
-              <ArrowRight size={18} color="#111827" />
+              <ArrowRight size={18} color={theme.text} />
             </TouchableOpacity>
 
           </View>
@@ -155,29 +163,29 @@ export default function DseDashboardScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  greeting: { fontSize: 13, color: '#6b7280', marginBottom: 2 },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border },
+  greeting: { fontSize: 13, color: theme.textSecondary, marginBottom: 2 },
+  title: { fontSize: 20, fontWeight: 'bold', color: theme.text },
   headerActions: { flexDirection: 'row', gap: 8 },
-  iconBtn: { padding: 8, backgroundColor: '#f3f4f6', borderRadius: 20 },
+  iconBtn: { padding: 8, backgroundColor: theme.input, borderRadius: 20 },
   scrollContent: { padding: 16 },
   center: { padding: 40, alignItems: 'center' },
   gridContainer: { gap: 16 },
   row: { flexDirection: 'row' },
   flex1: { flex: 1 },
-  card: { backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
-  cardLabel: { fontSize: 12, color: '#6b7280', marginBottom: 6 },
-  cardValue: { fontSize: 22, fontWeight: 'bold', color: '#111827' },
-  cardSub: { fontSize: 11, color: '#9ca3af', marginTop: 4 },
+  card: { backgroundColor: theme.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
+  cardLabel: { fontSize: 12, color: theme.textSecondary, marginBottom: 6 },
+  cardValue: { fontSize: 22, fontWeight: 'bold', color: theme.text },
+  cardSub: { fontSize: 11, color: theme.textMuted, marginTop: 4 },
   section: { marginTop: 8 },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#111827', marginBottom: 12 },
-  listItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', padding: 14, borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
-  listTextMain: { flex: 1, fontSize: 14, color: '#111827', fontWeight: '500' },
-  listTextVal: { fontSize: 14, fontWeight: 'bold', color: '#111827' },
-  listTextSub: { fontSize: 12, color: '#6b7280' },
-  actionBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginTop: 16 },
-  actionBtnText: { fontSize: 15, fontWeight: '600', color: '#111827', marginRight: 8 }
+  sectionTitle: { fontSize: 15, fontWeight: 'bold', color: theme.text, marginBottom: 12 },
+  listItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.card, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: theme.border, marginBottom: 8 },
+  listTextMain: { flex: 1, fontSize: 14, color: theme.text, fontWeight: '500' },
+  listTextVal: { fontSize: 14, fontWeight: 'bold', color: theme.text },
+  listTextSub: { fontSize: 12, color: theme.textSecondary },
+  actionBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: theme.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginTop: 16 },
+  actionBtnText: { fontSize: 15, fontWeight: '600', color: theme.text, marginRight: 8 }
 });

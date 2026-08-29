@@ -6,8 +6,11 @@ import * as Application from 'expo-application';
 import { Platform } from 'react-native';
 import axios from 'axios';
 import { API_URL } from '../api/config';
+import { useTheme } from '../theme';
 
 export default function LoginScreen({ navigation }: any) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const [code, setCode] = useState('');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
@@ -79,7 +82,7 @@ export default function LoginScreen({ navigation }: any) {
             placeholder="e.g. DSE001"
             autoCapitalize="none"
             autoCorrect={false}
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={theme.textMuted}
           />
 
           <Text style={styles.label}>PIN</Text>
@@ -90,7 +93,7 @@ export default function LoginScreen({ navigation }: any) {
             placeholder="Enter PIN"
             secureTextEntry
             keyboardType="numeric"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={theme.textMuted}
           />
 
           {error ? (
@@ -116,19 +119,19 @@ export default function LoginScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
   content: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, maxWidth: 400, width: '100%', alignSelf: 'center' },
   header: { alignItems: 'center', marginBottom: 32 },
-  logoBox: { width: 64, height: 64, borderRadius: 16, backgroundColor: '#2f7f74', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  logoBox: { width: 64, height: 64, borderRadius: 16, backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
   logoText: { fontSize: 24, fontWeight: 'bold', color: '#fff' },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
-  subtitle: { fontSize: 14, color: '#6b7280', marginTop: 4 },
+  title: { fontSize: 24, fontWeight: 'bold', color: theme.text },
+  subtitle: { fontSize: 14, color: theme.textSecondary, marginTop: 4 },
   form: { gap: 16 },
-  label: { fontSize: 14, fontWeight: '500', color: '#374151', marginBottom: -8 },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, paddingHorizontal: 12, height: 48, fontSize: 16 },
-  errorBox: { backgroundColor: '#fee2e2', padding: 12, borderRadius: 8 },
-  errorText: { color: '#ef4444', fontSize: 14 },
-  button: { backgroundColor: '#2f7f74', height: 48, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
+  label: { fontSize: 14, fontWeight: '500', color: theme.textSecondary, marginBottom: -8 },
+  input: { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 12, height: 48, fontSize: 16, color: theme.text },
+  errorBox: { backgroundColor: theme.isDark ? '#2c1515' : '#fee2e2', padding: 12, borderRadius: 8 },
+  errorText: { color: theme.error, fontSize: 14 },
+  button: { backgroundColor: theme.primary, height: 48, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' }
 });

@@ -6,8 +6,11 @@ import { useAppStore } from '../store';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { API_URL } from '../api/config';
+import { useTheme } from '../theme';
 
 function ProductRow({ product, qty, onChange }: { product: any, qty: number, onChange: (id: string, qty: number) => void }) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   if (!product) return null;
   const baseRate = Number(product?.current_price || product?.dealer_rate || 0);
   const taxPct = Number(product?.tax_percentage || 0);
@@ -19,15 +22,15 @@ function ProductRow({ product, qty, onChange }: { product: any, qty: number, onC
   };
 
   return (
-    <View style={[styles.productRow, qty > 0 && { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
+    <View style={[styles.productRow, qty > 0 && { backgroundColor: theme.isDark ? '#14291e' : '#f0fdf4', borderColor: theme.isDark ? '#166534' : '#bbf7d0' }]}>
       <View style={styles.prodInfo}>
         <Text style={styles.prodName}>{product?.product_name}</Text>
         <Text style={styles.prodCode}>{product?.ean_code || 'No EAN'}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 }}>
-          <Text style={{ fontSize: 12, color: '#6b7280' }}>MRP ₹{Number(product?.mrp || 0).toFixed(2)}</Text>
-          <Text style={{ fontSize: 12, color: '#6b7280' }}>Rate ₹{rateWithTax.toFixed(2)}</Text>
+          <Text style={{ fontSize: 12, color: theme.textSecondary }}>MRP ₹{Number(product?.mrp || 0).toFixed(2)}</Text>
+          <Text style={{ fontSize: 12, color: theme.textSecondary }}>Rate ₹{rateWithTax.toFixed(2)}</Text>
           {Number(product?.current_stock) > 0 && (
-            <Text style={{ fontSize: 12, color: '#16a34a', fontWeight: '500' }}>Stk {Number(product.current_stock)}</Text>
+            <Text style={{ fontSize: 12, color: theme.success, fontWeight: '500' }}>Stk {Number(product.current_stock)}</Text>
           )}
         </View>
       </View>
@@ -41,7 +44,7 @@ function ProductRow({ product, qty, onChange }: { product: any, qty: number, onC
           value={qty > 0 ? String(qty) : ''} 
           onChangeText={handleTextChange} 
           placeholder="0"
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor={theme.textMuted}
         />
         <TouchableOpacity style={styles.qtyBtn} onPress={() => onChange(String(product.id), qty + 1)}>
           <Text style={styles.qtyBtnText}>+</Text>
@@ -52,6 +55,8 @@ function ProductRow({ product, qty, onChange }: { product: any, qty: number, onC
 }
 
 export default function OrderFormScreen({ navigation }: any) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const { selectedCustomer, cart, setCartItem, products, setProducts, brands, setBrands } = useAppStore();
   const [search, setSearch] = useState('');
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
@@ -135,7 +140,7 @@ export default function OrderFormScreen({ navigation }: any) {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <ChevronLeft size={24} color="#111827" />
+            <ChevronLeft size={24} color={theme.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle} numberOfLines={1}>
             {selectedCustomer?.customer_name || 'Order Form'}
@@ -149,13 +154,13 @@ export default function OrderFormScreen({ navigation }: any) {
         </View>
 
         <View style={styles.searchBox}>
-          <Search size={18} color="#9ca3af" style={styles.searchIcon} />
+          <Search size={18} color={theme.textMuted} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search products..."
             value={search}
             onChangeText={setSearch}
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={theme.textMuted}
           />
         </View>
 
@@ -181,7 +186,7 @@ export default function OrderFormScreen({ navigation }: any) {
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#2f7f74" /></View>
+        <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View>
       ) : (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <FlatList
@@ -215,35 +220,35 @@ export default function OrderFormScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingBottom: 12 },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
+  header: { backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 12 },
   headerTop: { flexDirection: 'row', alignItems: 'center', padding: 16, paddingBottom: 12 },
   backBtn: { marginRight: 12, marginLeft: -4 },
-  headerTitle: { flex: 1, fontSize: 16, fontWeight: 'bold', color: '#111827' },
-  cartBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2f7f74', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  headerTitle: { flex: 1, fontSize: 16, fontWeight: 'bold', color: theme.text },
+  cartBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   cartBadgeText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', marginHorizontal: 16, borderRadius: 10, paddingHorizontal: 12, height: 40, marginBottom: 12 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.input, marginHorizontal: 16, borderRadius: 10, paddingHorizontal: 12, height: 40, marginBottom: 12 },
   searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 14, color: '#111827' },
+  searchInput: { flex: 1, fontSize: 14, color: theme.text },
   brandScroll: { paddingBottom: 4 },
-  brandChip: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#fff' },
-  brandChipActive: { backgroundColor: '#2f7f74', borderColor: '#2f7f74' },
-  brandChipText: { fontSize: 12, fontWeight: '500', color: '#6b7280' },
+  brandChip: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card },
+  brandChipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  brandChipText: { fontSize: 12, fontWeight: '500', color: theme.textSecondary },
   brandChipTextActive: { color: '#fff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   listContent: { padding: 16, paddingBottom: 200 },
-  listCount: { fontSize: 12, color: '#6b7280', marginBottom: 12 },
-  productRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
+  listCount: { fontSize: 12, color: theme.textSecondary, marginBottom: 12 },
+  productRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginBottom: 8 },
   prodInfo: { flex: 1 },
-  prodName: { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 4 },
-  prodCode: { fontSize: 12, color: '#6b7280' },
-  qtyBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 8, padding: 2 },
-  qtyBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', borderRadius: 6, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
-  qtyBtnText: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
-  qtyText: { width: 32, textAlign: 'center', fontSize: 14, fontWeight: 'bold', color: '#111827' },
-  qtyInput: { width: 44, textAlign: 'center', fontSize: 14, fontWeight: 'bold', color: '#111827' },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', padding: 16, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  checkoutBtn: { flexDirection: 'row', backgroundColor: '#2f7f74', padding: 16, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  prodName: { fontSize: 14, fontWeight: '600', color: theme.text, marginBottom: 4 },
+  prodCode: { fontSize: 12, color: theme.textSecondary },
+  qtyBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.input, borderRadius: 8, padding: 2 },
+  qtyBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.card, borderRadius: 6, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
+  qtyBtnText: { fontSize: 18, fontWeight: 'bold', color: theme.text },
+  qtyText: { width: 32, textAlign: 'center', fontSize: 14, fontWeight: 'bold', color: theme.text },
+  qtyInput: { width: 44, textAlign: 'center', fontSize: 14, fontWeight: 'bold', color: theme.text },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: theme.card, padding: 16, borderTopWidth: 1, borderTopColor: theme.border },
+  checkoutBtn: { flexDirection: 'row', backgroundColor: theme.primary, padding: 16, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   checkoutText: { color: '#fff', fontSize: 15, fontWeight: 'bold' }
 });

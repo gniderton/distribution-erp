@@ -6,8 +6,11 @@ import { useAppStore } from '../store';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { API_URL } from '../api/config';
+import { useTheme } from '../theme';
 
 export default function AdHocCustomersScreen({ navigation }: any) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const { currentUser, setSelectedCustomer } = useAppStore();
   const [search, setSearch] = useState('');
 
@@ -49,7 +52,7 @@ export default function AdHocCustomersScreen({ navigation }: any) {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ChevronLeft size={24} color="#111827" />
+          <ChevronLeft size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>All Customers</Text>
         <TouchableOpacity onPress={() => navigation.navigate('CreateCustomer')} style={styles.newBtn}>
@@ -59,18 +62,18 @@ export default function AdHocCustomersScreen({ navigation }: any) {
       </View>
 
       <View style={styles.searchBox}>
-        <Search size={18} color="#9ca3af" style={styles.searchIcon} />
+        <Search size={18} color={theme.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search all customers..."
           value={search}
           onChangeText={setSearch}
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor={theme.textMuted}
         />
       </View>
 
       {isLoading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#2f7f74" /></View>
+        <View style={styles.center}><ActivityIndicator size="large" color={theme.primary} /></View>
       ) : (
         <FlatList
           data={filtered}
@@ -91,7 +94,7 @@ export default function AdHocCustomersScreen({ navigation }: any) {
                     style={styles.actionBtn} 
                     onPress={() => Linking.openURL(`tel:${item.customer_phone || item.contact_primary}`)}
                   >
-                    <Phone size={18} color="#2f7f74" />
+                    <Phone size={18} color={theme.primary} />
                   </TouchableOpacity>
                 )}
                 {item.latitude && item.longitude && (
@@ -99,7 +102,7 @@ export default function AdHocCustomersScreen({ navigation }: any) {
                     style={styles.actionBtn}
                     onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`)}
                   >
-                    <MapPin size={18} color="#6b7280" />
+                    <MapPin size={18} color={theme.textSecondary} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -112,25 +115,25 @@ export default function AdHocCustomersScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border },
   backBtn: { padding: 4, marginRight: 8, marginLeft: -4 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#111827' },
-  newBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2f7f74', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 4 },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: theme.text },
+  newBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 4 },
   newBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
-  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', margin: 16, borderRadius: 10, paddingHorizontal: 12, height: 44, borderWidth: 1, borderColor: '#e5e7eb' },
+  searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, margin: 16, borderRadius: 10, paddingHorizontal: 12, height: 44, borderWidth: 1, borderColor: theme.border },
   searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 15, color: '#111827' },
+  searchInput: { flex: 1, fontSize: 15, color: theme.text },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { textAlign: 'center', color: '#6b7280', marginTop: 24 },
+  emptyText: { textAlign: 'center', color: theme.textSecondary, marginTop: 24 },
   listContent: { paddingHorizontal: 16, paddingBottom: 40 },
-  customerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  avatarText: { color: '#2f7f74', fontWeight: 'bold', fontSize: 16 },
+  customerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginBottom: 8 },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.input, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  avatarText: { color: theme.primary, fontWeight: 'bold', fontSize: 16 },
   customerInfo: { flex: 1, marginRight: 8 },
-  customerName: { fontSize: 15, fontWeight: '600', color: '#111827', marginBottom: 2 },
-  customerCode: { fontSize: 13, color: '#6b7280' },
+  customerName: { fontSize: 15, fontWeight: '600', color: theme.text, marginBottom: 2 },
+  customerCode: { fontSize: 13, color: theme.textSecondary },
   actions: { flexDirection: 'row', gap: 4 },
-  actionBtn: { padding: 8, borderRadius: 20, backgroundColor: '#f3f4f6' }
+  actionBtn: { padding: 8, borderRadius: 20, backgroundColor: theme.input }
 });

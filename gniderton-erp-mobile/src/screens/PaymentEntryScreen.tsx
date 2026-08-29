@@ -7,6 +7,7 @@ import { useAppStore } from '../store';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { API_URL } from '../api/config';
+import { useTheme } from '../theme';
 
 const MODES = ['CASH', 'CHEQUE', 'UPI', 'NEFT'];
 
@@ -15,6 +16,8 @@ function genPaymentId() {
 }
 
 export default function PaymentEntryScreen({ navigation }: any) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const { currentUser, selectedCustomer, pendingPayments, addPayment, selectedInvoice } = useAppStore();
   const [mode, setMode] = useState('CASH');
   const [amount, setAmount] = useState('');
@@ -94,7 +97,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ChevronLeft size={24} color="#111827" />
+          <ChevronLeft size={24} color={theme.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment Entry</Text>
         <TouchableOpacity 
@@ -112,7 +115,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
           <Text style={styles.infoLabel}>{isAdvance ? 'Advance Payment' : `Payment against ${selectedInvoice?.invoice_number}`}</Text>
           <Text style={styles.infoValue}>{selectedCustomer.customer_name}</Text>
           {!isAdvance && (
-            <Text style={{ marginTop: 4, color: '#dc2626', fontWeight: 'bold' }}>
+            <Text style={{ marginTop: 4, color: theme.error, fontWeight: 'bold' }}>
               Balance: ₹{remainingBalance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </Text>
           )}
@@ -143,7 +146,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
               onChangeText={setAmount}
               placeholder={isAdvance ? "0.00" : String(remainingBalance.toFixed(2))}
               keyboardType="numeric"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={theme.textMuted}
             />
           </View>
         </View>
@@ -153,10 +156,10 @@ export default function PaymentEntryScreen({ navigation }: any) {
             <View style={styles.section}>
               <View style={styles.flexBetween}>
                 <Text style={styles.label}>Bank Name</Text>
-                <TouchableOpacity onPress={() => refetchBanks()}><RefreshCw size={16} color="#6b7280" /></TouchableOpacity>
+                <TouchableOpacity onPress={() => refetchBanks()}><RefreshCw size={16} color={theme.textSecondary} /></TouchableOpacity>
               </View>
               <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowBankModal(true)}>
-                <Text style={[styles.dropdownBtnText, !bankName && { color: '#9ca3af' }]}>{bankName || '— Select Bank —'}</Text>
+                <Text style={[styles.dropdownBtnText, !bankName && { color: theme.textMuted }]}>{bankName || '— Select Bank —'}</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.section}>
@@ -167,7 +170,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
                 onChangeText={setReference}
                 placeholder="Enter cheque number"
                 keyboardType="numeric"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={theme.textMuted}
               />
             </View>
             <View style={styles.section}>
@@ -176,7 +179,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
                   style={[styles.input, { justifyContent: 'center' }]}
                   onPress={() => setShowDatePicker(true)}
                 >
-                  <Text style={{ color: chequeDate ? '#111827' : '#9ca3af', fontSize: 14 }}>
+                  <Text style={{ color: chequeDate ? theme.text : theme.textMuted, fontSize: 14 }}>
                     {chequeDate || 'YYYY-MM-DD'}
                   </Text>
                 </TouchableOpacity>
@@ -201,11 +204,11 @@ export default function PaymentEntryScreen({ navigation }: any) {
           <View style={styles.section}>
             <View style={styles.flexBetween}>
               <Text style={styles.label}>Reference / UTR No.</Text>
-              <TouchableOpacity onPress={() => refetchCredits()}><RefreshCw size={16} color="#6b7280" /></TouchableOpacity>
+              <TouchableOpacity onPress={() => refetchCredits()}><RefreshCw size={16} color={theme.textSecondary} /></TouchableOpacity>
             </View>
             {credits.length > 0 ? (
               <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowCreditModal(true)}>
-                <Text style={[styles.dropdownBtnText, !reference && { color: '#9ca3af' }]}>{reference || '— Select Reference —'}</Text>
+                <Text style={[styles.dropdownBtnText, !reference && { color: theme.textMuted }]}>{reference || '— Select Reference —'}</Text>
               </TouchableOpacity>
             ) : (
               <TextInput
@@ -213,10 +216,10 @@ export default function PaymentEntryScreen({ navigation }: any) {
                 value={reference}
                 onChangeText={setReference}
                 placeholder="Enter UTR / reference number"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={theme.textMuted}
               />
             )}
-            <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+            <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4 }}>
               {credits.length === 0 ? 'No pending bank credits found — enter manually' : `${credits.length} unconsumed credit(s) available`}
             </Text>
           </View>
@@ -239,7 +242,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Bank</Text>
-              <TouchableOpacity onPress={() => setShowBankModal(false)}><X size={24} color="#111827" /></TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowBankModal(false)}><X size={24} color={theme.text} /></TouchableOpacity>
             </View>
             <FlatList
               data={banks}
@@ -259,7 +262,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Reference</Text>
-              <TouchableOpacity onPress={() => setShowCreditModal(false)}><X size={24} color="#111827" /></TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowCreditModal(false)}><X size={24} color={theme.text} /></TouchableOpacity>
             </View>
             <FlatList
               data={credits}
@@ -267,7 +270,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
               renderItem={({ item }) => (
                 <TouchableOpacity style={styles.modalItem} onPress={() => { setReference(`[${item.id}] ${item.bank_ref_id}`); setShowCreditModal(false); }}>
                   <Text style={styles.modalItemText}>[{item.id}] {item.bank_ref_id}</Text>
-                  <Text style={{ fontSize: 12, color: '#6b7280' }}>Cr: ₹{Number(item.credit_amount).toFixed(2)} | Bal: ₹{(item.credit_amount - item.consumed_amount).toFixed(2)}</Text>
+                  <Text style={{ fontSize: 12, color: theme.textSecondary }}>Cr: ₹{Number(item.credit_amount).toFixed(2)} | Bal: ₹{(item.credit_amount - item.consumed_amount).toFixed(2)}</Text>
                 </TouchableOpacity>
               )}
             />
@@ -279,38 +282,38 @@ export default function PaymentEntryScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border },
   backBtn: { marginRight: 12, marginLeft: -4 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#111827' },
-  saveBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2f7f74', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: theme.text },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
   saveBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   content: { padding: 16 },
-  infoBox: { backgroundColor: '#eff6ff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe', marginBottom: 20 },
-  infoLabel: { fontSize: 12, color: '#2f7f74', fontWeight: '600', marginBottom: 2 },
-  infoValue: { fontSize: 14, color: '#1e3a8a', fontWeight: '500' },
+  infoBox: { backgroundColor: theme.isDark ? '#1e293b' : '#eff6ff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.isDark ? '#3b82f6' : '#bfdbfe', marginBottom: 20 },
+  infoLabel: { fontSize: 12, color: theme.primary, fontWeight: '600', marginBottom: 2 },
+  infoValue: { fontSize: 14, color: theme.isDark ? '#93c5fd' : '#1e3a8a', fontWeight: '500' },
   section: { marginBottom: 20 },
   flexBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  label: { fontSize: 13, fontWeight: '500', color: '#6b7280', marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: '500', color: theme.textSecondary, marginBottom: 8 },
   modeRow: { flexDirection: 'row', gap: 8 },
-  modeBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#f3f4f6', alignItems: 'center' },
-  modeBtnActive: { backgroundColor: '#2f7f74', borderColor: '#2f7f74' },
-  modeBtnText: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
+  modeBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.input, alignItems: 'center' },
+  modeBtnActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  modeBtnText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
   modeBtnTextActive: { color: '#fff' },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 12 },
-  currencyPrefix: { fontSize: 18, color: '#6b7280', fontWeight: '500', marginRight: 8 },
-  amountInput: { flex: 1, height: 52, fontSize: 20, fontWeight: 'bold', color: '#111827' },
-  input: { backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 16, height: 48, fontSize: 15, color: '#111827' },
-  dropdownBtn: { backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 16, height: 48, justifyContent: 'center' },
-  dropdownBtnText: { fontSize: 15, color: '#111827' },
-  mainSaveBtn: { backgroundColor: '#2f7f74', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 12, marginBottom: 12 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.input, borderRadius: 12, paddingHorizontal: 12 },
+  currencyPrefix: { fontSize: 18, color: theme.textSecondary, fontWeight: '500', marginRight: 8 },
+  amountInput: { flex: 1, height: 52, fontSize: 20, fontWeight: 'bold', color: theme.text },
+  input: { backgroundColor: theme.input, borderRadius: 12, paddingHorizontal: 16, height: 48, fontSize: 15, color: theme.text },
+  dropdownBtn: { backgroundColor: theme.input, borderRadius: 12, paddingHorizontal: 16, height: 48, justifyContent: 'center' },
+  dropdownBtnText: { fontSize: 15, color: theme.text },
+  mainSaveBtn: { backgroundColor: theme.primary, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 12, marginBottom: 12 },
   mainSaveText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  footerNote: { textAlign: 'center', fontSize: 12, color: '#6b7280' },
+  footerNote: { textAlign: 'center', fontSize: 12, color: theme.textSecondary },
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%', minHeight: '50%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
-  modalItem: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  modalItemText: { fontSize: 16, color: '#111827', fontWeight: '500', marginBottom: 4 }
+  modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%', minHeight: '50%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text },
+  modalItem: { padding: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
+  modalItemText: { fontSize: 16, color: theme.text, fontWeight: '500', marginBottom: 4 }
 });

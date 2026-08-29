@@ -5,6 +5,7 @@ import { ChevronLeft, CheckCircle, RefreshCw, PlusCircle, Trash2, ArrowRight } f
 import { useAppStore } from '../store';
 import axios from 'axios';
 import { API_URL } from '../api/config';
+import { useTheme } from '../theme';
 
 const EXPENSE_TYPES = ['Petrol', 'Food', 'Drinks', 'Auto / Taxi', 'Other'];
 const DENOM_ROWS = [
@@ -19,6 +20,8 @@ const DENOM_ROWS = [
 const MAX_EXPENSE_TOTAL = 300;
 
 export default function EODSummaryScreen({ navigation }: any) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
   const { currentUser, pendingOrders, pendingPayments, expenses, denominations, addExpense, removeExpense, setDenom, resetEod } = useAppStore();
   const [step, setStep] = useState(1);
   const [syncing, setSyncing] = useState(false);
@@ -118,10 +121,10 @@ export default function EODSummaryScreen({ navigation }: any) {
 
   if (synced) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' }}>
-        <CheckCircle size={64} color="#16a34a" style={{ marginBottom: 16 }} />
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#111827' }}>Sync Successful!</Text>
-        <Text style={{ color: '#6b7280', marginTop: 8 }}>All data uploaded. Returning to home...</Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}>
+        <CheckCircle size={64} color={theme.success} style={{ marginBottom: 16 }} />
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: theme.text }}>Sync Successful!</Text>
+        <Text style={{ color: theme.textSecondary, marginTop: 8 }}>All data uploaded. Returning to home...</Text>
       </View>
     );
   }
@@ -130,7 +133,7 @@ export default function EODSummaryScreen({ navigation }: any) {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => step > 1 ? setStep(step - 1) : navigation.goBack()} style={styles.backBtn}>
-          <ChevronLeft size={24} color="#111827" />
+          <ChevronLeft size={24} color={theme.text} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>End of Day</Text>
@@ -165,10 +168,10 @@ export default function EODSummaryScreen({ navigation }: any) {
                 </View>
 
                 <Text style={styles.label}>Amount</Text>
-                <TextInput style={styles.input} value={expAmount} onChangeText={setExpAmount} keyboardType="numeric" placeholder="0" />
+                <TextInput style={styles.input} value={expAmount} onChangeText={setExpAmount} keyboardType="numeric" placeholder="0" placeholderTextColor={theme.textMuted} />
 
                 <Text style={styles.label}>Description</Text>
-                <TextInput style={styles.input} value={expDesc} onChangeText={setExpDesc} placeholder="e.g. Lunch with client" />
+                <TextInput style={styles.input} value={expDesc} onChangeText={setExpDesc} placeholder="e.g. Lunch with client" placeholderTextColor={theme.textMuted} />
 
                 <TouchableOpacity style={styles.addBtn} onPress={handleAddExpense}>
                   <PlusCircle size={18} color="#fff" style={{ marginRight: 6 }} />
@@ -188,7 +191,7 @@ export default function EODSummaryScreen({ navigation }: any) {
                     </View>
                     <Text style={styles.expenseAmount}>₹{e.amount}</Text>
                     <TouchableOpacity onPress={() => removeExpense(e.id)} style={styles.deleteBtn}>
-                      <Trash2 size={16} color="#ef4444" />
+                      <Trash2 size={16} color={theme.error} />
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -222,6 +225,7 @@ export default function EODSummaryScreen({ navigation }: any) {
                       onChangeText={v => setDenom(row.key as keyof typeof denominations, parseInt(v) || 0)}
                       keyboardType="numeric"
                       placeholder="0"
+                      placeholderTextColor={theme.textMuted}
                     />
                     <Text style={styles.denomTotal}>= ₹{((denominations[row.key as keyof typeof denominations] || 0) * row.value)}</Text>
                   </View>
@@ -235,7 +239,7 @@ export default function EODSummaryScreen({ navigation }: any) {
                     <Text style={styles.summaryLabel}>Cash Counted</Text>
                     <Text style={[styles.summaryValue, { fontWeight: 'bold' }]}>₹{denomTotal}</Text>
                   </View>
-                  <Text style={[styles.matchText, { color: cashMatch ? '#16a34a' : '#dc2626' }]}>
+                  <Text style={[styles.matchText, { color: cashMatch ? theme.success : theme.error }]}>
                     {cashMatch ? '✓ Cash Matched' : `✗ Difference: ₹${Math.abs(denomTotal - expectedCash)}`}
                   </Text>
                 </View>
@@ -286,6 +290,7 @@ export default function EODSummaryScreen({ navigation }: any) {
                           onChangeText={v => setEodCheque(c.key, v)}
                           keyboardType="numeric"
                           placeholder="0"
+                          placeholderTextColor={theme.textMuted}
                         />
                       </View>
                       {hasInput && !isMatch && (
@@ -336,7 +341,7 @@ export default function EODSummaryScreen({ navigation }: any) {
                   {productSummary.map((p, i) => (
                     <View key={i} style={styles.tableRow}>
                       <Text style={[styles.tableCell, { flex: 2 }]}>{p.name}</Text>
-                      <Text style={[styles.tableCell, { flex: 1, textAlign: 'right', color: '#6b7280' }]}>{p.qty}</Text>
+                      <Text style={[styles.tableCell, { flex: 1, textAlign: 'right', color: theme.textSecondary }]}>{p.qty}</Text>
                       <Text style={[styles.tableCell, { flex: 1, textAlign: 'right', fontWeight: '500' }]}>₹{p.value.toLocaleString('en-IN')}</Text>
                     </View>
                   ))}
@@ -365,8 +370,8 @@ export default function EODSummaryScreen({ navigation }: any) {
                   <Text style={styles.summaryLabel}>Online (UPI/NEFT)</Text>
                   <Text style={styles.summaryValue}>₹{onlineTotal.toLocaleString('en-IN')}</Text>
                 </View>
-                <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: '#e5e7eb', marginTop: 4, paddingTop: 8 }]}>
-                  <Text style={[styles.summaryLabel, { fontWeight: 'bold', color: '#111827' }]}>Total</Text>
+                <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: theme.border, marginTop: 4, paddingTop: 8 }]}>
+                  <Text style={[styles.summaryLabel, { fontWeight: 'bold', color: theme.text }]}>Total</Text>
                   <Text style={[styles.summaryValue, { fontWeight: 'bold' }]}>₹{(cashTotal + chequeTotal + onlineTotal).toLocaleString('en-IN')}</Text>
                 </View>
               </View>
@@ -404,86 +409,86 @@ export default function EODSummaryScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+const getStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border },
   backBtn: { marginRight: 12, marginLeft: -4 },
   headerTitleContainer: { flex: 1, flexDirection: 'column' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text },
   stepperContainer: { flexDirection: 'row', gap: 4, marginTop: 4 },
-  stepDot: { height: 4, width: 20, borderRadius: 2, backgroundColor: '#e5e7eb' },
-  stepDotActive: { backgroundColor: '#2f7f74' },
+  stepDot: { height: 4, width: 20, borderRadius: 2, backgroundColor: theme.border },
+  stepDotActive: { backgroundColor: theme.primary },
   content: { padding: 16, paddingBottom: 40 },
   stepContent: { flex: 1 },
-  stepTitle: { fontSize: 22, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
-  stepDesc: { fontSize: 14, color: '#6b7280', marginBottom: 24 },
+  stepTitle: { fontSize: 22, fontWeight: 'bold', color: theme.text, marginBottom: 4 },
+  stepDesc: { fontSize: 14, color: theme.textSecondary, marginBottom: 24 },
   
-  expenseForm: { backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 16 },
-  label: { fontSize: 12, fontWeight: '500', color: '#6b7280', marginBottom: 6, marginTop: 12 },
+  expenseForm: { backgroundColor: theme.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginBottom: 16 },
+  label: { fontSize: 12, fontWeight: '500', color: theme.textSecondary, marginBottom: 6, marginTop: 12 },
   typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  typeBtn: { paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center', borderRadius: 8, backgroundColor: '#f3f4f6' },
-  typeBtnActive: { backgroundColor: '#2f7f74' },
-  typeBtnText: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
+  typeBtn: { paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center', borderRadius: 8, backgroundColor: theme.input },
+  typeBtnActive: { backgroundColor: theme.primary },
+  typeBtnText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
   typeBtnTextActive: { color: '#fff' },
-  input: { backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 12, height: 44, fontSize: 14 },
-  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#2f7f74', padding: 12, borderRadius: 8, marginTop: 16 },
+  input: { backgroundColor: theme.input, borderRadius: 8, paddingHorizontal: 12, height: 44, fontSize: 14, color: theme.text },
+  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary, padding: 12, borderRadius: 8, marginTop: 16 },
   addBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   
   expenseList: { marginTop: 8, marginBottom: 24 },
-  expenseListTitle: { fontSize: 14, fontWeight: 'bold', color: '#111827', marginBottom: 8 },
-  expenseRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
-  expenseType: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  expenseDesc: { fontSize: 12, color: '#6b7280' },
-  expenseAmount: { fontSize: 15, fontWeight: 'bold', color: '#111827', marginRight: 12 },
+  expenseListTitle: { fontSize: 14, fontWeight: 'bold', color: theme.text, marginBottom: 8 },
+  expenseRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.border, marginBottom: 8 },
+  expenseType: { fontSize: 14, fontWeight: '600', color: theme.text },
+  expenseDesc: { fontSize: 12, color: theme.textSecondary },
+  expenseAmount: { fontSize: 15, fontWeight: 'bold', color: theme.text, marginRight: 12 },
   deleteBtn: { padding: 4 },
 
-  denomRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 8 },
-  denomLabel: { width: 50, fontSize: 15, fontWeight: 'bold', color: '#111827' },
-  denomInput: { flex: 1, backgroundColor: '#f3f4f6', borderRadius: 8, height: 40, textAlign: 'center', fontSize: 15, fontWeight: 'bold' },
-  denomTotal: { width: 80, textAlign: 'right', fontSize: 14, fontWeight: 'bold', color: '#111827' },
-  denomSummary: { backgroundColor: '#eef6f5', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#a7d3cd', marginTop: 16, marginBottom: 24 },
+  denomRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.border, marginBottom: 8 },
+  denomLabel: { width: 50, fontSize: 15, fontWeight: 'bold', color: theme.text },
+  denomInput: { flex: 1, backgroundColor: theme.input, borderRadius: 8, height: 40, textAlign: 'center', fontSize: 15, fontWeight: 'bold', color: theme.text },
+  denomTotal: { width: 80, textAlign: 'right', fontSize: 14, fontWeight: 'bold', color: theme.text },
+  denomSummary: { backgroundColor: theme.isDark ? '#1a2e2b' : '#eef6f5', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.isDark ? '#2f7f74' : '#a7d3cd', marginTop: 16, marginBottom: 24 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  summaryLabel: { fontSize: 14, color: '#4d9e92' },
-  summaryValue: { fontSize: 16, color: '#111827' },
-  matchText: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#a7d3cd', fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
+  summaryLabel: { fontSize: 14, color: theme.primary },
+  summaryValue: { fontSize: 16, color: theme.text },
+  matchText: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.isDark ? '#2f7f74' : '#a7d3cd', fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
 
-  chequeCard: { backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 16 },
-  chequeCardMatch: { borderColor: '#16a34a', backgroundColor: '#f0fdf4' },
-  chequeCardError: { borderColor: '#ef4444', backgroundColor: '#fef2f2' },
+  chequeCard: { backgroundColor: theme.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginBottom: 16 },
+  chequeCardMatch: { borderColor: theme.success, backgroundColor: theme.isDark ? '#14291e' : '#f0fdf4' },
+  chequeCardError: { borderColor: theme.error, backgroundColor: theme.isDark ? '#2c1515' : '#fef2f2' },
   chequeHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  chequeTitle: { fontSize: 15, fontWeight: 'bold', color: '#111827' },
-  chequeBank: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
-  chequeDetail: { fontSize: 12, color: '#6b7280', marginBottom: 2 },
-  chequeInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  chequeInputLabel: { fontSize: 13, fontWeight: '600', color: '#111827' },
-  chequeInput: { backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 12, height: 40, width: 120, textAlign: 'right', fontSize: 15, fontWeight: 'bold' },
-  chequeErrorText: { color: '#dc2626', fontSize: 12, marginTop: 8, fontWeight: '500' },
-  chequeMatchText: { color: '#16a34a', fontSize: 12, marginTop: 8, fontWeight: 'bold', textAlign: 'right' },
+  chequeTitle: { fontSize: 15, fontWeight: 'bold', color: theme.text },
+  chequeBank: { fontSize: 13, color: theme.textSecondary, fontWeight: '500' },
+  chequeDetail: { fontSize: 12, color: theme.textSecondary, marginBottom: 2 },
+  chequeInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
+  chequeInputLabel: { fontSize: 13, fontWeight: '600', color: theme.text },
+  chequeInput: { backgroundColor: theme.input, borderRadius: 8, paddingHorizontal: 12, height: 40, width: 120, textAlign: 'right', fontSize: 15, fontWeight: 'bold', color: theme.text },
+  chequeErrorText: { color: theme.error, fontSize: 12, marginTop: 8, fontWeight: '500' },
+  chequeMatchText: { color: theme.success, fontSize: 12, marginTop: 8, fontWeight: 'bold', textAlign: 'right' },
 
-  infoBox: { backgroundColor: '#eff6ff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe', marginBottom: 24 },
-  infoBoxText: { color: '#1e3a8a', fontSize: 14, fontWeight: '500', textAlign: 'center' },
+  infoBox: { backgroundColor: theme.isDark ? '#1e293b' : '#eff6ff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.isDark ? '#3b82f6' : '#bfdbfe', marginBottom: 24 },
+  infoBoxText: { color: theme.isDark ? '#93c5fd' : '#1e3a8a', fontSize: 14, fontWeight: '500', textAlign: 'center' },
 
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
-  statCard: { width: '48%', backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
-  statLabel: { fontSize: 12, color: '#6b7280', marginBottom: 4 },
-  statValue: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+  statCard: { width: '48%', backgroundColor: theme.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
+  statLabel: { fontSize: 12, color: theme.textSecondary, marginBottom: 4 },
+  statValue: { fontSize: 20, fontWeight: 'bold', color: theme.text },
 
-  nextBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#2f7f74', padding: 16, borderRadius: 12 },
+  nextBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary, padding: 16, borderRadius: 12 },
   nextBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   btnDisabled: { opacity: 0.5 },
 
-  syncBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#2f7f74', padding: 16, borderRadius: 12 },
+  syncBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary, padding: 16, borderRadius: 12 },
   syncBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 
-  summarySection: { backgroundColor: '#fff', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 16 },
+  summarySection: { backgroundColor: theme.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginBottom: 16 },
   summarySectionHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  summarySectionTitle: { fontSize: 14, fontWeight: 'bold', color: '#111827' },
-  summarySectionSub: { fontSize: 12, color: '#6b7280' },
-  tableHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingBottom: 8, marginBottom: 8 },
-  tableCol: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
+  summarySectionTitle: { fontSize: 14, fontWeight: 'bold', color: theme.text },
+  summarySectionSub: { fontSize: 12, color: theme.textSecondary },
+  tableHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 8, marginBottom: 8 },
+  tableCol: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
   tableRow: { flexDirection: 'row', marginBottom: 8 },
-  tableCell: { fontSize: 13, color: '#111827' },
-  tableFooter: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 8, marginTop: 4 },
-  tableFooterCell: { fontSize: 13, fontWeight: 'bold', color: '#111827' },
-  emptyText: { fontSize: 13, color: '#6b7280', fontStyle: 'italic', marginTop: 8 }
+  tableCell: { fontSize: 13, color: theme.text },
+  tableFooter: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 8, marginTop: 4 },
+  tableFooterCell: { fontSize: 13, fontWeight: 'bold', color: theme.text },
+  emptyText: { fontSize: 13, color: theme.textSecondary, fontStyle: 'italic', marginTop: 8 }
 });
