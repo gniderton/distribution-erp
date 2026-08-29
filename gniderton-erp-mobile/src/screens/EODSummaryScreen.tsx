@@ -19,7 +19,7 @@ const DENOM_ROWS = [
 const MAX_EXPENSE_TOTAL = 300;
 
 export default function EODSummaryScreen({ navigation }: any) {
-  const { currentUser, pendingOrders, pendingPayments, expenses, denominations, addExpense, removeExpense, setDenom, clearEodData } = useAppStore();
+  const { currentUser, pendingOrders, pendingPayments, expenses, denominations, addExpense, removeExpense, setDenom, resetEod } = useAppStore();
   const [step, setStep] = useState(1);
   const [syncing, setSyncing] = useState(false);
   const [synced, setSynced] = useState(false);
@@ -30,7 +30,8 @@ export default function EODSummaryScreen({ navigation }: any) {
   const [expDesc, setExpDesc] = useState('');
 
   // Cheque state
-  const [chequeInputs, setChequeInputs] = useState<Record<string, string>>({});
+  const eodCheques = useAppStore(state => state.eodCheques);
+  const setEodCheque = useAppStore(state => state.setEodCheque);
 
   // Summaries
   const expenseTotal = expenses.reduce((s, e) => s + e.amount, 0);
@@ -76,7 +77,7 @@ export default function EODSummaryScreen({ navigation }: any) {
 
   const orderTotal = productSummary.reduce((s, p) => s + p.value, 0);
 
-  const chequesMatch = groupedCheques.every(c => Number(chequeInputs[c.key] || 0) === c.expected_amount);
+  const chequesMatch = groupedCheques.every(c => Number(eodCheques[c.key] || 0) === c.expected_amount);
 
   const handleAddExpense = () => {
     const amt = parseFloat(expAmount);
@@ -105,7 +106,7 @@ export default function EODSummaryScreen({ navigation }: any) {
       await axios.post(API_URL + '/dse/eod-sync', payload);
       setSynced(true);
       setTimeout(() => {
-        clearEodData();
+        resetEod();
         navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
       }, 2000);
     } catch (err) {
@@ -131,7 +132,14 @@ export default function EODSummaryScreen({ navigation }: any) {
         <TouchableOpacity onPress={() => step > 1 ? setStep(step - 1) : navigation.goBack()} style={styles.backBtn}>
           <ChevronLeft size={24} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>End of Day (Step {step}/4)</Text>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>End of Day</Text>
+          <View style={styles.stepperContainer}>
+            {[1, 2, 3, 4].map(i => (
+              <View key={i} style={[styles.stepDot, step >= i ? styles.stepDotActive : {}]} />
+            ))}
+          </View>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -257,25 +265,25 @@ export default function EODSummaryScreen({ navigation }: any) {
             ) : (
               <>
                 {groupedCheques.map(c => {
-                  const entered = Number(chequeInputs[c.key] || 0);
+                  const entered = Number(eodCheques[c.key] || 0);
                   const isMatch = entered === c.expected_amount;
-                  const hasInput = !!chequeInputs[c.key];
+                  const hasInput = !!eodCheques[c.key];
 
                   return (
                     <View key={c.key} style={[styles.chequeCard, hasInput && (isMatch ? styles.chequeCardMatch : styles.chequeCardError)]}>
                       <View style={styles.chequeHeader}>
                         <Text style={styles.chequeTitle}>{c.customer_name}</Text>
+                        <Text style={styles.chequeBank}>{c.bank_name}</Text>
                       </View>
-                      <Text style={styles.chequeBank}>{c.bank_name}</Text>
-                      <Text style={styles.chequeDetail}>No: {c.cheque_no} • {c.cheque_date}</Text>
-                      <Text style={styles.chequeDetail}>For invoices: {c.invoices.join(', ')}</Text>
+                      <Text style={styles.chequeDetail}>No: {c.cheque_no}</Text>
+                      <Text style={styles.chequeDetail}>Date: {c.cheque_date}</Text>
                       
                       <View style={styles.chequeInputRow}>
                         <Text style={styles.chequeInputLabel}>Amount on Cheque (₹)</Text>
                         <TextInput
                           style={styles.chequeInput}
-                          value={chequeInputs[c.key] || ''}
-                          onChangeText={v => setChequeInputs(prev => ({ ...prev, [c.key]: v }))}
+                          value={eodCheques[c.key] || ''}
+                          onChangeText={v => setEodCheque(c.key, v)}
                           keyboardType="numeric"
                           placeholder="0"
                         />
@@ -400,7 +408,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
   header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
   backBtn: { marginRight: 12, marginLeft: -4 },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#111827' },
+  headerTitleContainer: { flex: 1, flexDirection: 'column' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
+  stepperContainer: { flexDirection: 'row', gap: 4, marginTop: 4 },
+  stepDot: { height: 4, width: 20, borderRadius: 2, backgroundColor: '#e5e7eb' },
+  stepDotActive: { backgroundColor: '#2f7f74' },
   content: { padding: 16, paddingBottom: 40 },
   stepContent: { flex: 1 },
   stepTitle: { fontSize: 22, fontWeight: 'bold', color: '#111827', marginBottom: 4 },

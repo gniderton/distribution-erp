@@ -89,6 +89,8 @@ const DEFAULT_DENOMS: Denominations = {
   note_50: 0, note_20: 0, note_10: 0, coins: 0,
 }
 
+export type ThemeType = 'light' | 'dark' | 'glass';
+
 interface AppState {
   currentUser: User | null
   selectedCustomer: Customer | null
@@ -102,6 +104,9 @@ interface AppState {
   pendingPayments: PendingPayment[]
   expenses: Expense[]
   denominations: Denominations
+  eodCheques: Record<string, string>
+  activeTheme: ThemeType
+  lastClearTimestamp: number | null
 
   // Actions
   setUser: (user: User | null) => void
@@ -120,12 +125,15 @@ interface AppState {
   addExpense: (expense: Expense) => void
   removeExpense: (id: number) => void
   setDenom: (key: keyof Denominations, value: number) => void
+  setEodCheque: (key: string, value: string) => void
+  setActiveTheme: (theme: ThemeType) => void
+  checkAndAutoClear: () => void
   resetEod: () => void
 }
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       currentUser: null,
       selectedCustomer: null,
       cart: {},
@@ -138,6 +146,9 @@ export const useAppStore = create<AppState>()(
       pendingPayments: [],
       expenses: [],
       denominations: DEFAULT_DENOMS,
+      eodCheques: {},
+      activeTheme: 'light',
+      lastClearTimestamp: null,
 
       setUser: (user) => set({ currentUser: user }),
       setSelectedCustomer: (customer) => set({ selectedCustomer: customer }),
@@ -164,16 +175,40 @@ export const useAppStore = create<AppState>()(
       removePayment: (uid) => set((state) => ({ pendingPayments: state.pendingPayments.filter(p => p.uid !== uid) })),
       
       addExpense: (expense) => set((state) => ({ expenses: [...state.expenses, expense] })),
-      removeExpense: (id) => set((state) => ({ expenses: state.expenses.filter(e => e.id !== id) })),
+      removeExpense: (id) => set((state) => ({ expenses: state.expenses.filter(e => e.id !== id) }) ),
       
       setDenom: (key, value) => set((state) => ({ denominations: { ...state.denominations, [key]: value } })),
+      setEodCheque: (key, value) => set((state) => ({ eodCheques: { ...state.eodCheques, [key]: value } })),
+      setActiveTheme: (theme) => set({ activeTheme: theme }),
       
+      checkAndAutoClear: () => {
+        const state = get();
+        const now = new Date();
+        const currentHour = now.getHours();
+        
+        // Only trigger auto-clear if it's 8 AM or later
+        if (currentHour >= 8) {
+          const today8AM = new Date();
+          today8AM.setHours(8, 0, 0, 0);
+          
+          const lastClear = state.lastClearTimestamp || 0;
+          
+          // If we haven't cleared since 8 AM today, wipe memory
+          if (lastClear < today8AM.getTime()) {
+            state.resetEod();
+            set({ lastClearTimestamp: Date.now() });
+          }
+        }
+      },
+
       resetEod: () => set({
         cart: {},
         pendingOrders: [],
         pendingPayments: [],
         expenses: [],
-        denominations: DEFAULT_DENOMS
+        denominations: DEFAULT_DENOMS,
+        eodCheques: {},
+        lastClearTimestamp: Date.now()
       })
     }),
     {
@@ -184,7 +219,9 @@ export const useAppStore = create<AppState>()(
         pendingPayments: state.pendingPayments,
         expenses: state.expenses,
         denominations: state.denominations,
-        // currentUser: state.currentUser // Uncomment if we want them to stay logged in
+        eodCheques: state.eodCheques,
+        activeTheme: state.activeTheme,
+        lastClearTimestamp: state.lastClearTimestamp
       }),
     }
   )

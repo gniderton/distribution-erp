@@ -28,6 +28,11 @@ const queryClient = new QueryClient();
 
 export default function App() {
   const currentUser = useAppStore(state => state.currentUser);
+  const checkAndAutoClear = useAppStore(state => state.checkAndAutoClear);
+
+  React.useEffect(() => {
+    checkAndAutoClear();
+  }, [checkAndAutoClear]);
 
   return (
     <SafeAreaProvider>
