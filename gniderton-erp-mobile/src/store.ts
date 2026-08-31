@@ -112,6 +112,7 @@ interface AppState {
   setUser: (user: User | null) => void
   setSelectedCustomer: (customer: Customer | null) => void
   setCartItem: (productId: string, qty: number) => void
+  setCart: (cart: Record<string, number>) => void
   clearCart: () => void
   setBrandFilter: (brand: Brand | null) => void
   setSelectedInvoice: (invoice: SelectedInvoice | null) => void
@@ -159,6 +160,7 @@ export const useAppStore = create<AppState>()(
         else next[productId] = qty
         return { cart: next }
       }),
+      setCart: (cart) => set({ cart }),
       clearCart: () => set({ cart: {} }),
       
       setBrandFilter: (brand) => set({ brandFilter: brand }),
