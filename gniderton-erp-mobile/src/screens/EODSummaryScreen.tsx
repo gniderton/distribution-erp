@@ -107,7 +107,11 @@ export default function EODSummaryScreen({ navigation }: any) {
     try {
       const payload = { 
         orders: pendingOrders, 
-        payments: pendingPayments, 
+        payments: pendingPayments.map(p => ({
+          ...p,
+          offline_id: p.uid,
+          transaction_ref: p.reference
+        })),
         expenses, 
         denominations: {
           500: denominations.note_500,
