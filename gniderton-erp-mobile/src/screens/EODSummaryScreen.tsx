@@ -105,7 +105,23 @@ export default function EODSummaryScreen({ navigation }: any) {
     }
     setSyncing(true);
     try {
-      const payload = { pendingOrders, pendingPayments, expenses, denominations, dse_id: currentUser?.id };
+      const payload = { 
+        orders: pendingOrders, 
+        payments: pendingPayments, 
+        expenses, 
+        denominations: {
+          500: denominations.note_500,
+          200: denominations.note_200,
+          100: denominations.note_100,
+          50: denominations.note_50,
+          20: denominations.note_20,
+          10: denominations.note_10,
+          coins: denominations.coins,
+          total: denomTotal
+        }, 
+        dse_id: currentUser?.id,
+        date: new Date().toISOString().split('T')[0]
+      };
       await axios.post(API_URL + '/dse/eod-sync', payload);
       setSynced(true);
       setTimeout(() => {
