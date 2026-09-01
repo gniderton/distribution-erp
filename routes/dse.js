@@ -147,6 +147,13 @@ router.post('/eod-sync', async (req, res) => {
 
         // --- 1B. Process Payments (UPDATED for Allocation System) ---
         for (const pay of payments) {
+            // Normalize payment mode for database constraint
+            let normalizedMode = pay.mode;
+            if (normalizedMode === 'CASH') normalizedMode = 'Cash';
+            if (normalizedMode === 'CHEQUE') normalizedMode = 'Cheque';
+            // UPI and NEFT are already supported directly in constraint but in uppercase?
+            // Wait, constraint says 'UPI', 'NEFT' (uppercase). So they are fine.
+
             // Check for duplicate using offline_id
             if (pay.offline_id) {
                 const dupCheck = await client.query(
@@ -193,7 +200,7 @@ router.post('/eod-sync', async (req, res) => {
                     pay.customer_id,
                     dse_id,
                     pay.amount,
-                    pay.mode,
+                    normalizedMode,
                     date,
                     pay.transaction_ref || null,
                     pay.bank_name || null,
