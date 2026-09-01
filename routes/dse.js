@@ -43,15 +43,20 @@ router.post('/eod-sync', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        const {
+        let {
             dse_id,
             date,
             orders = [],
             payments = [],
             expenses = [],
             denominations = {}, // Obj { note_500: 10, total: 5000 }
-            sync_source = 'Standard' // 🚀 NEW: Default to Standard, but allow 'MANUAL_IMPORT'
+            sync_source = 'Standard' // ✨ NEW: Default to Standard, but allow 'MANUAL_IMPORT'
         } = req.body;
+
+        // Backward compatibility for old app versions missing date
+        if (!date) {
+            date = new Date().toISOString().split('T')[0];
+        }
 
         // --- 0. Create Master Sync Log ---
         const summary = {
@@ -258,9 +263,15 @@ router.post('/eod-sync', async (req, res) => {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         `, [
             dse_id, date,
-            denominations[500] || 0, denominations[200] || 0, denominations[100] || 0,
-            denominations[50] || 0, denominations[20] || 0, denominations[10] || 0,
-            denominations.coins || 0, denominations.total || 0, syncId, reportId
+            denominations[500] ?? denominations.note_500 ?? 0, 
+            denominations[200] ?? denominations.note_200 ?? 0, 
+            denominations[100] ?? denominations.note_100 ?? 0,
+            denominations[50] ?? denominations.note_50 ?? 0, 
+            denominations[20] ?? denominations.note_20 ?? 0, 
+            denominations[10] ?? denominations.note_10 ?? 0,
+            denominations.coins ?? 0, 
+            denominations.total ?? 0, 
+            syncId, reportId
         ]);
 
         // --- 4. Finalize Daily Sales Report Totals (Smart Summary Logic) ---
