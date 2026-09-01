@@ -13,6 +13,7 @@
     "expo-application": "~5.9.1",
     "expo-blur": "~13.0.3",
     "expo-device": "~6.0.2",
+    "expo-location": "~17.0.1",
     "expo-splash-screen": "~0.27.7",
     "expo-status-bar": "~1.12.1",
     "lucide-react-native": "^1.34.0",

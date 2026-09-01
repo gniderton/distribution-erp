@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, CheckCircle } from 'lucide-react-native';
 import { useAppStore, PendingOrder } from '../store';
 import { useTheme } from '../theme';
+import * as Location from 'expo-location';
 
 function genOfflineId(code: string) {
   const ts = new Date();
@@ -16,7 +17,10 @@ function genOfflineId(code: string) {
 export default function CartSummaryScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = getStyles(theme);
-  const { currentUser, selectedCustomer, cart, products, addOrder } = useAppStore();
+  const { currentUser, selectedCustomer, cart, products, addOrder, setCart } = useAppStore();
+
+  const [saving, setSaving] = useState(false);
+  const hasSaved = React.useRef(false);
 
   const cartItems = useMemo(() => {
     return Object.entries(cart)
@@ -37,10 +41,22 @@ export default function CartSummaryScreen({ navigation }: any) {
 
   const total = useMemo(() => cartItems.reduce((s, i) => s + i.qty * i.rate, 0), [cartItems]);
 
-  const hasSaved = React.useRef(false);
+  const handleSave = async () => {
+    if (!currentUser || !selectedCustomer || cartItems.length === 0 || saving) return;
+    setSaving(true);
 
-  const handleSave = () => {
-    if (!currentUser || !selectedCustomer || cartItems.length === 0) return;
+    let lat = 0;
+    let lng = 0;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({});
+        lat = location.coords.latitude;
+        lng = location.coords.longitude;
+      }
+    } catch (err) {
+      console.log('Location fetch failed:', err);
+    }
 
     const items = cartItems.map(i => ({
       product_id: i.id,
@@ -58,19 +74,18 @@ export default function CartSummaryScreen({ navigation }: any) {
       dse_id: currentUser.id,
       order_date: new Date().toISOString().split('T')[0],
       items,
+      latitude: lat,
+      longitude: lng,
     };
 
     hasSaved.current = true;
     addOrder(order);
+    setCart({});
+    setSaving(false);
     
-    // Replace the current stack properly so we don't end up with broken back buttons
-    navigation.reset({
-      index: 1,
-      routes: [
-        { name: 'Home' },
-        { name: 'CustomerHub' }
-      ]
-    });
+    Alert.alert('Success', 'Order saved offline!', [
+      { text: 'OK', onPress: () => navigation.navigate('Home') }
+    ]);
   };
 
   if (cartItems.length === 0) {

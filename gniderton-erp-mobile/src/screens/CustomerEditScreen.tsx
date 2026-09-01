@@ -5,6 +5,7 @@ import { ChevronLeft, Send, MapPin } from 'lucide-react-native';
 import { useTheme } from '../theme';
 import { useAppStore } from '../store';
 import axios from 'axios';
+import * as Location from 'expo-location';
 import { API_URL } from '../api/config';
 
 export default function CustomerEditScreen({ navigation }: any) {
@@ -38,14 +39,27 @@ export default function CustomerEditScreen({ navigation }: any) {
     setLoading(true);
 
     try {
+      let lat = 0;
+      let lng = 0;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const location = await Location.getCurrentPositionAsync({});
+          lat = location.coords.latitude;
+          lng = location.coords.longitude;
+        }
+      } catch (err) {
+        console.log('Location fetch failed:', err);
+      }
+
       await axios.post(`${API_URL}/verify-requests`, {
         customer_id: selectedCustomer.id,
         dse_id: currentUser.id,
         name: name.trim(),
         phone: phone.trim(),
         gstin: gstin.trim().toUpperCase() || undefined,
-        latitude: 0,
-        longitude: 0,
+        latitude: lat,
+        longitude: lng,
       });
       
       setName('');

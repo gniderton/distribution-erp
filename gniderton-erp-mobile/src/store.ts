@@ -42,6 +42,8 @@ export interface PendingOrder {
   dse_id: string
   order_date: string
   items: any[]
+  latitude?: number
+  longitude?: number
 }
 
 export interface PendingPayment {
@@ -54,10 +56,14 @@ export interface PendingPayment {
   invoice_no: string
   cheque_no?: string
   cheque_date?: string
+  reference?: string
   bank_name?: string
   deposit_bank?: string
   ai_confidence?: number
+  is_advance?: boolean
   timestamp: string
+  latitude?: number
+  longitude?: number
 }
 
 export interface Expense {

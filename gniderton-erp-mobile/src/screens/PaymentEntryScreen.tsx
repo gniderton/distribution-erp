@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { API_URL } from '../api/config';
 import { useTheme } from '../theme';
+import * as Location from 'expo-location';
 
 const MODES = ['CASH', 'CHEQUE', 'UPI', 'NEFT'];
 
@@ -63,12 +64,29 @@ export default function PaymentEntryScreen({ navigation }: any) {
     (isCheque ? !!(reference.trim() && bankName.trim() && chequeDate.trim()) : true) &&
     (isOnline ? !!reference.trim() : true);
 
-  const handleSave = () => {
-    if (!canSave) return;
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
     
     if (!isAdvance && numAmt > remainingBalance + 0.01) {
       Alert.alert('Error', `Amount exceeds remaining balance: ₹${remainingBalance.toFixed(2)}`);
+      setSaving(false);
       return;
+    }
+
+    let lat = 0;
+    let lng = 0;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({});
+        lat = location.coords.latitude;
+        lng = location.coords.longitude;
+      }
+    } catch (err) {
+      console.log('Location fetch failed:', err);
     }
 
     const payment = {
@@ -84,10 +102,13 @@ export default function PaymentEntryScreen({ navigation }: any) {
       reference: reference.trim(),
       bank_name: bankName.trim(),
       cheque_date: chequeDate.trim(),
-      is_advance: isAdvance
+      is_advance: isAdvance,
+      latitude: lat,
+      longitude: lng,
     };
 
     addPayment(payment);
+    setSaving(false);
     Alert.alert('Success', 'Payment saved locally!', [
       { text: 'OK', onPress: () => navigation.navigate('CustomerHub') }
     ]);
