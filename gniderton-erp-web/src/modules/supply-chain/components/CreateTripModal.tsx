@@ -116,32 +116,38 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
         return;
       }
 
-      const API_KEY = "5b3ce3597851110001cf62489812f22b7a9f4c399a9a3b680d2822a9"; // Temporary test key
-      
-      const payload = {
-        vehicles: [{
-          id: 1,
-          profile: "driving-car",
-          start: [Number(warehouse.warehouse_lng), Number(warehouse.warehouse_lat)],
-          end: [Number(warehouse.warehouse_lng), Number(warehouse.warehouse_lat)]
-        }],
-        jobs: validJobs.map((inv: any) => ({
-          id: inv.id,
-          location: [Number(inv.longitude), Number(inv.latitude)]
-        }))
+      // Local fallback: Greedy Nearest Neighbor (TSP) since free API key doesn't allow /optimization
+      const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       };
 
-      const res = await axios.post("https://api.openrouteservice.org/optimization", payload, {
-        headers: {
-          'Authorization': API_KEY,
-          'Content-Type': 'application/json'
-        }
-      });
+      let currentLoc = [Number(warehouse.warehouse_lat), Number(warehouse.warehouse_lng)];
+      let remainingJobs = [...validJobs];
+      const orderedJobIds: number[] = [];
 
-      const steps = res.data.routes[0].steps;
-      const orderedJobIds = steps.filter((s: any) => s.type === 'job').map((s: any) => s.job);
+      while (remainingJobs.length > 0) {
+        let nearestIdx = 0;
+        let minDistance = Infinity;
+        for (let i = 0; i < remainingJobs.length; i++) {
+          const dist = getDistance(currentLoc[0], currentLoc[1], Number(remainingJobs[i].latitude), Number(remainingJobs[i].longitude));
+          if (dist < minDistance) {
+            minDistance = dist;
+            nearestIdx = i;
+          }
+        }
+        const nearest = remainingJobs[nearestIdx];
+        orderedJobIds.push(nearest.id);
+        currentLoc = [Number(nearest.latitude), Number(nearest.longitude)];
+        remainingJobs.splice(nearestIdx, 1);
+      }
+
       const unmappedIds = selectedInvoiceIds.filter(id => !orderedJobIds.includes(id));
-      
       setSelectedInvoiceIds([...orderedJobIds, ...unmappedIds]);
     } catch (err) {
       console.error(err);
