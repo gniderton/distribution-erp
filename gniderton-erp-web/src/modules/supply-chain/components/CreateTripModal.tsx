@@ -94,10 +94,7 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
 
 
   const handleToggleInvoice = (id: number) => {
-    const newSet = new Set(selectedInvoiceIds)
-    if (newSet.has(id)) newSet.delete(id)
-    else newSet.add(id)
-    setSelectedInvoiceIds(newSet)
+    setSelectedInvoiceIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
   const handleOptimizeRoute = async () => {
@@ -302,15 +299,13 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
               size="sm"
               onClick={() => {
                 const isAllSelected = filteredInvoices.every((i: any) => selectedInvoiceIds.includes(i.id))
-                const newSet = new Set(selectedInvoiceIds)
                 if (isAllSelected && filteredInvoices.length > 0) {
-                  // Deselect all filtered
-                  filteredInvoices.forEach((i: any) => newSet.delete(i.id))
+                  const filteredIds = filteredInvoices.map((i: any) => i.id)
+                  setSelectedInvoiceIds(prev => prev.filter(id => !filteredIds.includes(id)))
                 } else {
-                  // Select all filtered
-                  filteredInvoices.forEach((i: any) => newSet.add(i.id))
+                  const toAdd = filteredInvoices.map((i: any) => i.id).filter((id: number) => !selectedInvoiceIds.includes(id))
+                  setSelectedInvoiceIds(prev => [...prev, ...toAdd])
                 }
-                setSelectedInvoiceIds(newSet)
               }}
             >
               {filteredInvoices.length > 0 && filteredInvoices.every((i: any) => selectedInvoiceIds.includes(i.id)) 
