@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, CheckCircle, RefreshCw, PlusCircle, Trash2, ArrowRight } from 'lucide-react-native';
+import { ChevronLeft, CheckCircle, RefreshCw, PlusCircle, Trash2, ArrowRight, Download } from 'lucide-react-native';
 import { useAppStore } from '../store';
 import axios from 'axios';
 import { API_URL } from '../api/config';
 import { useTheme } from '../theme';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 const EXPENSE_TYPES = ['Petrol', 'Food', 'Drinks', 'Auto / Taxi', 'Other'];
 const DENOM_ROWS = [
@@ -136,6 +138,31 @@ export default function EODSummaryScreen({ navigation }: any) {
       Alert.alert('Sync Failed', 'Please check your connection and try again.');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    try {
+      const payload = { 
+        orders: pendingOrders, 
+        payments: pendingPayments,
+        expenses, 
+        denominations, 
+        dse_id: currentUser?.id,
+        date: new Date().toISOString()
+      };
+      const jsonString = JSON.stringify(payload, null, 2);
+      const fileUri = FileSystem.documentDirectory + 'gniderton_offline_data.json';
+      await FileSystem.writeAsStringAsync(fileUri, jsonString, { encoding: FileSystem.EncodingType.UTF8 });
+      
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(fileUri);
+      } else {
+        Alert.alert('Sharing Unavailable', 'Sharing is not available on this device.');
+      }
+    } catch (e) {
+      Alert.alert('Export Failed', 'Could not export data.');
     }
   };
 
@@ -421,6 +448,11 @@ export default function EODSummaryScreen({ navigation }: any) {
               {syncing ? <ActivityIndicator color="#fff" /> : <RefreshCw size={20} color="#fff" style={{ marginRight: 8 }} />}
               <Text style={styles.syncBtnText}>{syncing ? 'Syncing...' : 'Sync to Server'}</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity style={styles.exportBtn} onPress={handleExportData}>
+              <Download size={20} color={theme.textSecondary} style={{ marginRight: 8 }} />
+              <Text style={styles.exportBtnText}>Download Offline Data</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -499,6 +531,9 @@ const getStyles = (theme: any) => StyleSheet.create({
 
   syncBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary, padding: 16, borderRadius: 12 },
   syncBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+
+  exportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginTop: 12 },
+  exportBtnText: { color: theme.textSecondary, fontSize: 16, fontWeight: '600' },
 
   summarySection: { backgroundColor: theme.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border, marginBottom: 16 },
   summarySectionHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
