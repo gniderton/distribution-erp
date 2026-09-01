@@ -108,7 +108,7 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
     try {
       const validJobs = selectedInvoiceIds.map(id => {
         return allInvoices.find((i: any) => i.id === id);
-      }).filter((inv: any) => inv && inv.latitude && inv.longitude);
+      }).filter((inv: any) => inv && inv.latitude != null && inv.longitude != null);
 
       if (validJobs.length === 0) {
         alert("None of the selected invoices have GPS coordinates.");
