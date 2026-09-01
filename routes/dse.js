@@ -178,9 +178,10 @@ router.post('/eod-sync', async (req, res) => {
                     INSERT INTO customer_payments (
                         payment_number, customer_id, collected_by, amount, payment_mode, payment_date, 
                         transaction_ref, bank_name, cheque_date, deposit_bank,
-                        verification_status, offline_id, sync_id, report_id
+                        verification_status, offline_id, sync_id, report_id,
+                        location_lat, location_lng
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Pending', $11, $12, $13)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Pending', $11, $12, $13, $14, $15)
                     RETURNING id
                 `, [
                     payNumber,
@@ -195,7 +196,9 @@ router.post('/eod-sync', async (req, res) => {
                     pay.deposit_bank || null,
                     pay.offline_id || null,
                     syncId,
-                    reportId
+                    reportId,
+                    pay.latitude || null,
+                    pay.longitude || null
                 ]);
 
                 const paymentId = payRes.rows[0].id;
