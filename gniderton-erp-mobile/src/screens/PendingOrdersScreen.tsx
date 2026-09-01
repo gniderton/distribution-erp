@@ -9,7 +9,10 @@ export default function PendingOrdersScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = getStyles(theme);
   const { pendingOrders, removeOrder, setCart, setSelectedCustomer } = useAppStore();
-  const orderTotal = pendingOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+  const orderTotal = pendingOrders.reduce((sum, o) => {
+    const itemSum = (o.items || []).reduce((s, i) => s + (i.amount || (i.qty * i.rate) || 0), 0);
+    return sum + itemSum;
+  }, 0);
 
   const editOrder = (order: any) => {
     setSelectedCustomer({ id: order.customer_id, customer_name: order.customer_name });
