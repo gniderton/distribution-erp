@@ -244,7 +244,7 @@ router.post('/eod-sync', async (req, res) => {
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             `, [
-                dse_id, date, exp.type, exp.amount, exp.description, syncId, reportId,
+                dse_id, date, exp.type, exp.amount, exp.desc || exp.description || null, syncId, reportId,
                 exp.payment_mode || 'Cash', exp.bank_account_id || null
             ]);
             totalExpense += parseFloat(exp.amount || 0);
