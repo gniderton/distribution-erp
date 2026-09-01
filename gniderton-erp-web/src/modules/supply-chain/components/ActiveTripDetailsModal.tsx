@@ -110,9 +110,7 @@ export function ActiveTripDetailsModal({
 
   const tripInfo = manifestData?.trip_info || {}
   
-  const invoices = [...(manifestData?.items || [])].sort((a, b) => 
-    (a.customer_name || '').localeCompare(b.customer_name || '')
-  )
+  const invoices = [...(manifestData?.items || [])]
   const picklist = [...(picklistData?.items || [])].sort((a, b) => 
     (a.product_name || '').localeCompare(b.product_name || '')
   )
@@ -383,16 +381,21 @@ export function ActiveTripDetailsModal({
                 </thead>
                 <tbody className="divide-y divide-border-subtle">
                   {manifestLoading ? (
-                    <tr><td colSpan={5} className="p-4 text-center">Loading...</td></tr>
+                    <tr><td colSpan={6} className="p-4 text-center">Loading...</td></tr>
                   ) : filteredInvoices.length === 0 ? (
-                    <tr><td colSpan={5} className="p-4 text-center text-ink-500">No invoices match your search.</td></tr>
-                  ) : filteredInvoices.map((inv: any) => (
+                    <tr><td colSpan={6} className="p-4 text-center text-ink-500">No invoices match your search.</td></tr>
+                  ) : filteredInvoices.map((inv: any, index: number) => (
                     <React.Fragment key={inv.invoice_id}>
                       <tr 
                         className="hover:bg-surface cursor-pointer transition-colors"
                         onClick={() => toggleManifestRow(inv.invoice_id)}
                       >
-                        <td className="px-4 py-3 font-medium">{inv.customer_name}</td>
+                        <td className="px-4 py-3">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-brand-100 text-brand-700">
+                              Stop {index + 1}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-medium">{inv.customer_name}</td>
                         <td className="px-4 py-3">{inv.invoice_number}</td>
                         <td className="px-4 py-3 text-brand-600 font-mono-figures">
                           <div className="flex items-center justify-between group">
@@ -418,7 +421,7 @@ export function ActiveTripDetailsModal({
                       </tr>
                       {expandedManifest === inv.invoice_id && (
                         <tr>
-                          <td colSpan={5} className="p-0">
+                          <td colSpan={6} className="p-0">
                             <ManifestRowExpanded salesOrderId={inv.sales_order_id} />
                           </td>
                         </tr>
