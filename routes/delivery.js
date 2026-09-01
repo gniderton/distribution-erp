@@ -48,7 +48,7 @@ router.get('/invoices-pool', async (req, res) => {
             SELECT 
                 si.id, si.invoice_number, si.invoice_date, si.grand_total,
                 si.delivery_status,
-                c.customer_name, c.latitude, c.longitude, c.route_sequence,
+                c.customer_name, COALESCE(c.latitude, (SELECT location_lat FROM customer_addresses WHERE customer_id = c.id LIMIT 1)) as latitude, COALESCE(c.longitude, (SELECT location_lng FROM customer_addresses WHERE customer_id = c.id LIMIT 1)) as longitude, c.route_sequence,
                 rt.route_name,
                 dse.full_name as dse_name -- Crucial for sorting
             FROM sales_invoices si
@@ -531,7 +531,7 @@ router.get('/trips/:id/manifest', async (req, res) => {
                 ti.id as trip_invoice_id, si.id as invoice_id, si.sales_order_id, si.invoice_number, si.invoice_date, si.grand_total, si.balance_amount,
                 c.id as customer_id, c.customer_name, 
                 (SELECT address_line1 FROM customer_addresses WHERE customer_id = c.id LIMIT 1) as address,
-                c.latitude, c.longitude, c.customer_phone as phone,
+                COALESCE(c.latitude, (SELECT location_lat FROM customer_addresses WHERE customer_id = c.id LIMIT 1)) as latitude, COALESCE(c.longitude, (SELECT location_lng FROM customer_addresses WHERE customer_id = c.id LIMIT 1)) as longitude, c.customer_phone as phone,
                 ti.delivery_status, so.notes as instructions
             FROM trip_invoices ti
             JOIN sales_invoices si ON ti.invoice_id = si.id
@@ -607,7 +607,7 @@ router.get('/trips/:id/manifest-web', async (req, res) => {
                 ti.id as trip_invoice_id, si.id as invoice_id, si.sales_order_id, si.invoice_number, si.invoice_date, si.grand_total, si.balance_amount, si.eway_bill_number,
                 c.id as customer_id, c.customer_name, 
                 (SELECT address_line1 FROM customer_addresses WHERE customer_id = c.id LIMIT 1) as address,
-                c.latitude, c.longitude, c.customer_phone as phone,
+                COALESCE(c.latitude, (SELECT location_lat FROM customer_addresses WHERE customer_id = c.id LIMIT 1)) as latitude, COALESCE(c.longitude, (SELECT location_lng FROM customer_addresses WHERE customer_id = c.id LIMIT 1)) as longitude, c.customer_phone as phone,
                 ti.delivery_status, so.notes as instructions
             FROM trip_invoices ti
             JOIN sales_invoices si ON ti.invoice_id = si.id
