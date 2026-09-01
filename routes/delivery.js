@@ -65,6 +65,15 @@ router.get('/invoices-pool', async (req, res) => {
     }
 });
 
+router.get('/warehouse-location', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT warehouse_lat, warehouse_lng FROM company_settings LIMIT 1');
+        res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.get('/vehicles', async (req, res) => {
     try {
         const result = await pool.query('SELECT id, vehicle_number, vehicle_type FROM vehicles WHERE is_active = true');
@@ -172,11 +181,12 @@ router.post('/trips', async (req, res) => {
         const tripId = tripRes.rows[0].id;
 
         // Assign Invoices
+        let sequenceNo = 1;
         for (const invId of invoice_ids) {
             await client.query(`
-                INSERT INTO trip_invoices (trip_id, invoice_id, delivery_status)
-                VALUES ($1, $2, 'Pending')
-            `, [tripId, invId]);
+                INSERT INTO trip_invoices (trip_id, invoice_id, delivery_status, sequence_no)
+                VALUES ($1, $2, 'Pending', $3)
+            `, [tripId, invId, sequenceNo++]);
 
             // Update Invoice Status
             await client.query(`
@@ -261,6 +271,14 @@ router.put('/trips/:id', async (req, res) => {
             for (const invId of added) {
                 await client.query("INSERT INTO trip_invoices (trip_id, invoice_id, delivery_status) VALUES ($1, $2, 'Pending')", [id, invId]);
                 await client.query("UPDATE sales_invoices SET delivery_status = 'In Transit' WHERE id = $1", [invId]);
+            }
+
+            // Update sequence_no for all invoices to reflect the new array order
+            for (let i = 0; i < invoice_ids.length; i++) {
+                await client.query(
+                    'UPDATE trip_invoices SET sequence_no = $1 WHERE trip_id = $2 AND invoice_id = $3',
+                    [i + 1, id, invoice_ids[i]]
+                );
             }
         }
 
@@ -520,7 +538,7 @@ router.get('/trips/:id/manifest', async (req, res) => {
             JOIN customers c ON si.customer_id = c.id
             LEFT JOIN sales_orders so ON si.sales_order_id = so.id
             WHERE ti.trip_id = $1
-            ORDER BY c.route_sequence ASC
+            ORDER BY ti.sequence_no ASC NULLS LAST, c.route_sequence ASC
         `, [req.params.id]);
 
         res.json(result.rows);
@@ -596,7 +614,7 @@ router.get('/trips/:id/manifest-web', async (req, res) => {
             JOIN customers c ON si.customer_id = c.id
             LEFT JOIN sales_orders so ON si.sales_order_id = so.id
             WHERE ti.trip_id = $1
-            ORDER BY c.route_sequence ASC
+            ORDER BY ti.sequence_no ASC NULLS LAST, c.route_sequence ASC
         `, [req.params.id]);
 
         const tripInfoRes = await pool.query(`

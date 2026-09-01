@@ -3,7 +3,9 @@ import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { useTeams, useInvoicesPool, useCreateTrip, useUpdateTrip, useTripManifest } from '../hooks'
 import { format } from 'date-fns'
-import { FileText, IndianRupee, Store } from 'lucide-react'
+import { FileText, IndianRupee, Store, Sparkles } from 'lucide-react'
+import { api } from '@/lib/axios'
+import axios from 'axios'
 import { PickupAtOfficeModal } from './PickupAtOfficeModal'
 
 export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, onClose: () => void, editTripId?: number | null }) {
@@ -15,13 +17,19 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
   const updateTripMutation = useUpdateTrip()
   
   const [selectedTeamId, setSelectedTeamId] = useState<string>('')
-  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<number>>(new Set())
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<number[]>([])
   const [pickupInvoice, setPickupInvoice] = useState<any | null>(null)
+  const [isOptimizing, setIsOptimizing] = useState(false)
+  const [warehouse, setWarehouse] = useState<{warehouse_lat: number, warehouse_lng: number}|null>(null)
+
+  useEffect(() => {
+    api.get('/api/delivery/warehouse-location').then(res => setWarehouse(res.data)).catch(console.error)
+  }, [])
 
   useEffect(() => {
     if (editTripId && manifestData && open) {
       setSelectedTeamId(String(manifestData.trip_info.team_id || ''))
-      setSelectedInvoiceIds(new Set(manifestData.items.map((i: any) => i.invoice_id)))
+      setSelectedInvoiceIds(manifestData.items.map((i: any) => i.invoice_id))
     }
   }, [editTripId, manifestData, open])
 
@@ -72,11 +80,11 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
   }, [allInvoices, dseFilter, routeFilter])
 
   // Stats
-  const selectedCount = selectedInvoiceIds.size
+  const selectedCount = selectedInvoiceIds.length
   const selectedValue = useMemo(() => {
     if (!allInvoices) return 0
     return allInvoices
-      .filter((i: any) => selectedInvoiceIds.has(i.id))
+      .filter((i: any) => selectedInvoiceIds.includes(i.id))
       .reduce((sum: number, i: any) => sum + Number(i.grand_total), 0)
   }, [allInvoices, selectedInvoiceIds])
 
@@ -92,8 +100,62 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
     setSelectedInvoiceIds(newSet)
   }
 
+  const handleOptimizeRoute = async () => {
+    if (selectedInvoiceIds.length === 0) return;
+    if (!warehouse || !warehouse.warehouse_lat || !warehouse.warehouse_lng) {
+      alert("Warehouse location not configured.");
+      return;
+    }
+
+    setIsOptimizing(true);
+    try {
+      const validJobs = selectedInvoiceIds.map(id => {
+        return allInvoices.find((i: any) => i.id === id);
+      }).filter((inv: any) => inv && inv.latitude && inv.longitude);
+
+      if (validJobs.length === 0) {
+        alert("None of the selected invoices have GPS coordinates.");
+        setIsOptimizing(false);
+        return;
+      }
+
+      const API_KEY = "5b3ce3597851110001cf62489812f22b7a9f4c399a9a3b680d2822a9"; // Temporary test key
+      
+      const payload = {
+        vehicles: [{
+          id: 1,
+          profile: "driving-car",
+          start: [Number(warehouse.warehouse_lng), Number(warehouse.warehouse_lat)],
+          end: [Number(warehouse.warehouse_lng), Number(warehouse.warehouse_lat)]
+        }],
+        jobs: validJobs.map((inv: any) => ({
+          id: inv.id,
+          location: [Number(inv.longitude), Number(inv.latitude)]
+        }))
+      };
+
+      const res = await axios.post("https://api.openrouteservice.org/optimization", payload, {
+        headers: {
+          'Authorization': API_KEY,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const steps = res.data.routes[0].steps;
+      const orderedJobIds = steps.filter((s: any) => s.type === 'job').map((s: any) => s.job);
+      const unmappedIds = selectedInvoiceIds.filter(id => !orderedJobIds.includes(id));
+      
+      setSelectedInvoiceIds([...orderedJobIds, ...unmappedIds]);
+    } catch (err) {
+      console.error(err);
+      alert("Route optimization failed. Ensure locations are valid.");
+    } finally {
+      setIsOptimizing(false);
+    }
+  }
+
   const handleSave = () => {
-    if (!selectedTeamId || selectedInvoiceIds.size === 0) return
+    if (!selectedTeamId || selectedInvoiceIds.length === 0) return
 
     const team = teamsData?.find((t: any) => String(t.id) === selectedTeamId)
     
@@ -101,14 +163,14 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
       team_id: team?.id || null,
       driver_id: team?.driver_id,
       vehicle_number: team?.vehicle_number,
-      invoice_ids: Array.from(selectedInvoiceIds),
+      invoice_ids: selectedInvoiceIds,
       created_by: 1 // Default Admin ID for now
     }
 
     const onSuccess = () => {
       if (!editTripId) {
         setSelectedTeamId('')
-        setSelectedInvoiceIds(new Set())
+        setSelectedInvoiceIds([])
         setDseFilter('')
         setRouteFilter('')
       }
@@ -135,7 +197,7 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
         <Button 
           onClick={handleSave}
           loading={createTripMutation.isPending || updateTripMutation.isPending}
-          disabled={!selectedTeamId || selectedInvoiceIds.size === 0}
+          disabled={!selectedTeamId || selectedInvoiceIds.length === 0}
         >
           {editTripId ? 'Save Changes' : 'Dispatch Trip'}
         </Button>
@@ -219,14 +281,27 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
         {/* Invoice Selection */}
         <div className="flex flex-col flex-1 min-h-0 space-y-2">
           <div className="flex items-center justify-between shrink-0">
-            <label className="text-sm font-medium text-ink-700">
-              Select Invoices
-            </label>
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-ink-700">
+                Select Invoices
+              </label>
+              <Button 
+                variant="secondary" 
+                size="sm"
+                className="text-xs h-7 px-2 border-brand-200 text-brand-700 bg-brand-50 hover:bg-brand-100"
+                onClick={handleOptimizeRoute}
+                loading={isOptimizing}
+                disabled={selectedInvoiceIds.length === 0}
+              >
+                <Sparkles size={12} className="mr-1" />
+                Optimize Sequence
+              </Button>
+            </div>
             <Button 
               variant="secondary" 
               size="sm"
               onClick={() => {
-                const isAllSelected = filteredInvoices.every((i: any) => selectedInvoiceIds.has(i.id))
+                const isAllSelected = filteredInvoices.every((i: any) => selectedInvoiceIds.includes(i.id))
                 const newSet = new Set(selectedInvoiceIds)
                 if (isAllSelected && filteredInvoices.length > 0) {
                   // Deselect all filtered
@@ -238,7 +313,7 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
                 setSelectedInvoiceIds(newSet)
               }}
             >
-              {filteredInvoices.length > 0 && filteredInvoices.every((i: any) => selectedInvoiceIds.has(i.id)) 
+              {filteredInvoices.length > 0 && filteredInvoices.every((i: any) => selectedInvoiceIds.includes(i.id)) 
                 ? 'Deselect Filtered' 
                 : 'Select All Filtered'}
             </Button>
@@ -267,19 +342,26 @@ export function CreateTripModal({ open, onClose, editTripId }: { open: boolean, 
                     filteredInvoices.map((inv: any) => (
                       <tr 
                         key={inv.id} 
-                        className={`hover:bg-surface cursor-pointer ${selectedInvoiceIds.has(inv.id) ? 'bg-brand-50' : ''}`}
+                        className={`hover:bg-surface cursor-pointer ${selectedInvoiceIds.includes(inv.id) ? 'bg-brand-50' : ''}`}
                         onClick={() => handleToggleInvoice(inv.id)}
                       >
                         <td className="px-4 py-3">
                           <input 
                             type="checkbox" 
                             className="rounded border-border-subtle text-brand-600 focus:ring-brand-500"
-                            checked={selectedInvoiceIds.has(inv.id)}
+                            checked={selectedInvoiceIds.includes(inv.id)}
                             readOnly
                           />
                         </td>
                         <td className="px-4 py-3 font-medium">
-                          <div>{inv.invoice_number}</div>
+                          <div className="flex items-center gap-2">
+                            {selectedInvoiceIds.includes(inv.id) && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-brand-100 text-brand-700">
+                                Stop {selectedInvoiceIds.indexOf(inv.id) + 1}
+                              </span>
+                            )}
+                            {inv.invoice_number}
+                          </div>
                           <div className="text-xs text-ink-500 font-normal">{format(new Date(inv.invoice_date), 'MMM d, yyyy')}</div>
                         </td>
                         <td className="px-4 py-3">{inv.customer_name}</td>
