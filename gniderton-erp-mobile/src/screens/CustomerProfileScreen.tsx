@@ -26,7 +26,7 @@ export default function CustomerProfileScreen({ navigation }: any) {
   }
 
   const c = selectedCustomer;
-  const phoneNum = c.whatsapp_number ?? c.contact_primary;
+  const phoneNum = c.customer_phone || c.contact_primary || c.whatsapp_number;
   const hasPhone = !!phoneNum;
   
   const mapsUrl = c.latitude && c.longitude
@@ -46,13 +46,13 @@ export default function CustomerProfileScreen({ navigation }: any) {
         
         {/* Status Badge */}
         <View style={styles.badgeContainer}>
-          {c.latitude && c.longitude ? (
+          {c.is_verified || c.verification_status === 'Verified' ? (
             <View style={[styles.badge, { backgroundColor: '#dcfce7', borderColor: '#bbf7d0' }]}>
-              <Text style={[styles.badgeText, { color: '#166534' }]}>🟢 Verified Location</Text>
+              <Text style={[styles.badgeText, { color: '#166534' }]}>🟢 Verified</Text>
             </View>
           ) : (
             <View style={[styles.badge, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
-              <Text style={[styles.badgeText, { color: '#92400e' }]}>🟡 Pending Verification</Text>
+              <Text style={[styles.badgeText, { color: '#92400e' }]}>🟡 {c.verification_status || 'Pending Verification'}</Text>
             </View>
           )}
         </View>
@@ -105,7 +105,7 @@ export default function CustomerProfileScreen({ navigation }: any) {
           <Pencil size={20} color={theme.textSecondary} />
           <View style={styles.mainBtnTextContainer}>
             <Text style={styles.mainBtnTitle}>Request Edit / Update</Text>
-            <Text style={styles.mainBtnSub}>Pending admin approval</Text>
+            <Text style={styles.mainBtnSub}>Requires admin approval</Text>
           </View>
         </TouchableOpacity>
 

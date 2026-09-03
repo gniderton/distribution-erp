@@ -148,7 +148,7 @@ export default function HomeScreen({ navigation }: any) {
                 <View style={styles.customerInfo}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
                     <Text style={styles.customerName}>{item.customer_name}</Text>
-                    {item.latitude && item.longitude ? (
+                    {item.is_verified || item.verification_status === 'Verified' ? (
                       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' }} />
                     ) : (
                       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#f59e0b' }} />
@@ -162,8 +162,8 @@ export default function HomeScreen({ navigation }: any) {
                       <MapPin size={18} color={theme.isDark ? '#60a5fa' : '#1d4ed8'} />
                     </TouchableOpacity>
                   )}
-                  {item.contact_primary && (
-                    <TouchableOpacity onPress={() => Linking.openURL('tel:' + item.contact_primary)} style={{ padding: 8, backgroundColor: theme.isDark ? '#14532d' : '#f0fdf4', borderRadius: 8 }}>
+                  {(item.customer_phone || item.contact_primary) && (
+                    <TouchableOpacity onPress={() => Linking.openURL('tel:' + (item.customer_phone || item.contact_primary))} style={{ padding: 8, backgroundColor: theme.isDark ? '#14532d' : '#f0fdf4', borderRadius: 8 }}>
                       <Phone size={18} color={theme.isDark ? '#4ade80' : '#15803d'} />
                     </TouchableOpacity>
                   )}
