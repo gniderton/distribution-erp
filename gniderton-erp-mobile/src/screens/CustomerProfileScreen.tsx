@@ -29,8 +29,10 @@ export default function CustomerProfileScreen({ navigation }: any) {
   const phoneNum = c.customer_phone || c.contact_primary || c.whatsapp_number;
   const hasPhone = !!phoneNum;
   
-  const mapsUrl = c.latitude && c.longitude
-    ? `https://www.google.com/maps/search/?api=1&query=${c.latitude},${c.longitude}`
+  const cLat = c.latitude || c.location_lat;
+  const cLng = c.longitude || c.location_lng;
+  const mapsUrl = cLat && cLng
+    ? `https://www.google.com/maps/search/?api=1&query=${cLat},${cLng}`
     : null;
 
   return (

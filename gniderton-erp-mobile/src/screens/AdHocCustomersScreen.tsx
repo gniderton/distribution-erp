@@ -97,10 +97,10 @@ export default function AdHocCustomersScreen({ navigation }: any) {
                     <Phone size={18} color={theme.primary} />
                   </TouchableOpacity>
                 )}
-                {item.latitude && item.longitude && (
+                {(item.latitude || item.location_lat) && (item.longitude || item.location_lng) && (
                   <TouchableOpacity 
                     style={styles.actionBtn}
-                    onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`)}
+                    onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.latitude || item.location_lat},${item.longitude || item.location_lng}`)}
                   >
                     <MapPin size={18} color={theme.textSecondary} />
                   </TouchableOpacity>

@@ -21,18 +21,43 @@ export default function CartSummaryScreen({ navigation }: any) {
   const { currentUser, selectedCustomer, cart, products, addOrder, setCart } = useAppStore();
 
   const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
   const hasSaved = React.useRef(false);
 
   const [showReasonModal, setShowReasonModal] = useState(false);
   const [remoteReason, setRemoteReason] = useState('');
+  const [otherReason, setOtherReason] = useState('');
   const [currentLat, setCurrentLat] = useState(0);
   const [currentLng, setCurrentLng] = useState(0);
 
+  const REASON_OPTIONS = ['Phone Order', 'Customer not at shop', 'Shop Closed', 'Other'];
+
+  const applyPricing = (prods: any[], customer: any) => {
+    if (!Array.isArray(prods)) return [];
+    if (!customer) return prods.map(p => ({ ...p, current_price: p?.dealer_rate || p?.mrp }));
+    const col = customer.default_price_col ?? 'dealer_rate';
+    let exceptions = customer.pricing_ex ?? [];
+    if (typeof exceptions === 'string') {
+      try { exceptions = JSON.parse(exceptions); } catch { exceptions = []; }
+    }
+    if (!Array.isArray(exceptions)) exceptions = [];
+
+    return prods.map(p => {
+      let rateCol = col;
+      const ex = exceptions.find((e: any) => e.brand_id === p?.brand_id);
+      if (ex) rateCol = ex.price_column;
+      const price = Number(p?.[rateCol]) > 0 ? Number(p?.[rateCol]) : (Number(p?.dealer_rate) || Number(p?.mrp));
+      return { ...p, current_price: price };
+    });
+  };
+
   const cartItems = useMemo(() => {
+    const pricedProducts = applyPricing(products, selectedCustomer);
+    
     return Object.entries(cart)
       .filter(([_, qty]) => qty > 0)
       .map(([id, qty]) => {
-        const product = products.find(p => String(p.id) === id);
+        const product = pricedProducts.find((p: any) => String(p.id) === id);
         const baseRate = Number(product?.current_price || product?.dealer_rate || 0);
         const taxPct = Number(product?.tax_percentage || 0);
         return {
@@ -43,7 +68,7 @@ export default function CartSummaryScreen({ navigation }: any) {
           tax_pct: taxPct,
         };
       });
-  }, [cart, products]);
+  }, [cart, products, selectedCustomer]);
 
   const total = useMemo(() => cartItems.reduce((s, i) => s + i.qty * i.rate, 0), [cartItems]);
 
@@ -76,9 +101,10 @@ export default function CartSummaryScreen({ navigation }: any) {
     setCart({});
     setSaving(false);
     
-    Alert.alert('Success', 'Order saved offline!', [
-      { text: 'OK', onPress: () => navigation.navigate('Home') }
-    ]);
+    setSuccess(true);
+    setTimeout(() => {
+      navigation.navigate('Home');
+    }, 2000);
   };
 
   const handleSaveAttempt = async () => {
@@ -100,11 +126,13 @@ export default function CartSummaryScreen({ navigation }: any) {
       console.log('Location fetch failed:', err);
     }
 
-    const isPending = !selectedCustomer.latitude || !selectedCustomer.longitude;
+    const cLat = selectedCustomer.latitude || selectedCustomer.location_lat;
+    const cLng = selectedCustomer.longitude || selectedCustomer.location_lng;
+    const isPending = !cLat || !cLng;
 
     if (isPending) {
       Alert.alert(
-        'Location Unverified',
+        'Missing GPS Location',
         'Are you currently at the customer shop?',
         [
           { text: 'Yes', onPress: () => { setSaving(false); navigation.navigate('CustomerEdit'); } },
@@ -114,15 +142,29 @@ export default function CartSummaryScreen({ navigation }: any) {
       return;
     }
 
-    const distance = calculateDistance(lat, lng, Number(selectedCustomer.latitude), Number(selectedCustomer.longitude));
+    const distance = calculateDistance(lat, lng, Number(cLat), Number(cLng));
     
     if (distance > 200) {
+      setRemoteReason('');
+      setOtherReason('');
       setShowReasonModal(true);
       return;
     }
 
     commitOrder('');
   };
+
+  if (success) {
+    return (
+      <View style={styles.successContainer}>
+        <View style={styles.successIconBox}>
+          <CheckCircle size={32} color={theme.success || '#10b981'} />
+        </View>
+        <Text style={styles.successTitle}>Order Saved!</Text>
+        <Text style={styles.successSub}>Your order has been saved locally and will sync during EOD.</Text>
+      </View>
+    );
+  }
 
   if (cartItems.length === 0) {
     if (!hasSaved.current) {
@@ -191,13 +233,27 @@ export default function CartSummaryScreen({ navigation }: any) {
             <Text style={styles.modalTitle}>Remote Order Justification</Text>
             <Text style={styles.modalSub}>You are &gt;200m away from the verified shop location. Please provide a reason.</Text>
             
-            <TextInput
-              style={styles.modalInput}
-              placeholder="e.g. Phone Order, Customer called me..."
-              placeholderTextColor="#94a3b8"
-              value={remoteReason}
-              onChangeText={setRemoteReason}
-            />
+            <View style={{ marginBottom: 16 }}>
+              {REASON_OPTIONS.map(opt => (
+                <TouchableOpacity 
+                  key={opt}
+                  style={[styles.reasonOption, remoteReason === opt && styles.reasonOptionSelected]}
+                  onPress={() => setRemoteReason(opt)}
+                >
+                  <Text style={[styles.reasonOptionText, remoteReason === opt && styles.reasonOptionTextSelected]}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {remoteReason === 'Other' && (
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Enter custom reason..."
+                placeholderTextColor="#94a3b8"
+                value={otherReason}
+                onChangeText={setOtherReason}
+              />
+            )}
             
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalBtnCancel} onPress={() => { setShowReasonModal(false); setSaving(false); }}>
@@ -206,9 +262,10 @@ export default function CartSummaryScreen({ navigation }: any) {
               <TouchableOpacity 
                 style={styles.modalBtnSubmit} 
                 onPress={() => {
-                  if(!remoteReason.trim()) return Alert.alert('Error', 'Reason is required');
+                  const finalReason = remoteReason === 'Other' ? otherReason : remoteReason;
+                  if(!finalReason.trim()) return Alert.alert('Error', 'Reason is required');
                   setShowReasonModal(false);
-                  commitOrder(`[Remote: ${remoteReason.trim()}]`);
+                  commitOrder(`[Remote: ${finalReason.trim()}]`);
                 }}
               >
                 <Text style={styles.modalBtnSubmitText}>Submit Order</Text>
@@ -229,6 +286,10 @@ const getStyles = (theme: any) => StyleSheet.create({
   saveBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
   saveBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   content: { padding: 16 },
+  successContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background, padding: 32 },
+  successIconBox: { width: 64, height: 64, borderRadius: 32, backgroundColor: theme.isDark ? '#14532d' : '#dcfce7', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  successTitle: { fontSize: 20, fontWeight: 'bold', color: theme.text, marginBottom: 8 },
+  successSub: { fontSize: 14, color: theme.textSecondary, textAlign: 'center' },
   itemsList: { gap: 8, marginBottom: 16 },
   itemRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
   itemInfo: { flex: 1, marginRight: 16 },
@@ -257,4 +318,8 @@ const getStyles = (theme: any) => StyleSheet.create({
   modalBtnCancelText: { color: theme.text, fontWeight: '600' },
   modalBtnSubmit: { flex: 1, padding: 14, borderRadius: 8, backgroundColor: theme.primary, alignItems: 'center' },
   modalBtnSubmitText: { color: '#fff', fontWeight: '600' },
+  reasonOption: { padding: 12, borderRadius: 8, borderWidth: 1, borderColor: theme.border, marginBottom: 8 },
+  reasonOptionSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
+  reasonOptionText: { fontSize: 14, color: theme.text },
+  reasonOptionTextSelected: { color: '#fff', fontWeight: 'bold' }
 });

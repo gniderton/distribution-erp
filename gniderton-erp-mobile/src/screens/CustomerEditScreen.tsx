@@ -14,6 +14,7 @@ export default function CustomerEditScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = getStyles(theme);
   const { currentUser, selectedCustomer } = useAppStore();
+  const queryClient = useQueryClient();
   
   const [name, setName] = useState(selectedCustomer?.customer_name || '');
   const [phone, setPhone] = useState(selectedCustomer?.customer_phone || selectedCustomer?.contact_primary || '');
@@ -26,7 +27,9 @@ export default function CustomerEditScreen({ navigation }: any) {
   useEffect(() => {
     const checkProximity = async () => {
       if (!selectedCustomer) return;
-      if (!selectedCustomer.latitude || !selectedCustomer.longitude) {
+      const cLat = selectedCustomer.latitude || selectedCustomer.location_lat;
+      const cLng = selectedCustomer.longitude || selectedCustomer.location_lng;
+      if (!cLat || !cLng) {
         setCheckingAccess(false);
         return;
       }
@@ -37,8 +40,8 @@ export default function CustomerEditScreen({ navigation }: any) {
           const distance = calculateDistance(
             location.coords.latitude,
             location.coords.longitude,
-            Number(selectedCustomer.latitude),
-            Number(selectedCustomer.longitude)
+            Number(cLat),
+            Number(cLng)
           );
           if (distance > 200) {
             setAccessDenied(true);
@@ -100,7 +103,6 @@ export default function CustomerEditScreen({ navigation }: any) {
 
   const canSubmit = name.trim().length > 0 && phoneValid && gstValid && hasChanges && !loading;
 
-  const queryClient = useQueryClient();
 
   const handleSubmit = async () => {
     if (!canSubmit || !currentUser || loading) return;

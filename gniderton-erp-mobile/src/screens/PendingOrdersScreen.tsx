@@ -4,18 +4,31 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Pencil, Trash2 } from 'lucide-react-native';
 import { useAppStore } from '../store';
 import { useTheme } from '../theme';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function PendingOrdersScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = getStyles(theme);
-  const { pendingOrders, removeOrder, setCart, setSelectedCustomer } = useAppStore();
+  const { pendingOrders, removeOrder, setCart, setSelectedCustomer, currentUser } = useAppStore();
   const orderTotal = pendingOrders.reduce((sum, o) => {
     const itemSum = (o.items || []).reduce((s, i) => s + (i.amount || (i.qty * i.rate) || 0), 0);
     return sum + itemSum;
   }, 0);
 
+  const queryClient = useQueryClient();
+
   const editOrder = (order: any) => {
-    setSelectedCustomer({ id: order.customer_id, customer_name: order.customer_name });
+    // Try to find the full customer object from cache
+    let fullCustomer = { id: order.customer_id, customer_name: order.customer_name };
+    const allCustomers: any = queryClient.getQueryData(['customers', currentUser?.id, 'all']) || [];
+    const todayCustomers: any = queryClient.getQueryData(['customers', currentUser?.id, 'today']) || [];
+    const found = allCustomers.find((c: any) => c.id === order.customer_id) || todayCustomers.find((c: any) => c.id === order.customer_id);
+    
+    if (found) {
+      fullCustomer = found;
+    }
+
+    setSelectedCustomer(fullCustomer);
     
     const newCart: Record<string, number> = {};
     (order.items || []).forEach((item: any) => {

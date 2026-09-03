@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTheme } from '../theme';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, ActivityIndicator, Modal, Linking, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, UserPlus, Phone, Plus, ShoppingCart, IndianRupee, Menu, Bell, TrendingUp, RefreshCw, LogOut, CheckSquare, Moon, Sun, Droplet, MapPin, SortAsc } from 'lucide-react-native';
+import { Search, UserPlus, Phone, Plus, ShoppingCart, IndianRupee, Menu, Bell, TrendingUp, RefreshCw, LogOut, CheckSquare, Moon, Sun, Droplet, MapPin, SortAsc, CheckCircle } from 'lucide-react-native';
 import * as Location from 'expo-location';
 import { calculateDistance } from '../utils/geo';
 import { useAppStore } from '../store';
@@ -14,7 +14,7 @@ export default function HomeScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = getStyles(theme);
 
-  const { currentUser, pendingOrders, pendingPayments, setSelectedCustomer, logout, activeTheme, setActiveTheme } = useAppStore();
+  const { currentUser, pendingOrders, pendingPayments, setSelectedCustomer, setUser, activeTheme, setActiveTheme } = useAppStore();
 
   const [search, setSearch] = useState('');
   const [menuVisible, setMenuVisible] = useState(false);
@@ -39,8 +39,12 @@ export default function HomeScreen({ navigation }: any) {
     )
     .sort((a: any, b: any) => {
       if (sortOrder === 'visit' && currentLoc.lat !== 0) {
-        const distA = (a.latitude && a.longitude) ? calculateDistance(currentLoc.lat, currentLoc.lng, Number(a.latitude), Number(a.longitude)) : 9999999;
-        const distB = (b.latitude && b.longitude) ? calculateDistance(currentLoc.lat, currentLoc.lng, Number(b.latitude), Number(b.longitude)) : 9999999;
+        const aLat = a.latitude || a.location_lat;
+        const aLng = a.longitude || a.location_lng;
+        const bLat = b.latitude || b.location_lat;
+        const bLng = b.longitude || b.location_lng;
+        const distA = (aLat && aLng) ? calculateDistance(currentLoc.lat, currentLoc.lng, Number(aLat), Number(aLng)) : 9999999;
+        const distB = (bLat && bLng) ? calculateDistance(currentLoc.lat, currentLoc.lng, Number(bLat), Number(bLng)) : 9999999;
         return distA - distB;
       } else {
         return (a.customer_name || '').localeCompare(b.customer_name || '');
@@ -73,7 +77,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const handleLogout = () => {
     setMenuVisible(false);
-    logout();
+    setUser(null);
   };
 
   return (
@@ -146,19 +150,21 @@ export default function HomeScreen({ navigation }: any) {
                   </Text>
                 </View>
                 <View style={styles.customerInfo}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
                     <Text style={styles.customerName}>{item.customer_name}</Text>
                     {item.is_verified || item.verification_status === 'Verified' ? (
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' }} />
+                      <CheckCircle size={14} color="#16a34a" />
                     ) : (
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#f59e0b' }} />
+                      <View style={{ backgroundColor: '#fffbeb', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#fde68a' }}>
+                        <Text style={{ fontSize: 9, color: '#b45309', fontWeight: 'bold' }}>PENDING</Text>
+                      </View>
                     )}
                   </View>
                   <Text style={styles.customerCode}>{item.customer_code} • {item.address_line1 || item.city}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                  {item.latitude && item.longitude && (
-                    <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`)} style={{ padding: 8, backgroundColor: theme.isDark ? '#1e293b' : '#eff6ff', borderRadius: 8 }}>
+                  {(item.latitude || item.location_lat) && (item.longitude || item.location_lng) && (
+                    <TouchableOpacity onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${item.latitude || item.location_lat},${item.longitude || item.location_lng}`)} style={{ padding: 8, backgroundColor: theme.isDark ? '#1e293b' : '#eff6ff', borderRadius: 8 }}>
                       <MapPin size={18} color={theme.isDark ? '#60a5fa' : '#1d4ed8'} />
                     </TouchableOpacity>
                   )}

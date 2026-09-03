@@ -9,6 +9,7 @@ import axios from 'axios';
 import { API_URL } from '../api/config';
 import { useTheme } from '../theme';
 import * as Location from 'expo-location';
+import { calculateDistance } from '../utils/geo';
 
 const MODES = ['CASH', 'CHEQUE', 'UPI', 'NEFT'];
 
@@ -29,6 +30,14 @@ export default function PaymentEntryScreen({ navigation }: any) {
   const [showBankModal, setShowBankModal] = useState(false);
   const [showCreditModal, setShowCreditModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  const [showReasonModal, setShowReasonModal] = useState(false);
+  const [remoteReason, setRemoteReason] = useState('');
+  const [otherReason, setOtherReason] = useState('');
+  const [currentLat, setCurrentLat] = useState(0);
+  const [currentLng, setCurrentLng] = useState(0);
+
+  const REASON_OPTIONS = ['Paid online remotely', 'Collected at office/elsewhere', 'Customer not at shop', 'Other'];
 
   const { data: banksData, refetch: refetchBanks } = useQuery({
     queryKey: ['banks'],
@@ -65,6 +74,36 @@ export default function PaymentEntryScreen({ navigation }: any) {
     (isOnline ? !!(reference || '').trim() : true);
 
   const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const commitPayment = (notesStr: string = '') => {
+    const payment = {
+      uid: genPaymentId(),
+      customer_id: selectedCustomer.id,
+      customer_name: selectedCustomer.customer_name,
+      dse_id: currentUser?.id || 'UNK',
+      timestamp: new Date().toISOString(),
+      amount: numAmt,
+      mode,
+      invoice_id: selectedInvoice?.id,
+      invoice_no: selectedInvoice?.invoice_number || 'ADVANCE',
+      reference: (reference || '').trim(),
+      bank_name: (bankName || '').trim(),
+      cheque_date: (chequeDate || '').trim(),
+      is_advance: isAdvance,
+      latitude: currentLat,
+      longitude: currentLng,
+      notes: notesStr,
+    };
+
+    addPayment(payment);
+    setSaving(false);
+    
+    setSuccess(true);
+    setTimeout(() => {
+      navigation.navigate('CustomerHub');
+    }, 2000);
+  };
 
   const handleSave = async () => {
     if (!canSave || saving) return;
@@ -84,35 +123,52 @@ export default function PaymentEntryScreen({ navigation }: any) {
         const location = await Location.getCurrentPositionAsync({});
         lat = location.coords.latitude;
         lng = location.coords.longitude;
+        setCurrentLat(lat);
+        setCurrentLng(lng);
       }
     } catch (err) {
       console.log('Location fetch failed:', err);
     }
 
-    const payment = {
-      uid: genPaymentId(),
-      customer_id: selectedCustomer.id,
-      customer_name: selectedCustomer.customer_name,
-      dse_id: currentUser?.id || 'UNK',
-      timestamp: new Date().toISOString(),
-      amount: numAmt,
-      mode,
-      invoice_id: selectedInvoice?.id,
-      invoice_no: selectedInvoice?.invoice_number || 'ADVANCE',
-      reference: (reference || '').trim(),
-      bank_name: (bankName || '').trim(),
-      cheque_date: (chequeDate || '').trim(),
-      is_advance: isAdvance,
-      latitude: lat,
-      longitude: lng,
-    };
+    const cLat = selectedCustomer.latitude || selectedCustomer.location_lat;
+    const cLng = selectedCustomer.longitude || selectedCustomer.location_lng;
+    const isPending = !cLat || !cLng;
 
-    addPayment(payment);
-    setSaving(false);
-    Alert.alert('Success', 'Payment saved locally!', [
-      { text: 'OK', onPress: () => navigation.navigate('CustomerHub') }
-    ]);
+    if (isPending) {
+      Alert.alert(
+        'Missing GPS Location',
+        'Are you currently at the customer shop?',
+        [
+          { text: 'Yes', onPress: () => { setSaving(false); navigation.navigate('CustomerEdit'); } },
+          { text: 'No (Remote Payment)', onPress: () => { commitPayment('[Remote Payment]'); } }
+        ]
+      );
+      return;
+    }
+
+    const distance = calculateDistance(lat, lng, Number(cLat), Number(cLng));
+    
+    if (distance > 200) {
+      setRemoteReason('');
+      setOtherReason('');
+      setShowReasonModal(true);
+      return;
+    }
+
+    commitPayment('');
   };
+
+  if (success) {
+    return (
+      <View style={styles.successContainer}>
+        <View style={styles.successIconBox}>
+          <CheckSquare size={32} color={theme.success || '#10b981'} />
+        </View>
+        <Text style={styles.successTitle}>Payment Saved!</Text>
+        <Text style={styles.successSub}>Your payment has been saved locally and will sync during EOD.</Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -258,6 +314,54 @@ export default function PaymentEntryScreen({ navigation }: any) {
       </ScrollView>
 
       {/* Modals */}
+      <Modal visible={showReasonModal} transparent animationType="fade">
+        <View style={styles.modalBgReason}>
+          <View style={styles.modalContentReason}>
+            <Text style={styles.modalTitle}>Remote Payment Justification</Text>
+            <Text style={styles.modalSub}>You are >200m away from the verified shop location. Please provide a reason.</Text>
+            
+            <View style={{ marginBottom: 16 }}>
+              {REASON_OPTIONS.map(opt => (
+                <TouchableOpacity 
+                  key={opt}
+                  style={[styles.reasonOption, remoteReason === opt && styles.reasonOptionSelected]}
+                  onPress={() => setRemoteReason(opt)}
+                >
+                  <Text style={[styles.reasonOptionText, remoteReason === opt && styles.reasonOptionTextSelected]}>{opt}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {remoteReason === 'Other' && (
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Enter custom reason..."
+                placeholderTextColor="#94a3b8"
+                value={otherReason}
+                onChangeText={setOtherReason}
+              />
+            )}
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalBtnCancel} onPress={() => { setShowReasonModal(false); setSaving(false); }}>
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.modalBtnSubmit} 
+                onPress={() => {
+                  const finalReason = remoteReason === 'Other' ? otherReason : remoteReason;
+                  if(!finalReason.trim()) return Alert.alert('Error', 'Reason is required');
+                  setShowReasonModal(false);
+                  commitPayment(`[Remote: ${finalReason.trim()}]`);
+                }}
+              >
+                <Text style={styles.modalBtnSubmitText}>Submit Payment</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={showBankModal} animationType="slide" transparent>
         <View style={styles.modalBg}>
           <View style={styles.modalContent}>
@@ -311,6 +415,10 @@ const getStyles = (theme: any) => StyleSheet.create({
   saveBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
   saveBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   content: { padding: 16 },
+  successContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background, padding: 32 },
+  successIconBox: { width: 64, height: 64, borderRadius: 32, backgroundColor: theme.isDark ? '#14532d' : '#dcfce7', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  successTitle: { fontSize: 20, fontWeight: 'bold', color: theme.text, marginBottom: 8 },
+  successSub: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginBottom: 16 },
   infoBox: { backgroundColor: theme.isDark ? '#1e293b' : '#eff6ff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.isDark ? '#3b82f6' : '#bfdbfe', marginBottom: 20 },
   infoLabel: { fontSize: 12, color: theme.primary, fontWeight: '600', marginBottom: 2 },
   infoValue: { fontSize: 14, color: theme.isDark ? '#93c5fd' : '#1e3a8a', fontWeight: '500' },
@@ -336,5 +444,19 @@ const getStyles = (theme: any) => StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: theme.text },
   modalItem: { padding: 16, borderBottomWidth: 1, borderBottomColor: theme.border },
-  modalItemText: { fontSize: 16, color: theme.text, fontWeight: '500', marginBottom: 4 }
+  modalItemText: { fontSize: 16, color: theme.text, fontWeight: '500', marginBottom: 4 },
+  
+  modalBgReason: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 },
+  modalContentReason: { backgroundColor: theme.card, padding: 24, borderRadius: 16 },
+  modalSub: { fontSize: 14, color: theme.textSecondary, marginBottom: 16 },
+  modalInput: { backgroundColor: theme.input, borderWidth: 1, borderColor: theme.border, borderRadius: 8, padding: 12, color: theme.text, marginBottom: 24 },
+  modalActions: { flexDirection: 'row', gap: 12 },
+  modalBtnCancel: { flex: 1, padding: 14, borderRadius: 8, backgroundColor: theme.input, alignItems: 'center' },
+  modalBtnCancelText: { color: theme.text, fontWeight: '600' },
+  modalBtnSubmit: { flex: 1, padding: 14, borderRadius: 8, backgroundColor: theme.primary, alignItems: 'center' },
+  modalBtnSubmitText: { color: '#fff', fontWeight: '600' },
+  reasonOption: { padding: 12, borderRadius: 8, borderWidth: 1, borderColor: theme.border, marginBottom: 8 },
+  reasonOptionSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
+  reasonOptionText: { fontSize: 14, color: theme.text },
+  reasonOptionTextSelected: { color: '#fff', fontWeight: 'bold' }
 });
