@@ -44,6 +44,19 @@ export default function CustomerProfileScreen({ navigation }: any) {
 
       <ScrollView contentContainerStyle={styles.content}>
         
+        {/* Status Badge */}
+        <View style={styles.badgeContainer}>
+          {c.latitude && c.longitude ? (
+            <View style={[styles.badge, { backgroundColor: '#dcfce7', borderColor: '#bbf7d0' }]}>
+              <Text style={[styles.badgeText, { color: '#166534' }]}>🟢 Verified Location</Text>
+            </View>
+          ) : (
+            <View style={[styles.badge, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
+              <Text style={[styles.badgeText, { color: '#92400e' }]}>🟡 Pending Verification</Text>
+            </View>
+          )}
+        </View>
+
         {/* Quick Actions */}
         <View style={styles.quickActions}>
           {hasPhone && (
@@ -108,6 +121,10 @@ const getStyles = (theme: any) => StyleSheet.create({
   headerTitle: { flex: 1, fontSize: 18, fontWeight: 'bold', color: theme.text },
   content: { padding: 16 },
   
+  badgeContainer: { marginBottom: 16 },
+  badge: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, alignSelf: 'flex-start' },
+  badgeText: { fontSize: 13, fontWeight: 'bold' },
+
   quickActions: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 1, gap: 8 },
   actionBtnText: { fontSize: 14, fontWeight: '600' },

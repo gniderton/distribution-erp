@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, Send, MapPin } from 'lucide-react-native';
+import { ChevronLeft, Send, MapPin, ShieldAlert } from 'lucide-react-native';
 import { useTheme } from '../theme';
 import { useAppStore } from '../store';
+import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import * as Location from 'expo-location';
 import { API_URL } from '../api/config';
+import { calculateDistance } from '../utils/geo';
 
 export default function CustomerEditScreen({ navigation }: any) {
   const theme = useTheme();
@@ -18,10 +20,74 @@ export default function CustomerEditScreen({ navigation }: any) {
   const [gstin, setGstin] = useState(selectedCustomer?.gstin || '');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [checkingAccess, setCheckingAccess] = useState(true);
+
+  useEffect(() => {
+    const checkProximity = async () => {
+      if (!selectedCustomer) return;
+      if (!selectedCustomer.latitude || !selectedCustomer.longitude) {
+        setCheckingAccess(false);
+        return;
+      }
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const location = await Location.getCurrentPositionAsync({});
+          const distance = calculateDistance(
+            location.coords.latitude,
+            location.coords.longitude,
+            Number(selectedCustomer.latitude),
+            Number(selectedCustomer.longitude)
+          );
+          if (distance > 200) {
+            setAccessDenied(true);
+          }
+        }
+      } catch (err) {
+        console.log('Proximity check failed', err);
+      } finally {
+        setCheckingAccess(false);
+      }
+    };
+    checkProximity();
+  }, [selectedCustomer]);
 
   if (!selectedCustomer) {
     setTimeout(() => navigation.goBack(), 0);
     return null;
+  }
+
+  if (checkingAccess) {
+    return (
+      <View style={styles.successContainer}>
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={{ marginTop: 16, color: theme.textSecondary }}>Verifying location access...</Text>
+      </View>
+    );
+  }
+
+  if (accessDenied) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <ChevronLeft size={24} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Access Denied</Text>
+        </View>
+        <View style={styles.successContainer}>
+          <View style={[styles.successIconBox, { backgroundColor: '#fef2f2' }]}>
+            <ShieldAlert size={32} color="#ef4444" />
+          </View>
+          <Text style={styles.successTitle}>Restricted Access</Text>
+          <Text style={styles.successSub}>You can only request profile edits when you are physically near the verified shop location (&gt;200m away).</Text>
+          <TouchableOpacity style={[styles.submitBtn, { width: 200 }]} onPress={() => navigation.goBack()}>
+            <Text style={styles.submitBtnText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   const phoneValid = /^[6-9]\d{9}$/.test(phone.trim());
@@ -33,6 +99,8 @@ export default function CustomerEditScreen({ navigation }: any) {
                      gstin !== (selectedCustomer.gstin || '');
 
   const canSubmit = name.trim().length > 0 && phoneValid && gstValid && hasChanges && !loading;
+
+  const queryClient = useQueryClient();
 
   const handleSubmit = async () => {
     if (!canSubmit || !currentUser || loading) return;
@@ -66,6 +134,7 @@ export default function CustomerEditScreen({ navigation }: any) {
       setPhone('');
       setGstin('');
       
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
       setSuccess(true);
       setTimeout(() => navigation.navigate('CustomerHub'), 2000);
     } catch {

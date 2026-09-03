@@ -56,13 +56,13 @@ export default function PaymentEntryScreen({ navigation }: any) {
     return sum;
   }, 0);
 
-  const remainingBalance = selectedInvoice ? (selectedInvoice.balance_amount - alreadyPaidOffline) : Infinity;
+  const remainingBalance = selectedInvoice ? (Number(selectedInvoice.balance_amount) - alreadyPaidOffline) : Infinity;
 
   const numAmt = parseFloat(amount);
   const canSave = !isNaN(numAmt) && numAmt > 0 &&
     (isAdvance || numAmt <= remainingBalance + 0.01) &&
-    (isCheque ? !!(reference.trim() && bankName.trim() && chequeDate.trim()) : true) &&
-    (isOnline ? !!reference.trim() : true);
+    (isCheque ? !!((reference || '').trim() && (bankName || '').trim() && (chequeDate || '').trim()) : true) &&
+    (isOnline ? !!(reference || '').trim() : true);
 
   const [saving, setSaving] = useState(false);
 
@@ -99,9 +99,9 @@ export default function PaymentEntryScreen({ navigation }: any) {
       mode,
       invoice_id: selectedInvoice?.id,
       invoice_no: selectedInvoice?.invoice_number || 'ADVANCE',
-      reference: reference.trim(),
-      bank_name: bankName.trim(),
-      cheque_date: chequeDate.trim(),
+      reference: (reference || '').trim(),
+      bank_name: (bankName || '').trim(),
+      cheque_date: (chequeDate || '').trim(),
       is_advance: isAdvance,
       latitude: lat,
       longitude: lng,

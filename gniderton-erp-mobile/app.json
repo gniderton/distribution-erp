@@ -25,6 +25,14 @@
         "projectId": "d3eeea8c-ba30-43c9-bc3b-23f471657729"
       }
     },
-    "owner": "gniderton"
+    "owner": "gniderton",
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Gniderton to use your location."
+        }
+      ]
+    ]
   }
 }

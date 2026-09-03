@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, UserPlus, MapPin } from 'lucide-react-native';
 import { useAppStore } from '../store';
 import { useTheme } from '../theme';
+import { useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import * as Location from 'expo-location';
 import { API_URL } from '../api/config';
@@ -12,6 +13,7 @@ export default function CreateCustomerScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = getStyles(theme);
   const { currentUser } = useAppStore();
+  const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [gstin, setGstin] = useState('');
@@ -50,6 +52,7 @@ export default function CreateCustomerScreen({ navigation }: any) {
         longitude: lng,
       });
       
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
       setSuccess(true);
       setTimeout(() => navigation.navigate('Home'), 2000);
     } catch {
