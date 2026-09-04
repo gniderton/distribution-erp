@@ -20,7 +20,7 @@ function genPaymentId() {
 export default function PaymentEntryScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = getStyles(theme);
-  const { currentUser, selectedCustomer, pendingPayments, addPayment, selectedInvoice } = useAppStore();
+  const { currentUser, selectedCustomer, pendingPayments, addPayment, selectedInvoice, sessionVerifiedCustomers, markCustomerSessionVerified } = useAppStore();
   const [mode, setMode] = useState('CASH');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
@@ -132,7 +132,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
 
     const cLat = selectedCustomer.latitude || selectedCustomer.location_lat;
     const cLng = selectedCustomer.longitude || selectedCustomer.location_lng;
-    const isPending = !cLat || !cLng;
+    const isPending = (!cLat || !cLng) && !sessionVerifiedCustomers.includes(selectedCustomer.id);
 
     if (isPending) {
       Alert.alert(
@@ -142,6 +142,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
           { 
             text: 'Yes', 
             onPress: () => { 
+              markCustomerSessionVerified(selectedCustomer.id);
               commitPayment('[At Shop - Pending Verification]', 'CustomerEdit'); 
             } 
           },

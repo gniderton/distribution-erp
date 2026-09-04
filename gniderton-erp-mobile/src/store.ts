@@ -114,6 +114,8 @@ interface AppState {
   activeTheme: ThemeType
   lastClearTimestamp: number | null
 
+  sessionVerifiedCustomers: string[]
+  
   // Actions
   setUser: (user: User | null) => void
   setSelectedCustomer: (customer: Customer | null) => void
@@ -134,6 +136,7 @@ interface AppState {
   setDenom: (key: keyof Denominations, value: number) => void
   setEodCheque: (key: string, value: string) => void
   setActiveTheme: (theme: ThemeType) => void
+  markCustomerSessionVerified: (id: string) => void
   checkAndAutoClear: () => void
   resetEod: () => void
 }
@@ -156,6 +159,7 @@ export const useAppStore = create<AppState>()(
       eodCheques: {},
       activeTheme: 'light',
       lastClearTimestamp: null,
+      sessionVerifiedCustomers: [],
 
       setUser: (user) => set({ currentUser: user }),
       setSelectedCustomer: (customer) => set({ selectedCustomer: customer }),
@@ -188,6 +192,9 @@ export const useAppStore = create<AppState>()(
       setDenom: (key, value) => set((state) => ({ denominations: { ...state.denominations, [key]: value } })),
       setEodCheque: (key, value) => set((state) => ({ eodCheques: { ...state.eodCheques, [key]: value } })),
       setActiveTheme: (theme) => set({ activeTheme: theme }),
+      markCustomerSessionVerified: (id) => set((state) => ({
+        sessionVerifiedCustomers: [...new Set([...state.sessionVerifiedCustomers, id])]
+      })),
       
       checkAndAutoClear: () => {
         const state = get();
@@ -216,6 +223,7 @@ export const useAppStore = create<AppState>()(
         expenses: [],
         denominations: DEFAULT_DENOMS,
         eodCheques: {},
+        sessionVerifiedCustomers: [],
         lastClearTimestamp: Date.now()
       })
     }),

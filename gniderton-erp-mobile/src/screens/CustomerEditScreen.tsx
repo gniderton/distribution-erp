@@ -137,6 +137,8 @@ export default function CustomerEditScreen({ navigation }: any) {
       setGstin('');
       
       queryClient.invalidateQueries({ queryKey: ['customers'] });
+      useAppStore.getState().markCustomerSessionVerified(selectedCustomer.id);
+      
       setSuccess(true);
       setTimeout(() => navigation.navigate('CustomerHub'), 2000);
     } catch {

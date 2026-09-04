@@ -18,7 +18,7 @@ function genOfflineId(code: string) {
 export default function CartSummaryScreen({ navigation }: any) {
   const theme = useTheme();
   const styles = getStyles(theme);
-  const { currentUser, selectedCustomer, cart, products, addOrder, setCart } = useAppStore();
+  const { currentUser, selectedCustomer, cart, products, addOrder, setCart, sessionVerifiedCustomers, markCustomerSessionVerified } = useAppStore();
 
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -128,7 +128,7 @@ export default function CartSummaryScreen({ navigation }: any) {
 
     const cLat = selectedCustomer.latitude || selectedCustomer.location_lat;
     const cLng = selectedCustomer.longitude || selectedCustomer.location_lng;
-    const isPending = !cLat || !cLng;
+    const isPending = (!cLat || !cLng) && !sessionVerifiedCustomers.includes(selectedCustomer.id);
 
     if (isPending) {
       Alert.alert(
@@ -138,6 +138,7 @@ export default function CartSummaryScreen({ navigation }: any) {
           { 
             text: 'Yes', 
             onPress: () => { 
+              markCustomerSessionVerified(selectedCustomer.id);
               commitOrder('[At Shop - Pending Verification]', 'CustomerEdit'); 
             } 
           },
