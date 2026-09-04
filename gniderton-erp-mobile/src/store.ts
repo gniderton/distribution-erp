@@ -237,6 +237,7 @@ export const useAppStore = create<AppState>()(
         denominations: state.denominations,
         eodCheques: state.eodCheques,
         activeTheme: state.activeTheme,
+        sessionVerifiedCustomers: state.sessionVerifiedCustomers,
         lastClearTimestamp: state.lastClearTimestamp
       }),
     }
