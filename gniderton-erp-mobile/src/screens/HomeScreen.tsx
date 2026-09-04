@@ -183,11 +183,16 @@ export default function HomeScreen({ navigation }: any) {
         )}
       </View>
 
-      {/* Sticky Bottom Bar for EOD */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.eodBtn} onPress={() => navigation.navigate('EODSummary')}>
+      {/* Sticky Bottom Bar */}
+      <View style={[styles.bottomBar, { flexDirection: 'row', gap: 12 }]}>
+        <TouchableOpacity style={[styles.eodBtn, { flex: 1, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]} onPress={() => navigation.navigate('RouteBriefing')}>
+          <CheckSquare size={20} color={theme.text} style={{ marginRight: 8 }} />
+          <Text style={[styles.eodBtnText, { color: theme.text }]}>Plan Tomorrow</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={[styles.eodBtn, { flex: 1 }]} onPress={() => navigation.navigate('EODSummary')}>
           <CheckSquare size={20} color="#fff" style={{ marginRight: 8 }} />
-          <Text style={styles.eodBtnText}>Run End of Day</Text>
+          <Text style={styles.eodBtnText}>End of Day</Text>
         </TouchableOpacity>
       </View>
 
