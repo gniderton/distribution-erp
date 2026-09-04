@@ -148,7 +148,7 @@ export default function CartSummaryScreen({ navigation }: any) {
       return;
     }
 
-    const distance = calculateDistance(lat, lng, Number(cLat), Number(cLng));
+    const distance = (cLat && cLng) ? calculateDistance(lat, lng, Number(cLat), Number(cLng)) : 0;
     
     if (distance > 200) {
       setRemoteReason('');
