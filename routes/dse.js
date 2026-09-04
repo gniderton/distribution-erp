@@ -407,4 +407,122 @@ router.post('/reports/:id/finalize', async (req, res) => {
     }
 });
 
+// --- NEW ROUTE BRIEFING ENDPOINTS ---
+router.get('/route-briefing', async (req, res) => {
+    try {
+        const { dse_id, day } = req.query;
+        if (!dse_id) return res.status(400).json({ error: 'dse_id is required' });
+
+        let query = `
+            SELECT 
+                c.id, c.customer_name, c.customer_code, c.balance_amount,
+                r.route_name,
+                -- Recent Orders (14 days)
+                COALESCE((
+                    SELECT SUM(so.total_amount)
+                    FROM sales_orders so 
+                    WHERE so.customer_id = c.id AND so.order_date >= CURRENT_DATE - INTERVAL '14 days'
+                ), 0) as recent_orders,
+                
+                -- Recent Payments (14 days)
+                COALESCE((
+                    SELECT SUM(cp.amount)
+                    FROM customer_payments cp 
+                    WHERE cp.customer_id = c.id AND cp.payment_date >= CURRENT_DATE - INTERVAL '14 days'
+                ), 0) as recent_payments,
+                
+                -- Credit Notes (14 days)
+                COALESCE((
+                    SELECT SUM(sr.grand_total)
+                    FROM sales_returns sr 
+                    WHERE sr.customer_id = c.id AND sr.return_date >= CURRENT_DATE - INTERVAL '14 days'
+                ), 0) as credit_notes,
+                
+                -- Last Visit Context
+                (
+                    SELECT visit_date::text || ' (' || visit_type || ')'
+                    FROM customer_visits cv 
+                    WHERE cv.customer_id = c.id 
+                    ORDER BY visit_date DESC LIMIT 1
+                ) as last_visit
+            FROM customers c
+            JOIN routes r ON c.route_id = r.id
+            WHERE c.dse_id = $1
+        `;
+        const params = [dse_id];
+        
+        if (day) {
+            query += ` AND (r.service_day = $2 OR r.route_name ILIKE $3)`;
+            params.push(day, `%${day}%`);
+        }
+
+        const { rows } = await pool.query(query, params);
+        
+        // Enrich data structure
+        const enriched = rows.map(r => ({
+            id: r.id,
+            customer_name: r.customer_name,
+            customer_code: r.customer_code,
+            route_name: r.route_name,
+            mockContext: { 
+                lastVisit: r.last_visit || 'No recent visits',
+                recentOrders: Number(r.recent_orders) || 0,
+                recentPayments: Number(r.recent_payments) || 0,
+                creditNotes: Number(r.credit_notes) || 0,
+                balance: Number(r.balance_amount) || 0,
+                isInactive: (Number(r.recent_orders) === 0 && Number(r.recent_payments) === 0)
+            },
+            objective: 'None',
+            strategy: ''
+        }));
+
+        res.json(enriched);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/route-briefing', async (req, res) => {
+    try {
+        const { dse_id, route_date, plan } = req.body;
+        // plan is an array: [{ customer_id, objective, strategy }]
+        
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            
+            // Delete existing plan for this date
+            await client.query('DELETE FROM dse_route_briefings WHERE dse_id = $1 AND route_date = $2', [dse_id, route_date]);
+            
+            if (plan && plan.length > 0) {
+                const values = [];
+                const params = [];
+                let pIdx = 1;
+                
+                for (const p of plan) {
+                    values.push(`($${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++})`);
+                    params.push(dse_id, p.customer_id, route_date, p.objective, p.strategy);
+                }
+                
+                await client.query(`
+                    INSERT INTO dse_route_briefings (dse_id, customer_id, route_date, target_objective, inactive_reason)
+                    VALUES ${values.join(', ')}
+                `, params);
+            }
+            
+            await client.query('COMMIT');
+            res.json({ success: true, message: 'Briefing saved successfully' });
+        } catch (e) {
+            await client.query('ROLLBACK');
+            throw e;
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
