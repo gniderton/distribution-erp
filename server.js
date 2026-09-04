@@ -1,3 +1,4 @@
+console.log("===== HELLO RENDER: SERVER.JS IS STARTING =====");
 const dns = require('dns');
 
 // CRITICAL FIX: Monkey-patch dns.lookup to force IPv4 globally.
@@ -7,16 +8,16 @@ const dns = require('dns');
 // This is required because Render's Node 20+ environment defaults to IPv6,
 // but the Supabase IPv4 Pooler (aws-0-ap-southeast-2.pooler.supabase.com)
 // usually requires explicit IPv4 resolution in this specific environment.
-const originalLookup = dns.lookup;
-dns.lookup = (hostname, options, callback) => {
-    if (typeof options === 'function') {
-        callback = options;
-        options = { family: 4 };
-    } else {
-        options = { ...options, family: 4 };
-    }
-    return originalLookup.call(dns, hostname, options, callback);
-};
+// const originalLookup = dns.lookup;
+// dns.lookup = (hostname, options, callback) => {
+//     if (typeof options === 'function') {
+//         callback = options;
+//         options = { family: 4 };
+//     } else {
+//         options = { ...options, family: 4 };
+//     }
+//     return originalLookup.call(dns, hostname, options, callback);
+// };
 
 require('dotenv').config();
 const express = require('express');
@@ -255,7 +256,7 @@ async function initializeDatabase() {
 }
 
 // Start Server Immediately (Satisfies Render Health Checks)
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
     console.log(`🚀 Server is listening on port ${port}...`);
     console.log(`🛠️ Building environment: ${process.env.NODE_ENV || 'development'}`);
     
