@@ -76,7 +76,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const commitPayment = (notesStr: string = '') => {
+  const commitPayment = (notesStr: string = '', nextScreen?: string) => {
     const payment = {
       uid: genPaymentId(),
       customer_id: selectedCustomer.id,
@@ -101,7 +101,7 @@ export default function PaymentEntryScreen({ navigation }: any) {
     
     setSuccess(true);
     setTimeout(() => {
-      navigation.navigate('CustomerHub');
+      navigation.navigate(nextScreen || 'CustomerHub');
     }, 2000);
   };
 
@@ -139,7 +139,12 @@ export default function PaymentEntryScreen({ navigation }: any) {
         'Missing GPS Location',
         'Are you currently at the customer shop?',
         [
-          { text: 'Yes', onPress: () => { setSaving(false); navigation.navigate('CustomerEdit'); } },
+          { 
+            text: 'Yes', 
+            onPress: () => { 
+              commitPayment('[At Shop - Pending Verification]', 'CustomerEdit'); 
+            } 
+          },
           { text: 'No (Remote Payment)', onPress: () => { commitPayment('[Remote Payment]'); } }
         ]
       );

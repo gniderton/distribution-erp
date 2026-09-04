@@ -72,7 +72,7 @@ export default function CartSummaryScreen({ navigation }: any) {
 
   const total = useMemo(() => cartItems.reduce((s, i) => s + i.qty * i.rate, 0), [cartItems]);
 
-  const commitOrder = (notesStr: string = '') => {
+  const commitOrder = (notesStr: string = '', nextScreen?: string) => {
     if (!currentUser || !selectedCustomer || cartItems.length === 0) return;
 
     const items = cartItems.map(i => ({
@@ -103,7 +103,7 @@ export default function CartSummaryScreen({ navigation }: any) {
     
     setSuccess(true);
     setTimeout(() => {
-      navigation.navigate('Home');
+      navigation.navigate(nextScreen || 'Home');
     }, 2000);
   };
 
@@ -135,7 +135,12 @@ export default function CartSummaryScreen({ navigation }: any) {
         'Missing GPS Location',
         'Are you currently at the customer shop?',
         [
-          { text: 'Yes', onPress: () => { setSaving(false); navigation.navigate('CustomerEdit'); } },
+          { 
+            text: 'Yes', 
+            onPress: () => { 
+              commitOrder('[At Shop - Pending Verification]', 'CustomerEdit'); 
+            } 
+          },
           { text: 'No (Phone Order)', onPress: () => { commitOrder('[Remote Order: Phone Order]'); } }
         ]
       );
