@@ -14,6 +14,10 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EAS_BUILD_DISABLE_MAVEN_CACHE": "1",
+        "EAS_NO_VCS": "1"
       }
     },
     "production": {

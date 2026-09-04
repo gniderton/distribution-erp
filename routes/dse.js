@@ -415,7 +415,7 @@ router.get('/route-briefing', async (req, res) => {
 
         let query = `
             SELECT 
-                c.id, c.customer_name, c.customer_code, c.balance_amount,
+                c.id, c.customer_name, c.customer_code,
                 r.route_name,
                 -- Recent Orders (14 days)
                 COALESCE((
@@ -452,8 +452,8 @@ router.get('/route-briefing', async (req, res) => {
         const params = [dse_id];
         
         if (day) {
-            query += ` AND (r.service_day = $2 OR r.route_name ILIKE $3)`;
-            params.push(day, `%${day}%`);
+            query += ` AND r.route_name ILIKE $2`;
+            params.push(`%${day}%`);
         }
 
         const { rows } = await pool.query(query, params);

@@ -1,27 +1,15 @@
 const { pool } = require('./config/db');
-
-async function checkRoutes() {
+async function run() {
   try {
-    const res = await pool.query("SELECT DISTINCT service_day FROM routes");
-    console.log("Service Days in DB:", res.rows.map(r => r.service_day));
-    
-    const dayRes = await pool.query("SELECT TRIM(TO_CHAR(CURRENT_DATE, 'Day')) as today");
-    console.log("Today's format (Postgres):", dayRes.rows[0].today);
-    
-    // Check if any customers are actually on today's route
-    const custRes = await pool.query(`
-        SELECT COUNT(*) as count 
-        FROM customers c 
-        JOIN routes r ON c.route_id = r.id 
-        WHERE TRIM(TO_CHAR(CURRENT_DATE, 'Day')) = r.service_day
+    const { rows } = await pool.query(`
+      SELECT c.customer_name, r.route_name, e.full_name as dse_name 
+      FROM customers c 
+      JOIN routes r ON c.route_id = r.id 
+      JOIN employees e ON c.dse_id = e.id
+      WHERE e.full_name ILIKE '%saleem%'
     `);
-    console.log("Customers on today's route (any DSE):", custRes.rows[0].count);
-
-  } catch (err) {
-    console.error(err);
-  } finally {
-    process.exit();
-  }
+    console.log(JSON.stringify(rows, null, 2));
+  } catch(e) { console.error(e); }
+  pool.end();
 }
-
-checkRoutes();
+run();
