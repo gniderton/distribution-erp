@@ -444,7 +444,16 @@ router.get('/route-briefing', async (req, res) => {
                     FROM customer_visits cv 
                     WHERE cv.customer_id = c.id 
                     ORDER BY visit_date DESC LIMIT 1
-                ) as last_visit
+                ) as last_visit,
+                
+                -- Recent Items (14 days)
+                (
+                    SELECT json_agg(json_build_object('item_name', p.product_name, 'qty', sol.ordered_qty))
+                    FROM sales_order_lines sol
+                    JOIN sales_orders so ON sol.sales_order_id = so.id
+                    JOIN products p ON sol.product_id = p.id
+                    WHERE so.customer_id = c.id AND so.order_date >= CURRENT_DATE - INTERVAL '14 days'
+                ) as recent_items
             FROM customers c
             JOIN routes r ON c.route_id = r.id
             WHERE c.dse_id = $1
@@ -470,7 +479,8 @@ router.get('/route-briefing', async (req, res) => {
                 recentPayments: Number(r.recent_payments) || 0,
                 creditNotes: Number(r.credit_notes) || 0,
                 balance: Number(r.balance_amount) || 0,
-                isInactive: (Number(r.recent_orders) === 0 && Number(r.recent_payments) === 0)
+                isInactive: (Number(r.recent_orders) === 0 && Number(r.recent_payments) === 0),
+                recentItems: r.recent_items || []
             },
             objective: 'None',
             strategy: ''

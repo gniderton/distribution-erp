@@ -112,15 +112,17 @@ export default function RouteBriefingScreen({ navigation }: any) {
           <Text style={styles.lastVisitText}>Last Visit: {mockContext.lastVisit}</Text>
 
           {/* Expandable Recent Items */}
-          {expanded && !mockContext.isInactive && (
+          {expanded && !mockContext.isInactive && mockContext.recentItems && mockContext.recentItems.length > 0 && (
             <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
               <Text style={{ fontSize: 11, fontWeight: 'bold', color: theme.textSecondary, marginBottom: 6, textTransform: 'uppercase' }}>Recent Invoice Items</Text>
-              <Text style={{ fontSize: 13, color: theme.text, marginBottom: 4 }}>• 5x Premium Detergent (1kg)</Text>
-              <Text style={{ fontSize: 13, color: theme.text, marginBottom: 4 }}>• 12x Bath Soap Bar (100g)</Text>
-              <Text style={{ fontSize: 13, color: theme.text }}>• 2x Floor Cleaner (5L)</Text>
+              {mockContext.recentItems.map((item: any, idx: number) => (
+                <Text key={idx} style={{ fontSize: 13, color: theme.text, marginBottom: 4 }}>
+                  • {item.qty}x {item.item_name}
+                </Text>
+              ))}
             </View>
           )}
-          {expanded && mockContext.isInactive && (
+          {expanded && (!mockContext.recentItems || mockContext.recentItems.length === 0) && (
             <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
               <Text style={{ fontSize: 13, color: theme.textMuted, fontStyle: 'italic' }}>No invoice items in the last 14 days.</Text>
             </View>
