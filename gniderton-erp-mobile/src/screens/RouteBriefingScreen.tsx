@@ -20,12 +20,18 @@ export default function RouteBriefingScreen({ navigation }: any) {
 
   // Fetch actual aggregated briefing data from backend
   const { data: rawCustomers, isLoading } = useQuery({
-    queryKey: ['route_briefing_customers', currentUser?.id, 'tomorrow_v3'],
+    queryKey: ['route_briefing_customers', currentUser?.id, 'next_working_day'],
     queryFn: async () => {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + 1);
+      
+      // If the next day is Sunday (0), skip to Monday
+      if (targetDate.getDay() === 0) {
+        targetDate.setDate(targetDate.getDate() + 1);
+      }
+      
       const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const day = days[tomorrow.getDay()];
+      const day = days[targetDate.getDay()];
       
       const res = await axios.get(`${API_URL}/dse/route-briefing`, { params: { dse_id: currentUser?.id, day } });
       return res.data;
@@ -62,12 +68,15 @@ export default function RouteBriefingScreen({ navigation }: any) {
   const renderCard = ({ item }: { item: any }) => {
     const { mockContext, objective, strategy, expanded } = item;
     
+    const today = new Date();
+    const badgeText = today.getDay() === 6 ? "Monday's Route" : "Tomorrow's Route";
+
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={{ flex: 1 }}>
             <Text style={styles.customerName} numberOfLines={1}>{item.customer_name}</Text>
-            <Text style={styles.routeBadge}>Tomorrow's Route</Text>
+            <Text style={styles.routeBadge}>{badgeText}</Text>
           </View>
           {mockContext.balance > 0 && (
             <View style={styles.dueBadge}>
