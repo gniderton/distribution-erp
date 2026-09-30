@@ -107,6 +107,27 @@ class KDKEwayBillService {
             }))
         };
 
+        // Recalculate header totals to strictly match item sums (preventing NIC portal 0.01 mismatch errors)
+        const computedTaxable = payload.itemList.reduce((acc, item) => acc + item.taxableAmount, 0);
+        
+        // Cgst and Sgst sums from items
+        const computedCgst = payload.itemList.reduce((acc, item) => acc + Number((item.taxableAmount * (item.cgstRate / 100)).toFixed(2)), 0);
+        const computedSgst = payload.itemList.reduce((acc, item) => acc + Number((item.taxableAmount * (item.sgstRate / 100)).toFixed(2)), 0);
+        const computedIgst = payload.itemList.reduce((acc, item) => acc + Number((item.taxableAmount * (item.igstRate / 100)).toFixed(2)), 0);
+
+        payload.totalValue = Number(computedTaxable.toFixed(2));
+        payload.cgstValue = Number(computedCgst.toFixed(2));
+        payload.sgstValue = Number(computedSgst.toFixed(2));
+        payload.igstValue = Number(computedIgst.toFixed(2));
+        
+        // Use OthValue to store any invoice round_off amount so that totInvValue exactly matches the ERP grand_total
+        // totInvValue = totalValue + cgstValue + sgstValue + igstValue + cessValue + OthValue
+        const strictSum = payload.totalValue + payload.cgstValue + payload.sgstValue + payload.igstValue;
+        const actualGrandTotal = parseFloat(inv.grand_total) || 0;
+        
+        payload.OthValue = Number((actualGrandTotal - strictSum).toFixed(2));
+        payload.totInvValue = actualGrandTotal;
+
         return payload;
     }
 
