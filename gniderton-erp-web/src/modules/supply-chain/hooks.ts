@@ -177,7 +177,12 @@ export function useGenerateEwayBills() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        toast.success(`Downloaded bulk E-Way Bill JSON for ${data.processedCount} invoices!`);
+        if (data.details && data.details.some((d: any) => d.status === 'Error')) {
+            const errors = data.details.filter((d: any) => d.status === 'Error').map((d: any) => `${d.invoice}: ${d.error}`).join('\n');
+            toast.error(`Partial Success: ${data.processedCount} processed. Failed:\n${errors}`, { duration: 10000 });
+          } else {
+            toast.success(`Downloaded bulk E-Way Bill JSON for ${data.processedCount} invoices!`);
+          }
       } else {
         toast.success(data.message || 'No eligible invoices found for E-Way Bills.');
       }
