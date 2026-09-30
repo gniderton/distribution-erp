@@ -94,6 +94,7 @@ export function ActiveTripDetailsModal({
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   const [activeTab, setActiveTab] = useState<'manifest' | 'picklist'>('manifest')
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<number[]>([])
   
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -297,7 +298,7 @@ export function ActiveTripDetailsModal({
             <Button 
               size="sm" 
               variant="secondary"
-              onClick={() => generateEwayBillsMutation.mutate(tripId!)}
+              onClick={() => generateEwayBillsMutation.mutate({ tripId: tripId!, invoiceIds: selectedInvoiceIds })}
               loading={generateEwayBillsMutation.isPending}
               className="h-[34px]"
             >
@@ -372,8 +373,22 @@ export function ActiveTripDetailsModal({
                 <table className="w-full text-sm text-left">
                   <thead className="bg-surface text-ink-700 text-xs uppercase font-medium sticky top-0 border-b border-border-subtle z-10">
                   <tr>
-                    <th className="px-4 py-3">Customer</th>
-                    <th className="px-4 py-3">Inv #</th>
+                    <th className="px-4 py-3 w-10">
+                        <input 
+                          type="checkbox" 
+                          checked={manifestData?.length > 0 && selectedInvoiceIds.length === manifestData?.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedInvoiceIds(manifestData.map((inv: any) => inv.invoice_id));
+                            } else {
+                              setSelectedInvoiceIds([]);
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-border-subtle text-brand-600 focus:ring-brand-500"
+                        />
+                      </th>
+                      <th className="px-4 py-3">Customer</th>
+                      <th className="px-4 py-3">Inv #</th>
                     <th className="px-4 py-3">E-Way Bill #</th>
                     <th className="px-4 py-3">Address</th>
                     <th className="px-4 py-3 text-right">Amount</th>
@@ -387,10 +402,24 @@ export function ActiveTripDetailsModal({
                   ) : filteredInvoices.map((inv: any, index: number) => (
                     <React.Fragment key={inv.invoice_id}>
                       <tr 
-                        className="hover:bg-surface cursor-pointer transition-colors"
-                        onClick={() => toggleManifestRow(inv.invoice_id)}
-                      >
-                        <td className="px-4 py-3">
+                          className="hover:bg-surface cursor-pointer transition-colors"
+                          onClick={() => toggleManifestRow(inv.invoice_id)}
+                        >
+                          <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                            <input 
+                              type="checkbox" 
+                              checked={selectedInvoiceIds.includes(inv.invoice_id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedInvoiceIds(prev => [...prev, inv.invoice_id]);
+                                } else {
+                                  setSelectedInvoiceIds(prev => prev.filter(id => id !== inv.invoice_id));
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-border-subtle text-brand-600 focus:ring-brand-500 cursor-pointer"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-brand-100 text-brand-700">
                               Stop {index + 1}
                             </span>

@@ -164,7 +164,7 @@ export function useMarkSelfCollected() {
 
 export function useGenerateEwayBills() {
   return useMutation({
-    mutationFn: (tripId: string | number) => supply_chainApi.generateEwayBills(tripId),
+    mutationFn: (payload: { tripId: string | number, invoiceIds?: number[] }) => supply_chainApi.generateEwayBills(payload),
     onSuccess: (data) => {
       if (data.fileData) {
         // Trigger file download

@@ -15,7 +15,7 @@ const upload = multer({ storage: multer.memoryStorage() });
  */
 router.post('/bulk-trip/:tripId', async (req, res) => {
     const { tripId } = req.params;
-    const { user_id } = req.body;
+    const { user_id, invoiceIds } = req.body;
 
     const client = await pool.connect();
     try {
@@ -30,14 +30,24 @@ router.post('/bulk-trip/:tripId', async (req, res) => {
         if (tripRes.rows.length === 0) return res.status(404).json({ error: "Trip not found" });
         const trip = tripRes.rows[0];
 
-        // 3. Get all invoices in this trip that are above the threshold and don't already have an EWB
-        const invoicesRes = await client.query(`
-            SELECT id, invoice_number, grand_total 
-            FROM sales_invoices 
-            WHERE id IN (SELECT invoice_id FROM trip_invoices WHERE trip_id = $1)
-              AND CAST(grand_total AS NUMERIC) >= $2
-              AND (eway_bill_number IS NULL OR eway_bill_number = '')
-        `, [tripId, threshold]);
+        // 3. Get invoices based on manual selection OR fallback to threshold logic
+        let invoicesRes;
+        if (Array.isArray(invoiceIds) && invoiceIds.length > 0) {
+            invoicesRes = await client.query(`
+                SELECT id, invoice_number, grand_total 
+                FROM sales_invoices 
+                WHERE id = ANY($1::int[])
+                  AND (eway_bill_number IS NULL OR eway_bill_number = '')
+            `, [invoiceIds]);
+        } else {
+            invoicesRes = await client.query(`
+                SELECT id, invoice_number, grand_total 
+                FROM sales_invoices 
+                WHERE id IN (SELECT invoice_id FROM trip_invoices WHERE trip_id = $1)
+                  AND CAST(grand_total AS NUMERIC) >= $2
+                  AND (eway_bill_number IS NULL OR eway_bill_number = '')
+            `, [tripId, threshold]);
+        }
 
         const payloads = [];
         const results = [];
