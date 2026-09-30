@@ -178,8 +178,26 @@ export function useGenerateEwayBills() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         if (data.details && data.details.some((d: any) => d.status === 'Error')) {
-            const errors = data.details.filter((d: any) => d.status === 'Error').map((d: any) => `${d.invoice}: ${d.error}`).join('\n');
-            toast.error(`Partial Success: ${data.processedCount} processed. Failed:\n${errors}`, { duration: 10000 });
+            const errorDetails = data.details.filter((d: any) => d.status === 'Error');
+            
+            // Generate CSV for errors
+            const csvRows = ['Invoice Number,Error Reason'];
+            errorDetails.forEach((d: any) => {
+                const reason = `"${(d.error || '').replace(/"/g, '""')}"`;
+                csvRows.push(`${d.invoice},${reason}`);
+            });
+            const csvContent = csvRows.join('\n');
+            const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const csvUrl = URL.createObjectURL(csvBlob);
+            const csvA = document.createElement('a');
+            csvA.href = csvUrl;
+            csvA.download = `EWB_Generation_Errors_${Date.now()}.csv`;
+            document.body.appendChild(csvA);
+            csvA.click();
+            document.body.removeChild(csvA);
+            URL.revokeObjectURL(csvUrl);
+
+            toast.error(`Partial Success: ${data.processedCount} processed. Downloaded CSV with ${errorDetails.length} errors.`, { duration: 6000 });
           } else {
             toast.success(`Downloaded bulk E-Way Bill JSON for ${data.processedCount} invoices!`);
           }
