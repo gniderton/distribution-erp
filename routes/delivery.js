@@ -1304,7 +1304,7 @@ router.post('/verify/settle', async (req, res) => {
                 await client.query(`
                     INSERT INTO sales_return_lines (return_id, product_id, batch_id, qty, rate, gross_amount, scheme_amount, taxable_amount, tax_percent, tax_amount, amount, reason)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-                `, [srId, ret.product_id, ret.batch_id, ret.qty, line.baseRate, line.grossAmount, line.schemeAmount, line.taxableAmount, line.taxPct, line.taxAmount, Math.round(line.itemTotal), ret.reason]);
+                `, [srId, ret.product_id, ret.batch_id, ret.qty, line.baseRate, line.grossAmount, line.schemeAmount, line.taxableAmount, line.taxPct, line.taxAmount, Number(line.itemTotal.toFixed(2)), ret.reason]);
 
                 await client.query(`UPDATE trip_returns SET sales_return_id = $1 WHERE id = $2`, [srId, ret.id]);
 

@@ -893,9 +893,49 @@ router.post('/returns/manual', async (req, res) => {
                     }
                 }
 
-                // Tier 3: Batch Master Price (Fallback)
-                // If foundPrice is still false, it means they never bought this product.
-                // We fallback to unitNet which defaults to the frontend provided `Taxable $ / qty`.
+                // Tier 3: Customer Price Channel Rate (Fallback when never purchased before)
+                if (!foundPrice) {
+                    try {
+                        const custChannelRes = await client.query(`
+                            SELECT ch.price_column 
+                            FROM customers c 
+                            JOIN channels ch ON c.channel_id = ch.id 
+                            WHERE c.id = $1
+                        `, [customer_id]);
+                        const priceCol = custChannelRes.rows[0]?.price_column || 'wholesale_rate';
+
+                        let batchRate = 0;
+                        if (batchId) {
+                            const bRes = await client.query(`
+                                SELECT ${priceCol} as channel_rate, mrp 
+                                FROM inventory_batches 
+                                WHERE id = $1
+                            `, [batchId]);
+                            if (bRes.rows.length > 0) {
+                                batchRate = Number(bRes.rows[0].channel_rate || bRes.rows[0].mrp || 0);
+                            }
+                        }
+
+                        if (!batchRate && productId) {
+                            const pRes = await client.query(`
+                                SELECT b.${priceCol} as channel_rate, b.mrp 
+                                FROM inventory_batches b 
+                                WHERE b.product_id = $1 AND b.is_active = true 
+                                ORDER BY b.created_at DESC LIMIT 1
+                            `, [productId]);
+                            if (pRes.rows.length > 0) {
+                                batchRate = Number(pRes.rows[0].channel_rate || pRes.rows[0].mrp || 0);
+                            }
+                        }
+
+                        if (batchRate > 0) {
+                            unitNet = batchRate;
+                            foundPrice = true;
+                        }
+                    } catch (e) {
+                        console.error('Error resolving customer channel price for return fallback:', e.message);
+                    }
+                }
             }
 
             const grossAmount = qty * rate;

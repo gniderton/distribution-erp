@@ -189,7 +189,12 @@ export function CreateCreditNoteModal({ isOpen, onClose }: Props) {
       if (b) {
         newLines[index].batch_code = b.batch_code
         newLines[index].mrp = Number(b.mrp || 0)
-        newLines[index].rate = Number(b.mrp || 0)
+        
+        // Resolve customer's channel price (e.g. wholesale_rate, dealer_rate, etc.)
+        const selectedCustomer = Array.isArray(customers) ? customers.find((c: any) => String(c.id) === String(customerId)) : null
+        const priceCol = selectedCustomer?.default_price_col || 'wholesale_rate'
+        const channelRate = b[priceCol] || b.wholesale_rate || b.dealer_rate || b.distributor_rate || b.retail_rate || b.mrp || 0
+        newLines[index].rate = Number(channelRate)
       }
     }
 
