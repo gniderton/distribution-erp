@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { GroupedCheque } from '../types';
 import { useClearCheque, useBulkClearCheques, useBankStatementEntries } from '../hooks';
+import { formatStatementDate, getStatementEntryBalance, matchesStatementSearch } from '../utils';
 import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatCurrency } from '../../../lib/utils';
 import toast from 'react-hot-toast';
-import { X, CheckCircle, XCircle } from 'lucide-react';
+import { X, CheckCircle, XCircle, Search } from 'lucide-react';
 
 interface ClearChequeModalProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [clearanceDate, setClearanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [remarks, setRemarks] = useState('');
+  const [entrySearch, setEntrySearch] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -27,6 +29,7 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
       setMappings({});
       setClearanceDate(new Date().toISOString().split('T')[0]);
       setRemarks('');
+      setEntrySearch('');
     }
   }, [isOpen, selectedCheques]);
 
@@ -59,7 +62,7 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
     for (const [entryId, totalChequeAmount] of Object.entries(statementTotals)) {
       const entry = bankStatementEntries.find((e: any) => e.id.toString() === entryId);
       if (entry) {
-        const entryBalance = Number(entry.balance_amount ?? entry.unreconciled_amount ?? Math.abs(entry.amount));
+        const entryBalance = getStatementEntryBalance(entry);
         if (totalChequeAmount > entryBalance + 0.01) {
           return {
             entry,
@@ -173,6 +176,21 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search size={15} className="text-ink-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              placeholder="Filter unconsumed bank entries by narration, date (YYYY-MM-DD), ref or amount..."
+              value={entrySearch}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEntrySearch(e.target.value)}
+              className="w-full pl-9"
+            />
+          </div>
+          <span className="text-xs font-medium text-ink-500">
+            {isLoadingEntries ? 'Loading unconsumed entries...' : `${bankStatementEntries.length} unconsumed statement entries loaded`}
+          </span>
+        </div>
+
         <div className="border border-border-subtle rounded-xl overflow-hidden bg-surface max-h-[60vh] overflow-y-auto">
           <table className="w-full text-left text-sm divide-y divide-border-subtle">
             <thead className="bg-ink-50 sticky top-0 z-10 shadow-sm">
@@ -192,11 +210,13 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
                 </tr>
               ) : (
                 activeCheques.map(cheque => {
+                  const selectedEntryId = mappings[cheque.id] || '';
                   const validEntries = bankStatementEntries.filter((e: any) => {
                     if (e.status === 'Exhausted') return false;
-                    if (cheque.type === 'INCOMING') return Number(e.credit_amount) > 0;
-                    if (cheque.type === 'OUTGOING') return Number(e.debit_amount) > 0;
-                    return true;
+                    if (cheque.type === 'INCOMING' && !(Number(e.credit_amount) > 0)) return false;
+                    if (cheque.type === 'OUTGOING' && !(Number(e.debit_amount) > 0)) return false;
+                    if (selectedEntryId && String(e.id) === selectedEntryId) return true;
+                    return matchesStatementSearch(e, entrySearch);
                   });
 
                   return (
@@ -208,16 +228,16 @@ export default function ClearChequeModal({ isOpen, onClose, selectedCheques, onS
                       <td className="p-3">
                         <select
                           className="w-full h-9 rounded-lg border border-border-subtle text-sm px-3 outline-none focus:border-brand-500"
-                          value={mappings[cheque.id] || ''}
+                          value={selectedEntryId}
                           onChange={(e) => setMappings({ ...mappings, [cheque.id]: e.target.value })}
                           disabled={isLoadingEntries}
                         >
-                          <option value="">Select Statement Entry...</option>
+                          <option value="">Select Statement Entry ({validEntries.length})...</option>
                           {validEntries.map((e: any) => {
-                            const entryBalance = Number(e.balance_amount ?? e.unreconciled_amount ?? Math.abs(e.amount));
+                            const entryBalance = getStatementEntryBalance(e);
                             return (
                               <option key={e.id} value={e.id}>
-                                {e.transaction_date?.split('T')[0]} - {formatCurrency(Math.abs(e.amount))} {entryBalance !== Math.abs(e.amount) ? `(Bal: ${formatCurrency(entryBalance)})` : ''} - {e.particulars}
+                                {formatStatementDate(e.transaction_date)} - {formatCurrency(Math.abs(e.amount))} {entryBalance !== Math.abs(e.amount) ? `(Bal: ${formatCurrency(entryBalance)})` : ''} - {e.particulars}
                               </option>
                             );
                           })}

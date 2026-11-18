@@ -9,12 +9,19 @@ export function useCheques(filters?: ChequeFilter) {
   });
 }
 
+const invalidateChequeReconQueries = (qc: ReturnType<typeof useQueryClient>) => {
+  qc.invalidateQueries({ queryKey: ['cheques'] });
+  qc.invalidateQueries({ queryKey: ['bankStatementEntries'] });
+  qc.invalidateQueries({ queryKey: ['unconsumed-credits'] });
+  qc.invalidateQueries({ queryKey: ['unconsumed-debits'] });
+};
+
 export function useClearCheque() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, payload }: { id: number | string, payload: ClearChequePayload }) => 
       chequeApi.clear(id, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['cheques'] })
+    onSuccess: () => invalidateChequeReconQueries(qc)
   });
 }
 
@@ -22,7 +29,7 @@ export function useBulkClearCheques() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: BulkClearChequePayload) => chequeApi.bulkClear(payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['cheques'] })
+    onSuccess: () => invalidateChequeReconQueries(qc)
   });
 }
 
@@ -31,7 +38,7 @@ export function useBounceCheque() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: number | string, payload: BounceChequePayload }) => 
       chequeApi.bounce(id, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['cheques'] })
+    onSuccess: () => invalidateChequeReconQueries(qc)
   });
 }
 
@@ -39,13 +46,13 @@ export function useRevertCheque() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number | string) => chequeApi.revert(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['cheques'] })
+    onSuccess: () => invalidateChequeReconQueries(qc)
   });
 }
 
-export function useBankStatementEntries() {
+export function useBankStatementEntries(params?: { unconsumedOnly?: boolean; limit?: number; search?: string; startDate?: string; endDate?: string }) {
   return useQuery({
-    queryKey: ['bankStatementEntries'],
-    queryFn: () => chequeApi.getBankStatementEntries()
+    queryKey: ['bankStatementEntries', params ?? { unconsumedOnly: true }],
+    queryFn: () => chequeApi.getBankStatementEntries(params)
   });
 }

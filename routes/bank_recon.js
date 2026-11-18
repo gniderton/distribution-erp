@@ -140,11 +140,48 @@ router.post('/upload', async (req, res) => {
     }
 });
 
+function parseBoundedInt(raw, fallback, min, max) {
+    const n = parseInt(String(raw ?? ''), 10);
+    if (!Number.isFinite(n) || n < min) return fallback;
+    return Math.min(max, n);
+}
+
+function appendDateAndSearchFilters(params, { search, startDate, endDate, bank_account_id }) {
+    const clauses = [];
+    if (bank_account_id) {
+        params.push(bank_account_id);
+        clauses.push(`AND bank_account_id = $${params.length}`);
+    }
+    if (startDate && endDate) {
+        params.push(startDate, endDate);
+        clauses.push(`AND transaction_date BETWEEN $${params.length - 1} AND $${params.length}`);
+    } else if (startDate) {
+        params.push(startDate);
+        clauses.push(`AND transaction_date >= $${params.length}`);
+    } else if (endDate) {
+        params.push(endDate);
+        clauses.push(`AND transaction_date <= $${params.length}`);
+    }
+    if (search && String(search).trim()) {
+        params.push(`%${String(search).trim()}%`);
+        clauses.push(`AND (particulars ILIKE $${params.length} OR bank_ref_id ILIKE $${params.length} OR COALESCE(bank_name, '') ILIKE $${params.length})`);
+    }
+    return clauses.join(' ');
+}
+
 // List Bank Statement Entries
 router.get('/list', async (req, res) => {
     try {
-        const { bank_name, status, startDate, endDate, search } = req.query;
-        let query = `SELECT * FROM bank_statement_entries WHERE 1=1`;
+        const { bank_name, status, startDate, endDate, search, bank_account_id, unconsumedOnly, entryType } = req.query;
+        const onlyUnconsumed = String(unconsumedOnly || '').toLowerCase() === 'true' || String(unconsumedOnly) === '1';
+        let query = `
+            SELECT
+                *,
+                GREATEST(0, ABS(COALESCE(amount, 0)) - COALESCE(consumed_amount, 0)) AS balance_amount,
+                GREATEST(0, ABS(COALESCE(amount, 0)) - COALESCE(consumed_amount, 0)) AS unreconciled_amount
+            FROM bank_statement_entries
+            WHERE 1=1
+        `;
         const params = [];
 
         if (bank_name) {
@@ -155,16 +192,20 @@ router.get('/list', async (req, res) => {
             params.push(status);
             query += ` AND status = $${params.length}`;
         }
-        if (startDate && endDate) {
-            params.push(startDate, endDate);
-            query += ` AND transaction_date BETWEEN $${params.length - 1} AND $${params.length}`;
+        if (onlyUnconsumed) {
+            query += ` AND COALESCE(status, '') != 'Exhausted' AND (credit_amount > COALESCE(consumed_amount, 0) OR debit_amount > COALESCE(consumed_amount, 0) OR (ABS(COALESCE(amount, 0)) - COALESCE(consumed_amount, 0)) > 0.01)`;
         }
-        if (search) {
-            params.push(`%${search}%`);
-            query += ` AND (particulars ILIKE $${params.length} OR bank_ref_id ILIKE $${params.length})`;
+        if (String(entryType || '').toLowerCase() === 'credit') {
+            query += ` AND credit_amount > COALESCE(consumed_amount, 0)`;
+        } else if (String(entryType || '').toLowerCase() === 'debit') {
+            query += ` AND debit_amount > COALESCE(consumed_amount, 0)`;
         }
+        query += ' ' + appendDateAndSearchFilters(params, { search, startDate, endDate, bank_account_id });
 
-        query += ` ORDER BY transaction_date DESC, created_at DESC LIMIT 1000`;
+        const limit = parseBoundedInt(req.query.limit, onlyUnconsumed ? 5000 : 1000, 1, 10000);
+        const offset = parseBoundedInt(req.query.offset, 0, 0, 1000000);
+        params.push(limit, offset);
+        query += ` ORDER BY transaction_date DESC, created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
 
         const result = await pool.query(query, params);
         res.json(result.rows);
@@ -201,41 +242,39 @@ router.post('/clear', async (req, res) => {
     }
 });
 
-// [NEW] Get Unconsumed Credits for DSE Smart Select
-router.get('/unconsumed-credits', async (req, res) => {
+async function fetchUnconsumedByDirection(req, res, amountCol) {
     try {
+        const { search, startDate, endDate, bank_account_id } = req.query;
+        const params = [];
+        const extraFilters = appendDateAndSearchFilters(params, { search, startDate, endDate, bank_account_id });
+        const limit = parseBoundedInt(req.query.limit, 2000, 1, 10000);
+        const offset = parseBoundedInt(req.query.offset, 0, 0, 1000000);
+        params.push(limit, offset);
+
         const result = await pool.query(`
-            SELECT id, bank_ref_id, particulars, credit_amount, consumed_amount, transaction_date
-            FROM bank_statement_entries 
-            WHERE credit_amount > consumed_amount 
-              AND status != 'Exhausted'
+            SELECT
+                id, bank_ref_id, particulars, ${amountCol}, consumed_amount,
+                GREATEST(0, ${amountCol} - COALESCE(consumed_amount, 0)) AS balance_amount,
+                transaction_date, bank_name, bank_account_id
+            FROM bank_statement_entries
+            WHERE ${amountCol} > COALESCE(consumed_amount, 0)
+              AND COALESCE(status, '') != 'Exhausted'
+              ${extraFilters}
             ORDER BY transaction_date DESC, created_at DESC
-            LIMIT 50
-        `);
+            LIMIT $${params.length - 1} OFFSET $${params.length}
+        `, params);
         res.json(result.rows);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: err.message });
     }
-});
+}
+
+// [NEW] Get Unconsumed Credits for DSE Smart Select
+router.get('/unconsumed-credits', (req, res) => fetchUnconsumedByDirection(req, res, 'credit_amount'));
 
 // [NEW] Get Unconsumed Debits for Expense/Vendor Payment Smart Select
-router.get('/unconsumed-debits', async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT id, bank_ref_id, particulars, debit_amount, consumed_amount, transaction_date
-            FROM bank_statement_entries 
-            WHERE debit_amount > consumed_amount 
-              AND status != 'Exhausted'
-            ORDER BY transaction_date DESC, created_at DESC
-            LIMIT 50
-        `);
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: err.message });
-    }
-});
+router.get('/unconsumed-debits', (req, res) => fetchUnconsumedByDirection(req, res, 'debit_amount'));
 
 // [NEW] Get Detailed Audit View (Reconciliation Details)
 router.get('/audit-view', async (req, res) => {

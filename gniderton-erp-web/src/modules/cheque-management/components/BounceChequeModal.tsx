@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import type { GroupedCheque } from '../types';
 import { useBounceCheque, useBankStatementEntries } from '../hooks';
+import { formatStatementDate, getStatementEntryBalance, matchesStatementSearch } from '../utils';
 import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { formatCurrency } from '../../../lib/utils';
 import toast from 'react-hot-toast';
+import { Search } from 'lucide-react';
 
 interface BounceChequeModalProps {
   isOpen: boolean;
@@ -23,6 +25,7 @@ export default function BounceChequeModal({ isOpen, onClose, cheque, onSuccess }
   
   const [depositEntryId, setDepositEntryId] = useState('');
   const [bounceEntryId, setBounceEntryId] = useState('');
+  const [entrySearch, setEntrySearch] = useState('');
 
   const bounceMutation = useBounceCheque();
   const { data: bankStatementEntries = [], isLoading: isLoadingEntries } = useBankStatementEntries();
@@ -63,16 +66,18 @@ export default function BounceChequeModal({ isOpen, onClose, cheque, onSuccess }
   // If OUTGOING: deposit = DEBIT, bounce = CREDIT
   const validDepositEntries = bankStatementEntries.filter((e: any) => {
     if (e.status === 'Exhausted') return false;
-    if (cheque.type === 'INCOMING') return Number(e.credit_amount) > 0;
-    if (cheque.type === 'OUTGOING') return Number(e.debit_amount) > 0;
-    return true;
+    if (cheque.type === 'INCOMING' && !(Number(e.credit_amount) > 0)) return false;
+    if (cheque.type === 'OUTGOING' && !(Number(e.debit_amount) > 0)) return false;
+    if (depositEntryId && String(e.id) === depositEntryId) return true;
+    return matchesStatementSearch(e, entrySearch);
   });
 
   const validBounceEntries = bankStatementEntries.filter((e: any) => {
     if (e.status === 'Exhausted') return false;
-    if (cheque.type === 'INCOMING') return Number(e.debit_amount) > 0;
-    if (cheque.type === 'OUTGOING') return Number(e.credit_amount) > 0;
-    return true;
+    if (cheque.type === 'INCOMING' && !(Number(e.debit_amount) > 0)) return false;
+    if (cheque.type === 'OUTGOING' && !(Number(e.credit_amount) > 0)) return false;
+    if (bounceEntryId && String(e.id) === bounceEntryId) return true;
+    return matchesStatementSearch(e, entrySearch);
   });
 
   return (
@@ -141,38 +146,55 @@ export default function BounceChequeModal({ isOpen, onClose, cheque, onSuccess }
           </div>
 
           {/* Statement Entries for Reconciliation */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-ink-700 mb-1">Original Deposit Statement Entry (Optional)</label>
-              <select
-                className="w-full h-9 rounded-lg border border-border-subtle text-sm px-3 outline-none focus:border-brand-500 bg-white"
-                value={depositEntryId}
-                onChange={(e) => setDepositEntryId(e.target.value)}
-                disabled={isLoadingEntries}
-              >
-                <option value="">Select Statement Entry...</option>
-                {validDepositEntries.map((e: any) => (
-                  <option key={e.id} value={e.id}>
-                    {e.transaction_date?.split('T')[0]} - {formatCurrency(Math.abs(e.amount))} - {e.particulars?.slice(0, 30)}
-                  </option>
-                ))}
-              </select>
+          <div className="space-y-2">
+            <div className="relative">
+              <Search size={14} className="text-ink-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Input
+                placeholder="Filter unconsumed statement entries (date, narration, amount)..."
+                value={entrySearch}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEntrySearch(e.target.value)}
+                className="w-full pl-8"
+              />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-ink-700 mb-1">Bounce Return Statement Entry (Optional)</label>
-              <select
-                className="w-full h-9 rounded-lg border border-border-subtle text-sm px-3 outline-none focus:border-brand-500 bg-white"
-                value={bounceEntryId}
-                onChange={(e) => setBounceEntryId(e.target.value)}
-                disabled={isLoadingEntries}
-              >
-                <option value="">Select Statement Entry...</option>
-                {validBounceEntries.map((e: any) => (
-                  <option key={e.id} value={e.id}>
-                    {e.transaction_date?.split('T')[0]} - {formatCurrency(Math.abs(e.amount))} - {e.particulars?.slice(0, 30)}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-ink-700 mb-1">Original Deposit Statement Entry (Optional)</label>
+                <select
+                  className="w-full h-9 rounded-lg border border-border-subtle text-sm px-3 outline-none focus:border-brand-500 bg-white"
+                  value={depositEntryId}
+                  onChange={(e) => setDepositEntryId(e.target.value)}
+                  disabled={isLoadingEntries}
+                >
+                  <option value="">Select Statement Entry ({validDepositEntries.length})...</option>
+                  {validDepositEntries.map((e: any) => {
+                    const bal = getStatementEntryBalance(e);
+                    return (
+                      <option key={e.id} value={e.id}>
+                        {formatStatementDate(e.transaction_date)} - {formatCurrency(Math.abs(e.amount))} {bal !== Math.abs(e.amount) ? `(Bal: ${formatCurrency(bal)})` : ''} - {e.particulars?.slice(0, 30)}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-ink-700 mb-1">Bounce Return Statement Entry (Optional)</label>
+                <select
+                  className="w-full h-9 rounded-lg border border-border-subtle text-sm px-3 outline-none focus:border-brand-500 bg-white"
+                  value={bounceEntryId}
+                  onChange={(e) => setBounceEntryId(e.target.value)}
+                  disabled={isLoadingEntries}
+                >
+                  <option value="">Select Statement Entry ({validBounceEntries.length})...</option>
+                  {validBounceEntries.map((e: any) => {
+                    const bal = getStatementEntryBalance(e);
+                    return (
+                      <option key={e.id} value={e.id}>
+                        {formatStatementDate(e.transaction_date)} - {formatCurrency(Math.abs(e.amount))} {bal !== Math.abs(e.amount) ? `(Bal: ${formatCurrency(bal)})` : ''} - {e.particulars?.slice(0, 30)}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             </div>
           </div>
 

@@ -34,8 +34,13 @@ export const chequeApi = {
     return data;
   },
 
-  getBankStatementEntries: async () => {
-    const { data } = await api.get(`/api/finance/reconciliation/bank/list`);
+  getBankStatementEntries: async (params?: { unconsumedOnly?: boolean; limit?: number; offset?: number; search?: string; startDate?: string; endDate?: string }) => {
+    const queryParams = {
+      unconsumedOnly: true,
+      limit: 5000,
+      ...params,
+    };
+    const { data } = await api.get(`/api/finance/reconciliation/bank/list`, { params: queryParams });
     return data;
   }
 };
