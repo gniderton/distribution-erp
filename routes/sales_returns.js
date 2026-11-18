@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const { syncInvoiceFromAllocations } = require('../services/invoiceBalanceHelper');
 
 // 1. List Credit Note Headers with Nested Items
 router.get('/', async (req, res) => {
@@ -202,35 +203,29 @@ router.delete('/:id', async (req, res) => {
             throw new Error("Credit Note is already cancelled");
         }
 
-        // B. Rollback Allocations (Restore Invoice Balances)
-        // Identify all invoices affected by this return's allocations
+        // B. Rollback Allocations & Any Advance / Utilizations Derived From This Return
+        const affectedInvoiceIds = new Set();
         const affectedInvsRes = await client.query('SELECT DISTINCT invoice_id FROM customer_payment_allocations WHERE return_id = $1', [id]);
+        for (const r of affectedInvsRes.rows) {
+            if (r.invoice_id) affectedInvoiceIds.add(r.invoice_id);
+        }
 
-        // Delete the allocations
         await client.query('DELETE FROM customer_payment_allocations WHERE return_id = $1', [id]);
 
-        // Recalculate balances from ground truth for each affected invoice
-        for (const row of affectedInvsRes.rows) {
-            if (row.invoice_id) {
-                await client.query(`
-                    UPDATE sales_invoices si
-                    SET amount_paid = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
-                                      COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0),
-                        paid_amount = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
-                                      COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
-                    WHERE id = $1
-                `, [row.invoice_id]);
-
-                await client.query(`
-                    UPDATE sales_invoices
-                    SET status = CASE 
-                        WHEN (grand_total - amount_paid) <= 1 THEN 'Paid'
-                        WHEN amount_paid > 0 THEN 'Partially Paid'
-                        ELSE 'Unpaid' 
-                    END
-                    WHERE id = $1
-                `, [row.invoice_id]);
+        const advIdsRes = await client.query('SELECT id FROM customer_advances WHERE return_id = $1', [id]);
+        const advIds = advIdsRes.rows.map(r => r.id);
+        if (advIds.length > 0) {
+            const utilInvsRes = await client.query('SELECT DISTINCT invoice_id FROM advance_utilizations WHERE advance_id = ANY($1::bigint[])', [advIds]);
+            for (const r of utilInvsRes.rows) {
+                if (r.invoice_id) affectedInvoiceIds.add(r.invoice_id);
             }
+            await client.query('DELETE FROM advance_utilizations WHERE advance_id = ANY($1::bigint[])', [advIds]);
+            await client.query('UPDATE customer_advances SET balance = 0, is_active = false, updated_at = NOW() WHERE id = ANY($1::bigint[])', [advIds]);
+        }
+
+        // Recalculate amount_paid, paid_amount, balance_amount, and status from ground truth
+        for (const invId of affectedInvoiceIds) {
+            await syncInvoiceFromAllocations(client, invId);
         }
 
         // C. Rollback Stock (Only if returned to stock)

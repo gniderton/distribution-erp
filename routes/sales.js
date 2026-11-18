@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool } = require('../config/db');
 const { calculateFreeItems } = require('../utils/schemeEngine'); // [NEW] Import
 const { runBackgroundJob } = require('../utils/jobRunner');
+const { allocateReturnCreditToInvoicesAndAdvance } = require('../services/invoiceBalanceHelper');
 
 // --- SALES ORDERS (Header/Lines) ---
 
@@ -1028,83 +1029,14 @@ router.post('/returns/manual', async (req, res) => {
             WHERE id = $4
         `, [totalTaxable, totalTax, roundedGrandTotal, returnId]);
 
-        // 5. ALLOCATION LOGIC (LIFO)
-        let remainingToAllocate = roundedGrandTotal;
-
-        // A. Priority: Linked Invoice
-        if (invoice_id && remainingToAllocate > 0) {
-            const invRes = await client.query(`
-                SELECT id, grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0) as balance
-                FROM sales_invoices WHERE id = $1
-            `, [invoice_id]);
-            
-            if (invRes.rows.length > 0) {
-                const balance = Number(invRes.rows[0].balance);
-                const alloc = Math.min(balance, remainingToAllocate);
-                if (alloc > 0) {
-                    await client.query(`
-                        INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
-                        VALUES ($1, $2, NOW(), $3, 'ACTIVE')
-                    `, [invoice_id, alloc, returnId]);
-
-                    // [NEW] Sync Invoice Balance and Status
-                    await client.query(`
-                        UPDATE sales_invoices 
-                        SET amount_paid = COALESCE(amount_paid, 0) + $1,
-                            paid_amount = COALESCE(paid_amount, 0) + $1,
-                            status = CASE 
-                                WHEN (COALESCE(paid_amount, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' 
-                                ELSE 'Partially Paid' 
-                            END
-                        WHERE id = $2
-                    `, [alloc, invoice_id]);
-
-                    remainingToAllocate -= alloc;
-                }
-            }
-        }
-
-        // B. Spillover: LIFO (Newest First)
-        if (remainingToAllocate > 0.01) {
-            const pendingRes = await client.query(`
-                SELECT id, (grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0)) as balance
-                FROM sales_invoices
-                WHERE customer_id = $1 AND status != 'Cancelled'
-                AND (grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0)) > 0
-                AND id != $2
-                ORDER BY invoice_date DESC, created_at DESC
-            `, [customer_id, invoice_id || -1]);
-
-            for (const inv of pendingRes.rows) {
-                if (remainingToAllocate <= 0.01) break;
-                const alloc = Math.min(Number(inv.balance), remainingToAllocate);
-                await client.query(`
-                    INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
-                    VALUES ($1, $2, NOW(), $3, 'ACTIVE')
-                `, [inv.id, alloc, returnId]);
-
-                // [NEW] Sync Invoice Balance and Status
-                await client.query(`
-                    UPDATE sales_invoices 
-                    SET amount_paid = COALESCE(amount_paid, 0) + $1,
-                        status = CASE 
-                            WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' 
-                            ELSE 'Partially Paid' 
-                        END
-                    WHERE id = $2
-                `, [alloc, inv.id]);
-
-                remainingToAllocate -= alloc;
-            }
-        }
-
-        // [NEW] Convert remaining unutilized credit note amount to a Customer Advance
-        if (remainingToAllocate > 0.01) {
-            await client.query(`
-                INSERT INTO customer_advances (customer_id, return_id, amount, balance)
-                VALUES ($1, $2, $3, $3)
-            `, [customer_id, returnId, remainingToAllocate]);
-        }
+        // 5. ALLOCATION LOGIC using live balance (ACTIVE CPA + advance_utilizations)
+        await allocateReturnCreditToInvoicesAndAdvance(client, {
+            returnId,
+            customerId: customer_id,
+            totalCredit: roundedGrandTotal,
+            specificInvoiceIds: invoice_id ? [invoice_id] : [],
+            minThreshold: 0.01
+        });
 
         // 6. ACCOUNTING (LEDGER)
         const acc_inv = 1001, acc_ar = 1101, acc_returns = 4003, acc_cgst = 2011, acc_sgst = 2012, acc_round = 5003, acc_cogs = 5001;
@@ -1348,98 +1280,14 @@ router.post('/returns/:id/apply', async (req, res) => {
                 [new Date(), `Stock Reversal for Return: ${ret.return_number}`, 'COGS_REV', id, JSON.stringify(stockInLines)]);
         }
 
-        // --- [NEW] ALLOCATION LOGIC (Deduction from Invoice) ---
-        let creditRemaining = total;
-        // Priority: Linked Invoice
-        if (ret.invoice_id && creditRemaining > 0) {
-            const invRes = await client.query(`
-                SELECT id, grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0) as balance
-                FROM sales_invoices WHERE id = $1
-            `, [ret.invoice_id]);
-            if (invRes.rows.length > 0) {
-                const balance = Number(invRes.rows[0].balance);
-                const apply = Math.min(creditRemaining, balance);
-                if (apply > 0.01) {
-                    await client.query(`
-                        INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
-                        VALUES ($1, $2, NOW(), $3, 'ACTIVE')
-                    `, [ret.invoice_id, apply, id]);
-
-                    // Update invoice from ground truth active allocations and advances
-                    await client.query(`
-                        UPDATE sales_invoices si
-                        SET amount_paid = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
-                                          COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0),
-                            paid_amount = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
-                                          COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
-                        WHERE id = $1
-                    `, [ret.invoice_id]);
-
-                    await client.query(`
-                        UPDATE sales_invoices
-                        SET status = CASE 
-                            WHEN (grand_total - amount_paid) <= 1 THEN 'Paid'
-                            WHEN amount_paid > 0 THEN 'Partially Paid'
-                            ELSE 'Unpaid' 
-                        END
-                        WHERE id = $1
-                    `, [ret.invoice_id]);
-                    creditRemaining -= apply;
-                }
-            }
-        }
-
-        // Spillover: LIFO
-        if (creditRemaining > 0.49) {
-            const pendingRes = await client.query(`
-                SELECT id, (grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0)) as balance
-                FROM sales_invoices
-                WHERE customer_id = $1 AND status != 'Cancelled'
-                AND (grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0)) > 0
-                AND id != $2
-                ORDER BY invoice_date DESC, created_at DESC
-            `, [ret.customer_id, ret.invoice_id || -1]);
-
-            for (const inv of pendingRes.rows) {
-                if (creditRemaining <= 0.49) break;
-                const apply = Math.min(Number(inv.balance), creditRemaining);
-                if (apply > 0.01) {
-                    await client.query(`
-                        INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
-                        VALUES ($1, $2, NOW(), $3, 'ACTIVE')
-                    `, [inv.id, apply, id]);
-
-                    // Update invoice from ground truth active allocations and advances
-                    await client.query(`
-                        UPDATE sales_invoices si
-                        SET amount_paid = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
-                                          COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0),
-                            paid_amount = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
-                                          COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
-                        WHERE id = $1
-                    `, [inv.id]);
-
-                    await client.query(`
-                        UPDATE sales_invoices
-                        SET status = CASE 
-                            WHEN (grand_total - amount_paid) <= 1 THEN 'Paid'
-                            WHEN amount_paid > 0 THEN 'Partially Paid'
-                            ELSE 'Unpaid' 
-                        END
-                        WHERE id = $1
-                    `, [inv.id]);
-                    creditRemaining -= apply;
-                }
-            }
-        }
-
-        // [NEW] Convert remaining unutilized credit note amount to a Customer Advance
-        if (creditRemaining > 0.01) {
-            await client.query(`
-                INSERT INTO customer_advances (customer_id, return_id, amount, balance)
-                VALUES ($1, $2, $3, $3)
-            `, [ret.customer_id, id, creditRemaining]);
-        }
+        // --- ALLOCATION LOGIC using live balance (ACTIVE CPA + advance_utilizations) ---
+        await allocateReturnCreditToInvoicesAndAdvance(client, {
+            returnId: id,
+            customerId: ret.customer_id,
+            totalCredit: total,
+            specificInvoiceIds: ret.invoice_id ? [ret.invoice_id] : [],
+            minThreshold: 0.49
+        });
 
         await client.query('COMMIT');
         res.json({ success: true, message: 'Return Applied. Stock and Ledger updated.' });

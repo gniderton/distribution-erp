@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const { syncInvoiceFromAllocations } = require('../services/invoiceBalanceHelper');
 
 // 1. List All Cheques (Management Dashboard)
 router.get('/', async (req, res) => {
@@ -285,34 +286,29 @@ router.post('/:id/bounce', async (req, res) => {
                 WHERE payment_id = $1
             `, [paymentId]);
 
-            // b. Find all affected invoices
+            // b. Find all affected invoices (including via any advance generated from this payment)
+            const affectedIds = new Set();
             const affectedInvsRes = await client.query(`
                 SELECT DISTINCT invoice_id FROM customer_payment_allocations WHERE payment_id = $1
             `, [paymentId]);
-
-            // c. Re-calculate status and balance for each affected invoice
             for (const row of affectedInvsRes.rows) {
-                const invId = row.invoice_id;
-                await client.query(`
-                    UPDATE sales_invoices si
-                    SET 
-                        amount_paid = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
-                                      COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0) +
-                                      COALESCE((SELECT SUM(grand_total) FROM sales_returns WHERE invoice_id = si.id AND status = 'Applied'), 0),
-                        status = 'Unpaid' -- Reset to Unpaid (logic below will refine if partially paid)
-                    WHERE id = $1
-                `, [invId]);
+                if (row.invoice_id) affectedIds.add(row.invoice_id);
+            }
 
-                // Refine status based on new amount_paid
-                await client.query(`
-                    UPDATE sales_invoices si
-                    SET status = CASE 
-                        WHEN amount_paid <= 0 THEN 'Unpaid'
-                        WHEN amount_paid < (grand_total - 0.01) THEN 'Partially Paid'
-                        ELSE 'Paid'
-                    END
-                    WHERE id = $1
-                `, [invId]);
+            const advRes = await client.query(`SELECT id FROM customer_advances WHERE payment_id = $1`, [paymentId]);
+            const advIds = advRes.rows.map(r => r.id);
+            if (advIds.length > 0) {
+                const auInvs = await client.query(`SELECT DISTINCT invoice_id FROM advance_utilizations WHERE advance_id = ANY($1::bigint[])`, [advIds]);
+                for (const row of auInvs.rows) {
+                    if (row.invoice_id) affectedIds.add(row.invoice_id);
+                }
+                await client.query(`DELETE FROM advance_utilizations WHERE advance_id = ANY($1::bigint[])`, [advIds]);
+                await client.query(`UPDATE customer_advances SET balance = 0, is_active = false, updated_at = NOW() WHERE id = ANY($1::bigint[])`, [advIds]);
+            }
+
+            // c. Re-calculate status and balance_amount for each affected invoice
+            for (const invId of affectedIds) {
+                await syncInvoiceFromAllocations(client, invId);
             }
 
             // d. Mark the payment itself as Rejected (Bounced)

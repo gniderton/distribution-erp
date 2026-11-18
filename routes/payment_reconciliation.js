@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool } = require('../config/db');
 const { calculateDailyPoints } = require('../services/performanceService');
 const { runBackgroundJob } = require('../utils/jobRunner');
+const { getInvoiceLiveBalance, syncInvoiceFromAllocations } = require('../services/invoiceBalanceHelper');
 
 // 1. List Pending DSE Reports (Dashboard)
 router.get('/list', async (req, res) => {
@@ -243,9 +244,13 @@ router.post('/bulk-update', async (req, res) => {
                     // 2. Process DSE allocations with auto-resolution
                     if (pendingAllocRes.rows.length > 0) {
                         for (const pendingAlloc of pendingAllocRes.rows) {
-                            if (remainingToAllocate <= 0) break;
+                            if (remainingToAllocate <= 0) {
+                                await client.query(`UPDATE customer_payment_allocations SET status = 'REVERSED' WHERE id = $1`, [pendingAlloc.id]);
+                                continue;
+                            }
 
-                            const currentBalance = Number(pendingAlloc.grand_total) - Number(pendingAlloc.current_paid);
+                            const liveInv = await getInvoiceLiveBalance(client, pendingAlloc.invoice_id);
+                            const currentBalance = liveInv ? liveInv.balance : 0;
                             const requestedAmount = Number(pendingAlloc.amount);
 
                             // 🛡️ FORENSIC SAFETY CHECK: Prevent Cross-Customer Allocation
@@ -260,7 +265,7 @@ router.post('/bulk-update', async (req, res) => {
                                 continue;
                             }
 
-                            if (currentBalance <= 0) {
+                            if (currentBalance <= 0.01) {
                                 // Invoice fully paid - skip and mark as REVERSED
                                 await client.query(`
                                     UPDATE customer_payment_allocations 
@@ -270,7 +275,7 @@ router.post('/bulk-update', async (req, res) => {
                                 continue;
                             }
 
-                            // Auto-adjust to current balance if needed
+                            // Auto-adjust to current live balance if needed
                             const allocateAmount = Math.min(requestedAmount, currentBalance, remainingToAllocate);
 
                             // Update allocation to ACTIVE status with adjusted amount
@@ -280,25 +285,8 @@ router.post('/bulk-update', async (req, res) => {
                                 WHERE id = $2
                             `, [allocateAmount, pendingAlloc.id]);
 
-                            // Update invoice from ground truth active allocations and advances
-                            await client.query(`
-                                UPDATE sales_invoices si
-                                SET amount_paid = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
-                                                  COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0),
-                                    paid_amount = COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
-                                                  COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
-                                WHERE id = $1
-                            `, [pendingAlloc.invoice_id]);
-
-                            await client.query(`
-                                UPDATE sales_invoices
-                                SET status = CASE 
-                                    WHEN (grand_total - amount_paid) <= 1 THEN 'Paid'
-                                    WHEN amount_paid > 0 THEN 'Partially Paid'
-                                    ELSE 'Unpaid' 
-                                END
-                                WHERE id = $1
-                            `, [pendingAlloc.invoice_id]);
+                            // Sync invoice amount_paid, paid_amount, balance_amount, and status from ground truth
+                            await syncInvoiceFromAllocations(client, pendingAlloc.invoice_id);
 
                             remainingToAllocate -= allocateAmount;
                             processedInvoices.add(pendingAlloc.invoice_id);
@@ -308,38 +296,32 @@ router.post('/bulk-update', async (req, res) => {
                     // 3. FIFO allocation for remaining amount (Oldest Debt First)
                     if (remainingToAllocate > 0.01) {
                         const unpaidRes = await client.query(`
-                            SELECT id, invoice_number, grand_total, COALESCE(amount_paid, 0) as amount_paid 
-                            FROM sales_invoices 
-                            WHERE customer_id = $1 AND status != 'Paid'
-                            ORDER BY invoice_date ASC, id ASC
+                            SELECT si.id
+                            FROM sales_invoices si
+                            WHERE si.customer_id = $1 AND si.status != 'Cancelled'
+                              AND (
+                                  si.grand_total
+                                  - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0)
+                                  - COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
+                              ) > 0.01
+                            ORDER BY si.invoice_date ASC, si.id ASC
                         `, [pay.customer_id]);
 
                         for (const inv of unpaidRes.rows) {
                             if (remainingToAllocate <= 0.01) break;
-                            if (processedInvoices.has(inv.id)) continue; // Skip already processed
+                            if (processedInvoices.has(inv.id)) continue;
 
-                            const balance = Number(inv.grand_total) - Number(inv.amount_paid);
-                            if (balance <= 0) continue;
+                            const liveInv = await getInvoiceLiveBalance(client, inv.id);
+                            if (!liveInv || liveInv.balance <= 0.01) continue;
 
-                            const allocate = Math.min(remainingToAllocate, balance);
+                            const allocate = Math.min(remainingToAllocate, liveInv.balance);
 
-                            // Create new allocation (FIFO auto-resolution)
                             await client.query(`
                                 INSERT INTO customer_payment_allocations (payment_id, invoice_id, amount, status)
                                 VALUES ($1, $2, $3, 'ACTIVE')
                             `, [pay.id, inv.id, allocate]);
 
-                            // Update invoice
-                            await client.query(`
-                                UPDATE sales_invoices 
-                                SET amount_paid = COALESCE(amount_paid, 0) + $1,
-                                    paid_amount = COALESCE(paid_amount, 0) + $1,
-                                    status = CASE 
-                                        WHEN (grand_total - (COALESCE(amount_paid, 0) + $1)) <= 1 THEN 'Paid'
-                                        ELSE 'Partially Paid' 
-                                    END
-                                WHERE id = $2
-                            `, [allocate, inv.id]);
+                            await syncInvoiceFromAllocations(client, inv.id);
 
                             remainingToAllocate -= allocate;
                         }

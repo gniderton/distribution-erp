@@ -71,12 +71,18 @@ router.get('/unified', async (req, res) => {
                 ca.city as district,
                 ca.pincode as pin_code,
 
-                -- Real-time Payment Calculations
+                -- Real-time Payment Calculations (ACTIVE CPA + advance_utilizations)
                 CASE WHEN si.id IS NOT NULL THEN
-                    COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id), 0)
+                    (
+                        COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                        COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
+                    )
                 ELSE 0 END as paid_amount,
                 CASE WHEN si.id IS NOT NULL THEN
-                    si.grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id), 0)
+                    GREATEST(0, si.grand_total - (
+                        COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                        COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
+                    ))
                 ELSE 0 END as balance_amount,
                 
                 -- Computed fields for frontend
@@ -223,10 +229,16 @@ router.get('/unified/:id', async (req, res) => {
                 si.total_cgst,
                 si.total_sgst,
                 CASE WHEN si.id IS NOT NULL THEN
-                    COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id), 0)
+                    (
+                        COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                        COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
+                    )
                 ELSE 0 END as paid_amount,
                 CASE WHEN si.id IS NOT NULL THEN
-                    si.grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id), 0)
+                    GREATEST(0, si.grand_total - (
+                        COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id AND status = 'ACTIVE'), 0) +
+                        COALESCE((SELECT SUM(amount) FROM advance_utilizations WHERE invoice_id = si.id), 0)
+                    ))
                 ELSE 0 END as balance_amount,
                 (SELECT SUM(gross_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_gross_amount,
                 (SELECT SUM(scheme_amount) FROM sales_invoice_lines WHERE invoice_id = si.id) as invoice_scheme_amount,

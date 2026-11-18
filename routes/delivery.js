@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { runBackgroundJob } = require('../utils/jobRunner');
+const { allocateReturnCreditToInvoicesAndAdvance } = require('../services/invoiceBalanceHelper');
 
 // --- A. Dispatcher Operations ---
 
@@ -1391,97 +1392,16 @@ router.post('/verify/settle', async (req, res) => {
             await client.query('SELECT create_journal_entry($1, $2, $3, $4, $5)',
                 [new Date(), `Grouped Sales Return: ${srNumber}`, 'SALES_RETURN', srId, JSON.stringify(ledgerLines)]);
 
-            // 3.7 Prioritized Credit Application (Today's Bill First, then LIFO)
-            let creditRemaining = roundedGrandTotal;
-
-            // LAYER 1: Link directly to invoices mentioned in the returns data
+            // 3.7 Prioritized Credit Application (Today's Bill First, then LIFO) using live balance (CPA ACTIVE + advance_utilizations)
             const specificInvoices = [...new Set(items.map(i => i.invoice_id).filter(id => id))];
-            for (const invId of specificInvoices) {
-                if (creditRemaining <= 0.49) break;
-                const invRes = await client.query(`
-                    SELECT (grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0)) as balance 
-                    FROM sales_invoices WHERE id = $1
-                `, [invId]);
-                if (invRes.rows.length > 0) {
-                    const balance = Number(invRes.rows[0].balance);
-                    const apply = Math.min(creditRemaining, balance);
-                    if (apply > 0) {
-                        await client.query(`UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + $1, status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [apply, invId]);
-                        
-                        // [NEW] Add Allocation Record for Audit Trail
-                        await client.query(`
-                            INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
-                            VALUES ($1, $2, NOW(), $3, 'ACTIVE')
-                        `, [invId, apply, srId]);
-
-                        creditRemaining -= apply;
-                    }
-                }
-            }
-
-            // LAYER 2: Target invoices on the CURRENT TRIP for this customer
-            if (creditRemaining > 0.49) {
-                const tripInvoices = await client.query(`
-                    SELECT si.id, (si.grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = si.id), 0)) as balance
-                    FROM sales_invoices si
-                    JOIN trip_invoices ti ON ti.invoice_id = si.id
-                    JOIN sync_logs sl ON sl.trip_id = ti.trip_id
-                    WHERE sl.id = $1 AND si.customer_id = $2 AND si.status != 'Paid'
-                    ORDER BY si.invoice_date DESC, si.id DESC
-                `, [sync_id, customerId]);
-
-                for (const inv of tripInvoices.rows) {
-                    if (creditRemaining <= 0.49) break;
-                    const balance = Number(inv.balance);
-                    const apply = Math.min(creditRemaining, balance);
-                    if (apply > 0) {
-                        await client.query(`UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + $1, status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [apply, inv.id]);
-                        
-                        // [NEW] Add Allocation Record for Audit Trail
-                        await client.query(`
-                            INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
-                            VALUES ($1, $2, NOW(), $3, 'ACTIVE')
-                        `, [inv.id, apply, srId]);
-
-                        creditRemaining -= apply;
-                    }
-                }
-            }
-
-            // LAYER 3: Standard LIFO (Newest First) for any other unpaid invoices
-            if (creditRemaining > 0.49) {
-                const otherInvoices = await client.query(`
-                    SELECT id, (grand_total - COALESCE((SELECT SUM(amount) FROM customer_payment_allocations WHERE invoice_id = sales_invoices.id), 0)) as balance 
-                    FROM sales_invoices 
-                    WHERE customer_id = $1 AND status != 'Paid'
-                    ORDER BY invoice_date DESC, id DESC
-                `, [customerId]);
-                
-                for (const inv of otherInvoices.rows) {
-                    if (creditRemaining <= 0.49) break;
-                    const balance = Number(inv.balance);
-                    const apply = Math.min(creditRemaining, balance);
-                    if (apply > 0) {
-                        await client.query(`UPDATE sales_invoices SET amount_paid = COALESCE(amount_paid, 0) + $1, status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' ELSE 'Partially Paid' END WHERE id = $2`, [apply, inv.id]);
-                        
-                        // [NEW] Add Allocation Record for Audit Trail
-                        await client.query(`
-                            INSERT INTO customer_payment_allocations (invoice_id, amount, allocated_at, return_id, status)
-                            VALUES ($1, $2, NOW(), $3, 'ACTIVE')
-                        `, [inv.id, apply, srId]);
-
-                        creditRemaining -= apply;
-                    }
-                }
-            }
-
-            // [NEW] Convert remaining unutilized credit note amount to a Customer Advance
-            if (creditRemaining > 0.01) {
-                await client.query(`
-                    INSERT INTO customer_advances (customer_id, return_id, amount, balance)
-                    VALUES ($1, $2, $3, $3)
-                `, [customerId, srId, creditRemaining]);
-            }
+            await allocateReturnCreditToInvoicesAndAdvance(client, {
+                returnId: srId,
+                customerId,
+                totalCredit: roundedGrandTotal,
+                specificInvoiceIds: specificInvoices,
+                syncId: sync_id,
+                minThreshold: 0.49
+            });
         }
 
         await client.query('COMMIT');
@@ -1523,8 +1443,9 @@ router.post('/verify-payments', async (req, res) => {
                 for (const alloc of allocs.rows) {
                     await client.query(`
                         UPDATE sales_invoices 
-                        SET amount_paid = coalesce(amount_paid, 0) + $1,
-                            status = CASE WHEN (coalesce(amount_paid, 0) + $1) >= grand_total THEN 'Paid' ELSE 'Partially Paid' END
+                        SET amount_paid = COALESCE(amount_paid, 0) + $1,
+                            paid_amount = COALESCE(paid_amount, 0) + $1,
+                            status = CASE WHEN (COALESCE(amount_paid, 0) + $1) >= (grand_total - 0.01) THEN 'Paid' ELSE 'Partially Paid' END
                         WHERE id = $2
                     `, [alloc.amount, alloc.invoice_id]);
                     await client.query(`UPDATE payment_allocations SET status = 'ACTIVE' WHERE id = $1`, [alloc.id]);
